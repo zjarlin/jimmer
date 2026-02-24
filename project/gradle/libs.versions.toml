@@ -1,4 +1,5 @@
 [versions]
+site-addzero-gradle-plugin-processor-buddy-version = "2026.02.27"
 antlr = "4.13.0"
 buildconfig = "5.3.5"
 caffeine = "2.9.1"
@@ -29,6 +30,7 @@ springGraphql = "1.0.0"
 springdoc = "1.7.0"
 hibernateValitation = "8.0.1.Final"
 quarkus = "3.15.0"
+autoservice-gradle-plugin = "0.1.4"
 swaggerUi = "5.31.0"
 scalar = "0.5.47"
 
@@ -108,6 +110,7 @@ springdoc-openapi-common = { group = "org.springdoc", name = "springdoc-openapi-
 quarkus-redis-client = { group = "io.quarkus", name = "quarkus-redis-client", version.ref = "quarkus" }
 
 hibernate-validation = { group = "org.hibernate", name = "hibernate-validator", version.ref = "hibernateValitation" }
+autoservice-gradle-plugin = { group = "com.fueledbycaffeine.autoservice", name = "gradle-plugin", version.ref = "autoservice-gradle-plugin" }
 
 swagger-ui = { module = "org.webjars:swagger-ui", version.ref = "swaggerUi" }
 scalar-core = { module = "com.scalar.maven:scalar-core", version.ref = "scalar" }
@@ -118,3 +121,4 @@ jackson = ["jackson-annotations", "jackson3-databind", "jackson3-module-kotlin",
 [plugins]
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "buildconfig" }
+site-addzero-gradle-plugin-processor-buddy = { id = "site.addzero.gradle.plugin.processor-buddy", version.ref = "site-addzero-gradle-plugin-processor-buddy-version" }

@@ -7,118 +7,106 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.client.EnableImplicitApi
 import org.babyfish.jimmer.dto.compiler.DtoAstException
-import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoUtils
-import org.babyfish.jimmer.ksp.client.ClientProcessor
+import org.babyfish.jimmer.ksp.Context.delayedTupleTypeNames
+import org.babyfish.jimmer.ksp.Context.explicitClientApi
+import org.babyfish.jimmer.ksp.Context.serverGenerated
 import org.babyfish.jimmer.ksp.client.ExportDocProcessor
+import org.babyfish.jimmer.ksp.client.ExportDocProcessorCtx
 import org.babyfish.jimmer.ksp.dto.DtoProcessor
 import org.babyfish.jimmer.ksp.error.ErrorProcessor
 import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
 import org.babyfish.jimmer.ksp.transactional.TxProcessor
 import org.babyfish.jimmer.ksp.tuple.TypedTupleProcessor
+import org.babyfish.jimmer.processor.spi.ProcessorSpi
+import site.addzero.context.Settings
+import java.util.*
 import java.util.regex.Pattern
 
 class JimmerProcessor(
     private val environment: SymbolProcessorEnvironment
 ) : SymbolProcessor {
 
-    private val isModuleRequired: Boolean =
-        environment.options["jimmer.immutable.isModuleRequired"]?.trim() == "true"
 
-    private val dtoDirs: Collection<String> =
-        dtoDir("jimmer.dto.dirs", "src/main/") ?: listOf("src/main/dto")
+//    private val dtoDirs: Collection<String> =
+//        dtoDir("jimmer.dto.dirs", "src/main/") ?: listOf("src/main/dto")
 
-    private val dtoTestDirs: Collection<String> =
-        dtoDir("jimmer.dto.testDirs", "src/test/") ?: listOf("src/test/dto")
+//    private val dtoTestDirs: Collection<String> =
+//        dtoDir("jimmer.dto.testDirs", "src/test/") ?: listOf("src/test/dto")
 
-    private val defaultNullableInputModifier: DtoModifier =
-        environment.options["jimmer.dto.defaultNullableInputModifier"]?.takeIf { it.isNotEmpty() }?.let {
-            when (it) {
-                "fixed" -> DtoModifier.FIXED
-                "static" -> DtoModifier.STATIC
-                "dynamic" -> DtoModifier.DYNAMIC
-                "fuzzy" -> DtoModifier.FUZZY
-                else -> throw IllegalArgumentException(
-                    "The apt options `jimmer.dto.defaultNullableInputModifier` can only be " +
-                        "\"fixed\", \"static\", \"dynamic\" or \"fuzzy\""
-                )
-            }
-        } ?: DtoModifier.STATIC
+//    private val defaultNullableInputModifier: DtoModifier =
+//        environment.options["jimmer.dto.defaultNullableInputModifier"]?.takeIf { it.isNotEmpty() }?.let {
+//            when (it) {
+//                "fixed" -> DtoModifier.FIXED
+//                "static" -> DtoModifier.STATIC
+//                "dynamic" -> DtoModifier.DYNAMIC
+//                "fuzzy" -> DtoModifier.FUZZY
+//                else -> throw IllegalArgumentException(
+//                    "The apt options `jimmer.dto.defaultNullableInputModifier` can only be " +
+//                        "\"fixed\", \"static\", \"dynamic\" or \"fuzzy\""
+//                )
+//            }
+//        } ?: DtoModifier.STATIC
 
-    private val checkedException: Boolean =
-        environment.options["jimmer.client.checkedException"]?.trim() == "true"
+//    private val checkedException: Boolean =
+//        environment.options["jimmer.client.checkedException"]?.trim() == "true"
 
-    private val dtoMutable: Boolean =
-        environment.options["jimmer.dto.mutable"]?.trim() == "true"
+//    private val dtoMutable: Boolean =
+//        environment.options["jimmer.dto.mutable"]?.trim() == "true"
 
-    private val excludedUserAnnotationPrefixes: List<String> =
-        environment.options["jimmer.excludedUserAnnotationPrefixes"]?.trim()?.let {
-            SEPARATOR.split(it).toList()
-        } ?: emptyList()
+//    private val excludedUserAnnotationPrefixes: List<String> =
+//        environment.options["jimmer.excludedUserAnnotationPrefixes"]?.trim()?.let {
+//            SEPARATOR.split(it).toList()
+//        } ?: emptyList()
 
-    private var serverGenerated = false
-
-    private var explicitClientApi: Boolean? = null
-
-    private var tupleGenerated = false
-
-    private var delayedTupleTypeNames : Collection<String>? = null
-
-    private var clientGenerated = false
-
-    private var delayedClientTypeNames: Collection<String>? = null
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
+        Settings.fromOptions(environment.options)
+        Context.resolver = resolver
+        Context.environment = environment
+        val ctx = Context
+        initExplicitClientApi()
+
+
         return try {
-            val ctx = Context(resolver, environment)
-            if (explicitClientApi === null) {
-                explicitClientApi = resolver.getAllFiles().any { file ->
-                    file.declarations.any {
-                        it is KSClassDeclaration &&
-                            ctx.include(it) &&
-                            it.annotation(EnableImplicitApi::class) !== null
-                    }
-                }
+            val processorSpis =
+                ServiceLoader.load(ProcessorSpi::class.java, JimmerProcessor::class.java.classLoader).toList()
+
+            val map = processorSpis.map {
+                val process = it.process()
+                process
             }
             val processedDeclarations = mutableListOf<KSClassDeclaration>()
+
             if (!serverGenerated) {
-                processedDeclarations += ImmutableProcessor(ctx, isModuleRequired, excludedUserAnnotationPrefixes).process()
-                val errorGenerated = ErrorProcessor(ctx, checkedException).process()
+//                processedDeclarations += ImmutableProcessor(ctx).process()
+                val errorGenerated = ErrorProcessor(ctx, ctx.checkedException).process()
                 val dtoGenerated = DtoProcessor(
-                    ctx,
-                    dtoMutable,
-                    if (resolver.getAllFiles().toList().isNotEmpty() && isTest(ctx.resolver.getAllFiles().first().filePath)) {
-                        dtoTestDirs
+                    ctx, dtoMutable, if (resolver.getAllFiles().toList().isNotEmpty() && isTest(
+                            ctx.resolver.getAllFiles().first().filePath
+                        )
+                    ) {
+                        Settings.dtoTestDirs
                     } else {
                         dtoDirs
-                    },
-                    defaultNullableInputModifier
+                    }, defaultNullableInputModifier
                 ).process()
                 TxProcessor(ctx).process()
-                ExportDocProcessor(ctx).process()
+                ExportDocProcessor(ExportDocProcessorCtx(resolver, environment)).process()
                 serverGenerated = true
                 if (processedDeclarations.isNotEmpty() || errorGenerated || dtoGenerated) {
-                    delayedClientTypeNames = resolver.getAllFiles().flatMap { file ->
+                    ctx.delayedClientTypeNames = resolver.getAllFiles().flatMap { file ->
                         file.declarations.filterIsInstance<KSClassDeclaration>().map { it.fullName }
                     }.toList()
                     return processedDeclarations
                 }
             }
-            if (!tupleGenerated) {
-                tupleGenerated = true
+            if (!ctx.tupleGenerated) {
+                ctx.tupleGenerated = true
                 val processedTupleDeclarations = TypedTupleProcessor(ctx, delayedTupleTypeNames).process()
                 if (processedTupleDeclarations.isNotEmpty()) {
                     return processedTupleDeclarations
                 }
-            }
-            if (tupleGenerated && !clientGenerated && !ctx.isBuddyIgnoreResourceGeneration) {
-                clientGenerated = true
-                ClientProcessor(
-                    ctx,
-                    explicitClientApi ?: error("Internal bug: explicitClientApi not resolved"),
-                    delayedClientTypeNames
-                ).process()
-                delayedClientTypeNames = null
             }
             return processedDeclarations
         } catch (ex: MetaException) {
@@ -130,13 +118,19 @@ class JimmerProcessor(
         }
     }
 
-    private fun dtoDir(configurationName: String, prefix: String) : Collection<String>? =
-        environment.options[configurationName]
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { text ->
-                text.split("\\s*[,:;]\\s*")
-                    .map {
+    private fun initExplicitClientApi() {
+        if (explicitClientApi === null) {
+            explicitClientApi = Context.resolver.getAllFiles().any { file ->
+                file.declarations.any {
+                    it is KSClassDeclaration && it.include() && it.annotation(EnableImplicitApi::class) !== null
+                }
+            }
+        }
+    }
+
+    private fun dtoDir(configurationName: String, prefix: String): Collection<String>? =
+        environment.options[configurationName]?.trim()?.takeIf { it.isNotEmpty() }?.let { text ->
+                text.split("\\s*[,:;]\\s*").map {
                         when {
                             it == "" || it == "/" -> null
                             it.startsWith("/") -> it.substring(1)
@@ -145,21 +139,12 @@ class JimmerProcessor(
                         }?.also { dir ->
                             if (!dir.startsWith(prefix)) {
                                 throw GeneratorException(
-                                    "Illegal KSP configuration \"" +
-                                        configurationName +
-                                        "\", it contains an illegal path \"" +
-                                        dir +
-                                        "\" which does not start with \"" +
-                                        prefix +
-                                        "\""
+                                    "Illegal KSP configuration \"" + configurationName + "\", it contains an illegal path \"" + dir + "\" which does not start with \"" + prefix + "\""
                                 )
                             }
                         }
-                    }
-                    .filterNotNull()
-                    .toSet()
-            }
-            ?.let { DtoUtils.standardDtoDirs(it) }
+                    }.filterNotNull().toSet()
+            }?.let { DtoUtils.standardDtoDirs(it) }
 
     companion object {
 

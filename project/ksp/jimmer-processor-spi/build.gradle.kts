@@ -1,0 +1,6 @@
+plugins {
+    `kotlin-convention`
+}
+
+dependencies {
+}

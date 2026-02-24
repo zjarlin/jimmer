@@ -1,0 +1,174 @@
+package org.babyfish.jimmer.ksp
+
+import com.google.devtools.ksp.getClassDeclarationByName
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
+import com.google.devtools.ksp.symbol.KSAnnotation
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSType
+import org.babyfish.jimmer.Immutable
+import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
+import org.babyfish.jimmer.sql.Embeddable
+import org.babyfish.jimmer.sql.Entity
+import org.babyfish.jimmer.sql.MappedSuperclass
+import site.addzero.context.Settings
+import kotlin.text.isNotBlank
+
+object Context {
+    lateinit var resolver: Resolver
+    lateinit var environment: SymbolProcessorEnvironment
+
+    var explicitClientApi: Boolean? = null
+    var tupleGenerated = false
+
+    var delayedTupleTypeNames: Collection<String>? = null
+
+    var clientGenerated = false
+
+    var delayedClientTypeNames: Collection<String>? = null
+
+
+    var serverGenerated = false
+
+
+    val collectionType: KSType = resolver
+        .getClassDeclarationByName("kotlin.collections.Collection")
+        ?.asStarProjectedType()
+        ?: error("Internal bug")
+
+    val listType: KSType = resolver
+        .getClassDeclarationByName("kotlin.collections.List")
+        ?.asStarProjectedType()
+        ?: error("Internal bug")
+
+    val mapType: KSType = resolver
+        .getClassDeclarationByName("kotlin.collections.Map")
+        ?.asStarProjectedType()
+        ?: error("Internal bug")
+
+    val isHibernateValidatorEnhancement: Boolean =
+        environment.options["jimmer.dto.hibernateValidatorEnhancement"] == "true"
+
+    @Deprecated("Please use Settings")
+    val isBuddyIgnoreResourceGeneration: Boolean =
+        environment.options["jimmer.buddy.ignoreResourceGeneration"]?.trim() == "true"
+
+    val jackson3 = detectIsJackson3(resolver, environment)
+
+    val jacksonTypes: JacksonTypes =
+        if (jackson3) {
+            JacksonTypes(
+                jsonIgnore = ClassName("com.fasterxml.jackson.annotation", "JsonIgnore"),
+                jsonValue = ClassName("com.fasterxml.jackson.annotation", "JsonValue"),
+                jsonFormat = ClassName("com.fasterxml.jackson.annotation", "JsonFormat"),
+                jsonProperty = ClassName("com.fasterxml.jackson.annotation", "JsonProperty"),
+                jsonPropertyOrder = ClassName("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
+                jsonCreator = ClassName("com.fasterxml.jackson.annotation", "JsonCreator"),
+                jsonSerializer = ClassName("tools.jackson.databind", "ValueSerializer"),
+                jsonSerialize = ClassName("tools.jackson.databind.annotation", "JsonSerialize"),
+                jsonDeserialize = ClassName("tools.jackson.databind.annotation", "JsonDeserialize"),
+                jsonPojoBuilder = ClassName("tools.jackson.databind.annotation", "JsonPOJOBuilder"),
+                jsonNaming = ClassName("tools.jackson.databind.annotation", "JsonNaming"),
+                jsonGenerator = ClassName("tools.jackson.core", "JsonGenerator"),
+                serializeProvider = ClassName("tools.jackson.databind", "SerializationContext")
+            )
+        } else {
+            JacksonTypes(
+                jsonIgnore = ClassName("com.fasterxml.jackson.annotation", "JsonIgnore"),
+                jsonValue = ClassName("com.fasterxml.jackson.annotation", "JsonValue"),
+                jsonFormat = ClassName("com.fasterxml.jackson.annotation", "JsonFormat"),
+                jsonProperty = ClassName("com.fasterxml.jackson.annotation", "JsonProperty"),
+                jsonPropertyOrder = ClassName("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
+                jsonCreator = ClassName("com.fasterxml.jackson.annotation", "JsonCreator"),
+                jsonSerializer = ClassName("com.fasterxml.jackson.databind", "JsonSerializer"),
+                jsonSerialize = ClassName("com.fasterxml.jackson.databind.annotation", "JsonSerialize"),
+                jsonDeserialize = ClassName("com.fasterxml.jackson.databind.annotation", "JsonDeserialize"),
+                jsonPojoBuilder = ClassName("com.fasterxml.jackson.databind.annotation", "JsonPOJOBuilder"),
+                jsonNaming = ClassName("com.fasterxml.jackson.databind.annotation", "JsonNaming"),
+                jsonGenerator = ClassName("com.fasterxml.jackson.core", "JsonGenerator"),
+                serializeProvider = ClassName("com.fasterxml.jackson.databind", "SerializerProvider")
+            )
+        }
+
+    private val includes: Array<String>? =
+        environment.options["jimmer.source.includes"]
+            ?.takeIf { it.isNotEmpty() }
+            ?.let {
+                it.trim().split("\\s*,[,;]\\s*").toTypedArray()
+            }
+
+    private val excludes: Array<String>? =
+        environment.options["jimmer.source.excludes"]
+            ?.takeIf { it.isNotEmpty() }
+            ?.let {
+                it.trim().split("\\s*[,;]\\s*").toTypedArray()
+            }
+
+    private val typeMap: MutableMap<KSClassDeclaration, ImmutableType> = mutableMapOf()
+
+    private var newTypes = typeMap?.values?.toMutableList() ?: mutableListOf()
+
+    fun typeOf(classDeclaration: KSClassDeclaration): ImmutableType =
+        typeMap[classDeclaration] ?: ImmutableType(this, classDeclaration).also {
+            typeMap[classDeclaration] = it
+            newTypes += it
+        }
+
+    fun typeAnnotationOf(classDeclaration: KSClassDeclaration): KSAnnotation? {
+        var sqlAnnotation: KSAnnotation? = null
+        for (ormAnnotationType in ORM_ANNOTATION_TYPES) {
+            val anno = classDeclaration.annotation(ormAnnotationType) ?: continue
+            if (sqlAnnotation !== null) {
+                throw MetaException(
+                    classDeclaration,
+                    null,
+                    "it cannot be decorated by both " +
+                            "@${sqlAnnotation.fullName} and ${anno.fullName}"
+                )
+            }
+            sqlAnnotation = anno
+        }
+        return sqlAnnotation ?: classDeclaration.annotation(Immutable::class)
+    }
+
+    fun resolve() {
+        while (this.newTypes.isNotEmpty()) {
+            val newTypes = this.newTypes
+            this.newTypes = mutableListOf()
+            for (newType in newTypes) {
+                for (step in 0..4) {
+                    newType.resolve(this, step)
+                }
+            }
+        }
+    }
+
+    fun include(declaration: KSClassDeclaration): Boolean {
+        val qualifiedName = declaration.qualifiedName!!.asString()
+        if (includes !== null && !includes.any { qualifiedName.startsWith(it) }) {
+            return false
+        }
+        if (excludes !== null && excludes.any { qualifiedName.startsWith(it) }) {
+            return false
+        }
+        return true
+    }
+
+    private fun detectIsJackson3(resolver: Resolver, environment: SymbolProcessorEnvironment): Boolean {
+        val jackson3Text = environment.options["jimmer.jackson3"]
+        return if (jackson3Text.isNullOrEmpty()) {
+            resolver.getClassDeclarationByName("tools.jackson.databind.ObjectMapper") != null
+        } else {
+            "true" == jackson3Text
+        }
+    }
+
+
+    companion object {
+        private val ORM_ANNOTATION_TYPES = listOf(
+            Entity::class,
+            MappedSuperclass::class,
+            Embeddable::class
+        )
+    }
+}
