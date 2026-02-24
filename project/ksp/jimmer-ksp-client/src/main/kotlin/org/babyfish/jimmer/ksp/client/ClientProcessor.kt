@@ -16,20 +16,20 @@ import org.babyfish.jimmer.error.CodeBasedException
 import org.babyfish.jimmer.error.CodeBasedRuntimeException
 import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.ksp.*
-import org.babyfish.jimmer.ksp.Context.clientGenerated
 import org.babyfish.jimmer.ksp.Context.delayedClientTypeNames
-import org.babyfish.jimmer.ksp.Context.isBuddyIgnoreResourceGeneration
-import org.babyfish.jimmer.ksp.Context.tupleGenerated
 import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
+import site.addzero.context.Settings
 import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
 
 class ClientProcessor() : ProcessorSpi<Context, Unit> {
-    private val explicitClientApi = Context.explicitClientApi ?: error("Internal bug: explicitClientApi not resolved")
+    override val phase: Int get() = 3
+    override val order: Int get() = 0
+    private val explicitClientApi get() = Context.explicitClientApi
     private val clientExceptionContext = ClientExceptionContext()
 
     private val docMetadata = DocMetadata()
@@ -61,13 +61,7 @@ class ClientProcessor() : ProcessorSpi<Context, Unit> {
         set(value) {}
 
     override fun process() {
-        if (isBuddyIgnoreResourceGeneration) {
-            return
-        }
-        if (clientGenerated) {
-            return
-        }
-        if (!tupleGenerated) {
+        if (Settings.jimmerBuddyIgnoreResourceGeneration) {
             return
         }
 
@@ -91,7 +85,6 @@ class ClientProcessor() : ProcessorSpi<Context, Unit> {
         ).use {
             Schemas.writeTo(schema, OutputStreamWriter(it, StandardCharsets.UTF_8))
         }
-        clientGenerated = true
         delayedClientTypeNames = null
 
     }

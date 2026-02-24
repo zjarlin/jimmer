@@ -1,5 +1,4 @@
 [versions]
-site-addzero-gradle-plugin-processor-buddy-version = "2026.02.27"
 antlr = "4.13.0"
 apacheCommonsLang3 = "3.12.0"
 buildconfig = "5.3.5"
@@ -31,6 +30,7 @@ springdoc = "1.7.0"
 hibernateValitation = "8.0.1.Final"
 quarkus = "3.15.0"
 autoservice-gradle-plugin = "0.1.4"
+site-addzero-gradle-plugin-processor-buddy-version = "2026.02.28"
 
 [libraries]
 antlr = { group = "org.antlr", name = "antlr4", version.ref = "antlr" }

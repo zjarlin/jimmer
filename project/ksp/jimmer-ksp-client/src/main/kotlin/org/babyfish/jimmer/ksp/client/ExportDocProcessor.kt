@@ -18,8 +18,10 @@ import java.util.*
 import java.util.regex.Pattern
 
 
-object ExportDocProcessor : ProcessorSpi<Context, Unit> {
+class ExportDocProcessor : ProcessorSpi<Context, Unit> {
     override var ctx = Context
+    override val phase: Int get() = 1
+    override val order: Int get() = 4
     override fun process() {
         val pkg = pkg()
         val declarations = mutableListOf<KSClassDeclaration>()

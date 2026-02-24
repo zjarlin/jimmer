@@ -13,10 +13,10 @@ processorBuddy {
             "jimmer.source.excludes" to ",",
             //错误处理器
             "jimmer.dto.defaultNullableInputModifier" to "static",
-//            "jimmer.dto.dirs" to """listOf("src/mian/dto")""",
-//            "jimmer.dto.testDirs" to """listOf("src/test/dto")""",
-            "jimmer.dto.dirs" to "listOf(\"src/mian/dto\")",
-            "jimmer.dto.testDirs" to "listOf(\"src/test/dto\")",
+            "jimmer.dto.dirs" to """listOf("src/mian/dto")""",
+            "jimmer.dto.testDirs" to """listOf("src/test/dto")""",
+//            "jimmer.dto.dirs" to "listOf(\"src/mian/dto\")",
+//            "jimmer.dto.testDirs" to "listOf(\"src/test/dto\")",
             "jimmer.dto.mutable" to "true",
 
             "jimmer.client.checkedException" to "true",
@@ -36,7 +36,7 @@ dependencies {
 //
 //    implementation(libs.kotlin.stdlib)
 
-    implementation(project(":ksp:jimmer-ksp-constants"))
+//    implementation(project(":ksp:jimmer-ksp-constants"))
     implementation(projects.jimmerCore)
     implementation(projects.jimmerDtoCompiler)
     implementation(libs.ksp.symbolProcessing.api)

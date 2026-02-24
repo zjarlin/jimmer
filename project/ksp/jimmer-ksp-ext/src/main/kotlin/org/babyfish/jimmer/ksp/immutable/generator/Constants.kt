@@ -48,8 +48,8 @@ const val FETCHER = "Fetcher"
 const val FETCHER_DSL = "FetcherDsl"
 
 val CLASS_CLASS_NAME = Class::class.asClassName()
-internal val CLONEABLE_CLASS_NAME = Cloneable::class.asClassName()
-internal val SERIALIZABLE_CLASS_NAME = Serializable::class.asClassName()
+val CLONEABLE_CLASS_NAME = Cloneable::class.asClassName()
+val SERIALIZABLE_CLASS_NAME = Serializable::class.asClassName()
 val DESCRIPTION_CLASS_NAME = Description::class.asClassName()
 val JVM_STATIC_CLASS_NAME = JvmStatic::class.asClassName()
 val COLLECTIONS_CLASS_NAME = Collections::class.asClassName()
@@ -72,19 +72,19 @@ val DTO_METADATA_CLASS_NAME = ClassName(
     "DtoMetadata"
 )
 val DTO_PROP_ACCESSOR = DtoPropAccessor::class.asClassName()
-internal val INTERNAL_TYPE_CLASS_NAME = Internal::class.asClassName()
-internal val IMMUTABLE_PROP_CATEGORY_CLASS_NAME = ImmutablePropCategory::class.asClassName()
-internal val IMMUTABLE_TYPE_CLASS_NAME = ImmutableType::class.asClassName()
-internal val DRAFT_CONSUMER_CLASS_NAME = DraftConsumer::class.asClassName()
-internal val TYPED_PROP_CLASS_NAME = TypedProp::class.asClassName()
-internal val TYPED_PROP_SCALAR_CLASS_NAME = TypedProp.Scalar::class.asClassName()
-internal val TYPED_PROP_SCALAR_LIST_CLASS_NAME = TypedProp.ScalarList::class.asClassName()
-internal val TYPED_PROP_REFERENCE_CLASS_NAME = TypedProp.Reference::class.asClassName()
-internal val TYPED_PROP_REFERENCE_LIST_CLASS_NAME = TypedProp.ReferenceList::class.asClassName()
+val INTERNAL_TYPE_CLASS_NAME = Internal::class.asClassName()
+val IMMUTABLE_PROP_CATEGORY_CLASS_NAME = ImmutablePropCategory::class.asClassName()
+val IMMUTABLE_TYPE_CLASS_NAME = ImmutableType::class.asClassName()
+val DRAFT_CONSUMER_CLASS_NAME = DraftConsumer::class.asClassName()
+val TYPED_PROP_CLASS_NAME = TypedProp::class.asClassName()
+val TYPED_PROP_SCALAR_CLASS_NAME = TypedProp.Scalar::class.asClassName()
+val TYPED_PROP_SCALAR_LIST_CLASS_NAME = TypedProp.ScalarList::class.asClassName()
+val TYPED_PROP_REFERENCE_CLASS_NAME = TypedProp.Reference::class.asClassName()
+val TYPED_PROP_REFERENCE_LIST_CLASS_NAME = TypedProp.ReferenceList::class.asClassName()
 val IMMUTABLE_SPI_CLASS_NAME = ImmutableSpi::class.asClassName()
  val IMMUTABLE_OBJECTS_CLASS_NAME = ImmutableObjects::class.asClassName()
-internal val UNLOADED_EXCEPTION_CLASS_NAME = UnloadedException::class.asClassName()
-internal val SYSTEM_CLASS_NAME = System::class.asClassName()
+val UNLOADED_EXCEPTION_CLASS_NAME = UnloadedException::class.asClassName()
+val SYSTEM_CLASS_NAME = System::class.asClassName()
 val DRAFT_CLASS_NAME = Draft::class.asClassName()
 val DRAFT_SPI_CLASS_NAME = DraftSpi::class.asClassName()
 val DRAFT_CONTEXT_CLASS_NAME = DraftContext::class.asClassName()
@@ -98,35 +98,35 @@ val BIG_DECIMAL_CLASS_NAME = BigDecimal::class.asClassName()
 val BIG_INTEGER_CLASS_NAME = BigInteger::class.asClassName()
 val PATTERN_CLASS_NAME = Pattern::class.asClassName()
 val VALIDATOR_CLASS_NAME = Validator::class.asClassName()
-internal val ONE_TO_ONE_CLASS_NAME = OneToOne::class.asClassName()
-internal val MANY_TO_ONE_CLASS_NAME = ManyToOne::class.asClassName()
-internal val ONE_TO_MANY_CLASS_NAME = OneToMany::class.asClassName()
-internal val MANY_TO_MANY_CLASS_NAME = ManyToMany::class.asClassName()
-internal val ID_VIEW_CLASS_NAME = IdViewList::class.asClassName()
+val ONE_TO_ONE_CLASS_NAME = OneToOne::class.asClassName()
+val MANY_TO_ONE_CLASS_NAME = ManyToOne::class.asClassName()
+val ONE_TO_MANY_CLASS_NAME = OneToMany::class.asClassName()
+val MANY_TO_MANY_CLASS_NAME = ManyToMany::class.asClassName()
+val ID_VIEW_CLASS_NAME = IdViewList::class.asClassName()
 val MUTABLE_ID_VIEW_CLASS_NAME = MutableIdViewList::class.asClassName()
-internal val MANY_TO_MANY_VIEW_CLASS_NAME = ManyToManyView::class.asClassName()
-internal val MANY_TO_MANY_VIEW_LIST_CLASS_NAME = ManyToManyViewList::class.asClassName()
+val MANY_TO_MANY_VIEW_CLASS_NAME = ManyToManyView::class.asClassName()
+val MANY_TO_MANY_VIEW_LIST_CLASS_NAME = ManyToManyViewList::class.asClassName()
 val LOCAL_DATE_CLASS_NAME = LocalDate::class.asClassName()
 val LOCAL_DATE_TIME_CLASS_NAME = LocalDateTime::class.asClassName()
 val LOCAL_TIME_CLASS_NAME = LocalTime::class.asClassName()
 val INSTANT_CLASS_NAME = Instant::class.asClassName()
-internal val K_PROPS_CLASS_NAME = ClassName(
+val K_PROPS_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KProps"
 )
-internal val K_NON_NULL_PROPS_CLASS_NAME = ClassName(
+val K_NON_NULL_PROPS_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KNonNullProps"
 )
-internal val K_NULLABLE_PROPS_CLASS_NAME = ClassName(
+val K_NULLABLE_PROPS_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KNullableProps"
 )
-internal val K_NON_NULL_TABLE_CLASS_NAME = ClassName(
+val K_NON_NULL_TABLE_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KNonNullTable"
 )
-internal val K_NULLABLE_TABLE_CLASS_NAME = ClassName(
+val K_NULLABLE_TABLE_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KNullableTable"
 )
@@ -139,31 +139,31 @@ val K_NULLABLE_REMOTE_REF = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KRemoteRef", "Nullable"
 )
-internal val K_REMOTE_REF = ClassName(
+val K_REMOTE_REF = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KRemoteRef"
 )
-internal val K_REMOTE_REF_IMPLEMENTOR = ClassName(
+val K_REMOTE_REF_IMPLEMENTOR = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table.impl",
     "KRemoteRefImplementor"
 )
-internal val K_NON_NULL_TABLE_EX_CLASS_NAME = ClassName(
+val K_NON_NULL_TABLE_EX_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KNonNullTableEx"
 )
-internal val K_NULLABLE_TABLE_EX_CLASS_NAME = ClassName(
+val K_NULLABLE_TABLE_EX_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KNullableTableEx"
 )
-internal val K_IMPLICIT_SUB_QUERY_TABLE_CLASS_NAME = ClassName(
+val K_IMPLICIT_SUB_QUERY_TABLE_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KImplicitSubQueryTable"
 )
-internal val K_NONNULL_EXPRESSION = ClassName(
+val K_NONNULL_EXPRESSION = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.expression",
     "KNonNullExpression"
 )
-internal val K_TABLE_EX_CLASS_NAME = ClassName(
+val K_TABLE_EX_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.ast.table",
     "KTableEx"
 )
@@ -191,7 +191,7 @@ val FETCHER_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.fetcher",
     "Fetcher"
 )
-internal val FETCHER_IMPL_CLASS_NAME = ClassName(
+val FETCHER_IMPL_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.fetcher.impl",
     "FetcherImpl"
 )
@@ -219,7 +219,7 @@ val K_RECURSIVE_LIST_FIELD_DSL = ClassName(
     "org.babyfish.jimmer.sql.kt.fetcher",
     "KRecursiveListFieldDsl"
 )
-internal val FETCHER_CREATOR_CLASS_NAME = ClassName(
+val FETCHER_CREATOR_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.kt.fetcher",
     "FetcherCreator"
 )

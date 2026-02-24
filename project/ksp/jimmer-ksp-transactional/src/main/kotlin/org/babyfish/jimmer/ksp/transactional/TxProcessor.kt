@@ -7,12 +7,16 @@ import org.babyfish.jimmer.ksp.MetaException
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.util.fastResolve
+import org.babyfish.jimmer.processor.spi.ProcessorSpi
+import site.addzero.context.Settings
 
-class TxProcessor(
-    val ctx: Context
-) {
-    fun process() {
-        if (ctx.isBuddyIgnoreResourceGeneration) {
+class TxProcessor : ProcessorSpi<Context, Unit> {
+    override var ctx = Context
+    override val phase: Int get() = 1
+    override val order: Int get() = 3
+
+    override fun process() {
+        if (Settings.jimmerBuddyIgnoreResourceGeneration) {
             return
         }
         val map = mutableMapOf<String, KSClassDeclaration>()
