@@ -11,26 +11,42 @@ import org.babyfish.jimmer.ksp.immutable.generator.DraftGenerator
 import org.babyfish.jimmer.ksp.immutable.generator.FetcherGenerator
 import org.babyfish.jimmer.ksp.immutable.generator.JimmerModuleGenerator
 import org.babyfish.jimmer.ksp.immutable.generator.PropsGenerator
+import org.babyfish.jimmer.processor.spi.EntityMetaConsumerSpi
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
+import site.addzero.util.lsi.clazz.LsiClass
+import site.addzero.util.lsi_impl.impl.ksp.toLsiClass
 import site.addzero.context.ImmutableSettings
 import site.addzero.context.Settings
+import java.util.ServiceLoader
 import java.util.regex.Pattern
 import kotlin.math.min
 
 class ImmutableProcessor: ProcessorSpi<Context,Collection<KSClassDeclaration>> {
     override var ctx = Context
+    override val phase: Int get() = 1
+    override val order: Int get() = 0
 
     override fun process(): Collection<KSClassDeclaration> {
-        if (ctx.serverGenerated) {
-            return emptyList()
-        }
         ImmutableSettings.fromOptions(ctx.environment.options)
         val modelMap = findModelMap()
         generateJimmerTypes(modelMap)
-        return modelMap.values.flatten()
+        val declarations = modelMap.values.flatten()
+        val lsiClasses: List<LsiClass> = declarations.map { it.toLsiClass(ctx.resolver) }
+        notifyEntityMetaConsumers(lsiClasses)
+        return declarations
+    }
+
+    private fun notifyEntityMetaConsumers(entities: List<LsiClass>) {
+        val logger = ctx.environment.logger
+        val consumers = ServiceLoader.load(EntityMetaConsumerSpi::class.java, ImmutableProcessor::class.java.classLoader).toList()
+        logger.info("[jimmer] EntityMetaConsumerSpi: ${consumers.size} consumer(s) registered, ${entities.size} entity type(s) found")
+        consumers.forEach { consumer ->
+            logger.info("[jimmer] EntityMetaConsumerSpi -> invoking: ${consumer::class.qualifiedName}")
+            consumer.consume(entities)
+        }
     }
 
     private fun findModelMap(): Map<KSFile, List<KSClassDeclaration>> {
@@ -115,15 +131,15 @@ class ImmutableProcessor: ProcessorSpi<Context,Collection<KSClassDeclaration>> {
         for (file in ctx.resolver.getNewFiles()) {
             for (classDeclaration in file.declarations.filterIsInstance<KSClassDeclaration>()) {
                 if (classDeclaration.include(
-                        ctx.includes,
-                        ctx.excludes
+                        Settings.jimmerSourceIncludes,
+                        Settings.jimmerSourceExcludes
                     ) && classDeclaration.annotation(Entity::class) !== null
                 ) {
                     packageCollector.accept(classDeclaration)
                 }
             }
         }
-        if (!ctx.isBuddyIgnoreResourceGeneration) {
+        if (!Settings.jimmerBuddyIgnoreResourceGeneration) {
             JimmerModuleGenerator(
                 ctx.environment.codeGenerator,
                 packageCollector.toString(),

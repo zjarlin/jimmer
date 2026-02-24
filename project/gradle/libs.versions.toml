@@ -1,5 +1,4 @@
 [versions]
-site-addzero-gradle-plugin-processor-buddy-version = "2026.02.27"
 antlr = "4.13.0"
 buildconfig = "5.3.5"
 caffeine = "2.9.1"
@@ -33,6 +32,7 @@ quarkus = "3.15.0"
 autoservice-gradle-plugin = "0.1.4"
 swaggerUi = "5.31.0"
 scalar = "0.5.47"
+site-addzero-gradle-plugin-processor-buddy-version = "2026.02.28"
 
 [libraries]
 antlr = { group = "org.antlr", name = "antlr4", version.ref = "antlr" }

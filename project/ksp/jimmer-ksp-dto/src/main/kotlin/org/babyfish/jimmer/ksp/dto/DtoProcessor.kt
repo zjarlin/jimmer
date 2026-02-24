@@ -13,15 +13,26 @@ import org.babyfish.jimmer.ksp.client.DocMetadata
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.include
+import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
+import site.addzero.context.Settings
 
-class DtoProcessor(
-    private val mutable: Boolean,
-    private val dtoDirs: Collection<String>,
-    private val defaultNullableInputModifier: DtoModifier
-) {
-    fun process(): Boolean {
+class DtoProcessor : ProcessorSpi<Context, Boolean> {
+    override var ctx = Context
+    override val phase: Int get() = 1
+    override val order: Int get() = 2
+
+    private val mutable: Boolean get() = Settings.jimmerDtoMutable
+    private val dtoDirs: Collection<String>
+        get() = if (ctx.resolver.getAllFiles().toList().isNotEmpty() && isTest(ctx.resolver.getAllFiles().first().filePath)) {
+            Settings.jimmerDtoTestDirs
+        } else {
+            Settings.jimmerDtoDirs
+        }
+    private val defaultNullableInputModifier: DtoModifier get() = Settings.jimmerDtoDefaultNullableInputModifier
+
+    override fun process(): Boolean {
         val dtoTypeMap = findDtoTypeMap()
         generateDtoTypes(dtoTypeMap)
         return dtoTypeMap.isNotEmpty()
@@ -111,6 +122,15 @@ class DtoProcessor(
                 } ?: mutable
                 DtoGenerator( docMetadata, mutable, dtoType).generate(allFiles)
             }
+        }
+    }
+
+    companion object {
+        private fun isTest(path: String): Boolean {
+            val testIndex = path.indexOf("/src/test/")
+            if (testIndex == -1) return false
+            val mainIndex = path.indexOf("/src/main/")
+            return mainIndex == -1 || testIndex < mainIndex
         }
     }
 }

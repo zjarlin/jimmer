@@ -14,6 +14,8 @@ import org.babyfish.jimmer.sql.TypedTuple
 
 class TypedTupleProcessor : ProcessorSpi<Context, List<KSClassDeclaration>> {
     override var ctx = Context
+    override val phase: Int get() = 2
+    override val order: Int get() = 0
 
     override fun process(): List<KSClassDeclaration> {
         val processedDeclarations = mutableListOf<KSClassDeclaration>()

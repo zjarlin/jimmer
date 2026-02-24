@@ -27,7 +27,7 @@ class PropsGenerator(
     fun generate(allFiles: List<KSFile>) {
         val outputFileName =
             file.fileName.let {
-                var lastDotIndex = it.lastIndexOf('.')
+                val lastDotIndex = it.lastIndexOf('.')
                 if (lastDotIndex == -1) {
                     "${it}$PROPS"
                 } else {
@@ -182,14 +182,14 @@ class PropsGenerator(
                                     K_REMOTE_REF,
                                     innerFunName,
                                     type.propsClassName,
-                                    StringUtil.snake(prop.name, StringUtil.SnakeCase.UPPER)
+                                    StringUtil.snake(prop.name, SnakeCase.UPPER)
                                 )
                             } else if (innerFunName == "get") {
                                 addCode(
                                     "return get<%T>(%T.%L.unwrap()) as %T",
                                     prop.targetTypeName(overrideNullable = false),
                                     type.propsClassName,
-                                    StringUtil.snake(prop.name, StringUtil.SnakeCase.UPPER),
+                                    StringUtil.snake(prop.name, SnakeCase.UPPER),
                                     returnTypeName
                                 )
                             } else {
@@ -197,7 +197,7 @@ class PropsGenerator(
                                     "return %L(%T.%L.unwrap())",
                                     innerFunName,
                                     type.propsClassName,
-                                    StringUtil.snake(prop.name, StringUtil.SnakeCase.UPPER)
+                                    StringUtil.snake(prop.name, SnakeCase.UPPER)
                                 )
                             }
                         }
@@ -282,7 +282,7 @@ class PropsGenerator(
                             "return getAssociatedId<%T>(%T.%L.unwrap()) as %T",
                             prop.targetType!!.idProp!!.targetTypeName(overrideNullable = false),
                             type.propsClassName,
-                            StringUtil.snake(prop.name, StringUtil.SnakeCase.UPPER),
+                            StringUtil.snake(prop.name, SnakeCase.UPPER),
                             returnClassName
                         )
                         .build()
@@ -454,7 +454,7 @@ class PropsGenerator(
         addProperty(
             PropertySpec
                 .builder(
-                    StringUtil.snake(prop.name, StringUtil.SnakeCase.UPPER),
+                    StringUtil.snake(prop.name, SnakeCase.UPPER),
                     when {
                         prop.isReferenceList -> TYPED_PROP_REFERENCE_LIST_CLASS_NAME
                         prop.isReference -> TYPED_PROP_REFERENCE_CLASS_NAME

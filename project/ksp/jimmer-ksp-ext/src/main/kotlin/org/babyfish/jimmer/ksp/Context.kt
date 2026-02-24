@@ -11,25 +11,28 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
-import site.addzero.context.Settings
-import kotlin.text.isNotBlank
 
 object Context {
     lateinit var resolver: Resolver
     lateinit var environment: SymbolProcessorEnvironment
 
-    var explicitClientApi: Boolean? = null
-    var tupleGenerated = false
-
     var delayedTupleTypeNames: Collection<String>? = null
-
-    var clientGenerated = false
 
     var delayedClientTypeNames: Collection<String>? = null
 
+    val explicitClientApi: Boolean by lazy {
+        resolver.getAllFiles().any { file ->
+            file.declarations.any {
+                it is KSClassDeclaration && it.include() && it.annotation(EnableImplicitApi::class) !== null
+            }
+        }
+    }
 
-    var serverGenerated = false
-
+    fun snapshotAllTypeNames() {
+        delayedClientTypeNames = resolver.getAllFiles().flatMap { file ->
+            file.declarations.filterIsInstance<KSClassDeclaration>().map { it.fullName }
+        }.toList()
+    }
 
     val collectionType: KSType = resolver
         .getClassDeclarationByName("kotlin.collections.Collection")
@@ -46,12 +49,36 @@ object Context {
         ?.asStarProjectedType()
         ?: error("Internal bug")
 
-    val isHibernateValidatorEnhancement: Boolean =
-        environment.options["jimmer.dto.hibernateValidatorEnhancement"] == "true"
+    //    @Deprecated("Please use Settings")
+//    val isHibernateValidatorEnhancement: Boolean =
+//        environment.options["jimmer.dto.hibernateValidatorEnhancement"] == "true"
+//
+//    @Deprecated("Please use Settings")
+//    val isBuddyIgnoreResourceGeneration: Boolean =
+//        environment.options["jimmer.buddy.ignoreResourceGeneration"]?.trim() == "true"
+//
+//    @Deprecated("Please use Settings")
+//    private val includes: Array<String>? =
+//        environment.options["jimmer.source.includes"]
+//            ?.takeIf { it.isNotEmpty() }
+//            ?.let {
+//                it.trim().split("\\s*,[,;]\\s*").toTypedArray()
+//            }
+//
+//    @Deprecated("Please use Settings")
+//    private val excludes: Array<String>? =
+//        environment.options["jimmer.source.excludes"]
+//            ?.takeIf { it.isNotEmpty() }
+//            ?.let {
+//                it.trim().split("\\s*[,;]\\s*").toTypedArray()
+//            }
+//
+//    val isHibernateValidatorEnhancement: Boolean =
+//        environment.options["jimmer.dto.hibernateValidatorEnhancement"] == "true"
 
-    @Deprecated("Please use Settings")
-    val isBuddyIgnoreResourceGeneration: Boolean =
-        environment.options["jimmer.buddy.ignoreResourceGeneration"]?.trim() == "true"
+//    @Deprecated("Please use Settings")
+//    val isBuddyIgnoreResourceGeneration: Boolean =
+//        environment.options["jimmer.buddy.ignoreResourceGeneration"]?.trim() == "true"
 
     val jackson3 = detectIsJackson3(resolver, environment)
 
@@ -143,16 +170,16 @@ object Context {
         }
     }
 
-    fun include(declaration: KSClassDeclaration): Boolean {
-        val qualifiedName = declaration.qualifiedName!!.asString()
-        if (includes !== null && !includes.any { qualifiedName.startsWith(it) }) {
-            return false
-        }
-        if (excludes !== null && excludes.any { qualifiedName.startsWith(it) }) {
-            return false
-        }
-        return true
-    }
+//    fun include(declaration: KSClassDeclaration): Boolean {
+//        val qualifiedName = declaration.qualifiedName!!.asString()
+//        if (includes !== null && !includes.any { qualifiedName.startsWith(it) }) {
+//            return false
+//        }
+//        if (excludes !== null && excludes.any { qualifiedName.startsWith(it) }) {
+//            return false
+//        }
+//        return true
+//    }
 
     private fun detectIsJackson3(resolver: Resolver, environment: SymbolProcessorEnvironment): Boolean {
         val jackson3Text = environment.options["jimmer.jackson3"]
@@ -163,12 +190,9 @@ object Context {
         }
     }
 
-
-    companion object {
-        private val ORM_ANNOTATION_TYPES = listOf(
-            Entity::class,
-            MappedSuperclass::class,
-            Embeddable::class
-        )
-    }
+    private val ORM_ANNOTATION_TYPES = listOf(
+        Entity::class,
+        MappedSuperclass::class,
+        Embeddable::class
+    )
 }

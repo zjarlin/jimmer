@@ -4,20 +4,17 @@ import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.error.ErrorFamily
 import org.babyfish.jimmer.ksp.Context
-import org.babyfish.jimmer.ksp.Context.serverGenerated
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.include
+import org.babyfish.jimmer.processor.spi.ProcessorSpi
+import site.addzero.context.Settings
 
-class ErrorProcessor(
-    private val checkedException: Boolean
-) {
-    private val ctx = Context
+class ErrorProcessor : ProcessorSpi<Context, Boolean> {
+    override var ctx = Context
+    override val phase: Int get() = 1
+    override val order: Int get() = 1
 
-
-    fun process(): Boolean {
-        if (serverGenerated) {
-            return false
-        }
+    override fun process(): Boolean {
         val errorTypes = findErrorTypes()
         generateErrorTypes(errorTypes)
         return errorTypes.isNotEmpty()
@@ -32,7 +29,9 @@ class ErrorProcessor(
     private fun generateErrorTypes(declarations: Collection<KSClassDeclaration>) {
         val allFiles = ctx.resolver.getNewFiles().toList()
         for (declaration in declarations) {
-            ErrorGenerator(ctx, declaration, checkedException, ctx.environment.codeGenerator).generate(allFiles)
+            ErrorGenerator(declaration, Settings.jimmerClientCheckedException, ctx.environment.codeGenerator).generate(
+                allFiles
+            )
         }
     }
 }

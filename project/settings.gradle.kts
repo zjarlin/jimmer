@@ -2,14 +2,14 @@ rootProject.name = "jimmer"
 
 plugins {
   id("site.addzero.gradle.plugin.modules-buddy") version "+"
-//   id("me.champeau.includegit") version "+"
+   id("me.champeau.includegit") version "+"
 }
-//gitRepositories {
-//    include("lsi") {
-//        uri.set("https://github.com/zjarlin/lsi.git")
-//        branch.set("main")
-//    }
-//}
+gitRepositories {
+    include("lsi") {
+        uri.set("https://github.com/zjarlin/lsi.git")
+        branch.set("main")
+    }
+}
 
 //include(
 //    "jimmer-bom",

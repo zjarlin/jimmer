@@ -8,7 +8,6 @@ dependencies {
 
     implementation(project(":ksp:jimmer-processor-spi"))
     implementation(project(":ksp:jimmer-ksp-ext"))
-    implementation(project(":ksp:jimmer-ksp-constants"))
 //    implementation(project(":ksp:jimmer-ksp-immutable"))
 
 

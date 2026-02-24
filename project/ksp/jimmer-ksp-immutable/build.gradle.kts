@@ -37,7 +37,7 @@ processorBuddy {
 dependencies {
 
     implementation(project(":ksp:jimmer-processor-spi"))
-//    
+//
     implementation(libs.kotlin.stdlib)
     implementation(projects.jimmerCore)
     implementation(projects.jimmerDtoCompiler)
@@ -48,6 +48,5 @@ dependencies {
     implementation(libs.jakarta.validation.api)
 
     implementation(project(":ksp:jimmer-ksp-ext"))
-
-    implementation(project(":ksp:jimmer-ksp-constants"))
+    implementation(project(":checkouts:lsi:lsi-ksp"))
 }
