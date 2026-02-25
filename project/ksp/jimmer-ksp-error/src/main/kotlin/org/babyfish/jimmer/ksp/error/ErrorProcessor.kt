@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.ksp.error
 
+import com.google.auto.service.AutoService
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.error.ErrorFamily
@@ -8,11 +9,9 @@ import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.include
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import site.addzero.context.Settings
-
+@AutoService(ProcessorSpi::class)
 class ErrorProcessor : ProcessorSpi<Context, Boolean> {
     override var ctx = Context
-    override val phase: Int get() = 1
-    override val order: Int get() = 1
 
     override fun process(): Boolean {
         val errorTypes = findErrorTypes()

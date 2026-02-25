@@ -3,6 +3,8 @@ package org.babyfish.jimmer.ksp.tuple
 import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSTypeReference
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.ksp.toClassName
@@ -145,7 +147,7 @@ class TypedTupleGenerator(
                                 "%L = args[%L] as %T",
                                 props[i].name,
                                 i.toString(),
-                                props[i].type.toTypeName())
+                                props[i].type.safeToTypeName())
                         }
                         unindent()
                         add("\n)\n")
@@ -180,7 +182,7 @@ class TypedTupleGenerator(
                         .addParameter(
                             "selection",
                             SELECTION_CLASS_NAME.parameterizedBy(
-                                prop.type.toTypeName()
+                                prop.type.safeToTypeName()
                             )
                         )
                         .returns(buildReturnTypeName(index))
@@ -202,7 +204,7 @@ class TypedTupleGenerator(
                         .addParameter(
                             "selection",
                             SELECTION_CLASS_NAME.parameterizedBy(
-                                props[0].type.toTypeName()
+                                props[0].type.safeToTypeName()
                             )
                         )
                         .returns(buildReturnTypeName(0))
@@ -240,5 +242,23 @@ class TypedTupleGenerator(
                     STAR
                 ).copy(nullable = true)
             )
+
+        /**
+         * 安全的 toTypeName：当类型为 error type（如引用了同轮 KSP 生成的 DTO 类）时，
+         * kotlinpoet-ksp 的 toTypeName() 会抛异常。此方法通过 resolve() 检查 isError，
+         * 若为 error type 则从声明的全限定名构造 ClassName 作为降级方案。
+         */
+        private fun KSTypeReference.safeToTypeName(): TypeName {
+            val resolved = resolve()
+            if (resolved.isError) {
+                val qualifiedName = resolved.declaration.qualifiedName?.asString()
+                    ?: return ANY.copy(nullable = true)
+                val parts = qualifiedName.split(".")
+                val packageName = parts.dropLast(1).joinToString(".")
+                val simpleName = parts.last()
+                return ClassName(packageName, simpleName)
+            }
+            return toTypeName()
+        }
     }
 }

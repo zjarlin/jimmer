@@ -6,6 +6,9 @@ plugins {
 
 
 dependencies {
+    ksp("dev.zacsweers.autoservice:auto-service-ksp:+")
+    // NOTE: It's important that you _don't_ use compileOnly here, as it will fail to resolve at compile-time otherwise
+    implementation("com.google.auto.service:auto-service-annotations:+")
 
     implementation(project(":ksp:jimmer-processor-spi"))
     implementation(project(":ksp:jimmer-ksp-ext"))
@@ -21,8 +24,6 @@ dependencies {
     implementation(libs.kotlinpoet.ksp)
     implementation(libs.javax.validation.api)
     implementation(libs.jakarta.validation.api)
-
-
 
 
 //    implementation(project(":project:jimmer-ksp-error"))

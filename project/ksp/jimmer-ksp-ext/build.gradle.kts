@@ -44,4 +44,6 @@ dependencies {
     implementation(libs.kotlinpoet.ksp)
     implementation(libs.javax.validation.api)
 //    implementation(libs.jakarta.validation.api)
+    implementation(project(":checkouts:lsi:lsi-ksp"))
+    implementation(project(":checkouts:lsi:lsi-jimmer"))
 }

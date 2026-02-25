@@ -64,4 +64,5 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("2000")
     options.compilerArgs.add("-Ajimmer.dto.hibernateValidatorEnhancement=true")
     options.compilerArgs.add("-Ajimmer.dto.fieldVisibility=protected")
+    options.compilerArgs.add("-Ajimmer.entry.withFetchers=true")
 }

@@ -7,7 +7,7 @@ import site.addzero.util.lsi.clazz.LsiClass
  * 当 ImmutableProcessor 完成所有 `@Entity`/`@MappedSuperclass`/`@Embeddable`/`@Immutable`
  * 类型的代码生成后，会通过 [java.util.ServiceLoader] 发现并调用所有实现了此接口的消费者。
  *
- * 参数为 [LsiClass] 列表，消费者通过 `lsi-jimmer` 模块提供的扩展函数访问 Jimmer ORM 语义
+ * 参数为 [LsiClass] 列表((可以理解为apt/ksp 甚至psi 反射 ...的不完备中间态))，消费者通过 `lsi-jimmer` 模块提供的扩展函数访问 Jimmer ORM 语义
  * （如 `isJimmerEntity`、`jimmerIdField`、`jimmerAssociationFields` 等），
  * 无需依赖任何预编译框架（KSP/APT）。
  *

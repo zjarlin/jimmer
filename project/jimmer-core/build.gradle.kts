@@ -17,7 +17,7 @@ dependencies {
     testImplementation(libs.mapstruct)
     testImplementation(libs.lombok)
     testRuntimeOnly(libs.jupiter.engine)
-
+    testRuntimeOnly(libs.jupiter.platform.launcher)
     testAnnotationProcessor(projects.jimmerApt)
     testAnnotationProcessor(libs.lombok)
     testAnnotationProcessor(libs.mapstruct.processor)

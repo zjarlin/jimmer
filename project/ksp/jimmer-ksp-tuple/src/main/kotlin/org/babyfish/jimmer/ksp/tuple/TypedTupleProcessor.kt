@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.ksp.tuple
 
+import com.google.auto.service.AutoService
 import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
@@ -9,13 +10,16 @@ import org.babyfish.jimmer.ksp.MetaException
 import org.babyfish.jimmer.ksp.annotations
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.util.fastResolve
+import org.babyfish.jimmer.processor.spi.ID_DTO
+import org.babyfish.jimmer.processor.spi.ID_IMMUTABLE
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.TypedTuple
 
+@AutoService(ProcessorSpi::class)
 class TypedTupleProcessor : ProcessorSpi<Context, List<KSClassDeclaration>> {
     override var ctx = Context
-    override val phase: Int get() = 2
-    override val order: Int get() = 0
+    override val dependsOn: Set<String> get() = setOf(ID_DTO)
+    override val runsAfter: Set<String> get() = setOf(ID_IMMUTABLE)
 
     override fun process(): List<KSClassDeclaration> {
         val processedDeclarations = mutableListOf<KSClassDeclaration>()

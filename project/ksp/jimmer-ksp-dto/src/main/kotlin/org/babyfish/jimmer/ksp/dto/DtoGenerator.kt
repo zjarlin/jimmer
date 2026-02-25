@@ -29,6 +29,7 @@ import org.babyfish.jimmer.ksp.immutable.generator.*
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.*
+import site.addzero.context.Settings
 import java.io.OutputStreamWriter
 import java.util.*
 import kotlin.math.min
@@ -51,10 +52,7 @@ class DtoGenerator private constructor(
     private val interfacePropNames = abstractPropNames(ctx, dtoType)
 
     init {
-        if ((parent === null)) {
-            throw IllegalArgumentException("The nullity values of `codeGenerator` and `parent` cannot be same")
-        }
-        if (innerClassName !== null) {
+        if ((parent == null) != (innerClassName == null)) {
             throw IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same")
         }
     }
@@ -100,7 +98,8 @@ class DtoGenerator private constructor(
     }
 
     fun generate(allFiles: List<KSFile>) {
-        if (codeGenerator != null) {
+        // 顶级 DTO：parent == null，生成独立文件
+        if (parent == null) {
             codeGenerator.createNewFile(
                 Dependencies(false, *allFiles.toTypedArray()),
                 root.dtoType.packageName,
@@ -116,9 +115,7 @@ class DtoGenerator private constructor(
                         val builder = TypeSpec
                             .classBuilder(dtoType.name!!)
                             .addModifiers(KModifier.OPEN)
-                        if (parent == null) {
-                            builder.addAnnotation(generatedAnnotation(dtoType.dtoFile, mutable))
-                        }
+                        builder.addAnnotation(generatedAnnotation(dtoType.dtoFile, mutable))
                         builder.addTypeAnnotations()
                         _typeBuilder = builder
                         try {
@@ -134,7 +131,7 @@ class DtoGenerator private constructor(
                 fileSpec.writeTo(writer)
                 writer.flush()
             }
-        } else if (innerClassName !== null && parent !== null) {
+        } else if (innerClassName !== null) {
             val builder = TypeSpec
                 .classBuilder(innerClassName)
                 .addModifiers(KModifier.OPEN)
@@ -1988,7 +1985,7 @@ class DtoGenerator private constructor(
     }
 
     private val isHibernateValidatorEnhancementRequired: Boolean by lazy {
-        ctx.isHibernateValidatorEnhancement &&
+        Settings.jimmerDtoHibernateValidatorEnhancement &&
                 dtoType.dtoProps.any { it.inputModifier == DtoModifier.DYNAMIC }
     }
 

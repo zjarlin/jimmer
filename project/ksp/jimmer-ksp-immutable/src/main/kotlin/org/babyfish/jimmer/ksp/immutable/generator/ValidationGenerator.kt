@@ -7,6 +7,13 @@ import com.squareup.kotlinpoet.ParameterizedTypeName
 import org.babyfish.jimmer.ksp.MetaException
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.get
+import org.babyfish.jimmer.ksp.immutable.generator.BIG_DECIMAL_CLASS_NAME
+import org.babyfish.jimmer.ksp.immutable.generator.BIG_INTEGER_CLASS_NAME
+import org.babyfish.jimmer.ksp.immutable.generator.DRAFT_FIELD_EMAIL_PATTERN
+import org.babyfish.jimmer.ksp.immutable.generator.INSTANT_CLASS_NAME
+import org.babyfish.jimmer.ksp.immutable.generator.LOCAL_DATE_CLASS_NAME
+import org.babyfish.jimmer.ksp.immutable.generator.LOCAL_DATE_TIME_CLASS_NAME
+import org.babyfish.jimmer.ksp.immutable.generator.LOCAL_TIME_CLASS_NAME
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.isBuiltInType
 import java.math.BigDecimal
@@ -605,10 +612,13 @@ class ValidationGenerator(
       },
       if (bigNumLiteral != null) {
         arrayOf(prop.name, prop.typeName(overrideNullable = false), cmp)
-      } else if (prop.typeAlias !== null) {
-        arrayOf(prop.name, cmp, "${prop.typeAlias.qualifiedName!!.asString()}(${bound})")
       } else {
-        arrayOf(prop.name, cmp, bound)
+        val typeAlias = prop.typeAlias
+        if (typeAlias !== null) {
+          arrayOf(prop.name, cmp, "${typeAlias.qualifiedName!!.asString()}(${bound})")
+        } else {
+          arrayOf(prop.name, cmp, bound)
+        }
       },
       message
     ) {

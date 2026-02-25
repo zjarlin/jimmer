@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.ksp.dto
 
+import com.google.auto.service.AutoService
 import com.google.devtools.ksp.getClassDeclarationByName
 import org.babyfish.jimmer.Immutable
 import org.babyfish.jimmer.dto.compiler.Anno.EnumValue
@@ -13,15 +14,16 @@ import org.babyfish.jimmer.ksp.client.DocMetadata
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.include
+import org.babyfish.jimmer.processor.spi.ID_IMMUTABLE
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import site.addzero.context.Settings
 
+@AutoService(ProcessorSpi::class)
 class DtoProcessor : ProcessorSpi<Context, Boolean> {
     override var ctx = Context
-    override val phase: Int get() = 1
-    override val order: Int get() = 2
+    override val runsAfter: Set<String> get() = setOf(ID_IMMUTABLE)
 
     private val mutable: Boolean get() = Settings.jimmerDtoMutable
     private val dtoDirs: Collection<String>
@@ -30,7 +32,8 @@ class DtoProcessor : ProcessorSpi<Context, Boolean> {
         } else {
             Settings.jimmerDtoDirs
         }
-    private val defaultNullableInputModifier: DtoModifier get() = Settings.jimmerDtoDefaultNullableInputModifier
+    private val defaultNullableInputModifier: DtoModifier
+        get() = DtoModifier.valueOf(Settings.jimmerDtoDefaultNullableInputModifier.uppercase())
 
     override fun process(): Boolean {
         val dtoTypeMap = findDtoTypeMap()

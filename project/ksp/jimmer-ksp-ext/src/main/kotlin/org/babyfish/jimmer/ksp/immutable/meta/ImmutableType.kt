@@ -7,65 +7,58 @@ import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.squareup.kotlinpoet.ClassName
 import org.babyfish.jimmer.Formula
-import org.babyfish.jimmer.Immutable
 import org.babyfish.jimmer.dto.compiler.spi.BaseType
 import org.babyfish.jimmer.ksp.*
-import org.babyfish.jimmer.ksp.immutable.generator.DRAFT
-import org.babyfish.jimmer.ksp.immutable.generator.FETCHER_DSL
-import org.babyfish.jimmer.ksp.immutable.generator.PROPS
 import org.babyfish.jimmer.ksp.immutable.generator.parseValidationMessages
 import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.sql.*
+import site.addzero.util.lsi.clazz.LsiClass
+import site.addzero.util.lsi.jimmer.*
+import site.addzero.util.lsi_impl.impl.ksp.clazz.toKSClassDeclaration
 import kotlin.reflect.KClass
 
 class ImmutableType(
     ctx: Context,
-    val classDeclaration: KSClassDeclaration
-): BaseType {
-    private val immutableAnnoTypeName: String =
-        listOf(
-            classDeclaration.annotation(Entity::class),
-            classDeclaration.annotation(MappedSuperclass::class),
-            classDeclaration.annotation(Embeddable::class),
-            classDeclaration.annotation(Immutable::class)
-        ).filterNotNull().map {
-            it.annotationType.fastResolve().declaration.fullName
-        }.also {
-            if (it.size > 1) {
-                throw MetaException(
-                    classDeclaration,
-                    "Conflict annotations: $it"
-                )
-            }
-        }.first()
+    val lsiClass: LsiClass
+) : BaseType {
 
-    override val isEntity: Boolean = immutableAnnoTypeName == Entity::class.qualifiedName
+    /** 底层 KSClassDeclaration，仅用于需要 KSP 类型系统的操作 */
+    val classDeclaration: KSClassDeclaration = lsiClass.toKSClassDeclaration()
 
-    val isMappedSuperclass: Boolean = immutableAnnoTypeName == MappedSuperclass::class.qualifiedName
-
-    val isEmbeddable: Boolean = immutableAnnoTypeName == Embeddable::class.qualifiedName
-
-    val isImmutable: Boolean = immutableAnnoTypeName == Immutable::class.qualifiedName
-
-    val simpleName: String = classDeclaration.simpleName.asString()
-
-    val className: ClassName = classDeclaration.className()
-
-    val propsClassName: ClassName = classDeclaration.className { "$it$PROPS" }
-
-    val draftClassName: ClassName = classDeclaration.className { "$it$DRAFT" }
-
-    val fetcherDslClassName: ClassName = classDeclaration.className { "$it$FETCHER_DSL" }
-
-    fun draftClassName(vararg nestedNames: String) =
-        classDeclaration.nestedClassName {
-            mutableListOf<String>().apply {
-                add("$it$DRAFT")
-                for (nestedName in nestedNames) {
-                    add(nestedName)
-                }
-            }
+    init {
+        val conflicting = listOf(
+            ENTITY,
+            MAPPED_SUPERCLASS,
+            EMBEDDABLE,
+            IMMUTABLE,
+        ).filter { fqn -> lsiClass.annotations.any { it.qualifiedName == fqn } }
+        if (conflicting.size > 1) {
+            throw MetaException(classDeclaration, "Conflict annotations: $conflicting")
         }
+        if (conflicting.isEmpty()) {
+            throw MetaException(classDeclaration, "No Jimmer immutable annotation found")
+        }
+    }
+
+    override val isEntity: Boolean = lsiClass.isJimmerEntity
+
+    val isMappedSuperclass: Boolean = lsiClass.isJimmerMappedSuperclass
+
+    val isEmbeddable: Boolean = lsiClass.isJimmerEmbeddable
+
+    val isImmutable: Boolean = lsiClass.isJimmerImmutable
+
+    val simpleName: String = lsiClass.simpleName ?: classDeclaration.simpleName.asString()
+
+    val className: ClassName = lsiClass.className
+
+    val propsClassName: ClassName = lsiClass.propsClassName
+
+    val draftClassName: ClassName = lsiClass.draftClassName
+
+    val fetcherDslClassName: ClassName = lsiClass.fetcherDslClassName
+
+    fun draftClassName(vararg nestedNames: String): ClassName = lsiClass.draftClassName(*nestedNames)
 
     val sqlAnnotationType: KClass<out Annotation>? = run {
         var annotationType: KClass<out Annotation>? = null
@@ -85,23 +78,18 @@ class ImmutableType(
     }
 
     override val name: String
-        get() = classDeclaration.simpleName.asString()
+        get() = lsiClass.simpleName ?: classDeclaration.simpleName.asString()
 
     override val packageName: String
-        get() = classDeclaration.packageName.asString()
+        get() = lsiClass.qualifiedName?.substringBeforeLast('.', "") ?: classDeclaration.packageName.asString()
 
     override val qualifiedName: String
-        get() = classDeclaration.qualifiedName!!.asString()
+        get() = lsiClass.qualifiedName ?: classDeclaration.qualifiedName!!.asString()
 
-    val isAcrossMicroServices: Boolean =
-        classDeclaration.annotation(MappedSuperclass::class)?.get(MappedSuperclass::acrossMicroServices) ?: false
+    val isAcrossMicroServices: Boolean = lsiClass.isJimmerAcrossMicroServices
 
-    val microServiceName: String =
-        (
-            classDeclaration.annotation(Entity::class)?.get(Entity::microServiceName)
-                ?: classDeclaration.annotation(MappedSuperclass::class)?.get(MappedSuperclass::microServiceName)
-                ?: ""
-        ).also {
+    val microServiceName: String = lsiClass.jimmerMicroServiceName
+        .also {
             if (it.isNotEmpty() && isAcrossMicroServices) {
                 throw MetaException(
                     classDeclaration,
@@ -433,7 +421,7 @@ class ImmutableType(
         parseValidationMessages(classDeclaration)
 
     override fun toString(): String =
-        classDeclaration.fullName
+        lsiClass.qualifiedName ?: classDeclaration.fullName
 
     internal fun resolve(ctx: Context, step: Int) {
         for (prop in declaredProperties.values) {
@@ -451,6 +439,6 @@ class ImmutableType(
             setOf(Entity::class, MappedSuperclass::class, Embeddable::class)
 
         @JvmStatic
-        private val FORMULA_CLASS_NAME = Formula::class.qualifiedName
+        val FORMULA_CLASS_NAME = Formula::class.qualifiedName
     }
 }

@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.ksp.transactional
 
+import com.google.auto.service.AutoService
 import com.google.devtools.ksp.isConstructor
 import com.google.devtools.ksp.symbol.*
 import org.babyfish.jimmer.ksp.Context
@@ -10,10 +11,9 @@ import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import site.addzero.context.Settings
 
+@AutoService(ProcessorSpi::class)
 class TxProcessor : ProcessorSpi<Context, Unit> {
     override var ctx = Context
-    override val phase: Int get() = 1
-    override val order: Int get() = 3
 
     override fun process() {
         if (Settings.jimmerBuddyIgnoreResourceGeneration) {

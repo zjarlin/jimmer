@@ -19,6 +19,7 @@ dependencies {
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Ajimmer.source.includes=org.babyfish.jimmer.client.java.")
     options.compilerArgs.add("-Ajimmer.client.checkedException=true")
+    options.compilerArgs.add("-Ajimmer.entry.withFetchers=true")
 }
 
 //tasks.compileTestJava {
@@ -28,6 +29,7 @@ tasks.withType<JavaCompile>().configureEach {
 ksp {
     arg("jimmer.source.includes", "org.babyfish.jimmer.client.kotlin.")
     arg("jimmer.dto.testDirs", "src/test/dto2")
+    arg("jimmer.buddy.ignoreResourceGeneration", "false")
 }
 
 kotlin {
