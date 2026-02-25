@@ -7,9 +7,8 @@ import org.babyfish.jimmer.sql.Entity;
 import org.babyfish.jimmer.sql.MappedSuperclass;
 
 import javax.annotation.processing.Filer;
-import javax.lang.model.element.TypeElement;
-import java.util.Collection;
-import java.util.Map;
+import javax.lang.model.element.*;
+import java.util.*;
 
 public class EntryProcessor {
 
@@ -51,7 +50,7 @@ public class EntryProcessor {
             protected boolean isManaged(TypeElement typeElement, boolean strict) {
                 if (strict) {
                     return typeElement.getAnnotation(Immutable.class) != null ||
-                           typeElement.getAnnotation(Embeddable.class) != null;
+                            typeElement.getAnnotation(Embeddable.class) != null;
                 }
                 return typeElement.getAnnotation(MappedSuperclass.class) == null && context.isImmutable(typeElement);
             }
@@ -69,20 +68,9 @@ public class EntryProcessor {
             new ImmutablesGenerator(packageName, context.getImmutablesTypeName(), allElementMap.values(), filer).generate();
         }
         if (!entityElementMap.isEmpty()) {
-
-            if (context.withTables()) {
-                new TablesGenerator(packageName, context.getTablesTypeName(), entityElementMap.values(), filer, false).generate();
-            }
-
-            if (context.withTableExes()) {
-                new TablesGenerator(packageName, context.getTableExesTypeName(), entityElementMap.values(), filer, true).generate();
-            }
-
-
-            if (context.withFetchers()) {
-                new FetchersGenerator(packageName, context.getFetchersTypeName(), entityElementMap.values(), filer).generate();
-
-            }
+            new TablesGenerator(packageName, context.getTablesTypeName(), entityElementMap.values(), filer, false).generate();
+            new TablesGenerator(packageName, context.getTableExesTypeName(), entityElementMap.values(), filer, true).generate();
+            new FetchersGenerator(packageName, context.getFetchersTypeName(), entityElementMap.values(), filer).generate();
         }
     }
 }
