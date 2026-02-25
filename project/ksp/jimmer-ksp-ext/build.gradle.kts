@@ -11,20 +11,16 @@ processorBuddy {
         mapOf(
             "jimmer.source.includes" to ",",
             "jimmer.source.excludes" to ",",
-            //错误处理器
             "jimmer.dto.defaultNullableInputModifier" to "static",
             "jimmer.dto.dirs" to """listOf("src/mian/dto")""",
             "jimmer.dto.testDirs" to """listOf("src/test/dto")""",
-//            "jimmer.dto.dirs" to "listOf(\"src/mian/dto\")",
-//            "jimmer.dto.testDirs" to "listOf(\"src/test/dto\")",
             "jimmer.dto.mutable" to "true",
-
             "jimmer.client.checkedException" to "true",
             "jimmer.excludedUserAnnotationPrefixes" to ",",
             "jimmer.immutable.isModuleRequired" to "true",
-
             "jimmer.dto.hibernateValidatorEnhancement" to "true",
-            "jimmer.buddy.ignoreResourceGeneration" to "true",
+            //普通用户false,jimmer buddy那边true
+            "jimmer.buddy.ignoreResourceGeneration" to "false",
             )
     )
 }
