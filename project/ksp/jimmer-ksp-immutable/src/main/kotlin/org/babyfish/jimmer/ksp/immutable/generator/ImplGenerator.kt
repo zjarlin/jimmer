@@ -186,6 +186,7 @@ class ImplGenerator(
                                                     idViewBaseProp.targetType!!.idProp!!.name
                                                 )
                                             }
+
                                         manyToManyViewBaseProp !== null ->
                                             addStatement(
                                                 "return %T(Implementor.%L, %N)",
@@ -193,9 +194,14 @@ class ImplGenerator(
                                                 ImplementorGenerator.deeperPropIdPropName(prop),
                                                 manyToManyViewBaseProp.name
                                             )
+
                                         else -> {
                                             if (prop.loadedFieldName === null) {
-                                                addStatement("val %N = this.%N", prop.valueFieldName, prop.valueFieldName)
+                                                addStatement(
+                                                    "val %N = this.%N",
+                                                    prop.valueFieldName,
+                                                    prop.valueFieldName
+                                                )
                                             }
                                             beginControlFlow(
                                                 when {
@@ -306,6 +312,7 @@ class ImplGenerator(
                                                 idViewBaseProp.targetType!!.idProp!!.slotName
                                             )
                                         }
+
                                     manyToManyViewBaseProp !== null -> {
                                         add(
                                             "__isLoaded(%T.byIndex(%L)) && \n%L.all",
@@ -321,6 +328,7 @@ class ImplGenerator(
                                         )
                                         endControlFlow()
                                     }
+
                                     prop.isKotlinFormula -> {
                                         indent()
                                         var first = true
@@ -352,6 +360,7 @@ class ImplGenerator(
                                         add("\n")
                                         unindent()
                                     }
+
                                     else -> {
                                         val cond = prop.loadedFieldName ?: "${prop.valueFieldName} !== null"
                                         addStatement("%L", cond)

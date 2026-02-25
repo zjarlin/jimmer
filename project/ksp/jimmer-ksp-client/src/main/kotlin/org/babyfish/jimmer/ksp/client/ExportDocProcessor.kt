@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.ksp.client
 
+import com.google.auto.service.AutoService
 import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.symbol.ClassKind
@@ -10,6 +11,7 @@ import org.babyfish.jimmer.client.ExportDoc
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.get
+import org.babyfish.jimmer.processor.spi.ID_IMMUTABLE
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import java.io.OutputStreamWriter
 import java.io.Writer
@@ -18,10 +20,11 @@ import java.util.*
 import java.util.regex.Pattern
 
 
+@AutoService(ProcessorSpi::class)
+@Suppress("unused")
 class ExportDocProcessor : ProcessorSpi<Context, Unit> {
     override var ctx = Context
-    override val phase: Int get() = 1
-    override val order: Int get() = 4
+    override val runsAfter: Set<String> get() = setOf(ID_IMMUTABLE)
     override fun process() {
         val pkg = pkg()
         val declarations = mutableListOf<KSClassDeclaration>()
@@ -90,7 +93,7 @@ class ExportDocProcessor : ProcessorSpi<Context, Unit> {
                 }
                 pkg = pkg.parent ?: break
             }
-            return false;
+            return false
         }
 
         fun set(file: KSFile) {
@@ -107,7 +110,7 @@ class ExportDocProcessor : ProcessorSpi<Context, Unit> {
 
         fun sub(packageName: String, autoCreate: Boolean): Pkg {
             var pkg = this
-            for (name in DOT_PATTERN.split(packageName)) {
+            for (name in dotPattern.split(packageName)) {
                 val childPkg = pkg.child(name, autoCreate)
                 if (childPkg === null) {
                     return pkg
@@ -134,7 +137,9 @@ class ExportDocProcessor : ProcessorSpi<Context, Unit> {
     }
 
 
-    private val DOT_PATTERN = Pattern.compile("\\.")
+    companion object {
+        private val dotPattern = Pattern.compile("\\.")
+    }
 
     private fun writeDoc(declarations: List<KSClassDeclaration>, writer: Writer) {
         val properties = Properties()

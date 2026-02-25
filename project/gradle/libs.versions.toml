@@ -1,4 +1,5 @@
 [versions]
+site-addzero-gradle-plugin-kotlin-convention-version = "2026.02.24"
 antlr = "4.13.0"
 buildconfig = "5.3.5"
 caffeine = "2.9.1"
@@ -122,3 +123,5 @@ jackson = ["jackson-annotations", "jackson3-databind", "jackson3-module-kotlin",
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "buildconfig" }
 site-addzero-gradle-plugin-processor-buddy = { id = "site.addzero.gradle.plugin.processor-buddy", version.ref = "site-addzero-gradle-plugin-processor-buddy-version" }
+
+site-addzero-gradle-plugin-kotlin-convention = { id = "site.addzero.gradle.plugin.kotlin-convention", version.ref = "site-addzero-gradle-plugin-kotlin-convention-version" }

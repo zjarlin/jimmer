@@ -64,10 +64,10 @@ fun KSAnnotated.annotation(qualifiedName: String): KSAnnotation? =
 
 fun KSClassDeclaration.include(includes: List<String>, excludes: List<String>): Boolean {
     val qualifiedName = qualifiedName!!.asString()
-    if (includes !== null && !includes.any { qualifiedName.startsWith(it) }) {
+    if (includes.isNotEmpty() && !includes.any { qualifiedName.startsWith(it) }) {
         return false
     }
-    if (excludes !== null && excludes.any { qualifiedName.startsWith(it) }) {
+    if (excludes.isNotEmpty() && excludes.any { qualifiedName.startsWith(it) }) {
         return false
     }
     return true

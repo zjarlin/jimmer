@@ -1,48 +1,14 @@
 package org.babyfish.jimmer.ksp.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
-import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.AnnotationUseSiteTarget
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSFile
-import com.google.devtools.ksp.symbol.Origin
-import com.squareup.kotlinpoet.ANY
-import com.squareup.kotlinpoet.ARRAY
-import com.squareup.kotlinpoet.AnnotationSpec
-import com.squareup.kotlinpoet.BOOLEAN
-import com.squareup.kotlinpoet.BOOLEAN_ARRAY
-import com.squareup.kotlinpoet.BYTE
-import com.squareup.kotlinpoet.BYTE_ARRAY
-import com.squareup.kotlinpoet.CHAR
-import com.squareup.kotlinpoet.CHAR_ARRAY
-import com.squareup.kotlinpoet.COLLECTION
-import com.squareup.kotlinpoet.ClassName
-import com.squareup.kotlinpoet.CodeBlock
-import com.squareup.kotlinpoet.DOUBLE
-import com.squareup.kotlinpoet.DOUBLE_ARRAY
-import com.squareup.kotlinpoet.FLOAT
-import com.squareup.kotlinpoet.FLOAT_ARRAY
-import com.squareup.kotlinpoet.FileSpec
-import com.squareup.kotlinpoet.FunSpec
-import com.squareup.kotlinpoet.INT
-import com.squareup.kotlinpoet.INT_ARRAY
-import com.squareup.kotlinpoet.ITERABLE
-import com.squareup.kotlinpoet.KModifier
-import com.squareup.kotlinpoet.LIST
-import com.squareup.kotlinpoet.LONG
-import com.squareup.kotlinpoet.LONG_ARRAY
-import com.squareup.kotlinpoet.LambdaTypeName
-import com.squareup.kotlinpoet.MAP
-import com.squareup.kotlinpoet.MUTABLE_COLLECTION
-import com.squareup.kotlinpoet.MUTABLE_ITERABLE
-import com.squareup.kotlinpoet.MUTABLE_LIST
-import com.squareup.kotlinpoet.MUTABLE_MAP
-import com.squareup.kotlinpoet.MUTABLE_SET
-import com.squareup.kotlinpoet.MemberName
-import com.squareup.kotlinpoet.ParameterSpec
-import com.squareup.kotlinpoet.ParameterizedTypeName
+import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.SET
@@ -109,11 +75,8 @@ import org.babyfish.jimmer.ksp.immutable.generator.REFERENCE_FETCH_TYPE_CLASS_NA
 import org.babyfish.jimmer.ksp.immutable.generator.VIEW_CLASS_NAME
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
-import org.babyfish.jimmer.ksp.util.ConverterMetadata
-import org.babyfish.jimmer.ksp.util.GenericParser
-import org.babyfish.jimmer.ksp.util.fastResolve
-import org.babyfish.jimmer.ksp.util.generatedAnnotation
-import org.babyfish.jimmer.ksp.util.toPoetTarget
+import org.babyfish.jimmer.ksp.util.*
+import site.addzero.context.Settings
 import java.io.OutputStreamWriter
 import java.util.*
 import kotlin.math.min
@@ -136,10 +99,7 @@ class DtoGenerator private constructor(
     private val interfacePropNames = abstractPropNames(ctx, dtoType)
 
     init {
-        if ((parent === null)) {
-            throw IllegalArgumentException("The nullity values of `codeGenerator` and `parent` cannot be same")
-        }
-        if (innerClassName !== null) {
+        if ((parent == null) != (innerClassName == null)) {
             throw IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same")
         }
     }
@@ -185,7 +145,8 @@ class DtoGenerator private constructor(
     }
 
     fun generate(allFiles: List<KSFile>) {
-        if (codeGenerator != null) {
+        // 顶级 DTO：parent == null，生成独立文件
+        if (parent == null) {
             codeGenerator.createNewFile(
                 Dependencies(false, *allFiles.toTypedArray()),
                 root.dtoType.packageName,
@@ -219,7 +180,7 @@ class DtoGenerator private constructor(
                 fileSpec.writeTo(writer)
                 writer.flush()
             }
-        } else if (innerClassName !== null && parent !== null) {
+        } else if (innerClassName !== null) {
             val builder = TypeSpec
                 .classBuilder(innerClassName)
                 .addModifiers(KModifier.OPEN)
@@ -2064,7 +2025,7 @@ class DtoGenerator private constructor(
     }
 
     private val isHibernateValidatorEnhancementRequired: Boolean by lazy {
-        ctx.isHibernateValidatorEnhancement &&
+        Settings.jimmerDtoHibernateValidatorEnhancement &&
                 dtoType.dtoProps.any { it.inputModifier == DtoModifier.DYNAMIC }
     }
 

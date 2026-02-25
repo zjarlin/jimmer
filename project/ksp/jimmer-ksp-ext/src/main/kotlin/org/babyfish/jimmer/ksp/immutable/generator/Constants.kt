@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonPropertyOrder
-import com.fasterxml.jackson.databind.JsonSerializer
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder
@@ -33,7 +32,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.util.Arrays
 import java.util.Collections
 import java.util.regex.Pattern
 
@@ -55,7 +53,7 @@ val JVM_STATIC_CLASS_NAME = JvmStatic::class.asClassName()
 val COLLECTIONS_CLASS_NAME = Collections::class.asClassName()
 val JSON_IGNORE_CLASS_NAME = JsonIgnore::class.asClassName()
 val JSON_PROPERTY_CLASS_NAME = JsonProperty::class.asClassName()
-internal val JSON_PROPERTY_ORDER_CLASS_NAME = JsonPropertyOrder::class.asClassName()
+val JSON_PROPERTY_ORDER_CLASS_NAME = JsonPropertyOrder::class.asClassName()
 val JSON_CREATOR_CLASS_NAME = JsonCreator::class.asClassName()
 val JSON_SERIALIZE_CLASS_NAME = JsonSerialize::class.asClassName()
 val JSON_DESERIALIZE_CLASS_NAME = JsonDeserialize::class.asClassName()
@@ -272,7 +270,7 @@ val HIBERNATE_VALIDATOR_ENHANCED_BEAN = ClassName(
     "HibernateValidatorEnhancedBean"
 )
 
-internal val PROPAGATION_CLASS_NAME = ClassName(
+val PROPAGATION_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.transaction",
     "Propagation"
 )

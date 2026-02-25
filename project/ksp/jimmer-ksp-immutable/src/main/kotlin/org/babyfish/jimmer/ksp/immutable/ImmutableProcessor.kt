@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.ksp.immutable
 
+import com.google.auto.service.AutoService
 import com.google.devtools.ksp.isPrivate
 import com.google.devtools.ksp.isProtected
 import com.google.devtools.ksp.symbol.ClassKind
@@ -18,19 +19,17 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi_impl.impl.ksp.toLsiClass
-import site.addzero.context.ImmutableSettings
 import site.addzero.context.Settings
 import java.util.ServiceLoader
 import java.util.regex.Pattern
 import kotlin.math.min
 
+@AutoService(ProcessorSpi::class)
 class ImmutableProcessor: ProcessorSpi<Context,Collection<KSClassDeclaration>> {
     override var ctx = Context
-    override val phase: Int get() = 1
-    override val order: Int get() = 0
 
     override fun process(): Collection<KSClassDeclaration> {
-        ImmutableSettings.fromOptions(ctx.environment.options)
+
         val modelMap = findModelMap()
         generateJimmerTypes(modelMap)
         val declarations = modelMap.values.flatten()
@@ -98,7 +97,7 @@ class ImmutableProcessor: ProcessorSpi<Context,Collection<KSClassDeclaration>> {
                 ctx,
                 file,
                 classDeclarations,
-                ImmutableSettings.jimmerExcludedUserAnnotationPrefixes
+                Settings.jimmerExcludedUserAnnotationPrefixes
             )
                 .generate(allFiles)
             if (classDeclarations.size > 1) {
