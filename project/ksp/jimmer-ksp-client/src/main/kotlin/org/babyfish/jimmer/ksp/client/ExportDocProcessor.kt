@@ -11,7 +11,7 @@ import org.babyfish.jimmer.client.ExportDoc
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.get
-import org.babyfish.jimmer.processor.spi.ID_IMMUTABLE
+import org.babyfish.jimmer.processor.spi.IMMUTABLE_PROCESSOR
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import java.io.OutputStreamWriter
 import java.io.Writer
@@ -24,7 +24,7 @@ import java.util.regex.Pattern
 @Suppress("unused")
 class ExportDocProcessor : ProcessorSpi<Context, Unit> {
     override var ctx = Context
-    override val runsAfter: Set<String> get() = setOf(ID_IMMUTABLE)
+    override val runsAfter: Set<String> get() = setOf(IMMUTABLE_PROCESSOR)
     override fun process() {
         val pkg = pkg()
         val declarations = mutableListOf<KSClassDeclaration>()

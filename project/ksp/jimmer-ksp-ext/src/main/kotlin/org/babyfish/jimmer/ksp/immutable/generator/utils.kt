@@ -60,6 +60,8 @@ fun parseValidationMessages(source: KSAnnotated): Map<ClassName, String> =
             val validatedBy = annotationDeclaration
                 .annotations
                 .firstOrNull {
+//                    it.shortName.asString()=="Constraint"
+//                    it.fullName == Constraint::class.qualifiedName
                     it.fullName == "jakarta.validation.Constraint" ||
                             it.fullName == "javax.validation.Constraint"
                 }

@@ -8,7 +8,6 @@ import com.squareup.kotlinpoet.*
 import org.babyfish.jimmer.ksp.util.guessResourceFile
 import java.io.FileReader
 import java.io.OutputStreamWriter
-import java.nio.file.Files
 
 class JimmerModuleGenerator(
     private val codeGenerator: CodeGenerator,

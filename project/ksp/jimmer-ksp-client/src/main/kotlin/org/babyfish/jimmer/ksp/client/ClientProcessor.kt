@@ -19,8 +19,8 @@ import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.ksp.*
 import org.babyfish.jimmer.ksp.Context.delayedClientTypeNames
 import org.babyfish.jimmer.ksp.util.fastResolve
-import org.babyfish.jimmer.processor.spi.ID_IMMUTABLE
-import org.babyfish.jimmer.processor.spi.ID_TUPLE
+import org.babyfish.jimmer.processor.spi.IMMUTABLE_PROCESSOR
+import org.babyfish.jimmer.processor.spi.TYPED_TUPLE_PROCESSOR
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
@@ -31,7 +31,7 @@ import java.nio.charset.StandardCharsets
 
 @AutoService(ProcessorSpi::class)
 class ClientProcessor() : ProcessorSpi<Context, Unit> {
-    override val dependsOn: Set<String> get() = setOf(ID_IMMUTABLE, ID_TUPLE)
+    override val dependsOn: Set<String> get() = setOf(IMMUTABLE_PROCESSOR, TYPED_TUPLE_PROCESSOR)
     private val explicitClientApi get() = Context.explicitClientApi
     private val clientExceptionContext = ClientExceptionContext()
 

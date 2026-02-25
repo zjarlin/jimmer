@@ -58,14 +58,6 @@ interface ProcessorSpi<T, R> {
 
     /** Execute this processor's logic. Called once per KSP round it participates in. */
     fun process(): R
-
-    // ---- Deprecated: retained for binary compatibility, will be removed ----
-
-    @Deprecated("Use dependsOn instead. Will be removed in a future version.", ReplaceWith("dependsOn"))
-    val phase: Int get() = 1
-
-    @Deprecated("Use dependsOn instead. Will be removed in a future version.", ReplaceWith("dependsOn"))
-    val order: Int get() = 0
 }
 
 /**
@@ -74,10 +66,10 @@ interface ProcessorSpi<T, R> {
  * These constants are the fully qualified class names of built-in processors.
  * Using constants avoids typos and enables IDE navigation.
  */
-const val ID_IMMUTABLE = "org.babyfish.jimmer.ksp.immutable.ImmutableProcessor"
-const val ID_ERROR = "org.babyfish.jimmer.ksp.error.ErrorProcessor"
-const val ID_DTO = "org.babyfish.jimmer.ksp.dto.DtoProcessor"
-const val ID_TX = "org.babyfish.jimmer.ksp.transactional.TxProcessor"
-const val ID_EXPORT_DOC = "org.babyfish.jimmer.ksp.client.ExportDocProcessor"
-const val ID_TUPLE = "org.babyfish.jimmer.ksp.tuple.TypedTupleProcessor"
-const val ID_CLIENT = "org.babyfish.jimmer.ksp.client.ClientProcessor"
+const val IMMUTABLE_PROCESSOR = "org.babyfish.jimmer.ksp.immutable.ImmutableProcessor"
+const val ERROR_PROCESSOR = "org.babyfish.jimmer.ksp.error.ErrorProcessor"
+const val DTO_PROCESSOR = "org.babyfish.jimmer.ksp.dto.DtoProcessor"
+const val TX_PROCESSOR = "org.babyfish.jimmer.ksp.transactional.TxProcessor"
+const val EXPORT_DOC_PROCESSOR = "org.babyfish.jimmer.ksp.client.ExportDocProcessor"
+const val TYPED_TUPLE_PROCESSOR = "org.babyfish.jimmer.ksp.tuple.TypedTupleProcessor"
+const val CLIENT_PROCESSOR = "org.babyfish.jimmer.ksp.client.ClientProcessor"
