@@ -29,7 +29,6 @@ class ImmutableProcessor: ProcessorSpi<Context,Collection<KSClassDeclaration>> {
     override var ctx = Context
 
     override fun process(): Collection<KSClassDeclaration> {
-
         val modelMap = findModelMap()
         generateJimmerTypes(modelMap)
         val declarations = modelMap.values.flatten()

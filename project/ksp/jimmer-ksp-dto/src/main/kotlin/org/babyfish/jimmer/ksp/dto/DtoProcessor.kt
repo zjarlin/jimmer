@@ -14,7 +14,7 @@ import org.babyfish.jimmer.ksp.client.DocMetadata
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.include
-import org.babyfish.jimmer.processor.spi.ID_IMMUTABLE
+import org.babyfish.jimmer.processor.spi.IMMUTABLE_PROCESSOR
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
@@ -23,7 +23,7 @@ import site.addzero.context.Settings
 @AutoService(ProcessorSpi::class)
 class DtoProcessor : ProcessorSpi<Context, Boolean> {
     override var ctx = Context
-    override val runsAfter: Set<String> get() = setOf(ID_IMMUTABLE)
+    override val runsAfter: Set<String> get() = setOf(IMMUTABLE_PROCESSOR)
 
     private val mutable: Boolean get() = Settings.jimmerDtoMutable
     private val dtoDirs: Collection<String>

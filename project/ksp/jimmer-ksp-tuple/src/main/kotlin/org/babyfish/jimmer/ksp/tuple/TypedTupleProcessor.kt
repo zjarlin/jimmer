@@ -10,16 +10,16 @@ import org.babyfish.jimmer.ksp.MetaException
 import org.babyfish.jimmer.ksp.annotations
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.util.fastResolve
-import org.babyfish.jimmer.processor.spi.ID_DTO
-import org.babyfish.jimmer.processor.spi.ID_IMMUTABLE
+import org.babyfish.jimmer.processor.spi.DTO_PROCESSOR
+import org.babyfish.jimmer.processor.spi.IMMUTABLE_PROCESSOR
 import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.TypedTuple
 
 @AutoService(ProcessorSpi::class)
 class TypedTupleProcessor : ProcessorSpi<Context, List<KSClassDeclaration>> {
     override var ctx = Context
-    override val dependsOn: Set<String> get() = setOf(ID_DTO)
-    override val runsAfter: Set<String> get() = setOf(ID_IMMUTABLE)
+    override val dependsOn: Set<String> get() = setOf(DTO_PROCESSOR)
+    override val runsAfter: Set<String> get() = setOf(IMMUTABLE_PROCESSOR)
 
     override fun process(): List<KSClassDeclaration> {
         val processedDeclarations = mutableListOf<KSClassDeclaration>()
