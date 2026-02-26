@@ -35,6 +35,8 @@ swaggerUi = "5.31.0"
 scalar = "0.5.47"
 site-addzero-gradle-plugin-processor-buddy-version = "2026.02.28"
 
+auto-service-ksp-version = "+"
+auto-service-annotations-version = "+"
 [libraries]
 antlr = { group = "org.antlr", name = "antlr4", version.ref = "antlr" }
 
@@ -115,13 +117,15 @@ autoservice-gradle-plugin = { group = "com.fueledbycaffeine.autoservice", name =
 
 swagger-ui = { module = "org.webjars:swagger-ui", version.ref = "swaggerUi" }
 scalar-core = { module = "com.scalar.maven:scalar-core", version.ref = "scalar" }
+auto-service-ksp = { group = "dev.zacsweers.autoservice", name = "auto-service-ksp", version.ref = "auto-service-ksp-version" }
+auto-service-annotations = { group = "com.google.auto.service", name = "auto-service-annotations", version.ref = "auto-service-annotations-version" }
 
-[bundles]
-jackson = ["jackson-annotations", "jackson3-databind", "jackson3-module-kotlin", "jackson2-databind", "jackson2-datatype-jsr310", "jackson2-module-kotlin"]
 
 [plugins]
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "buildconfig" }
 site-addzero-gradle-plugin-processor-buddy = { id = "site.addzero.gradle.plugin.processor-buddy", version.ref = "site-addzero-gradle-plugin-processor-buddy-version" }
 
+[bundles]
+jackson = ["jackson-annotations", "jackson3-databind", "jackson3-module-kotlin", "jackson2-databind", "jackson2-datatype-jsr310", "jackson2-module-kotlin"]
 site-addzero-gradle-plugin-kotlin-convention = { id = "site.addzero.gradle.plugin.kotlin-convention", version.ref = "site-addzero-gradle-plugin-kotlin-convention-version" }

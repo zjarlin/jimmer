@@ -2,15 +2,19 @@ rootProject.name = "jimmer"
 
 plugins {
   id("site.addzero.gradle.plugin.modules-buddy") version "+"
-   id("me.champeau.includegit") version "+"
+// 类似 git  submodule,但idea多仓库的话提交列表会有bug,暂时用maven中央依赖
+//   id("me.champeau.includegit") version "+"
 }
-gitRepositories {
-    include("lsi") {
-        uri.set("https://github.com/zjarlin/lsi.git")
-        branch.set("main")
-    }
-}
-
+//gitRepositories {
+//    include("lsi") {
+//        uri.set("https://github.com/zjarlin/lsi.git")
+//        branch.set("main")
+//    }
+//}
+//modules-buddy 可以自发现模块下面是排除模块示例,
+//autoModules{
+//    excludeModules=arrayOf(":xxxx:jimmer-bom")
+//}
 //include(
 //    "jimmer-bom",
 //    "jimmer-core",

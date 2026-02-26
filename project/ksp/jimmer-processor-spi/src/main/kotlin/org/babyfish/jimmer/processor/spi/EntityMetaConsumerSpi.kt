@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.processor.spi
 
-import site.addzero.util.lsi.clazz.LsiClass
+import site.addzero.lsi.clazz.LsiClass
 
 /**
  * Jimmer 实体元数据消费者 SPI 接口。

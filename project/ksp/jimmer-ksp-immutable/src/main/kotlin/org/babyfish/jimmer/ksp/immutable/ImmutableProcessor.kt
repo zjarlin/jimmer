@@ -17,8 +17,8 @@ import org.babyfish.jimmer.processor.spi.ProcessorSpi
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
-import site.addzero.util.lsi.clazz.LsiClass
-import site.addzero.util.lsi_impl.impl.ksp.toLsiClass
+import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.ksp.toLsiClass
 import site.addzero.context.Settings
 import java.util.ServiceLoader
 import java.util.regex.Pattern
