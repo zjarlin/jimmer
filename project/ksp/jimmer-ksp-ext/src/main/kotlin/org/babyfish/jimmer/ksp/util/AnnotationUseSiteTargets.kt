@@ -14,4 +14,5 @@ fun AnnotationUseSiteTarget.toPoetTarget(): AnnotationSpec.UseSiteTarget =
         AnnotationUseSiteTarget.RECEIVER -> AnnotationSpec.UseSiteTarget.RECEIVER
         AnnotationUseSiteTarget.DELEGATE -> AnnotationSpec.UseSiteTarget.DELEGATE
         AnnotationUseSiteTarget.FILE -> AnnotationSpec.UseSiteTarget.FILE
+        AnnotationUseSiteTarget.ALL -> TODO()
     }

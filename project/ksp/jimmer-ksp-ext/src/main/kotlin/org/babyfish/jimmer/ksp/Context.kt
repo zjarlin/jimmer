@@ -12,9 +12,9 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
-import site.addzero.util.lsi.clazz.LsiClass
-import site.addzero.util.lsi_impl.impl.ksp.clazz.KspLsiClass
-import site.addzero.util.lsi_impl.impl.ksp.clazz.toKSClassDeclaration
+import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.ksp.clazz.KspLsiClass
+import site.addzero.lsi.ksp.clazz.toKSClassDeclaration
 
 object Context {
     lateinit var resolver: Resolver

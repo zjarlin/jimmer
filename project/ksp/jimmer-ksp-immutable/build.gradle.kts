@@ -6,12 +6,12 @@ plugins {
 
 
 dependencies {
-    ksp("dev.zacsweers.autoservice:auto-service-ksp:+")
-    implementation("com.google.auto.service:auto-service-annotations:+")
+     ksp(libs.auto.service.ksp)
+    implementation(libs.auto.service.annotations)
 
     implementation(project(":ksp:jimmer-processor-spi"))
     implementation(project(":ksp:jimmer-ksp-ext"))
-    implementation(project(":checkouts:lsi:lsi-ksp"))
+    implementation("site.addzero:lsi-ksp:2026.02.26")
 
     implementation(projects.jimmerDtoCompiler)
     implementation(projects.jimmerCore)

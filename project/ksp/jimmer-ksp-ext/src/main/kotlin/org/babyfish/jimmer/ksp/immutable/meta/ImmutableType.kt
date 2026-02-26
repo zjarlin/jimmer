@@ -12,9 +12,9 @@ import org.babyfish.jimmer.ksp.*
 import org.babyfish.jimmer.ksp.immutable.generator.parseValidationMessages
 import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.sql.*
-import site.addzero.util.lsi.clazz.LsiClass
-import site.addzero.util.lsi.jimmer.*
-import site.addzero.util.lsi_impl.impl.ksp.clazz.toKSClassDeclaration
+import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.jimmer.*
+import site.addzero.lsi.ksp.clazz.toKSClassDeclaration
 import kotlin.reflect.KClass
 
 class ImmutableType(
@@ -22,8 +22,8 @@ class ImmutableType(
     val lsiClass: LsiClass
 ) : BaseType {
 
-    /** 底层 KSClassDeclaration，仅用于需要 KSP 类型系统的操作 */
-    val classDeclaration: KSClassDeclaration = lsiClass.toKSClassDeclaration()
+    /** lsi是中间态,理论上可以完全解耦ksp,暂时先委托着 */
+    val classDeclaration = lsiClass.toKSClassDeclaration()
 
     init {
         val conflicting = listOf(

@@ -3,5 +3,5 @@ plugins {
 }
 
 dependencies {
-    api(project(":checkouts:lsi:lsi-core"))
+    api("site.addzero:lsi-core:2026.02.26")
 }

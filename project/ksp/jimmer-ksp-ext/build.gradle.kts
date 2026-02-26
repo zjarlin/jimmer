@@ -21,7 +21,7 @@ processorBuddy {
             "jimmer.dto.hibernateValidatorEnhancement" to "true",
             //普通用户false,jimmer buddy那边true
             "jimmer.buddy.ignoreResourceGeneration" to "false",
-            )
+        )
     )
 }
 
@@ -40,6 +40,6 @@ dependencies {
     implementation(libs.kotlinpoet.ksp)
 //    implementation(libs.javax.validation.api)
 //    implementation(libs.jakarta.validation.api)
-    implementation(project(":checkouts:lsi:lsi-ksp"))
-    implementation(project(":checkouts:lsi:lsi-jimmer"))
+    implementation("site.addzero:lsi-ksp:2026.02.26")
+    implementation("site.addzero:lsi-jimmer:2026.02.26")
 }

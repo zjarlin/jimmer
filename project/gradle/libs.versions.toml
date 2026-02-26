@@ -17,7 +17,8 @@ jspecify = "1.0.0"
 jupiter = "5.10.2"
 kafka = "0.10.0.0"
 kotlinpoet = "2.1.0"
-ksp = "2.1.20-2.0.0"
+ksp = "2.3.6"
+#ksp = "2.1.20-2.0.0"
 lombok = "1.18.38"
 mapstruct = "1.5.3.Final"
 mysql = "8.0.29"
@@ -33,6 +34,8 @@ quarkus = "3.15.0"
 autoservice-gradle-plugin = "0.1.4"
 site-addzero-gradle-plugin-processor-buddy-version = "2026.02.28"
 
+auto-service-ksp-version = "+"
+auto-service-annotations-version = "+"
 [libraries]
 antlr = { group = "org.antlr", name = "antlr4", version.ref = "antlr" }
 apache-commons-lang3 = { group = "org.apache.commons", name = "commons-lang3", version.ref = "apacheCommonsLang3" }
@@ -109,6 +112,8 @@ quarkus-redis-client = { group = "io.quarkus", name = "quarkus-redis-client", ve
 hibernate-validation = { group = "org.hibernate", name="hibernate-validator", version.ref = "hibernateValitation" }
 autoservice-gradle-plugin = { group = "com.fueledbycaffeine.autoservice", name = "gradle-plugin", version.ref = "autoservice-gradle-plugin" }
 
+auto-service-ksp = { group = "dev.zacsweers.autoservice", name = "auto-service-ksp", version.ref = "auto-service-ksp-version" }
+auto-service-annotations = { group = "com.google.auto.service", name = "auto-service-annotations", version.ref = "auto-service-annotations-version" }
 [plugins]
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "buildconfig" }
