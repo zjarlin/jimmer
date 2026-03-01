@@ -11,10 +11,11 @@ dependencies {
     implementation(libs.slf4j.api)
     implementation(libs.kotlin.stdlib)
     implementation(libs.jetbrains.annotations)
-    compileOnly(libs.jackson2.databind)
-    compileOnly(libs.jackson3.databind)
+    implementation(libs.apache.commons.lang3)
+    implementation(libs.jackson.datatype.jsr310)
     compileOnly(libs.h2)
     compileOnly(libs.postgresql)
+    compileOnly(libs.jackson.module.kotlin)
     compileOnly(libs.caffeine)
     compileOnly(libs.spring.data.redis)
     compileOnly(libs.quarkus.redis.client)
@@ -26,12 +27,15 @@ dependencies {
         exclude("com.ibm.icu", "icu4j")
     }
 
-    testCompileOnly(libs.lombok)
+    testImplementation(libs.lombok)
     testAnnotationProcessor(libs.lombok)
     testAnnotationProcessor(projects.jimmerApt)
 
-    testImplementation(libs.bundles.jackson)
+    testImplementation(libs.jupiter.api)
+    testRuntimeOnly(libs.jupiter.engine)
+
     testImplementation(libs.spring.jdbc)
+
     testImplementation(libs.h2)
     testImplementation(libs.mysql.connector.java)
     testImplementation(libs.postgresql)

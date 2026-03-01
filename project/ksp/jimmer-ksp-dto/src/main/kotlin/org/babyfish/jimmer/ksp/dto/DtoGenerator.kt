@@ -10,40 +10,14 @@ import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSFile
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.PropertySpec
-import com.squareup.kotlinpoet.SET
-import com.squareup.kotlinpoet.SHORT
-import com.squareup.kotlinpoet.SHORT_ARRAY
-import com.squareup.kotlinpoet.STAR
-import com.squareup.kotlinpoet.STRING
-import com.squareup.kotlinpoet.TypeName
-import com.squareup.kotlinpoet.TypeSpec
-import com.squareup.kotlinpoet.UNIT
-import com.squareup.kotlinpoet.WildcardTypeName
 import com.squareup.kotlinpoet.ksp.toAnnotationSpec
 import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.client.meta.Doc
-import org.babyfish.jimmer.dto.compiler.AbstractProp
-import org.babyfish.jimmer.dto.compiler.Anno
-import org.babyfish.jimmer.dto.compiler.Anno.AnnoValue
-import org.babyfish.jimmer.dto.compiler.Anno.ArrayValue
-import org.babyfish.jimmer.dto.compiler.Anno.EnumValue
-import org.babyfish.jimmer.dto.compiler.Anno.LiteralValue
-import org.babyfish.jimmer.dto.compiler.Anno.TypeRefValue
-import org.babyfish.jimmer.dto.compiler.Anno.Value
-import org.babyfish.jimmer.dto.compiler.Constants
-import org.babyfish.jimmer.dto.compiler.DtoModifier
-import org.babyfish.jimmer.dto.compiler.DtoProp
-import org.babyfish.jimmer.dto.compiler.DtoType
-import org.babyfish.jimmer.dto.compiler.LikeOption
+import org.babyfish.jimmer.dto.compiler.*
+import org.babyfish.jimmer.dto.compiler.Anno.*
 import org.babyfish.jimmer.dto.compiler.PropConfig.PathNode
 import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate
-import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate.And
-import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate.Cmp
-import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate.Nullity
-import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate.Or
-import org.babyfish.jimmer.dto.compiler.TypeRef
-import org.babyfish.jimmer.dto.compiler.UserProp
+import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate.*
 import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.impl.util.StringUtil.SnakeCase
 import org.babyfish.jimmer.ksp.Context
@@ -51,28 +25,7 @@ import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.client.DocMetadata
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.get
-import org.babyfish.jimmer.ksp.immutable.generator.BIG_DECIMAL_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.BIG_INTEGER_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.CLASS_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.DESCRIPTION_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.DTO_METADATA_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.DTO_PROP_ACCESSOR
-import org.babyfish.jimmer.ksp.immutable.generator.EMBEDDED_DTO_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.FIXED_INPUT_FIELD_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.HIBERNATE_VALIDATOR_ENHANCED_BEAN
-import org.babyfish.jimmer.ksp.immutable.generator.INPUT_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.JSON_CREATOR_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.JSON_DESERIALIZE_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.JSON_IGNORE_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.JSON_PROPERTY_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.JSON_SERIALIZE_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.JVM_STATIC_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.K_SPECIFICATION_ARGS_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.K_SPECIFICATION_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.NEW_FETCHER_FUN_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.PREDICATE_APPLIER
-import org.babyfish.jimmer.ksp.immutable.generator.REFERENCE_FETCH_TYPE_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.generator.VIEW_CLASS_NAME
+import org.babyfish.jimmer.ksp.immutable.generator.*
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.*
@@ -162,9 +115,7 @@ class DtoGenerator private constructor(
                         val builder = TypeSpec
                             .classBuilder(dtoType.name!!)
                             .addModifiers(KModifier.OPEN)
-                        if (parent == null) {
-                            builder.addAnnotation(generatedAnnotation(dtoType.dtoFile, mutable))
-                        }
+                        builder.addAnnotation(generatedAnnotation(dtoType.dtoFile, mutable))
                         builder.addTypeAnnotations()
                         _typeBuilder = builder
                         try {
@@ -1610,7 +1561,10 @@ class DtoGenerator private constructor(
         throw AssertionError("Dto is too deep")
     }
 
-    private fun CodeBlock.Builder.addValueToEnum(prop: DtoProp<ImmutableType, ImmutableProp>, variableName: String = "it") {
+    private fun CodeBlock.Builder.addValueToEnum(
+        prop: DtoProp<ImmutableType, ImmutableProp>,
+        variableName: String = "it"
+    ) {
         beginControlFlow(
             "when ($variableName as %T)",
             if (propTypeName(prop).copy(nullable = false) == INT) INT else STRING
@@ -1869,7 +1823,12 @@ class DtoGenerator private constructor(
                         .builder()
                         .apply {
                             val hashCondProps = dtoType.modifiers.contains(DtoModifier.INPUT) &&
-                                    dtoType.dtoProps.any { statePropName(it, false) != null || it.inputModifier == DtoModifier.FUZZY }
+                                    dtoType.dtoProps.any {
+                                        statePropName(
+                                            it,
+                                            false
+                                        ) != null || it.inputModifier == DtoModifier.FUZZY
+                                    }
                             if (hashCondProps) {
                                 addStatement("val builder = StringBuilder()")
                                 addStatement("var separator = \"\"")
