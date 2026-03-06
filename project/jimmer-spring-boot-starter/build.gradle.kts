@@ -4,10 +4,10 @@ plugins {
 }
 
 dependencies {
-    api(projects.jimmerSql)
-    api(projects.jimmerSqlKotlin)
-    api(projects.jimmerClient)
-    api(libs.spring.boot.starter.jdbc)
+    api(projects.project.jimmerSql)
+    api(projects.project.jimmerSqlKotlin)
+    api(project(":project:compiler:client:jimmer-client"))
+    api(libs.spring.boot.jdbc)
     api(libs.spring.data.commons)
 
     compileOnly(libs.spring.boot.starter.web)
@@ -19,16 +19,16 @@ dependencies {
 
     annotationProcessor(libs.spring.boot.configurationProcessor)
 
-    testAnnotationProcessor(projects.jimmerApt)
+    testAnnotationProcessor(projects.project.jimmerApt)
     testAnnotationProcessor(libs.lombok)
 
-    kspTest(projects.jimmerKsp)
+    kspTest(projects.project.jimmerKsp)
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.web)
     testImplementation(libs.h2)
     testRuntimeOnly(libs.bundles.jackson)
-    testRuntimeOnly(projects.jimmerClientSwagger)
+    testRuntimeOnly(project(":project:compiler:client:jimmer-client-swagger"))
 }
 
 tasks.processResources {

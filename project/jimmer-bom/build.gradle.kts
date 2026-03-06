@@ -4,18 +4,34 @@ plugins {
 }
 
 dependencies {
+
+
     constraints {
-        api(projects.jimmerApt)
-        api(projects.jimmerClient)
-        api(projects.jimmerClientSwagger)
-        api(projects.jimmerClientScalar)
-        api(projects.jimmerCore)
-        api(projects.jimmerCoreKotlin)
-        api(projects.jimmerDtoCompiler)
-        api(projects.jimmerKsp)
-        api(projects.jimmerMapstructApt)
-        api(projects.jimmerSpringBootStarter)
-        api(projects.jimmerSql)
-        api(projects.jimmerSqlKotlin)
+
+
+        api(project(":project:compiler:client:jimmer-client"))
+
+        api(project(":project:jimmer-apt"))
+
+        api(project(":project:compiler:client:jimmer-client-swagger"))
+
+        api(project(":project:compiler:client:jimmer-client-scalar"))
+
+//        api(projects.project.jimmerApt)
+
+//        api(projects.project.jimmerClient)
+//        api(projects.project.jimmerClientSwagger)
+
+//        api(projects.project.jimmerClientScalar)
+
+        api(projects.project.jimmerCore)
+        api(projects.project.jimmerCoreKotlin)
+        api(projects.project.jimmerDtoCompiler)
+
+        api(projects.project.jimmerKsp)
+        api(projects.project.jimmerMapstructApt)
+        api(projects.project.jimmerSpringBootStarter)
+        api(projects.project.jimmerSql)
+        api(projects.project.jimmerSqlKotlin)
     }
 }

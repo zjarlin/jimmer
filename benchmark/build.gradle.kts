@@ -1,13 +1,15 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
-    id("java")
-    alias(libs.plugins.kotlin)
+    id("kotlin-convention")
     alias(libs.plugins.ksp)
     alias(libs.plugins.springboot)
     alias(libs.plugins.spring.dependency.management)
 }
 
-group = "org.babyfish.jimmer"
 version = "0.1.0"
+
 
 repositories {
     mavenCentral()
@@ -57,4 +59,30 @@ ksp {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+
+afterEvaluate {
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
+    }
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+}
+
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+// 设置 JVM 目标版本为 17 以匹配 IntelliJ 平台
+tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }

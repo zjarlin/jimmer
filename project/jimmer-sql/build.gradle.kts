@@ -7,15 +7,14 @@ plugins {
 }
 
 dependencies {
-    api(projects.jimmerCore)
+    api(projects.project.jimmerCore)
     implementation(libs.slf4j.api)
     implementation(libs.kotlin.stdlib)
     implementation(libs.jetbrains.annotations)
-    implementation(libs.apache.commons.lang3)
-    implementation(libs.jackson.datatype.jsr310)
+//    implementation(libs.jackson.datatype.jsr310)
     compileOnly(libs.h2)
     compileOnly(libs.postgresql)
-    compileOnly(libs.jackson.module.kotlin)
+    compileOnly(libs.jackson.annotations)
     compileOnly(libs.caffeine)
     compileOnly(libs.spring.data.redis)
     compileOnly(libs.quarkus.redis.client)
@@ -29,10 +28,10 @@ dependencies {
 
     testImplementation(libs.lombok)
     testAnnotationProcessor(libs.lombok)
-    testAnnotationProcessor(projects.jimmerApt)
+    testAnnotationProcessor(projects.project.jimmerApt)
 
-    testImplementation(libs.jupiter.api)
-    testRuntimeOnly(libs.jupiter.engine)
+    testImplementation(libs.org.junit.jupiter.junit.jupiter.api)
+    testRuntimeOnly(libs.org.junit.jupiter.junit.jupiter.engine)
 
     testImplementation(libs.spring.jdbc)
 

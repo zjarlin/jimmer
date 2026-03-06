@@ -4,5 +4,5 @@ plugins {
 
 dependencies {
     compileOnly(libs.mapstruct.processor)
-    implementation(projects.jimmerCore)
+    implementation(projects.project.jimmerCore)
 }

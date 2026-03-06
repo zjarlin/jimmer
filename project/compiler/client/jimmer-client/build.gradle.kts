@@ -1,0 +1,40 @@
+plugins {
+    `kotlin-convention`
+    alias(libs.plugins.ksp)
+}
+
+dependencies {
+    implementation(projects.project.jimmerSql)
+    compileOnly(libs.spring.boot)
+    compileOnly(libs.jackson.annotations)
+    annotationProcessor(libs.spring.boot.configurationProcessor)
+
+    testAnnotationProcessor(projects.project.jimmerApt)
+    kspTest(projects.project.jimmerKsp)
+
+    testImplementation(projects.project.jimmerSqlKotlin)
+    testImplementation(libs.spring.web)
+    testImplementation(libs.bundles.jackson)
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-Ajimmer.source.includes=org.babyfish.jimmer.client.java.")
+    options.compilerArgs.add("-Ajimmer.client.checkedException=true")
+    options.compilerArgs.add("-Ajimmer.entry.withFetchers=true")
+}
+
+//tasks.compileTestJava {
+//    options.release.set(21)
+//}
+
+ksp {
+    arg("jimmer.source.includes", "org.babyfish.jimmer.client.kotlin.")
+    arg("jimmer.dto.testDirs", "src/test/dto2")
+    arg("jimmer.buddy.ignoreResourceGeneration", "false")
+}
+
+kotlin {
+    sourceSets.test {
+        kotlin.srcDir("build/generated/ksp/test/kotlin")
+    }
+}

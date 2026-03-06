@@ -5,10 +5,10 @@ plugins {
 }
 
 dependencies {
-    api(projects.jimmerCore)
+    api(projects.project.jimmerCore)
     implementation(libs.kotlin.stdlib)
 
-    testAnnotationProcessor(projects.jimmerApt)
+    testAnnotationProcessor(projects.project.jimmerApt)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.mapstruct)
     testImplementation(libs.javax.validation.api)
@@ -16,7 +16,7 @@ dependencies {
     testImplementation(libs.jackson.annotations)
     testRuntimeOnly(libs.bundles.jackson)
 
-    kspTest(projects.jimmerKsp)
+    kspTest(projects.project.jimmerKsp)
 }
 
 kotlin {

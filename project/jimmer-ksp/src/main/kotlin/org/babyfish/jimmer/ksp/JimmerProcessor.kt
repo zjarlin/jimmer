@@ -10,65 +10,14 @@ import site.addzero.context.Settings
 import java.util.*
 
 /**
- * The single KSP [SymbolProcessor] entry point for Jimmer.
+ * 1. tuple：dependsOn [dto、不可变对象]
+ * 2. transactional：dependsOn [无]
+ * 3. error：dependsOn [无]
+ * 4. dto：dependsOn [不可变对象]
+ * 5. client：dependsOn [不可变对象、tuple]（原规则直接沿用）
+ * 6. 不可变对象：dependsOn [无]（节点属性：独立、不可变对象）*
+ * 根据dependsOn对loadedService进行拓扑排序
  *
- * ## Architecture
- *
- * All Jimmer code-generation logic is implemented as [ProcessorSpi] modules,
- * discovered at runtime via [ServiceLoader]. Each SPI declares:
- * - **[id][ProcessorSpi.id]** — unique identifier (defaults to qualified class name)
- * - **[dependsOn][ProcessorSpi.dependsOn]** — needs compiled output → triggers barrier
- * - **[runsAfter][ProcessorSpi.runsAfter]** — needs in-memory state → same-round ordering
- *
- * ## Barrier derivation
- *
- * A processor is automatically a **barrier** if any other processor lists it in
- * [dependsOn][ProcessorSpi.dependsOn]. No manual annotation needed — the orchestrator
- * computes `barriers = allSpis.flatMap { it.dependsOn }.toSet()` at init time.
- *
- * ## Scheduling Algorithm
- *
- * Processors are topologically sorted by [dependsOn] + [runsAfter] edges.
- * Each KSP round iterates the sorted list and runs every processor whose
- * prerequisites are met:
- * - **[runsAfter]** deps: must have **executed** (this or prior round)
- * - **[dependsOn]** deps: must have **executed** AND if the dep is a barrier
- *   that generated output, must have been **compiled** (prior round only)
- *
- * If a barrier generates nothing, it is marked compiled immediately and
- * its [dependsOn] dependents can run in the same round (fall-through).
- *
- * ### Example execution trace
- *
- * ```
- * barriers (derived) = {ImmutableProcessor, TypedTupleProcessor}
- *   (because ClientProcessor dependsOn both)
- *
- * Topo order: [TxProcessor, ImmutableProcessor, ErrorProcessor,
- *              DtoProcessor, ExportDocProcessor, TypedTupleProcessor, ClientProcessor]
- *
- * Round 1:
- *   TxProcessor         — no deps, runs             → no output
- *   ImmutableProcessor  — no deps, barrier, runs    → generated ⇒ pendingBarrier
- *   ErrorProcessor      — no deps, runs             → generated
- *   DtoProcessor        — runsAfter Immutable (executed ✓) → runs
- *   ExportDocProcessor  — runsAfter Immutable (executed ✓) → runs
- *   TypedTupleProcessor — runsAfter Immutable (executed ✓), barrier → no output ⇒ compiled
- *   ClientProcessor     — dependsOn Immutable (pending barrier, not compiled) → SKIP
- *   ⇒ return deferred, KSP compiles
- *
- * Round 2:
- *   ClientProcessor     — Immutable+Tuple both compiled ✓ → runs
- *   ⇒ done
- * ```
- *
- * ## Why a single SymbolProcessor?
- *
- * KSP does not guarantee execution order across multiple [SymbolProcessor]s.
- * By keeping a single entry point and using SPI for modularity, we get:
- * - **Deterministic ordering** via the dependency graph
- * - **Easy extensibility** — add a module + `@AutoService(ProcessorSpi::class)`, done
- * - **Single user-facing dependency** — users only need `ksp(jimmer-ksp)`
  */
 class JimmerProcessor(
     private val environment: SymbolProcessorEnvironment
@@ -88,7 +37,8 @@ class JimmerProcessor(
         }
         logger.info("[jimmer] Loaded ${sorted.size} ProcessorSpi(s): ${builtin.size} builtin, ${userDefined.size} user-defined")
         for (spi in sorted) {
-            val tag = if (spi::class.qualifiedName?.startsWith("org.babyfish.jimmer.ksp.") == true) "builtin " else "user-ext"
+            val tag =
+                if (spi::class.qualifiedName?.startsWith("org.babyfish.jimmer.ksp.") == true) "builtin " else "user-ext"
             val isBarrier = spi.id in barriers
             logger.info("[jimmer]   $tag | id=${spi.id}, dependsOn=${spi.dependsOn}, runsAfter=${spi.runsAfter}, barrier=$isBarrier")
         }
@@ -145,6 +95,7 @@ class JimmerProcessor(
                         deferred += ksAnnotated
                         if (ksAnnotated.isNotEmpty()) generated = true
                     }
+
                     is Boolean -> if (result) generated = true
                 }
 

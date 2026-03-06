@@ -3,9 +3,9 @@ plugins {
 }
 
 dependencies {
-    implementation(projects.jimmerMapstructApt)
-    implementation(projects.jimmerCore)
-    implementation(projects.jimmerDtoCompiler)
+    implementation(projects.project.jimmerMapstructApt)
+    implementation(projects.project.jimmerCore)
+    implementation(projects.project.jimmerDtoCompiler)
 
     implementation(libs.spring.core)
     implementation(libs.intellij.annotations)

@@ -7,11 +7,11 @@ plugins {
 dependencies {
     implementation(libs.kotlin.stdlib)
     implementation(libs.kotlin.reflect)
-    api(projects.jimmerCoreKotlin)
-    api(projects.jimmerSql)
+    api(projects.project.jimmerCoreKotlin)
+    api(projects.project.jimmerSql)
 
     testImplementation(libs.kotlin.test)
-    kspTest(projects.jimmerKsp)
+    kspTest(projects.project.jimmerKsp)
 
     testImplementation(libs.bundles.jackson)
     testImplementation(libs.h2)
