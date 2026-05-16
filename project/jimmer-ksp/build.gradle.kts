@@ -7,8 +7,7 @@ plugins {
 dependencies {
     ksp(libs.auto.service.ksp)
     implementation(libs.auto.service.annotations)
-    implementation(project(":project:compiler:jimmer-processor-spi"))
-    implementation(project(":project:compiler:jimmer-ksp-ext"))
+    implementation(project(":lib:lsi:lsi-ksp"))
     implementation(project(":project:compiler:jimmer-ksp-ext"))
     implementation(project(":project:compiler:immutable:jimmer-ksp-immutable"))
     implementation(project(":project:compiler:client:jimmer-ksp-client"))
@@ -17,6 +16,5 @@ dependencies {
     implementation(project(":project:compiler:transactional:jimmer-ksp-transactional"))
     implementation(project(":project:compiler:tuple:jimmer-ksp-tuple"))
     implementation(libs.ksp.symbolProcessing.api)
-    implementation(projects.project.jimmerDtoCompiler)
     implementation(project(":project:jimmer-dto-compiler"))
 }

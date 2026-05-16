@@ -7,15 +7,7 @@ plugins {
 dependencies {
     ksp(libs.auto.service.ksp)
     implementation(libs.auto.service.annotations)
-
-    implementation(project(":project:compiler:jimmer-processor-spi"))
     implementation(project(":project:compiler:jimmer-ksp-ext"))
-
-    implementation(projects.project.jimmerCore)
-    implementation(projects.project.jimmerDtoCompiler)
-    implementation(libs.ksp.symbolProcessing.api)
-//    implementation(libs.kotlinpoet)
-    implementation(libs.kotlinpoet.ksp)
-//    implementation(libs.javax.validation.api)
-
+    implementation(project(":project:compiler:client:client-metadata-extractor"))
+    implementation(project(":project:compiler:client:client-metadata-generator"))
 }

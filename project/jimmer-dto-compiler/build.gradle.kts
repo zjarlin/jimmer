@@ -7,6 +7,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":lib:lsi:lsi-core"))
     implementation(libs.jetbrains.annotations)
     antlr(libs.antlr)
 }

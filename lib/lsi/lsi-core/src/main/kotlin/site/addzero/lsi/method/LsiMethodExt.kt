@@ -1,6 +1,25 @@
 package site.addzero.lsi.method
 
+import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.clazz.LsiClass
+import kotlin.reflect.KClass
+
+fun LsiMethod.annotation(annotationType: KClass<out Annotation>): LsiAnnotation? =
+    annotation(annotationType.qualifiedName!!)
+
+fun LsiMethod.annotation(qualifiedName: String): LsiAnnotation? =
+    // 覆盖来源：project/compiler/client/jimmer-ksp-client/.../ClientProcessor / LsiClientSchemaTraversal 方法注解判定
+    // 覆盖来源：project/compiler/transactional/jimmer-ksp-transactional/.../TxGenerator 方法注解复制
+    // 迁移说明：方法注解查询收敛到 lsi-core，后续 APT/KSP 共用，不再经由旧 `org.babyfish.jimmer.ksp.annotation`
+    annotations.firstOrNull { it.qualifiedName == qualifiedName }
+
+fun LsiParameter.annotation(annotationType: KClass<out Annotation>): LsiAnnotation? =
+    annotation(annotationType.qualifiedName!!)
+
+fun LsiParameter.annotation(qualifiedName: String): LsiAnnotation? =
+    // 覆盖来源：project/compiler/client/jimmer-ksp-client/.../LsiClientSchemaTraversal parameter @ApiIgnore 判定
+    // 迁移说明：参数注解查询迁移到 lsi-core，移除 client traversal 对旧 KSP 工具包的依赖
+    annotations.firstOrNull { it.qualifiedName == qualifiedName }
 
 /**
  * 检查方法是否具有指定的注解

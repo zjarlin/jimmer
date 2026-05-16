@@ -1,17 +1,27 @@
 package org.babyfish.jimmer.apt.entry;
 
-import com.squareup.javapoet.*;
-import org.babyfish.jimmer.apt.GeneratorException;
-import org.babyfish.jimmer.apt.immutable.generator.Constants;
-import org.babyfish.jimmer.apt.util.ClassNames;
+import site.addzero.lsi.clazz.LsiClass;
+import site.addzero.lsi.poet.LsiAnnotationSpec;
+import site.addzero.lsi.poet.LsiCallableSpec;
+import site.addzero.lsi.poet.LsiCallableSpecKind;
+import site.addzero.lsi.poet.LsiCallExpression;
+import site.addzero.lsi.poet.LsiModifier;
+import site.addzero.lsi.poet.LsiParameterSpec;
+import site.addzero.lsi.poet.LsiPropertyAccessExpression;
+import site.addzero.lsi.poet.LsiReturnStatement;
+import site.addzero.lsi.poet.LsiTypeExpression;
+import site.addzero.lsi.poet.LsiTypeSpec;
+import site.addzero.lsi.poet.LsiTypeSpecKind;
 
-import javax.annotation.processing.Filer;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
-import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
 
-import static org.babyfish.jimmer.apt.util.GeneratedAnnotation.generatedAnnotation;
+import static site.addzero.lsi.codegen.JavaCodegenConstants.DRAFT_CONSUMER_CLASS_NAME;
+import static site.addzero.lsi.codegen.JimmerCodegenAnnotationExtKt.generatedAnnotation;
+import static site.addzero.lsi.clazz.LsiClassNameExtKt.toLsiClassName;
 
 public class ImmutablesGenerator extends AbstractSummaryGenerator {
 
@@ -19,75 +29,96 @@ public class ImmutablesGenerator extends AbstractSummaryGenerator {
 
     private final String simpleName;
 
-    private final Collection<TypeElement> typeElements;
+    private final Collection<LsiClass> typeElements;
 
-    private final Filer filer;
-
-    public ImmutablesGenerator(String packageName, String simpleName, Collection<TypeElement> typeElements, Filer filer) {
+    public ImmutablesGenerator(String packageName, String simpleName, Collection<LsiClass> typeElements) {
         this.packageName = packageName;
         this.typeElements = typeElements;
         this.simpleName = simpleName;
-        this.filer = filer;
     }
 
     public void generate() {
-        TypeSpec typeSpec = typeSpec();
-        try {
-            JavaFile
-                    .builder(
-                            packageName,
-                            typeSpec
+        write(packageName, typeSpec());
+    }
+
+    private LsiTypeSpec typeSpec() {
+        List<LsiCallableSpec> callables = new ArrayList<>(typeElements.size() * 2);
+        for (LsiClass typeElement : typeElements) {
+            String methodName = distinctName("create" + typeElement.getSimpleName());
+            callables.add(creator(typeElement, methodName, false));
+            callables.add(creator(typeElement, methodName, true));
+        }
+        return new LsiTypeSpec(
+                simpleName,
+                LsiTypeSpecKind.INTERFACE,
+                Collections.singletonList(generatedAnnotation()),
+                EnumSet.of(LsiModifier.PUBLIC),
+                null,
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                callables,
+                Collections.emptyList(),
+                null
+        );
+    }
+
+    private LsiCallableSpec creator(LsiClass typeElement, String methodName, boolean withBase) {
+        site.addzero.lsi.poet.LsiClassName immutableClassName = toLsiClassName(typeElement, name -> name, false);
+        site.addzero.lsi.poet.LsiClassName draftClassName = toLsiClassName(typeElement, name -> name + "Draft", false);
+        List<LsiParameterSpec> parameters = new ArrayList<>(withBase ? 2 : 1);
+        if (withBase) {
+            parameters.add(
+                    new LsiParameterSpec(
+                            "base",
+                            immutableClassName,
+                            Collections.emptyList(),
+                            Collections.emptySet(),
+                            null
                     )
-                    .indent("    ")
-                    .build()
-                    .writeTo(filer);
-        } catch (IOException ex) {
-            throw new GeneratorException(
-                    String.format(
-                            "Cannot generate draft interface for '%s'",
-                            packageName + '.' + simpleName
-                    ),
-                    ex
             );
         }
-    }
-
-    private TypeSpec typeSpec() {
-        TypeSpec.Builder builder = TypeSpec
-                .interfaceBuilder(ClassName.get(packageName, simpleName))
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(generatedAnnotation());
-        for (TypeElement typeElement : typeElements) {
-            String methodName = distinctName("create" + typeElement.getSimpleName().toString());
-            builder.addMethod(creator(typeElement, methodName, false));
-            builder.addMethod(creator(typeElement, methodName,true));
-        }
-        return builder.build();
-    }
-
-    private MethodSpec creator(TypeElement typeElement, String methodName, boolean withBase) {
-        ClassName immutableClassName = ClassName.get(typeElement);
-        ClassName draftClassName = ClassNames.of(typeElement, name -> name + "Draft");
-        MethodSpec.Builder builder = MethodSpec
-                .methodBuilder(methodName)
-                .addModifiers(Modifier.PUBLIC, Modifier.STATIC);
-        if (withBase) {
-            builder.addParameter(immutableClassName, "base");
-        }
-        builder
-                .addParameter(
-                        ParameterizedTypeName.get(
-                                Constants.DRAFT_CONSUMER_CLASS_NAME,
-                                draftClassName
+        parameters.add(
+                new LsiParameterSpec(
+                        "block",
+                        new site.addzero.lsi.poet.LsiParameterizedTypeName(
+                                DRAFT_CONSUMER_CLASS_NAME,
+                                Collections.singletonList(draftClassName),
+                                false
                         ),
-                        "block"
+                        Collections.emptyList(),
+                        Collections.emptySet(),
+                        null
                 )
-                .returns(ClassName.get(typeElement));
+        );
+        List<site.addzero.lsi.poet.LsiExpression> arguments = new ArrayList<>(withBase ? 2 : 1);
         if (withBase) {
-            builder.addStatement("return $T.$$.produce(base, block)", draftClassName);
-        } else {
-            builder.addStatement("return $T.$$.produce(block)", draftClassName);
+            arguments.add(new site.addzero.lsi.poet.LsiNameExpression("base"));
         }
-        return builder.build();
+        arguments.add(new site.addzero.lsi.poet.LsiNameExpression("block"));
+        return new LsiCallableSpec(
+                LsiCallableSpecKind.FUNCTION,
+                methodName,
+                false,
+                null,
+                Collections.<LsiAnnotationSpec>emptyList(),
+                EnumSet.of(LsiModifier.PUBLIC, LsiModifier.STATIC),
+                Collections.emptyList(),
+                parameters,
+                immutableClassName,
+                Collections.emptyList(),
+                null,
+                Collections.singletonList(
+                        new LsiReturnStatement(
+                                new LsiCallExpression(
+                                        new LsiPropertyAccessExpression(new LsiTypeExpression(draftClassName), "$$"),
+                                        "produce",
+                                        Collections.emptyList(),
+                                        arguments
+                                )
+                        )
+                )
+        );
     }
 }

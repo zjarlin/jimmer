@@ -1,18 +1,20 @@
 package site.addzero.lsi.apt.type
 
 import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.apt.anno.toLsiAnnotations
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.type.LsiType
-import site.addzero.lsi.apt.anno.toLsiAnnotations
-import site.addzero.lsi.apt.clazz.AptLsiClass
+import javax.lang.model.element.TypeElement
 import javax.lang.model.type.ArrayType
 import javax.lang.model.type.DeclaredType
 import javax.lang.model.type.PrimitiveType
 import javax.lang.model.type.TypeMirror
-import javax.lang.model.element.TypeElement
 import javax.lang.model.util.Elements
 
-class AptLsiType(private val elements: Elements, private val typeMirror: TypeMirror) : LsiType {
+class AptLsiType(
+    internal val elements: Elements,
+    internal val typeMirror: TypeMirror
+) : LsiType {
 
     override val simpleName: String? by lazy {
         typeMirror.toString().substringAfterLast('.')
@@ -33,17 +35,18 @@ class AptLsiType(private val elements: Elements, private val typeMirror: TypeMir
     override val isCollectionType: Boolean by lazy {
         val qName = qualifiedName ?: ""
         qName.startsWith("java.util.") &&
-            (qName.contains("List") || qName.contains("Set") || qName.contains("Collection") || qName.contains("Map"))
+                (qName.contains("List") || qName.contains("Set") || qName.contains("Collection") || qName.contains("Map"))
     }
 
     override val typeParameters: List<LsiType> by lazy {
         when (typeMirror) {
             is DeclaredType -> typeMirror.typeArguments.map {
-                _root_ide_package_.site.addzero.lsi.apt.type.AptLsiType(
+                AptLsiType(
                     elements,
                     it
                 )
             }
+
             else -> emptyList()
         }
     }
@@ -58,6 +61,7 @@ class AptLsiType(private val elements: Elements, private val typeMirror: TypeMir
                 elements,
                 typeMirror.componentType
             )
+
             else -> null
         }
     }
@@ -75,9 +79,10 @@ class AptLsiType(private val elements: Elements, private val typeMirror: TypeMir
                     element
                 ) else null
             }
+
             else -> null
         }
     }
 }
 
-// Removed unused extension function - AptLsiType now requires Elements
+

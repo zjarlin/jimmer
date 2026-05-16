@@ -1,69 +1,63 @@
 package org.babyfish.jimmer.ksp.tuple
 
 import com.google.auto.service.AutoService
-import com.google.devtools.ksp.getClassDeclarationByName
-import com.google.devtools.ksp.symbol.ClassKind
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.Modifier
-import org.babyfish.jimmer.ksp.Context
-import org.babyfish.jimmer.ksp.MetaException
-import org.babyfish.jimmer.ksp.annotations
-import org.babyfish.jimmer.ksp.fullName
-import org.babyfish.jimmer.ksp.util.fastResolve
-import org.babyfish.jimmer.processor.spi.DTO_PROCESSOR
-import org.babyfish.jimmer.processor.spi.IMMUTABLE_PROCESSOR
-import org.babyfish.jimmer.processor.spi.ProcessorSpi
-import org.babyfish.jimmer.sql.TypedTuple
+import site.addzero.context.Context
+import site.addzero.lsi.jimmer.processor.spi.DTO_PROCESSOR
+import site.addzero.lsi.jimmer.processor.spi.IMMUTABLE_PROCESSOR
+import site.addzero.lsi.jimmer.tuple.metadata.extractor.TypedTupleMetadataExtraction
+import site.addzero.lsi.jimmer.tuple.metadata.generator.TypedTupleProcessorSupport
+import site.addzero.lsi.jimmer.tuple.metadata.model.TypedTupleMetadata
+import site.addzero.lsi.poet.LsiFileSpec
+import site.addzero.lsi.processor.ProcessorSpi
 
 @AutoService(ProcessorSpi::class)
-class TypedTupleProcessor : ProcessorSpi<Context, List<KSClassDeclaration>> {
+class TypedTupleProcessor : ProcessorSpi<Context, Boolean> {
     override var ctx = Context
-    override val dependsOn: Set<String> get() = setOf(DTO_PROCESSOR)
-    override val runsAfter: Set<String> get() = setOf(IMMUTABLE_PROCESSOR)
+    // 覆盖来源：用户给定规则：tuple dependsOn [dto、immutable]
+    override val dependsOn: Set<String> get() = setOf(DTO_PROCESSOR, IMMUTABLE_PROCESSOR)
+    private val collectedTypes = linkedMapOf<String, TypedTupleMetadata>()
 
-    override fun process(): List<KSClassDeclaration> {
-        val processedDeclarations = mutableListOf<KSClassDeclaration>()
-        for (file in ctx.resolver.getAllFiles()) {
-            for (declaration in file.declarations) {
-                if (declaration.annotations { it.fullName == TypedTuple::class.qualifiedName }.isNotEmpty()) {
-                    generate(declaration as KSClassDeclaration)
-                    processedDeclarations += declaration
-                }
-            }
-        }
-        if (ctx.delayedTupleTypeNames != null) {
-            for (delayedClientTypeName in ctx.delayedTupleTypeNames) {
-                val declaration = ctx.resolver.getClassDeclarationByName(delayedClientTypeName)!!
-                generate(declaration)
-                processedDeclarations += declaration
-            }
-        }
-        return processedDeclarations
+    override fun onRound() {
+        // 覆盖来源：project/compiler/tuple/jimmer-ksp-tuple/.../TypedTupleProcessor.process
+        // 原 process() 单阶段“扫描+校验+生成”路径中的扫描部分迁移到 onRound()
+        collect(
+            TypedTupleProcessorSupport.collectRoundTypes(
+                resolver = ctx.lsiResolver,
+                delayedTypeNames = ctx.delayedTupleTypeNames,
+            )
+        )
     }
 
-    private fun generate(declaration: KSClassDeclaration) {
-        if (!declaration.modifiers.contains(Modifier.DATA)) {
-            throw MetaException(
-                declaration,
-                "The type decorated by @${TypedTuple::class.qualifiedName} must be data class"
-            )
+    override fun onFinish(): Boolean {
+        // 覆盖来源：project/compiler/tuple/jimmer-ksp-tuple/.../TypedTupleProcessor.process
+        // 原 process() 单阶段“扫描+校验+生成”路径中的生成部分迁移到 onFinish() 收尾阶段
+        if (collectedTypes.isEmpty()) {
+            return false
         }
-        if (declaration.parentDeclaration is KSClassDeclaration) {
-            throw MetaException(
-                declaration,
-                "The type decorated by @${TypedTuple::class.qualifiedName} must be top-level class"
-            )
+        for (fileSpec in TypedTupleProcessorSupport.generateFileSpecs(collectedTypes.values)) {
+            // 覆盖来源：project/compiler/tuple/jimmer-ksp-tuple/.../TypedTupleProcessor.onFinish 生成入口
+            // 迁移说明：onFinish 直接消费 onRound 收集的 `TypedTupleMetadata`，处理器入口只保留 orchestration
+            writeFileSpec(fileSpec)
         }
-        if (declaration.superTypes.any {
-                val superType = it.fastResolve().declaration as KSClassDeclaration
-                superType.classKind == ClassKind.CLASS &&
-                        superType.fullName != "kotlin.Any"
-            }) {
-            throw MetaException(
-                declaration,
-                "The type decorated by @${TypedTuple::class.qualifiedName} cannot inherit other class"
-            )
+        collectedTypes.clear()
+        return true
+    }
+
+    private fun collect(
+        extraction: TypedTupleMetadataExtraction,
+    ) {
+        for (metadata in extraction.types) {
+            // 覆盖来源：project/compiler/tuple/jimmer-ksp-tuple/.../TypedTupleProcessor.onFinish 生成阶段声明缓存
+            // 迁移说明：收尾阶段缓存对象从 `LsiClass` 下沉为纯 `TypedTupleMetadata`，processor 只保留调度与写文件职责
+            collectedTypes.putIfAbsent(metadata.id, metadata)
         }
-        TypedTupleGenerator(declaration).generate()
+    }
+
+    private fun writeFileSpec(
+        fileSpec: LsiFileSpec,
+    ) {
+        // 覆盖来源：project/compiler/tuple/jimmer-ksp-tuple/.../TypedTupleGenerator.generate 输出文件创建
+        // 迁移说明：processor 主链路只向 `LsiFiler` 交付 `LsiFileSpec`，KotlinPoet 渲染收敛到 adapter 内部
+        ctx.lsiFiler.createSourceFile(fileSpec)
     }
 }

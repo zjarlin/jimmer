@@ -1,6 +1,25 @@
 package site.addzero.lsi.field
 
+import site.addzero.lsi.anno.LsiAnnotation
+import kotlin.reflect.KClass
 
+fun LsiField.annotations(predicate: (LsiAnnotation) -> Boolean): List<LsiAnnotation> =
+  // 覆盖来源：project/compiler/jimmer-ksp-ext/.../utils.KSAnnotated.annotations(KSPropertyDeclaration)
+  // 迁移说明：`LsiField.annotations` 过滤语义上收至 lsi-core，统一承接 property/getter/returnType 注解集合
+  annotations.filter(predicate)
+
+fun LsiField.annotations(annotationType: KClass<out Annotation>): List<LsiAnnotation> =
+  annotations { it.qualifiedName == annotationType.qualifiedName }
+
+fun LsiField.annotation(annotationType: KClass<out Annotation>): LsiAnnotation? =
+  annotation(annotationType.qualifiedName!!)
+
+fun LsiField.annotation(qualifiedName: String): LsiAnnotation? =
+  // 覆盖来源：project/compiler/client/jimmer-ksp-client/.../ClientProcessor field 注解判定
+  // 覆盖来源：project/compiler/client/jimmer-ksp-client/.../DocMetadata field Description 判定
+  // 覆盖来源：project/compiler/client/jimmer-ksp-client/.../ExportDocProcessor / enum/property 文档扫描
+  // 迁移说明：字段单注解查询迁移到 lsi-core，compiler 不再依赖旧 `org.babyfish.jimmer.ksp.annotation`
+  annotations.firstOrNull { it.qualifiedName == qualifiedName }
 
 
 fun LsiField.defaultValue(): String {
@@ -82,4 +101,3 @@ fun LsiField.hasFqAnnotation(vararg annotationNames: String): Boolean {
     }
   }
 }
-

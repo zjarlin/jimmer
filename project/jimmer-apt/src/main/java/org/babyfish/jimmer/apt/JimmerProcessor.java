@@ -1,5 +1,9 @@
 package org.babyfish.jimmer.apt;
 
+import kotlin.Unit;
+import site.addzero.context.Context;
+import site.addzero.context.Settings;
+import site.addzero.lsi.apt.diagnostic.AptLsiDiagnostics;
 import org.babyfish.jimmer.apt.client.ClientProcessor;
 import org.babyfish.jimmer.apt.client.ExportDocProcessor;
 import org.babyfish.jimmer.apt.client.FetchByUnsupportedException;
@@ -12,19 +16,24 @@ import org.babyfish.jimmer.apt.tuple.TypedTupleProcessor;
 import org.babyfish.jimmer.client.EnableImplicitApi;
 import org.babyfish.jimmer.client.FetchBy;
 import org.babyfish.jimmer.dto.compiler.DtoAstException;
-import org.babyfish.jimmer.dto.compiler.DtoModifier;
 import org.babyfish.jimmer.dto.compiler.DtoUtils;
 import org.babyfish.jimmer.sql.EnableDtoGeneration;
 import org.babyfish.jimmer.sql.TypedTuple;
+import site.addzero.lsi.apt.clazz.AptLsiClassDocMetadata;
+import site.addzero.lsi.apt.context.AptLsiContext;
+import site.addzero.lsi.clazz.LsiClass;
+import site.addzero.lsi.diagnostic.LsiDiagnosticAnchor;
+import site.addzero.lsi.diagnostic.MetaException;
+import site.addzero.lsi.jimmer.dto.LsiDtoModifier;
 
+import java.io.File;
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
-import javax.lang.model.element.Modifier;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
-import javax.tools.StandardLocation;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -43,8 +52,6 @@ import java.util.stream.Collectors;
 })
 public class JimmerProcessor extends AbstractProcessor {
 
-    private Context context;
-
     private Elements elements;
 
     private Messager messager;
@@ -53,7 +60,7 @@ public class JimmerProcessor extends AbstractProcessor {
 
     private Collection<String> dtoTestDirs;
 
-    private DtoModifier defaultNullableInputModifier = DtoModifier.STATIC;
+    private LsiDtoModifier defaultNullableInputModifier = LsiDtoModifier.STATIC;
 
     private boolean checkedException;
 
@@ -65,11 +72,15 @@ public class JimmerProcessor extends AbstractProcessor {
 
     private boolean toolGenerated;
 
-    private Set<String> delayedTupleTypeNames;
+    private String immutablesTypeName = "Immutables";
 
-    private List<String> delayedClientTypeNames;
+    private String tablesTypeName = "Tables";
 
-    private Modifier dtoFieldModifier;
+    private String tableExesTypeName = "TableExes";
+
+    private String fetchersTypeName = "Fetchers";
+
+    private boolean buddyIgnoreResourceGeneration;
 
     @Override
     public SourceVersion getSupportedSourceVersion() {
@@ -79,17 +90,8 @@ public class JimmerProcessor extends AbstractProcessor {
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
+        AptLsiContext.INSTANCE.init(processingEnv, null);
         messager = processingEnv.getMessager();
-        String includes = processingEnv.getOptions().get("jimmer.source.includes");
-        String excludes = processingEnv.getOptions().get("jimmer.source.excludes");
-        String[] includeArr = null;
-        String[] excludeArr = null;
-        if (includes != null && !includes.isEmpty()) {
-            includeArr = includes.trim().split("\\s*,\\s*");
-        }
-        if (excludes != null && !excludes.isEmpty()) {
-            excludeArr = excludes.trim().split("\\s*,\\s*");
-        }
         this.dtoDirs = dtoDirs(
                 processingEnv,
                 "jimmer.dto.dirs",
@@ -104,74 +106,18 @@ public class JimmerProcessor extends AbstractProcessor {
         );
         String inputModifierText = processingEnv.getOptions().get("jimmer.dto.defaultNullableInputModifier");
         if (inputModifierText != null && !inputModifierText.isEmpty()) {
-            switch (inputModifierText) {
-                case "fixed":
-                    defaultNullableInputModifier = DtoModifier.FIXED;
-                    break;
-                case "static":
-                    defaultNullableInputModifier = DtoModifier.STATIC;
-                    break;
-                case "dynamic":
-                    defaultNullableInputModifier = DtoModifier.DYNAMIC;
-                    break;
-                case "fuzzy":
-                    defaultNullableInputModifier = DtoModifier.FUZZY;
-                    break;
-                default:
-                    throw new IllegalArgumentException(
-                            "The apt options `jimmer.dto.defaultNullableInputModifier` can only be " +
-                                    "\"fixed\", \"static\", \"dynamic\" or \"fuzzy\""
-                    );
-            }
+            defaultNullableInputModifier = LsiDtoModifier.fromNullableInputOption(inputModifierText);
         }
 
         checkedException = "true".equals(processingEnv.getOptions().get("jimmer.client.checkedException"));
         ignoreJdkWarning = "true".equals(processingEnv.getOptions().get("jimmer.client.ignoreJdkWarning"));
-        String dtoFieldVisibility = processingEnv.getOptions().get("jimmer.dto.fieldVisibility");
-        if (dtoFieldVisibility == null) {
-            dtoFieldModifier = Modifier.PRIVATE;
-        } else {
-            switch (dtoFieldVisibility) {
-                case "private":
-                    dtoFieldModifier = Modifier.PRIVATE;
-                    break;
-                case "protected":
-                    dtoFieldModifier = Modifier.PROTECTED;
-                    break;
-                case "public":
-                    dtoFieldModifier = Modifier.PUBLIC;
-                    break;
-                default:
-                    throw new IllegalArgumentException(
-                            "The apt options `jimmer.dto.fieldVisibility` can only be " +
-                                    "\"private\", \"protected\" or \"public\""
-                    );
-            }
-        }
-        context = new Context(
-                processingEnv.getElementUtils(),
-                processingEnv.getTypeUtils(),
-                processingEnv.getFiler(),
-                "true".equals(processingEnv.getOptions().get("jimmer.keepIsPrefix")),
-                includeArr,
-                excludeArr,
-                detectIsJackson3(processingEnv),
-                processingEnv.getOptions().get("jimmer.entry.immutables"),
-                processingEnv.getOptions().get("jimmer.entry.tables"),
-                processingEnv.getOptions().get("jimmer.entry.tableExes"),
-                processingEnv.getOptions().get("jimmer.entry.fetchers"),
-                "true".equals(processingEnv.getOptions().get("jimmer.dto.hibernateValidatorEnhancement")),
-                "true".equals(processingEnv.getOptions().get("jimmer.buddy.ignoreResourceGeneration")),
-                dtoFieldModifier
-        );
         elements = processingEnv.getElementUtils();
-    }
-
-    private static boolean detectIsJackson3(ProcessingEnvironment processingEnv) {
-        String jackson3Text = processingEnv.getOptions().get("jimmer.jackson3");
-        return jackson3Text == null || jackson3Text.isEmpty() ?
-                processingEnv.getElementUtils().getTypeElement("tools.jackson.databind.ObjectMapper") != null :
-                "true".equals(jackson3Text);
+        immutablesTypeName = defaultEntryTypeName(processingEnv.getOptions().get("jimmer.entry.immutables"), "Immutables");
+        tablesTypeName = defaultEntryTypeName(processingEnv.getOptions().get("jimmer.entry.tables"), "Tables");
+        tableExesTypeName = defaultEntryTypeName(processingEnv.getOptions().get("jimmer.entry.tableExes"), "TableExes");
+        fetchersTypeName = defaultEntryTypeName(processingEnv.getOptions().get("jimmer.entry.fetchers"), "Fetchers");
+        buddyIgnoreResourceGeneration =
+                "true".equals(processingEnv.getOptions().get("jimmer.buddy.ignoreResourceGeneration"));
     }
 
     @Override
@@ -179,56 +125,24 @@ public class JimmerProcessor extends AbstractProcessor {
             Set<? extends TypeElement> annotations,
             RoundEnvironment roundEnv
     ) {
+        AptLsiContext.INSTANCE.resetRound(roundEnv, null);
         try {
+            resetSharedCompilerContext();
             if (clientExplicitApi == null) {
-                clientExplicitApi = roundEnv.getRootElements().stream().anyMatch(
-                        it -> it instanceof TypeElement &&
-                                context.include((TypeElement) it) &&
-                                it.getAnnotation(EnableImplicitApi.class) != null
-                );
+                clientExplicitApi = Context.INSTANCE.getExplicitClientApi();
             }
             if (!modelGenerated) {
                 modelGenerated = true;
-                Collection<TypeElement> immutableTypeElements =
-                        new ImmutableProcessor(context, messager).process(roundEnv).keySet();
-                new EntryProcessor(context, immutableTypeElements).process();
-                boolean errorGenerated = new ErrorProcessor(context, checkedException).process(roundEnv);
-                boolean dtoGenerated = new DtoProcessor(
-                        context,
-                        elements,
-                        isTest() ? dtoTestDirs : dtoDirs,
-                        defaultNullableInputModifier
-                ).process();
-                new TxProcessor(context).process(roundEnv);
-                new ExportDocProcessor(context).process(roundEnv);
-                if (!immutableTypeElements.isEmpty() || errorGenerated || dtoGenerated) {
-                    delayedTupleTypeNames = roundEnv
-                            .getElementsAnnotatedWith(TypedTuple.class)
-                            .stream()
-                            .filter(it -> it instanceof TypeElement)
-                            .map(it -> ((TypeElement) it).getQualifiedName().toString())
-                            .collect(Collectors.toSet());
-                    delayedClientTypeNames = roundEnv
-                            .getRootElements()
-                            .stream()
-                            .filter(it -> it instanceof TypeElement)
-                            .map(it -> ((TypeElement) it).getQualifiedName().toString())
-                            .collect(Collectors.toList());
+                if (runModelPhase(roundEnv)) {
                     return true;
                 }
             }
-            if (!toolGenerated && !context.isBuddyIgnoreResourceGeneration()) {
+            if (!toolGenerated && !buddyIgnoreResourceGeneration) {
                 toolGenerated = true;
-                new TypedTupleProcessor(context, delayedTupleTypeNames).process(roundEnv);
-                new ClientProcessor(context, clientExplicitApi, delayedClientTypeNames).process(roundEnv);
-                delayedClientTypeNames = null;
+                runToolPhase();
             }
         } catch (MetaException ex) {
-            messager.printMessage(
-                    Diagnostic.Kind.ERROR,
-                    ex.getMessage(),
-                    ex.getElement()
-            );
+            printLsiMetaException(ex);
         } catch (DtoAstException ex) {
             Collection<? extends Element> elements = roundEnv.getElementsAnnotatedWith(EnableDtoGeneration.class);
             if (elements.isEmpty()) {
@@ -274,16 +188,154 @@ public class JimmerProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * 第一阶段只做模型类与其直接依赖产物的生成。
+     * 如果这一阶段产出了会影响 tuple/client/export-doc 的新类型，就等待下一轮再进入工具阶段。
+     */
+    private boolean runModelPhase(RoundEnvironment roundEnv) {
+        Collection<LsiClass> immutableTypeElements =
+                new ImmutableProcessor(buddyIgnoreResourceGeneration).process();
+        new EntryProcessor(
+                immutableTypeElements,
+                immutablesTypeName,
+                tablesTypeName,
+                tableExesTypeName,
+                fetchersTypeName,
+                buddyIgnoreResourceGeneration
+        ).process();
+        boolean errorGenerated = new ErrorProcessor(checkedException).process();
+        boolean dtoGenerated = new DtoProcessor(
+                isTest() ? dtoTestDirs : dtoDirs,
+                defaultNullableInputModifier
+        ).process();
+        new TxProcessor(buddyIgnoreResourceGeneration).process();
+        if (!immutableTypeElements.isEmpty() || errorGenerated || dtoGenerated) {
+            prepareToolPhase(roundEnv);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 第二阶段只消费前一阶段已经稳定下来的类型快照，生成 tuple、export-doc 与 client 这类工具产物。
+     */
+    private void runToolPhase() {
+        new TypedTupleProcessor().process();
+        new ExportDocProcessor().process();
+        new ClientProcessor(clientExplicitApi).process();
+    }
+
+    /**
+     * tuple/client/export-doc 依赖上一阶段产出的新类型，这里把待消费类型名与全量类型快照固定下来，交给下一轮使用。
+     */
+    private void prepareToolPhase(RoundEnvironment roundEnv) {
+        Context.INSTANCE.setDelayedTupleTypeNames(roundEnv
+                .getElementsAnnotatedWith(TypedTuple.class)
+                .stream()
+                .filter(it -> it instanceof TypeElement)
+                .map(it -> ((TypeElement) it).getQualifiedName().toString())
+                .collect(Collectors.toSet()));
+        Context.INSTANCE.snapshotAllTypeNames();
+    }
+
+    private static String defaultEntryTypeName(String configuredValue, String defaultValue) {
+        if (configuredValue == null || configuredValue.isEmpty()) {
+            return defaultValue;
+        }
+        return configuredValue;
+    }
+
+    private void resetSharedCompilerContext() {
+        Settings.INSTANCE.fromOptions(AptLsiContext.INSTANCE.getOptions());
+        Context.INSTANCE.reset(
+                AptLsiContext.INSTANCE.getLsiResolver(),
+                AptLsiContext.INSTANCE.getLsiFiler(),
+                AptLsiContext.INSTANCE.getOptions(),
+                () -> null,
+                () -> {
+                    try {
+                        return findSourceAnchorFilePath();
+                    } catch (IOException ex) {
+                        throw AptLsiDiagnostics.generatorException("Cannot get the class output dir", ex);
+                    }
+                },
+                this::findGeneratedJimmerResourceFile,
+                message -> {
+                    messager.printMessage(Diagnostic.Kind.NOTE, message);
+                    return Unit.INSTANCE;
+                },
+                AptLsiClassDocMetadata::findAptDraftImplDocMap
+        );
+    }
+
+    private void printLsiMetaException(site.addzero.lsi.diagnostic.MetaException ex) {
+        Element element = findElement(ex.getAnchor());
+        if (element != null) {
+            messager.printMessage(Diagnostic.Kind.ERROR, ex.getMessage(), element);
+        } else {
+            messager.printMessage(Diagnostic.Kind.ERROR, ex.getMessage());
+        }
+    }
+
+    private Element findElement(LsiDiagnosticAnchor anchor) {
+        if (anchor == null) {
+            return null;
+        }
+        String ownerQualifiedName = anchor.getOwnerQualifiedName();
+        if (ownerQualifiedName == null || ownerQualifiedName.isEmpty()) {
+            return null;
+        }
+        TypeElement ownerType = elements.getTypeElement(ownerQualifiedName);
+        if (ownerType == null) {
+            return null;
+        }
+        if (anchor.getKind() == LsiDiagnosticAnchor.Kind.CLASS || anchor.getSymbolName() == null) {
+            return ownerType;
+        }
+        for (Element enclosedElement : ownerType.getEnclosedElements()) {
+            if (anchor.getSymbolName().equals(enclosedElement.getSimpleName().toString()) &&
+                    matchesAnchorKind(anchor.getKind(), enclosedElement)) {
+                return enclosedElement;
+            }
+        }
+        return ownerType;
+    }
+
+    private boolean matchesAnchorKind(LsiDiagnosticAnchor.Kind kind, Element element) {
+        switch (kind) {
+            case FIELD:
+                return element.getKind() == ElementKind.FIELD ||
+                        element.getKind() == ElementKind.ENUM_CONSTANT;
+            case METHOD:
+                return element.getKind() == ElementKind.METHOD;
+            case PARAMETER:
+                return element.getKind() == ElementKind.PARAMETER;
+            case CLASS:
+                return element instanceof TypeElement;
+            default:
+                return true;
+        }
+    }
+
     private boolean isTest() {
         try {
-            String path = context.getFiler().getResource(
-                    StandardLocation.CLASS_OUTPUT,
-                    "",
-                    "dummy.txt"
-            ).toUri().getPath();
+            String path = findSourceAnchorFilePath();
             return path.endsWith("/test/dummy.txt");
         } catch (IOException ex) {
-            throw new GeneratorException("Cannot get the class output dir", ex);
+            throw AptLsiDiagnostics.generatorException("Cannot get the class output dir", ex);
+        }
+    }
+
+    private String findSourceAnchorFilePath() throws IOException {
+        return AptLsiContext.INSTANCE.getLsiFiler().generatedResourcePath("dummy.txt");
+    }
+
+    private File findGeneratedJimmerResourceFile(String name) {
+        try {
+            File file = AptLsiContext.INSTANCE.getLsiFiler().generatedResourceFile("META-INF/jimmer/" + name);
+            return file.exists() ? file : null;
+        } catch (IOException ex) {
+            return null;
         }
     }
 
@@ -311,7 +363,7 @@ public class JimmerProcessor extends AbstractProcessor {
             }
             for (String dir : dirs) {
                 if (!dir.startsWith(prefix)) {
-                    throw new GeneratorException(
+                    throw AptLsiDiagnostics.generatorException(
                             "Illegal annotation processor configuration \"" +
                                     configurationName +
                                     "\", it contains an illegal path \"" +

@@ -1,11 +1,11 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-public interface PropConfig<P extends BaseProp> {
+public interface PropConfig<P extends LsiDtoBaseProp> {
 
     @Nullable
     Predicate getPredicate();
@@ -37,24 +37,24 @@ public interface PropConfig<P extends BaseProp> {
             List<Predicate> getPredicates();
         }
 
-        interface Cmp<P extends BaseProp> extends Predicate {
+        interface Cmp<P extends LsiDtoBaseProp> extends Predicate {
             List<PathNode<P>> getPath();
             String getOperator();
             Object getValue();
         }
 
-        interface Nullity<P extends BaseProp> extends Predicate {
+        interface Nullity<P extends LsiDtoBaseProp> extends Predicate {
             List<PathNode<P>> getPath();
             boolean isNegative();
         }
     }
 
-    interface OrderItem<P extends BaseProp> {
+    interface OrderItem<P extends LsiDtoBaseProp> {
         List<PathNode<P>> getPath();
         boolean isDesc();
     }
     
-    interface PathNode<P extends BaseProp> {
+    interface PathNode<P extends LsiDtoBaseProp> {
         P getProp();
         boolean isAssociatedId();
     }

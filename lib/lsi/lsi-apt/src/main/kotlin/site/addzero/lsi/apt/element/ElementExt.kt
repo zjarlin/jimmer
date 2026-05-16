@@ -15,6 +15,10 @@ fun Element.isField(): Boolean {
     return this.kind == ElementKind.FIELD
 }
 
+fun Element.isRecordComponent(): Boolean {
+    return this.kind.name == "RECORD_COMPONENT"
+}
+
 fun Element.isClass(): Boolean {
     return this.kind == ElementKind.CLASS
 }

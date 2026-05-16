@@ -1,167 +1,41 @@
 package org.babyfish.jimmer.ksp.client
 
 import com.google.auto.service.AutoService
-import com.google.devtools.ksp.getDeclaredProperties
-import com.google.devtools.ksp.processing.Dependencies
-import com.google.devtools.ksp.symbol.ClassKind
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSDeclaration
-import com.google.devtools.ksp.symbol.KSFile
-import org.babyfish.jimmer.client.ExportDoc
-import org.babyfish.jimmer.ksp.Context
-import org.babyfish.jimmer.ksp.annotation
-import org.babyfish.jimmer.ksp.get
-import org.babyfish.jimmer.processor.spi.IMMUTABLE_PROCESSOR
-import org.babyfish.jimmer.processor.spi.ProcessorSpi
-import java.io.OutputStreamWriter
-import java.io.Writer
-import java.nio.charset.StandardCharsets
-import java.util.*
-import java.util.regex.Pattern
+import site.addzero.context.Context
+import site.addzero.lsi.codegen.GeneratedResourceArtifact
+import site.addzero.lsi.jimmer.client.metadata.generator.ClientProcessorSupport
+import site.addzero.lsi.jimmer.processor.spi.IMMUTABLE_PROCESSOR
+import site.addzero.lsi.jimmer.processor.spi.TYPED_TUPLE_PROCESSOR
+import site.addzero.lsi.processor.ProcessorSpi
 
 
 @AutoService(ProcessorSpi::class)
-@Suppress("unused")
 class ExportDocProcessor : ProcessorSpi<Context, Unit> {
     override var ctx = Context
-    override val runsAfter: Set<String> get() = setOf(IMMUTABLE_PROCESSOR)
-    override fun process() {
-        val pkg = pkg()
-        val declarations = mutableListOf<KSClassDeclaration>()
-        for (file in ctx.resolver.getAllFiles()) {
-            for (declaration in file.declarations) {
-                collectDeclaration(pkg.isExported(declaration.packageName.asString()), declaration, declarations)
-            }
-        }
-        if (declarations.isEmpty()) {
+    override val dependsOn: Set<String> get() = setOf(IMMUTABLE_PROCESSOR, TYPED_TUPLE_PROCESSOR)
+    private val collectedTypeNames = linkedSetOf<String>()
+
+    override fun onRound() {
+        // 覆盖来源：project/compiler/client/jimmer-ksp-client/.../ExportDocProcessor.process
+        // 原 process() 单阶段“扫描+生成”路径中的扫描部分，迁移到 onRound() 收集阶段
+        // 迁移说明：导出文档扫描进一步收口到 shared support，processor 入口只保留 round 收集职责
+        collectedTypeNames += ClientProcessorSupport.collectExportDocTypeNames(ctx.lsiResolver)
+    }
+
+    override fun onFinish() {
+        // 覆盖来源：project/compiler/client/jimmer-ksp-client/.../ExportDocProcessor.process
+        // 原 process() 单阶段“扫描+生成”路径中的生成部分，迁移到 onFinish() 收尾阶段统一生成
+        if (collectedTypeNames.isEmpty()) {
             return
         }
-        ctx.environment.codeGenerator.createNewFile(
-            Dependencies(false, *ctx.resolver.getAllFiles().toList().toTypedArray()),
-            "META-INF.jimmer",
-            "doc",
-            "properties"
-        ).use {
-            val writer = OutputStreamWriter(it, StandardCharsets.UTF_8)
-            writeDoc(declarations, writer)
-            writer.flush()
-        }
+        ClientProcessorSupport.generateExportDocArtifact(
+            resolver = ctx.lsiResolver,
+            typeNames = collectedTypeNames,
+        )?.let(::writeArtifact)
+        collectedTypeNames.clear()
     }
 
-    private fun collectDeclaration(
-        parentExport: Boolean, declaration: KSDeclaration, declarations: MutableList<KSClassDeclaration>
-    ) {
-        if (declaration is KSClassDeclaration && (declaration.classKind == ClassKind.CLASS || declaration.classKind == ClassKind.INTERFACE || declaration.classKind == ClassKind.ENUM_CLASS)) {
-            val exportDoc = declaration.annotation(ExportDoc::class)
-            val export = if (exportDoc !== null) {
-                !(exportDoc[ExportDoc::excluded] ?: false)
-            } else {
-                parentExport
-            }
-            if (export) {
-                declarations += declaration
-            }
-            for (subDeclaration in declaration.declarations) {
-                collectDeclaration(export, subDeclaration, declarations)
-            }
-        }
+    private fun writeArtifact(artifact: GeneratedResourceArtifact) {
+        ctx.lsiFiler.createResourceFile(artifact.path, artifact.content)
     }
-
-    fun pkg(): Pkg {
-        val pkg = Pkg("", null)
-        for (file in ctx.resolver.getAllFiles()) {
-            pkg.set(file)
-        }
-        return pkg
-    }
-
-
-    class Pkg(
-        val name: String, private val parent: Pkg?
-    ) {
-        private var childMap: MutableMap<String, Pkg>? = null
-
-        var file: KSFile? = null
-
-        var export: Boolean? = null
-
-        fun isExported(packageName: String): Boolean {
-            var pkg = sub(packageName, false)
-            while (true) {
-                if (pkg.export != null) {
-                    return pkg.export!!
-                }
-                pkg = pkg.parent ?: break
-            }
-            return false
-        }
-
-        fun set(file: KSFile) {
-            val exportDoc = file.annotation(ExportDoc::class) ?: return
-            val pkg = sub(file.packageName.asString(), true)
-            if (pkg.file !== null) {
-                throw IllegalArgumentException(
-                    "Conflict \"${ExportDoc::class.qualifiedName}\" in " + "\"${pkg.file!!.filePath}\" and \"${file.filePath}\""
-                )
-            }
-            pkg.file = file
-            pkg.export = !(exportDoc[ExportDoc::excluded] ?: false)
-        }
-
-        fun sub(packageName: String, autoCreate: Boolean): Pkg {
-            var pkg = this
-            for (name in dotPattern.split(packageName)) {
-                val childPkg = pkg.child(name, autoCreate)
-                if (childPkg === null) {
-                    return pkg
-                }
-                pkg = childPkg
-            }
-            return pkg
-        }
-
-        private fun child(name: String, autoCreate: Boolean): Pkg? {
-            if (!autoCreate && childMap === null) {
-                return null
-            }
-            val childMap = this.childMap ?: mutableMapOf<String, Pkg>().also {
-                this.childMap = it
-            }
-            if (!autoCreate) {
-                return childMap[name]
-            }
-            return childMap.computeIfAbsent(name) {
-                Pkg(name, this)
-            }
-        }
-    }
-
-
-    companion object {
-        private val dotPattern = Pattern.compile("\\.")
-    }
-
-    private fun writeDoc(declarations: List<KSClassDeclaration>, writer: Writer) {
-        val properties = Properties()
-        for (declaration in declarations) {
-            addProperties(properties, declaration)
-        }
-        properties.store(writer, "Generated by @" + ExportDoc::class.qualifiedName)
-    }
-
-    private fun addProperties(properties: Properties, declaration: KSClassDeclaration) {
-        if (declaration.qualifiedName === null) {
-            return
-        }
-        standardComment(declaration.docString)?.let {
-            properties[declaration.qualifiedName!!.asString()] = it
-        }
-        for (prop in declaration.getDeclaredProperties()) {
-            standardComment(prop.docString)?.let {
-                properties[prop.qualifiedName!!.asString()] = it
-            }
-        }
-    }
-
-    private fun standardComment(comment: String?): String? = comment?.trim()?.takeIf { it.isNotEmpty() }
 }

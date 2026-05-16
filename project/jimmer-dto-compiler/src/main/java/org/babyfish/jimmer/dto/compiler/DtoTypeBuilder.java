@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseType;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
+class DtoTypeBuilder<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> {
 
     final DtoPropBuilder<T, P> parentProp;
 
@@ -217,7 +217,7 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
                                             "it matches several types: " +
                                             baseTypes
                                                     .stream()
-                                                    .map(BaseType::getQualifiedName)
+                                                    .map(LsiDtoBaseType::getQualifiedName)
                                                     .collect(Collectors.joining(", "))
                             );
                         }

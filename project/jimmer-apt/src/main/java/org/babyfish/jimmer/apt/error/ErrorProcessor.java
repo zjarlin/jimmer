@@ -1,56 +1,31 @@
 package org.babyfish.jimmer.apt.error;
 
-import org.babyfish.jimmer.apt.Context;
-import org.babyfish.jimmer.apt.MetaException;
-import org.babyfish.jimmer.error.ErrorFamily;
-
-import javax.annotation.processing.Filer;
-import javax.annotation.processing.RoundEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.TypeElement;
-import java.util.ArrayList;
-import java.util.List;
+import site.addzero.context.Context;
+import site.addzero.context.LsiSourceFilterKt;
+import site.addzero.lsi.jimmer.error.metadata.extractor.ErrorMetadataExtraction;
+import site.addzero.lsi.jimmer.error.metadata.generator.ErrorProcessorSupport;
+import site.addzero.lsi.poet.LsiFileSpec;
 
 public class ErrorProcessor {
 
-    private final Context context;
-
     private final boolean checkedException;
 
-    public ErrorProcessor(Context context, boolean checkedException) {
-        this.context = context;
+    public ErrorProcessor(boolean checkedException) {
         this.checkedException = checkedException;
     }
 
-    public boolean process(RoundEnvironment roundEnv) {
-        List<TypeElement> errorElements = getErrorFamilies(roundEnv);
-        generateErrorType(errorElements);
-        return !errorElements.isEmpty();
+    public boolean process() {
+        ErrorMetadataExtraction extraction = ErrorProcessorSupport.collectNewTypes(
+                Context.INSTANCE.getLsiResolver(),
+                LsiSourceFilterKt::matchesConfiguredSourceFilters
+        );
+        for (LsiFileSpec fileSpec : ErrorProcessorSupport.generateFileSpecs(extraction.getTypes(), checkedException)) {
+            writeFileSpec(fileSpec);
+        }
+        return !extraction.getTypes().isEmpty();
     }
 
-    private List<TypeElement> getErrorFamilies(RoundEnvironment roundEnv) {
-        List<TypeElement> typeElements = new ArrayList<>();
-        for (Element element : roundEnv.getRootElements()) {
-            if (element instanceof TypeElement && context.include((TypeElement) element)) {
-                if (element.getAnnotation(ErrorFamily.class) != null) {
-                    if (element.getKind() != ElementKind.ENUM) {
-                        throw new MetaException(
-                                element,
-                                "only enum can be decorated by @" +
-                                        ErrorFamily.class.getName()
-                        );
-                    }
-                    typeElements.add((TypeElement) element);
-                }
-            }
-        }
-        return typeElements;
-    }
-
-    private void generateErrorType(List<TypeElement> typeElements) {
-        for (TypeElement typeElement : typeElements) {
-            new ErrorGenerator(context, typeElement, checkedException).generate();
-        }
+    private void writeFileSpec(LsiFileSpec fileSpec) {
+        Context.INSTANCE.getLsiFiler().createSourceFile(fileSpec);
     }
 }

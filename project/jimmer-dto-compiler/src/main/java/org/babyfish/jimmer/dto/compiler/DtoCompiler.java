@@ -1,8 +1,8 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.*;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -10,7 +10,7 @@ import java.io.Reader;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
+public abstract class DtoCompiler<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> {
 
     private final DtoFile dtoFile;
 

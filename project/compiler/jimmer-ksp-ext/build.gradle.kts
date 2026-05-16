@@ -27,19 +27,13 @@ processorBuddy {
 
 
 dependencies {
-
-//    implementation(project(":jimmer-processor-spi"))
-//
 //    implementation(libs.kotlin.stdlib)
 
 //    implementation(project(":project:ksp:jimmer-ksp-constants"))
     implementation(projects.project.jimmerCore)
-    implementation(projects.project.jimmerDtoCompiler)
-    implementation(libs.ksp.symbolProcessing.api)
-//    implementation(libs.kotlinpoet)
-    implementation(libs.kotlinpoet.ksp)
+    compileOnly(libs.bundles.jackson)
 //    implementation(libs.javax.validation.api)
 //    implementation(libs.jakarta.validation.api)
-    implementation("site.addzero:lsi-ksp:2026.02.26")
-    implementation("site.addzero:lsi-jimmer:2026.02.26")
+    api(project(":lib:lsi:lsi-core"))
+    api(project(":lib:lsi:lsi-jimmer"))
 }

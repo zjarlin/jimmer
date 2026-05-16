@@ -31,7 +31,11 @@ interface LsiField {
   val comment: String?
 
   /**
-   * 获取字段上的注解
+   * 获取字段相关的全部注解。
+   *
+   * 语义约定：
+   * - KSP 等支持属性多落点的平台，应统一包含 property/getter/returnType 等位置的注解
+   * - APT/反射等无法提供更多落点的平台，至少返回字段本体注解
    */
   val annotations: List<LsiAnnotation>
 
@@ -39,6 +43,18 @@ interface LsiField {
    * 判断是否为静态字段
    */
   val isStatic: Boolean
+
+  /**
+   * 判断是否为 public 字段/属性。
+   */
+  val isPublic: Boolean
+    get() = true
+
+  /**
+   * 判断是否为 private 字段/属性。
+   */
+  val isPrivate: Boolean
+    get() = false
 
   /**
    * 判断是否为常量字段
@@ -57,6 +73,12 @@ interface LsiField {
   val isVar: Boolean
 
   /**
+   * 判断是否为抽象属性（例如接口抽象 getter）。
+   */
+  val isAbstract: Boolean
+    get() = false
+
+  /**
    * 判断是否为延迟初始化字段（Kotlin 的 lateinit）
    * 对于 Java 字段，始终返回 false
    */
@@ -66,6 +88,18 @@ interface LsiField {
    * 判断是否为集合类型
    */
   val isCollectionType: Boolean
+
+  /**
+   * 判断字段类型是否为类型别名（typealias）。
+   */
+  val isTypeAlias: Boolean
+    get() = false
+
+  /**
+   * 判断字段类型是否为 Kotlin value class。
+   */
+  val isValueClassType: Boolean
+    get() = false
 
   /**
    * 获取字段的默认值（如果有的话）

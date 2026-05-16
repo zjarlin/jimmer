@@ -1,20 +1,23 @@
 package org.babyfish.jimmer.apt.entry;
 
-import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.FieldSpec;
-import com.squareup.javapoet.JavaFile;
-import com.squareup.javapoet.TypeSpec;
-import org.babyfish.jimmer.apt.GeneratorException;
-import org.babyfish.jimmer.apt.util.ClassNames;
 import org.babyfish.jimmer.impl.util.StringUtil;
+import site.addzero.lsi.clazz.LsiClass;
+import site.addzero.lsi.poet.LsiAnnotationSpec;
+import site.addzero.lsi.poet.LsiModifier;
+import site.addzero.lsi.poet.LsiPropertyAccessExpression;
+import site.addzero.lsi.poet.LsiPropertySpec;
+import site.addzero.lsi.poet.LsiTypeExpression;
+import site.addzero.lsi.poet.LsiTypeSpec;
+import site.addzero.lsi.poet.LsiTypeSpecKind;
 
-import javax.annotation.processing.Filer;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
-import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
 
-import static org.babyfish.jimmer.apt.util.GeneratedAnnotation.generatedAnnotation;
+import static site.addzero.lsi.codegen.JimmerCodegenAnnotationExtKt.generatedAnnotation;
+import static site.addzero.lsi.clazz.LsiClassNameExtKt.toLsiClassName;
 
 public class FetchersGenerator extends AbstractSummaryGenerator {
 
@@ -22,71 +25,58 @@ public class FetchersGenerator extends AbstractSummaryGenerator {
 
     private final String simpleName;
 
-    private final Collection<TypeElement> typeElements;
+    private final Collection<LsiClass> typeElements;
 
-    private final Filer filer;
-
-    public FetchersGenerator(String packageName, String simpleName, Collection<TypeElement> typeElements, Filer filer) {
+    public FetchersGenerator(String packageName, String simpleName, Collection<LsiClass> typeElements) {
         this.packageName = packageName;
         this.simpleName = simpleName;
         this.typeElements = typeElements;
-        this.filer = filer;
     }
 
     public void generate() {
-        TypeSpec typeSpec = typeSpec();
-        try {
-            JavaFile
-                    .builder(
-                            packageName,
-                            typeSpec
-                    )
-                    .indent("    ")
-                    .build()
-                    .writeTo(filer);
-        } catch (IOException ex) {
-            throw new GeneratorException(
-                    String.format(
-                            "Cannot generate draft interface for '%s'",
-                            packageName + '.' + simpleName
-                    ),
-                    ex
-            );
-        }
+        write(packageName, typeSpec());
     }
 
-    private TypeSpec typeSpec() {
-        TypeSpec.Builder builder = TypeSpec
-                .interfaceBuilder(
-                        ClassName.get(
-                                packageName,
-                                simpleName
+    private LsiTypeSpec typeSpec() {
+        List<LsiPropertySpec> properties = new ArrayList<>(typeElements.size());
+        for (LsiClass typeElement : typeElements) {
+            properties.add(field(typeElement));
+        }
+        return new LsiTypeSpec(
+                simpleName,
+                LsiTypeSpecKind.INTERFACE,
+                Collections.singletonList(generatedAnnotation()),
+                EnumSet.of(LsiModifier.PUBLIC),
+                null,
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                properties,
+                Collections.emptyList(),
+                Collections.emptyList(),
+                null
+        );
+    }
+
+    private LsiPropertySpec field(LsiClass typeElement) {
+        site.addzero.lsi.poet.LsiClassName fetcherClassName =
+                toLsiClassName(typeElement, name -> name + "Fetcher", false);
+        return new LsiPropertySpec(
+                distinctName(
+                        StringUtil.snake(
+                                typeElement.getSimpleName() + "Fetcher",
+                                StringUtil.SnakeCase.UPPER
                         )
-                )
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(generatedAnnotation());
-        for (TypeElement typeElement : typeElements) {
-            builder.addField(field(typeElement));
-        }
-        return builder.build();
-    }
-
-    private FieldSpec field(TypeElement typeElement) {
-        ClassName fetcherClassName = ClassNames.of(typeElement, name -> name + "Fetcher");
-        return FieldSpec
-                .builder(
-                        fetcherClassName,
-                        distinctName(
-                                StringUtil.snake(
-                                        typeElement.getSimpleName().toString() + "Fetcher",
-                                        StringUtil.SnakeCase.UPPER
-                                )
-                        ),
-                        Modifier.PUBLIC,
-                        Modifier.STATIC,
-                        Modifier.FINAL
-                )
-                .initializer("$T.$$", fetcherClassName)
-                .build();
+                ),
+                fetcherClassName,
+                null,
+                Collections.<LsiAnnotationSpec>emptyList(),
+                EnumSet.of(LsiModifier.PUBLIC, LsiModifier.STATIC, LsiModifier.FINAL),
+                false,
+                new LsiPropertyAccessExpression(new LsiTypeExpression(fetcherClassName), "$$"),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptySet()
+        );
     }
 }

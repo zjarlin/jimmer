@@ -9,13 +9,13 @@ import javax.lang.model.util.Elements
  */
 fun Collection<TypeElement>.toLsiClasses(elements: Elements): List<LsiClass> {
     val map = map {
-        val aptLsiClass = _root_ide_package_.site.addzero.lsi.apt.clazz.AptLsiClass(elements, it)
+        val aptLsiClass = AptLsiClass(elements, it)
         aptLsiClass
     }
     return map
 }
 
 fun TypeElement.toLsiClass(elements: Elements): LsiClass =
-    _root_ide_package_.site.addzero.lsi.apt.clazz.AptLsiClass(elements, this)
+    AptLsiClass(elements, this)
 
 

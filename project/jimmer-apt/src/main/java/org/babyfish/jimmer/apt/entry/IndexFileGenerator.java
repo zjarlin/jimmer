@@ -1,37 +1,39 @@
 package org.babyfish.jimmer.apt.entry;
 
-import org.babyfish.jimmer.apt.Context;
-import org.babyfish.jimmer.apt.GeneratorException;
+import site.addzero.context.Context;
+import site.addzero.lsi.apt.diagnostic.AptLsiDiagnostics;
+import site.addzero.lsi.clazz.LsiClass;
 
-import javax.annotation.processing.Filer;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.TypeElement;
-import javax.tools.FileObject;
-import javax.tools.StandardLocation;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.*;
 
 public abstract class IndexFileGenerator {
 
-    protected final Context context;
+    private final boolean buddyIgnoreResourceGeneration;
 
-    private final Map<String, TypeElement> elementMap;
+    private final Map<String, LsiClass> elementMap;
 
-    private final File listFile;
+    private final String listFilePath;
 
     public IndexFileGenerator(
-            Context context,
-            Collection<TypeElement> typeElements,
-            PackageCollector packageCollector
+            Collection<LsiClass> typeElements,
+            PackageCollector packageCollector,
+            boolean buddyIgnoreResourceGeneration
     ) {
-        this.context = context;
-        String listFilePath = getListFilePath();
+        this.buddyIgnoreResourceGeneration = buddyIgnoreResourceGeneration;
+        this.listFilePath = getListFilePath();
 
-        Map<String, TypeElement> elementMap = new TreeMap<>();
-        for (TypeElement typeElement : typeElements) {
-            if (typeElement.getKind() == ElementKind.INTERFACE) {
+        Map<String, LsiClass> elementMap = new TreeMap<>();
+        for (LsiClass typeElement : typeElements) {
+            if (typeElement.isInterface()) {
+                String qualifiedName = typeElement.getQualifiedName();
+                if (qualifiedName == null) {
+                    continue;
+                }
                 if (isManaged(typeElement, true)) {
-                    elementMap.put(typeElement.getQualifiedName().toString(), typeElement);
+                    elementMap.put(qualifiedName, typeElement);
                 }
                 if (isManaged(typeElement, false)) {
                     packageCollector.accept(typeElement);
@@ -39,16 +41,15 @@ public abstract class IndexFileGenerator {
             }
         }
 
-        FileObject fileObject;
+        String existingContent;
         try {
-            fileObject = context.getFiler().getResource(StandardLocation.CLASS_OUTPUT, "", listFilePath);
-        } catch (IOException ex) {
-            throw new GeneratorException("Cannot get file object \"" + listFilePath + "\"", ex);
+            existingContent = Context.INSTANCE.getLsiFiler().readResourceText(listFilePath);
+        } catch (Exception ex) {
+            throw AptLsiDiagnostics.generatorException("Cannot get file object \"" + listFilePath + "\"", ex);
         }
-        listFile = new File(fileObject.getName());
-        if (listFile.exists()) {
+        if (existingContent != null) {
             // For command line or IDE
-            try (BufferedReader reader = new BufferedReader(new FileReader(listFile))) {
+            try (BufferedReader reader = new BufferedReader(new StringReader(existingContent))) {
                 while (true) {
                     String line = reader.readLine();
                     if (line == null) {
@@ -56,10 +57,10 @@ public abstract class IndexFileGenerator {
                     }
                     line = line.trim();
                     if (!line.isEmpty()) {
-                        TypeElement typeElement = context.getElements().getTypeElement(line);
+                        LsiClass typeElement = Context.INSTANCE.getLsiResolver().findClassByQualifiedName(line);
                         if (typeElement != null) {
                             if (isManaged(typeElement, true)) {
-                                elementMap.put(typeElement.getQualifiedName().toString(), typeElement);
+                                elementMap.put(line, typeElement);
                             }
                             if (isManaged(typeElement, false)) {
                                 packageCollector.accept(typeElement);
@@ -68,14 +69,18 @@ public abstract class IndexFileGenerator {
                     }
                 }
             } catch (IOException ex) {
-                throw new GeneratorException("Cannot read content of \"" + listFile + "\"", ex);
+                throw AptLsiDiagnostics.generatorException("Cannot read content of \"" + listFilePath + "\"", ex);
             }
         } else {
             // For jimmer buddy
-            for (TypeElement typeElement : typeElements) {
+            for (LsiClass typeElement : typeElements) {
                 if (typeElement != null) {
+                    String qualifiedName = typeElement.getQualifiedName();
+                    if (qualifiedName == null) {
+                        continue;
+                    }
                     if (isManaged(typeElement, true)) {
-                        elementMap.put(typeElement.getQualifiedName().toString(), typeElement);
+                        elementMap.put(qualifiedName, typeElement);
                     }
                     if (isManaged(typeElement, false)) {
                         packageCollector.accept(typeElement);
@@ -87,25 +92,25 @@ public abstract class IndexFileGenerator {
     }
 
     public void generate() {
-        if (context.isBuddyIgnoreResourceGeneration()) {
+        if (buddyIgnoreResourceGeneration) {
             return;
         }
-        listFile.getParentFile().mkdirs();
-        try (Writer writer = new FileWriter(listFile)) {
-            for (String qualifiedName : elementMap.keySet()) {
-                writer.write(qualifiedName);
-                writer.write('\n');
-            }
-        } catch (IOException ex) {
-            throw new GeneratorException("Cannot write \"" + listFile + "\"", ex);
+        StringBuilder builder = new StringBuilder();
+        for (String qualifiedName : elementMap.keySet()) {
+            builder.append(qualifiedName).append('\n');
+        }
+        try {
+            Context.INSTANCE.getLsiFiler().overwriteResourceFile(listFilePath, builder.toString());
+        } catch (Exception ex) {
+            throw AptLsiDiagnostics.generatorException("Cannot write \"" + listFilePath + "\"", ex);
         }
     }
 
-    public Map<String, TypeElement> getElementMap() {
+    public Map<String, LsiClass> getElementMap() {
         return Collections.unmodifiableMap(elementMap);
     }
 
     protected abstract String getListFilePath();
 
-    protected abstract boolean isManaged(TypeElement typeElement, boolean strict);
+    protected abstract boolean isManaged(LsiClass typeElement, boolean strict);
 }

@@ -18,6 +18,17 @@ class ClazzLsiClass(private val clazz: Class<*>) : LsiClass {
     override val qualifiedName: String?
         get() = clazz.name
 
+    override val packageName: String?
+        get() = clazz.`package`?.name?.takeIf { it.isNotEmpty() }
+
+    override val simpleNames: List<String>
+        get() = generateSequence(clazz) { current ->
+            current.enclosingClass
+        }
+            .map { it.simpleName }
+            .toList()
+            .asReversed()
+
     override val comment: String?
         get() = null // 字节码中不包含注释信息
 
@@ -27,8 +38,13 @@ class ClazzLsiClass(private val clazz: Class<*>) : LsiClass {
     override val annotations: List<LsiAnnotation>
         get() = clazz.annotations.map { ClazzLsiAnnotation(it) }
 
+    override val packageAnnotations: List<LsiAnnotation>
+        get() = clazz.`package`?.annotations?.map { ClazzLsiAnnotation(it) } ?: emptyList()
+
     override val isInterface: Boolean
         get() = clazz.isInterface
+    override val isClass: Boolean
+        get() = !clazz.isInterface && !clazz.isEnum && !clazz.isAnnotation
 
     override val isEnum: Boolean
         get() = clazz.isEnum
@@ -39,6 +55,12 @@ class ClazzLsiClass(private val clazz: Class<*>) : LsiClass {
     override val isPojo: Boolean
         get() = clazz.isPojo()
 
+    override val isTopLevel: Boolean
+        get() = clazz.enclosingClass == null
+
+    override val isStatic: Boolean
+        get() = !isTopLevel && java.lang.reflect.Modifier.isStatic(clazz.modifiers)
+
     override val superClasses: List<LsiClass>
         get() = clazz.superclass?.let { listOf(ClazzLsiClass(it)) } ?: emptyList()
 
@@ -47,4 +69,10 @@ class ClazzLsiClass(private val clazz: Class<*>) : LsiClass {
 
     override val methods: List<LsiMethod>
         get() = clazz.declaredMethods.map { ClazzLsiMethod(it) }
+
+    override val constructors: List<LsiMethod>
+        get() = clazz.declaredConstructors.map { site.addzero.lsi.reflection.java.method.ClazzLsiConstructor(it) }
+
+    override val fileName: String?
+        get() = simpleNames.firstOrNull()
 }

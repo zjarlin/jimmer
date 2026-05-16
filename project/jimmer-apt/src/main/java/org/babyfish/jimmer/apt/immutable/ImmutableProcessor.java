@@ -1,111 +1,101 @@
 package org.babyfish.jimmer.apt.immutable;
 
-import org.babyfish.jimmer.Immutable;
-import org.babyfish.jimmer.apt.Context;
-import org.babyfish.jimmer.apt.MetaException;
-import org.babyfish.jimmer.apt.immutable.generator.*;
-import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
-import org.babyfish.jimmer.sql.Embeddable;
-import org.babyfish.jimmer.sql.Entity;
-import org.babyfish.jimmer.sql.MappedSuperclass;
+import site.addzero.context.Context;
+import site.addzero.context.LsiSourceFilterKt;
+import site.addzero.context.Settings;
+import site.addzero.lsi.clazz.LsiClass;
+import site.addzero.lsi.codegen.GeneratedResourceArtifact;
+import site.addzero.lsi.jimmer.immutable.metadata.extractor.ImmutableCollectedSourceAccumulator;
+import site.addzero.lsi.jimmer.immutable.metadata.extractor.ImmutableCollectedSourceResolution;
+import site.addzero.lsi.jimmer.immutable.metadata.generator.ImmutableGeneratedOutput;
+import site.addzero.lsi.jimmer.immutable.metadata.generator.ImmutableProcessorSupport;
+import site.addzero.lsi.poet.LsiFileSpec;
 
-import javax.annotation.processing.Messager;
-import javax.annotation.processing.RoundEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeElement;
-import javax.tools.Diagnostic;
-import java.lang.annotation.Annotation;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.function.Consumer;
 
 public class ImmutableProcessor {
 
-    private final Context context;
+    private final boolean buddyIgnoreResourceGeneration;
 
-    private final Messager messager;
-
-    public ImmutableProcessor(Context context, Messager messager) {
-        this.context = context;
-        this.messager = messager;
+    public ImmutableProcessor(boolean buddyIgnoreResourceGeneration) {
+        this.buddyIgnoreResourceGeneration = buddyIgnoreResourceGeneration;
     }
 
-    public Map<TypeElement, ImmutableType> process(RoundEnvironment roundEnv) {
-        validateTopLevel(roundEnv, Immutable.class);
-        validateTopLevel(roundEnv, Entity.class);
-        validateTopLevel(roundEnv, Embeddable.class);
-        validateTopLevel(roundEnv, MappedSuperclass.class);
-        Map<TypeElement, ImmutableType> immutableTypeMap = parseImmutableTypes(roundEnv);
-        generateJimmerTypes(immutableTypeMap);
-        return immutableTypeMap;
+    public Collection<LsiClass> process() {
+        ImmutableCollectedSourceResolution resolvedSources = resolveImmutableSources();
+        generateJimmerTypes(resolvedSources);
+        return new ArrayList<>(resolvedSources.getLsiClasses());
     }
 
-    private void validateTopLevel(RoundEnvironment roundEnv, Class<? extends Annotation> annotationType) {
-        for (Element element : roundEnv.getElementsAnnotatedWith(annotationType)) {
-            TypeElement typeElement = (TypeElement) element;
-            if (!(typeElement.getEnclosingElement() instanceof PackageElement)) {
-                throw new MetaException(
-                        typeElement,
-                        "The type decorated by \"@" +
-                                annotationType.getName() +
-                                "\" must be top level type"
-                );
-            }
+    private ImmutableCollectedSourceResolution resolveImmutableSources() {
+        ImmutableCollectedSourceAccumulator accumulator = new ImmutableCollectedSourceAccumulator();
+        ImmutableProcessorSupport.collectRoundSources(
+                accumulator,
+                Context.INSTANCE.getLsiResolver(),
+                LsiSourceFilterKt::matchesConfiguredSourceFilters
+        );
+        ImmutableCollectedSourceResolution resolvedSources = ImmutableProcessorSupport.resolveCollectedSources(
+                accumulator,
+                Context.INSTANCE.getLsiResolver(),
+                Context.INSTANCE::typeOf
+        );
+        if (ImmutableProcessorSupport.hasImmutableTypes(resolvedSources)) {
+            Context.INSTANCE.resolve();
         }
+        return resolvedSources;
     }
 
-    private Map<TypeElement, ImmutableType> parseImmutableTypes(RoundEnvironment roundEnv) {
-        Map<TypeElement, ImmutableType> map = new HashMap<>();
-        for (Element element : roundEnv.getRootElements()) {
-            if (element instanceof TypeElement) {
-                TypeElement typeElement = (TypeElement) element;
-                if (context.isImmutable(typeElement) && context.include(typeElement)) {
-                    ImmutableType immutableType = context.getImmutableType(typeElement);
-                    map.put(typeElement, immutableType);
+    private void generateJimmerTypes(ImmutableCollectedSourceResolution resolvedSources) {
+        if (!ImmutableProcessorSupport.hasImmutableTypes(resolvedSources)) {
+            return;
+        }
+        ImmutableGeneratedOutput generatedOutput = ImmutableProcessorSupport.generateAptOutput(
+                resolvedSources,
+                Settings.INSTANCE.getJimmerExcludedUserAnnotationPrefixes(),
+                Context.INSTANCE.getJacksonTypes(),
+                findGeneratedEntitiesResourceFile(),
+                buddyIgnoreResourceGeneration,
+                Settings.INSTANCE.getJimmerImmutableIsModuleRequired(),
+                org.babyfish.jimmer.JimmerVersionsKt.currentVersion()
+        );
+        for (LsiFileSpec fileSpec : generatedOutput.getSourceFileSpecs()) {
+            writeFileSpec(fileSpec);
+        }
+        for (GeneratedResourceArtifact artifact : generatedOutput.getResourceArtifacts()) {
+            writeResourceArtifact(artifact);
+        }
+        ImmutableProcessorSupport.logResolvedImmutableTypes(
+                resolvedSources.getLsiClasses(),
+                new Consumer<String>() {
+                    @Override
+                    public void accept(String message) {
+                        Context.INSTANCE.logInfo(message);
+                    }
                 }
-            }
-        }
-        return map;
+        );
+        ImmutableProcessorSupport.notifyEntityMetaConsumers(
+                resolvedSources.getLsiClasses(),
+                new Consumer<String>() {
+                    @Override
+                    public void accept(String message) {
+                        Context.INSTANCE.logInfo(message);
+                    }
+                }
+        );
     }
 
-    private void generateJimmerTypes(Map<TypeElement, ImmutableType> immutableTypeMap) {
-        for (ImmutableType immutableType : immutableTypeMap.values()) {
-            new DraftGenerator(
-                    context,
-                    immutableType
-            ).generate();
-            new PropsGenerator(
-                    context,
-                    immutableType
-            ).generate();
-            messager.printMessage(Diagnostic.Kind.NOTE, "Immutable: " + immutableType.getQualifiedName());
-            if (immutableType.isEntity()) {
-                messager.printMessage(Diagnostic.Kind.NOTE, "Entity: " + immutableType.getQualifiedName());
-                new TableGenerator(
-                        context,
-                        immutableType,
-                        false
-                ).generate();
-                new TableGenerator(
-                        context,
-                        immutableType,
-                        true
-                ).generate();
-                new FetcherGenerator(
-                        context,
-                        immutableType
-                ).generate();
-            } else if (immutableType.isEmbeddable()) {
-                messager.printMessage(Diagnostic.Kind.NOTE, "Embeddable: " + immutableType.getQualifiedName());
-                new PropExpressionGenerator(
-                        context,
-                        immutableType
-                ).generate();
-                new FetcherGenerator(
-                        context,
-                        immutableType
-                ).generate();
-            }
-        }
+    private File findGeneratedEntitiesResourceFile() {
+        return Context.INSTANCE.guessGeneratedJimmerResourceFile("entities");
+    }
+
+    private void writeFileSpec(LsiFileSpec fileSpec) {
+        Context.INSTANCE.getLsiFiler().createSourceFile(fileSpec);
+    }
+
+    private void writeResourceArtifact(GeneratedResourceArtifact resourceArtifact) {
+        Context.INSTANCE.getLsiFiler().createResourceFile(resourceArtifact.getPath(), resourceArtifact.getContent());
     }
 }

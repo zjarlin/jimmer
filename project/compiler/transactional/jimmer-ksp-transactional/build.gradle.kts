@@ -6,12 +6,10 @@ plugins {
 
 
 dependencies {
-     ksp(libs.auto.service.ksp)
+    ksp(libs.auto.service.ksp)
     implementation(libs.auto.service.annotations)
-
-    implementation(project(":project:compiler:jimmer-processor-spi"))
     implementation(project(":project:compiler:jimmer-ksp-ext"))
-
-    implementation(libs.ksp.symbolProcessing.api)
-    implementation(libs.kotlinpoet.ksp)
+    implementation(project(":project:compiler:transactional:tx-metadata-model"))
+    implementation(project(":project:compiler:transactional:tx-metadata-extractor"))
+    implementation(project(":project:compiler:transactional:tx-metadata-generator"))
 }

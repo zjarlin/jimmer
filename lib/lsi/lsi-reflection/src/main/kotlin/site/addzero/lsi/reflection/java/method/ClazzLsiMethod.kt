@@ -8,6 +8,7 @@ import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.reflection.clazz.ClazzLsiClass
 import site.addzero.lsi.reflection.anno.ClazzLsiAnnotation
 import site.addzero.lsi.reflection.type.ClazzLsiType
+import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.lang.reflect.Parameter
@@ -40,8 +41,48 @@ class ClazzLsiMethod(private val clazzMethod: Method) : LsiMethod {
     override val parameters: List<LsiParameter>
         get() = clazzMethod.parameters.map { ClazzLsiParameter(it) }
 
+    override val thrownTypes: List<LsiType>
+        get() = clazzMethod.exceptionTypes.map { ClazzLsiType(it) }
+
     override val declaringClass: LsiClass?
         get() = ClazzLsiClass(clazzMethod.declaringClass)
+}
+
+class ClazzLsiConstructor(
+    private val constructor: Constructor<*>,
+) : LsiMethod {
+    override val name: String?
+        get() = "<init>"
+
+    override val returnType: LsiType?
+        get() = null
+
+    override val returnTypeName: String?
+        get() = null
+
+    override val comment: String?
+        get() = null
+
+    override val annotations: List<LsiAnnotation>
+        get() = constructor.annotations.map { ClazzLsiAnnotation(it) }
+
+    override val isStatic: Boolean
+        get() = false
+
+    override val isAbstract: Boolean
+        get() = false
+
+    override val isConstructor: Boolean
+        get() = true
+
+    override val parameters: List<LsiParameter>
+        get() = constructor.parameters.map { ClazzLsiParameter(it) }
+
+    override val thrownTypes: List<LsiType>
+        get() = constructor.exceptionTypes.map { ClazzLsiType(it) }
+
+    override val declaringClass: LsiClass?
+        get() = ClazzLsiClass(constructor.declaringClass)
 }
 
 class ClazzLsiParameter(private val clazzParameter: Parameter) : LsiParameter {
@@ -56,5 +97,7 @@ class ClazzLsiParameter(private val clazzParameter: Parameter) : LsiParameter {
 
     override val annotations: List<LsiAnnotation>
         get() = clazzParameter.annotations.map { ClazzLsiAnnotation(it) }
-}
 
+    override val isVararg: Boolean
+        get() = clazzParameter.isVarArgs
+}

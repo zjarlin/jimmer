@@ -1,14 +1,14 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropImplementor, AbstractPropBuilder {
+class DtoPropBuilder<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> implements DtoPropImplementor, AbstractPropBuilder {
 
     private final DtoTypeBuilder<T, P> parent;
 
@@ -903,7 +903,7 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
         return recursive;
     }
 
-    private static <T extends BaseType, P extends BaseProp > P getBaseProp(DtoTypeBuilder<T, P> parent, Token token) {
+    private static <T extends LsiDtoBaseType, P extends LsiDtoBaseProp > P getBaseProp(DtoTypeBuilder<T, P> parent, Token token) {
 
         T baseType = parent.baseType;
         CompilerContext<T, P> ctx = parent.ctx;

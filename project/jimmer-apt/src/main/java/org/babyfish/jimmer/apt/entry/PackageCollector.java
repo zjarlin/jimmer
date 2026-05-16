@@ -1,8 +1,6 @@
 package org.babyfish.jimmer.apt.entry;
 
-import javax.lang.model.element.Element;
-import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeElement;
+import site.addzero.lsi.clazz.LsiClass;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -14,24 +12,26 @@ public class PackageCollector {
 
     private String str;
 
-    private final Map<String, TypeElement> elementMap = new TreeMap<>();
+    private final Map<String, LsiClass> elementMap = new TreeMap<>();
 
-    public void accept(TypeElement typeElement) {
-        elementMap.put(typeElement.getQualifiedName().toString(), typeElement);
+    public void accept(LsiClass typeElement) {
+        String qualifiedName = typeElement.getQualifiedName();
+        if (qualifiedName == null) {
+            return;
+        }
+        elementMap.put(qualifiedName, typeElement);
         if (pathParts != null && pathParts.isEmpty()) {
             return;
         }
         str = null;
-        for (Element parent = typeElement.getEnclosingElement(); parent != null; parent = parent.getEnclosingElement()) {
-            if (parent instanceof PackageElement) {
-                String packageName = ((PackageElement) parent).getQualifiedName().toString();
-                accept(packageName);
-                break;
-            }
-        }
+        accept(typeElement.getPackageName());
     }
 
     private void accept(String path) {
+        if (path == null || path.isEmpty()) {
+            pathParts = Collections.emptyList();
+            return;
+        }
         List<String> parts = new ArrayList<>(Arrays.asList(DOT_PATTERN.split(path)));
         if (pathParts == null) {
             pathParts = parts;
@@ -50,7 +50,7 @@ public class PackageCollector {
         }
     }
 
-    public Map<String, TypeElement> getElementMap() {
+    public Map<String, LsiClass> getElementMap() {
         return Collections.unmodifiableMap(elementMap);
     }
 

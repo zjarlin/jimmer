@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, P> {
+class DtoPropImpl<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> implements DtoProp<T, P> {
 
     private final Map<String, P> basePropMap;
 
@@ -95,7 +95,7 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
                     basePropMap
                             .values()
                             .stream()
-                            .map(BaseProp::getName)
+                            .map(LsiDtoBaseProp::getName)
                             .collect(Collectors.joining("|")) +
                     ')';
         }
@@ -132,7 +132,7 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
         } else {
             builder
                     .append('(')
-                    .append(basePropMap.values().stream().map(BaseProp::getName).collect(Collectors.joining(", ")))
+                    .append(basePropMap.values().stream().map(LsiDtoBaseProp::getName).collect(Collectors.joining(", ")))
                     .append(')');
         }
         DtoProp<T, P> tail = this;

@@ -16,10 +16,4 @@ data class LsiClassProcessContext(
 
     val options: Map<String, String>
         get() = environment.options.orEmpty()
-
-    /**
-     * 兼容实体语义场景（如 Jimmer Entity 流程）。
-     */
-    val entities: Set<LsiClass>
-        get() = classes
 }

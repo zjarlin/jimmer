@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 
 interface DtoPropImplementor extends AbstractProp {
 
-    BaseProp getBaseProp();
+    LsiDtoBaseProp getBaseProp();
 
     Map<String, ?> getBasePropMap();
 

@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class DtoType<T extends BaseType, P extends BaseProp> {
+public class DtoType<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> {
 
     private final T baseType;
 
@@ -238,7 +238,7 @@ public class DtoType<T extends BaseType, P extends BaseProp> {
         return builder.toString();
     }
 
-    private class FlatDtoBuilder<T extends BaseType, P extends BaseProp> {
+    private class FlatDtoBuilder<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> {
 
         private final String packageName;
 
@@ -314,7 +314,7 @@ public class DtoType<T extends BaseType, P extends BaseProp> {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends BaseType, P extends BaseProp> List<AbstractProp> standardProps(List<AbstractProp> props) {
+    private static <T extends LsiDtoBaseType, P extends LsiDtoBaseProp> List<AbstractProp> standardProps(List<AbstractProp> props) {
         List<DtoProp<T, P>> recursiveProps = new ArrayList<>();
         for (AbstractProp prop : props) {
             if (prop instanceof DtoProp<?, ?>) {

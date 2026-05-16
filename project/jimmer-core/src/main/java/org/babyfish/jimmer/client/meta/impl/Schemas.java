@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.client.meta.impl;
 
+import com.fasterxml.jackson.databind.DeserializationContext;
 import org.babyfish.jimmer.client.meta.Schema;
 import org.babyfish.jimmer.jackson.codec.JsonCodec;
 import org.babyfish.jimmer.jackson.codec.JsonWriter;
@@ -47,7 +48,7 @@ public class Schemas {
     }
 
     @SuppressWarnings("unchecked")
-    static boolean isAllowed(com.fasterxml.jackson.databind.DeserializationContext ctx, Collection<String> elementGroups) {
+    static boolean isAllowed(DeserializationContext ctx, Collection<String> elementGroups) {
         return isAllowed(elementGroups, (Set<String>) ctx.getAttribute(GROUPS));
     }
 

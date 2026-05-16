@@ -1,131 +1,76 @@
 package org.babyfish.jimmer.ksp.dto
 
 import com.google.auto.service.AutoService
-import com.google.devtools.ksp.getClassDeclarationByName
-import org.babyfish.jimmer.Immutable
-import org.babyfish.jimmer.dto.compiler.Anno.EnumValue
-import org.babyfish.jimmer.dto.compiler.DtoAstException
-import org.babyfish.jimmer.dto.compiler.DtoModifier
-import org.babyfish.jimmer.dto.compiler.DtoType
-import org.babyfish.jimmer.ksp.Context
-import org.babyfish.jimmer.ksp.KspDtoCompiler
-import org.babyfish.jimmer.ksp.annotation
-import org.babyfish.jimmer.ksp.client.DocMetadata
-import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
-import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
-import org.babyfish.jimmer.ksp.include
-import org.babyfish.jimmer.processor.spi.IMMUTABLE_PROCESSOR
-import org.babyfish.jimmer.processor.spi.ProcessorSpi
-import org.babyfish.jimmer.sql.Embeddable
-import org.babyfish.jimmer.sql.Entity
+import site.addzero.context.Context
+import site.addzero.context.matchesConfiguredSourceFilters
 import site.addzero.context.Settings
+import site.addzero.lsi.jimmer.dto.LsiDtoModifier
+import site.addzero.lsi.jimmer.dto.DtoProcessorSupport
+import site.addzero.lsi.jimmer.dto.LsiDtoFile
+import site.addzero.lsi.jimmer.processor.spi.IMMUTABLE_PROCESSOR
+import site.addzero.lsi.processor.ProcessorSpi
+import java.util.function.Function
 
 @AutoService(ProcessorSpi::class)
 class DtoProcessor : ProcessorSpi<Context, Boolean> {
     override var ctx = Context
-    override val runsAfter: Set<String> get() = setOf(IMMUTABLE_PROCESSOR)
+    // 覆盖来源：`project/jimmer-ksp/.../JimmerProcessor` 中 dto 依赖 immutable 的调度规则
+    override val dependsOn: Set<String> get() = setOf(IMMUTABLE_PROCESSOR)
+    private val collectedDtoFiles = linkedSetOf<LsiDtoFile>()
 
     private val mutable: Boolean get() = Settings.jimmerDtoMutable
     private val dtoDirs: Collection<String>
-        get() = if (ctx.resolver.getAllFiles().toList().isNotEmpty() && isTest(ctx.resolver.getAllFiles().first().filePath)) {
-            Settings.jimmerDtoTestDirs
-        } else {
-            Settings.jimmerDtoDirs
+        get() {
+            // 覆盖来源：project/compiler/dto/jimmer-ksp-dto/.../DtoProcessor.dtoDirs 的 `ctx.resolver.getAllFiles().first().filePath`
+            // 迁移说明：DTO 目录判定只经由 Context 胶水层读取首文件路径，当前模块不再直接访问 KSP 文件 API
+            val firstFilePath = ctx.firstSourceFilePath
+            return if (firstFilePath != null && isTest(firstFilePath)) {
+                Settings.jimmerDtoTestDirs
+            } else {
+                Settings.jimmerDtoDirs
+            }
         }
-    private val defaultNullableInputModifier: DtoModifier
-        get() = DtoModifier.valueOf(Settings.jimmerDtoDefaultNullableInputModifier.uppercase())
+    private val defaultNullableInputModifier: LsiDtoModifier
+        get() = LsiDtoModifier.fromNullableInputOption(Settings.jimmerDtoDefaultNullableInputModifier)
 
-    override fun process(): Boolean {
-        val dtoTypeMap = findDtoTypeMap()
-        generateDtoTypes(dtoTypeMap)
-        return dtoTypeMap.isNotEmpty()
+    override fun onRound() {
+        // 覆盖来源：project/compiler/dto/jimmer-ksp-dto/.../DtoProcessor.process
+        // 原 process() 单阶段“扫描+生成”路径中的 DTO 文件扫描收集，迁移到 onRound()
+        collectDtoFiles()
     }
 
-    private fun findDtoTypeMap(): Map<ImmutableType, MutableList<DtoType<ImmutableType, ImmutableProp>>> {
-        val dtoTypeMap = mutableMapOf<ImmutableType, MutableList<DtoType<ImmutableType, ImmutableProp>>>()
-        val dtoCtx = DtoContext(Context.resolver.getAllFiles().firstOrNull(), dtoDirs)
-        val immutableTypeMap = mutableMapOf<KspDtoCompiler, ImmutableType>()
-        for (dtoFile in dtoCtx.dtoFiles) {
-            val compiler = try {
-                KspDtoCompiler(dtoFile, Context.resolver, defaultNullableInputModifier)
-            } catch (ex: DtoAstException) {
-                throw DtoException(
-                    "Failed to parse \"" +
-                        dtoFile.absolutePath +
-                        "\": " +
-                        ex.message,
-                    ex
-                )
-            } catch (ex: Throwable) {
-                throw DtoException(
-                    "Failed to read \"" +
-                        dtoFile.absolutePath +
-                        "\": " +
-                        ex.message,
-                    ex
-                )
-            }
-            val classDeclaration = Context.resolver.getClassDeclarationByName(compiler.sourceTypeName)
-            if (classDeclaration === null) {
-                throw DtoException(
-                    "Failed to parse \"" +
-                        dtoFile.absolutePath +
-                        "\": No immutable type \"" +
-                        compiler.sourceTypeName +
-                        "\""
-                )
-            }
-            if (!classDeclaration.include()) {
-                continue
-            }
-            if (classDeclaration.annotation(Entity::class) == null &&
-                classDeclaration.annotation(Embeddable::class) == null &&
-                classDeclaration.annotation(Immutable::class) == null) {
-                throw DtoException(
-                    "Failed to parse \"" +
-                        dtoFile.absolutePath +
-                        "\": the \"" +
-                        compiler.sourceTypeName +
-                        "\" is not decorated by \"@" +
-                        Entity::class.qualifiedName +
-                        "\", \"" +
-                        Embeddable::class.qualifiedName +
-                        "\" or \"" +
-                        Immutable::class.qualifiedName +
-                        "\""
-                )
-            }
-            immutableTypeMap[compiler] = Context.typeOf(classDeclaration)
+    override fun onFinish(): Boolean {
+        // 覆盖来源：project/compiler/dto/jimmer-ksp-dto/.../DtoProcessor.process
+        // 原 process() 单阶段“扫描+生成”路径中的编译生成，迁移到 onFinish() 收尾阶段
+        if (collectedDtoFiles.isEmpty()) {
+            return false
         }
-        Context.resolve()
-        for ((compiler, immutableType) in immutableTypeMap) {
-            dtoTypeMap.computeIfAbsent(immutableType) {
-                mutableListOf()
-            } += compiler.compile(immutableType)
+        val fileSpecs = DtoProcessorSupport.generateFileSpecs(
+            dtoFiles = collectedDtoFiles,
+            defaultNullableInputModifier = defaultNullableInputModifier,
+            resolver = Context.lsiResolver,
+            includeDtoSourceType = { it.matchesConfiguredSourceFilters() },
+            toImmutableType = Function(Context::typeOf),
+            resolveTypes = Runnable(Context::resolve),
+            draftImplDocMapOf = { type, annotationQualifiedName, valueAttributeName ->
+                Context.findDraftImplDocMap(type, annotationQualifiedName, valueAttributeName)
+            },
+            fallbackMutable = mutable,
+        )
+        fileSpecs.forEach { fileSpec ->
+            Context.lsiFiler.createSourceFile(fileSpec)
         }
-        return dtoTypeMap
+        collectedDtoFiles.clear()
+        return fileSpecs.isNotEmpty()
     }
 
-    private fun generateDtoTypes(
-        dtoTypeMap: Map<ImmutableType, List<DtoType<ImmutableType, ImmutableProp>>>
-    ) {
-        val allFiles = Context.resolver.getAllFiles().toList()
-        val docMetadata = DocMetadata()
-        for (dtoTypes in dtoTypeMap.values) {
-            for (dtoType in dtoTypes) {
-                val mutable = dtoType.annotations.firstOrNull {
-                    it.qualifiedName == "org.babyfish.jimmer.kt.dto.KotlinDto"
-                }?.let {
-                    val value = it.valueMap["immutability"] as EnumValue
-                    when (value.constant) {
-                        "IMMUTABLE" -> false
-                        "MUTABLE" -> true
-                        else -> null
-                    }
-                } ?: mutable
-                DtoGenerator( docMetadata, mutable, dtoType).generate(allFiles)
-            }
-        }
+    private fun collectDtoFiles() {
+        collectedDtoFiles += DtoProcessorSupport.collectDtoFiles(
+            // 覆盖来源：project/compiler/dto/jimmer-ksp-dto/.../DtoProcessor.collectDtoFiles 的 `KspLsiFile(Context.resolver, it)`
+            // 迁移说明：DTO 文件扫描入口统一经由 shared `DtoProcessorSupport` 收口，KSP 壳层只负责提供项目锚点路径
+            Context.sourceAnchorFilePath,
+            dtoDirs,
+        )
     }
 
     companion object {

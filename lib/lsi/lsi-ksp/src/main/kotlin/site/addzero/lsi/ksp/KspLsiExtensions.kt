@@ -5,6 +5,7 @@ import com.google.devtools.ksp.symbol.*
 import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.field.LsiField
+import site.addzero.lsi.ksp.context.KspLsiContext
 import site.addzero.lsi.ksp.anno.KspLsiAnnotation
 import site.addzero.lsi.ksp.clazz.toLsiClass
 import site.addzero.lsi.ksp.field.toLsiField
@@ -31,10 +32,16 @@ fun KSType.toLsiType(resolver: Resolver): LsiType =
   KspLsiType(resolver, this)
 
 /**
+ * 使用 [KspLsiContext] 当前轮次 resolver 转换。
+ */
+fun KSType.toLsiType(context: KspLsiContext = KspLsiContext): LsiType =
+  KspLsiType(context.resolver, this)
+
+/**
  * 将KSAnnotation转换为LsiAnnotation
  */
 fun KSAnnotation.toLsiAnnotation(resolver: Resolver): LsiAnnotation =
-  KspLsiAnnotation(this)
+  KspLsiAnnotation(this) { resolver }
 
 /**
  * 批量转换KSClassDeclaration列表为LsiClass列表
@@ -59,6 +66,12 @@ fun List<KSFunctionDeclaration>.toLsiMethods(resolver: Resolver): List<LsiMethod
  */
 fun List<KSType>.toLsiTypes(resolver: Resolver): List<LsiType> =
   map { it.toLsiType(resolver) }
+
+/**
+ * 使用 [KspLsiContext] 当前轮次 resolver 批量转换。
+ */
+fun List<KSType>.toLsiTypes(context: KspLsiContext = KspLsiContext): List<LsiType> =
+  map { it.toLsiType(context) }
 
 /**
  * 批量转换KSAnnotation列表为LsiAnnotation列表

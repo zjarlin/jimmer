@@ -1,9 +1,12 @@
 package site.addzero.lsi.ksp.field
 
 import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.isAbstract
+import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSTypeAlias
 import com.google.devtools.ksp.symbol.Modifier
 import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.clazz.LsiClass
@@ -15,8 +18,8 @@ import site.addzero.lsi.ksp.type.KspLsiType
 import site.addzero.util.str.toUnderlineLowerCase
 
 class KspLsiField(
-    private val resolver: Resolver,
-    private val ksPropertyDeclaration: KSPropertyDeclaration
+    internal val resolver: Resolver,
+    internal val ksPropertyDeclaration: KSPropertyDeclaration
 ) : LsiField {
 
     override val name: String? by lazy {
@@ -37,15 +40,31 @@ class KspLsiField(
     }
 
     override val annotations: List<LsiAnnotation> by lazy {
-        ksPropertyDeclaration.annotations
-            .map { KspLsiAnnotation(it) }
-            .toList()
+        // 覆盖来源：project/compiler/jimmer-ksp-ext/.../utils.KSAnnotated.annotations(KSPropertyDeclaration)
+        // 迁移说明：`LsiField.annotations` 统一承接 property/getter/returnType 三处注解语义，删除重复的 `allAnnotations` 定义
+        buildList {
+            addAll(ksPropertyDeclaration.annotations.map { KspLsiAnnotation(it) { resolver } })
+            ksPropertyDeclaration.getter?.let { getter ->
+                addAll(getter.annotations.map { KspLsiAnnotation(it) { resolver } })
+                getter.returnType?.let { returnType ->
+                    addAll(returnType.annotations.map { KspLsiAnnotation(it) { resolver } })
+                }
+            }
+        }
     }
 
     override val isStatic: Boolean by lazy {
         // Kotlin属性通常不是静态的，除非在companion object中
         val parent = ksPropertyDeclaration.parentDeclaration
         parent is KSClassDeclaration && parent.classKind == ClassKind.OBJECT
+    }
+
+    override val isPublic: Boolean by lazy {
+        ksPropertyDeclaration.isPublic()
+    }
+
+    override val isPrivate: Boolean by lazy {
+        ksPropertyDeclaration.modifiers.contains(Modifier.PRIVATE)
     }
 
     override val isConstant: Boolean by lazy {
@@ -58,6 +77,10 @@ class KspLsiField(
         ksPropertyDeclaration.isMutable
     }
 
+    override val isAbstract: Boolean by lazy {
+        ksPropertyDeclaration.isAbstract()
+    }
+
     override val isLateInit: Boolean by lazy {
         ksPropertyDeclaration.modifiers.contains(Modifier.LATEINIT)
     }
@@ -68,6 +91,15 @@ class KspLsiField(
         qualifiedName.startsWith("kotlin.collections.") || qualifiedName.startsWith("java.util.") &&
                 (qualifiedName.contains("List") || qualifiedName.contains("Set") ||
                         qualifiedName.contains("Collection") || qualifiedName.contains("Map"))
+    }
+
+    override val isTypeAlias: Boolean by lazy {
+        ksPropertyDeclaration.type.resolve().declaration is KSTypeAlias
+    }
+
+    override val isValueClassType: Boolean by lazy {
+        val declaration = ksPropertyDeclaration.type.resolve().declaration as? KSClassDeclaration
+        declaration?.modifiers?.contains(Modifier.VALUE) == true
     }
 
     override val defaultValue: String? by lazy {
@@ -140,4 +172,3 @@ class KspLsiField(
         )
     }
 }
-

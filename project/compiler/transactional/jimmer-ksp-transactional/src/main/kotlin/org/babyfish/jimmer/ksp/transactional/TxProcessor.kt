@@ -1,104 +1,52 @@
 package org.babyfish.jimmer.ksp.transactional
 
 import com.google.auto.service.AutoService
-import com.google.devtools.ksp.isConstructor
-import com.google.devtools.ksp.symbol.*
-import org.babyfish.jimmer.ksp.Context
-import org.babyfish.jimmer.ksp.MetaException
-import org.babyfish.jimmer.ksp.annotation
-import org.babyfish.jimmer.ksp.fullName
-import org.babyfish.jimmer.ksp.util.fastResolve
-import org.babyfish.jimmer.processor.spi.ProcessorSpi
+import site.addzero.context.Context
 import site.addzero.context.Settings
+import site.addzero.lsi.jimmer.transactional.metadata.generator.TxProcessorSupport
+import site.addzero.lsi.jimmer.transactional.metadata.model.TxTypeMetadata
+import site.addzero.lsi.poet.LsiFileSpec
+import site.addzero.lsi.processor.ProcessorSpi
 
 @AutoService(ProcessorSpi::class)
 class TxProcessor : ProcessorSpi<Context, Unit> {
     override var ctx = Context
+    private val collectedTypes = linkedMapOf<String, TxTypeMetadata>()
 
-    override fun process() {
+    override fun onRound() {
         if (Settings.jimmerBuddyIgnoreResourceGeneration) {
             return
         }
-        val map = mutableMapOf<String, KSClassDeclaration>()
-        for (file in ctx.resolver.getNewFiles()) {
-            for (declaration in file.declarations) {
-                if (declaration is KSClassDeclaration) {
-                    if (isTxType(declaration)) {
-                        validateType(declaration)
-                        map[declaration.fullName] = declaration
-                    }
-                }
-            }
+        // 覆盖来源：project/compiler/transactional/jimmer-ksp-transactional/.../TxProcessor.process
+        // 原 process() 单阶段“扫描+校验+生成”路径中扫描校验部分，迁移到 onRound() 收集阶段
+        // 原 resolver.getNewFiles() + file.declarations 增量扫描路径，替换为 metadata extractor + lsiResolver.newClasses()
+        val extraction = TxProcessorSupport.collectNewTypes(ctx.lsiResolver)
+        for (metadata in extraction.types) {
+            // 覆盖来源：project/compiler/transactional/jimmer-ksp-transactional/.../TxProcessor.onFinish 生成阶段声明缓存
+            // 迁移说明：收尾阶段缓存对象从 `LsiClass` 下沉为纯 `TxTypeMetadata`，processor 只保留 orchestration
+            collectedTypes.putIfAbsent(metadata.id, metadata)
         }
-        if (map.isEmpty()) {
+    }
+
+    override fun onFinish() {
+        if (Settings.jimmerBuddyIgnoreResourceGeneration) {
+            collectedTypes.clear()
             return
         }
-        val allFiles = ctx.resolver.getAllFiles().toList()
-        for (declaration in map.values) {
-            TxGenerator(ctx.environment.codeGenerator, ctx, declaration).generate(allFiles)
+        // 覆盖来源：project/compiler/transactional/jimmer-ksp-transactional/.../TxProcessor.process
+        // 原 process() 单阶段“扫描+校验+生成”路径中的生成部分，迁移到 onFinish() 收尾阶段统一生成
+        if (collectedTypes.isEmpty()) {
+            return
         }
+        for (fileSpec in TxProcessorSupport.generateFileSpecs(collectedTypes.values)) {
+            writeFileSpec(fileSpec)
+        }
+        collectedTypes.clear()
     }
 
-    private fun isTxType(declaration: KSClassDeclaration): Boolean {
-        if (declaration.annotation(TX) !== null) {
-            return true
-        }
-        for (subDeclaration in declaration.declarations) {
-            if (subDeclaration.annotation(TX) !== null) {
-                if (subDeclaration !is KSFunctionDeclaration || subDeclaration.functionKind != FunctionKind.MEMBER || subDeclaration.isConstructor()) {
-                    throw MetaException(
-                        subDeclaration,
-                        "it cannot be decorated by @Tx"
-                    )
-                }
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun validateType(declaration: KSClassDeclaration) {
-        if (declaration.classKind != ClassKind.CLASS) {
-            throw MetaException(
-                declaration,
-                "The type uses @Tx must be class"
-            )
-        }
-        if (declaration.modifiers.contains(Modifier.DATA)) {
-            throw MetaException(
-                declaration,
-                "The class uses @Tx cannot be data class"
-            )
-        }
-        if (declaration.modifiers.contains(Modifier.SEALED)) {
-            throw MetaException(
-                declaration,
-                "The class uses @Tx cannot be sealed class"
-            )
-        }
-        if (!declaration.modifiers.contains(Modifier.OPEN)) {
-            throw MetaException(
-                declaration,
-                "The class uses @Tx must be open"
-            )
-        }
-        if (declaration.typeParameters.isNotEmpty()) {
-            throw MetaException(
-                declaration,
-                "The current version does not yet support the use of generics for types annotated with @Tx"
-            )
-        }
-        for (superTypeRef in declaration.superTypes) {
-            val superType = superTypeRef.fastResolve()
-            val superDeclaration = superType.declaration
-            if (superDeclaration is KSClassDeclaration &&
-                superDeclaration.classKind == ClassKind.CLASS &&
-                !superType.isAssignableFrom(ctx.resolver.builtIns.anyType)) {
-                throw MetaException(
-                    declaration,
-                    "The current version does not yet support the use of inheritance for types annotated with @Tx"
-                )
-            }
-        }
+    private fun writeFileSpec(fileSpec: LsiFileSpec) {
+        // 覆盖来源：project/compiler/transactional/jimmer-ksp-transactional/.../TxGenerator.generate 输出文件创建
+        // 迁移说明：processor 主链路只向 `LsiFiler` 交付 `LsiFileSpec`，KotlinPoet 渲染收敛到 adapter 内部
+        ctx.lsiFiler.createSourceFile(fileSpec)
     }
 }

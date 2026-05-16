@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-class CompilerContext<T extends BaseType, P extends BaseProp> {
+class CompilerContext<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> {
 
     private final DtoCompiler<T, P> compiler;
 

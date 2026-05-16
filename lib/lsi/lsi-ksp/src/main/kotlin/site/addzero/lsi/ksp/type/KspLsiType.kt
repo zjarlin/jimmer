@@ -5,13 +5,14 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.ksp.context.KspLsiContext
 import site.addzero.lsi.ksp.anno.KspLsiAnnotation
 import site.addzero.lsi.ksp.clazz.KspLsiClass
 import site.addzero.lsi.type.LsiType
 
 class KspLsiType(
-  private val resolver: Resolver,
-  private val ksType: KSType,
+  internal val resolver: Resolver,
+  internal val ksType: KSType,
 ) : LsiType {
 
   override val simpleName: String? by lazy {
@@ -28,7 +29,7 @@ class KspLsiType(
 
   override val annotations: List<LsiAnnotation> by lazy {
     ksType.annotations
-      .map { KspLsiAnnotation(it) }
+      .map { KspLsiAnnotation(it) { resolver } }
       .toList()
   }
 
@@ -83,3 +84,6 @@ class KspLsiType(
 }
 
 fun KSType.toLsiType(resolver: Resolver): LsiType = KspLsiType(resolver, this)
+
+fun KSType.toLsiType(context: KspLsiContext = KspLsiContext): LsiType =
+  KspLsiType(context.resolver, this)

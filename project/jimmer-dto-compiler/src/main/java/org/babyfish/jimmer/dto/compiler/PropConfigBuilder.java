@@ -1,8 +1,8 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import site.addzero.lsi.dto.LsiDtoBaseProp;
+import site.addzero.lsi.dto.LsiDtoBaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
+class PropConfigBuilder<T extends LsiDtoBaseType, P extends LsiDtoBaseProp> {
 
     private final CompilerContext<T, P> ctx;
 
@@ -625,7 +625,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
-    private static abstract class PathHolder<P extends BaseProp> {
+    private static abstract class PathHolder<P extends LsiDtoBaseProp> {
 
         final List<PropConfig.PathNode<P>> path;
 
@@ -657,7 +657,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
-    private static class OrderItemImpl<P extends BaseProp> extends PathHolder<P> implements PropConfig.OrderItem<P> {
+    private static class OrderItemImpl<P extends LsiDtoBaseProp> extends PathHolder<P> implements PropConfig.OrderItem<P> {
 
         private final boolean desc;
 
@@ -677,7 +677,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
-    private static class NullityPredicate<P extends BaseProp>
+    private static class NullityPredicate<P extends LsiDtoBaseProp>
             extends PathHolder<P>
             implements PropConfig.Predicate.Nullity<P> {
 
@@ -699,7 +699,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
-    private static class CmpPredicate<P extends BaseProp> extends PathHolder<P> implements PropConfig.Predicate.Cmp<P> {
+    private static class CmpPredicate<P extends LsiDtoBaseProp> extends PathHolder<P> implements PropConfig.Predicate.Cmp<P> {
 
         private final String operator;
 
@@ -728,7 +728,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
-    private static class PropConfigImpl<P extends BaseProp> implements PropConfig<P> {
+    private static class PropConfigImpl<P extends LsiDtoBaseProp> implements PropConfig<P> {
 
         private final PropConfig.Predicate predicate;
 
@@ -864,7 +864,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
-    private static class SimplePathNodeImpl<P extends BaseProp> implements PropConfig.PathNode<P> {
+    private static class SimplePathNodeImpl<P extends LsiDtoBaseProp> implements PropConfig.PathNode<P> {
 
         private final P prop;
 
@@ -888,7 +888,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
-    private static class AssociatedIdPathNodeImpl<P extends BaseProp> implements PropConfig.PathNode<P> {
+    private static class AssociatedIdPathNodeImpl<P extends LsiDtoBaseProp> implements PropConfig.PathNode<P> {
 
         private final P prop;
 

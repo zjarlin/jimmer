@@ -1,7 +1,7 @@
 package site.addzero.lsi.assist
 
-import site.addzero.lsi.types.TypeRegistry
 import site.addzero.lsi.types.PrimitiveType
+import site.addzero.lsi.types.TypeRegistry
 
 /**
  * 类型检查器 - 统一的类型判断工具
@@ -53,7 +53,7 @@ object TypeChecker {
      * 判断是否为浮点类型
      */
     fun isFloatType(javaType: String?): Boolean {
-        javaType?: return false
+        javaType ?: return false
         return TypeRegistry.isFloatingPoint(javaType)
     }
 
@@ -61,7 +61,7 @@ object TypeChecker {
      * 判断是否为双精度浮点类型
      */
     fun isDoubleType(javaType: String?): Boolean {
-        javaType?: return false
+        javaType ?: return false
         val toSimpleName = javaType.toSimpleName()
         val simpleType = toSimpleName.lowercase()
         return simpleType in setOf("double", "float")
@@ -71,7 +71,7 @@ object TypeChecker {
      * 判断是否为数值类型（包括整型、浮点型、BigDecimal等）
      */
     fun isNumericType(typeName: String?): Boolean {
-        typeName?: return false
+        typeName ?: return false
         return TypeRegistry.isNumeric(typeName)
     }
 
@@ -79,7 +79,7 @@ object TypeChecker {
      * 判断是否为BigDecimal类型
      */
     fun isBigDecimalType(javaType: String?): Boolean {
-        javaType?: return false
+        javaType ?: return false
         return TypeRegistry.isBigNumber(javaType) && javaType.contains("BigDecimal", ignoreCase = true)
     }
 
@@ -88,7 +88,7 @@ object TypeChecker {
      * 判断是否为字符类型
      */
     fun isCharType(javaType: String?): Boolean {
-        javaType?: return false
+        javaType ?: return false
         return TypeRegistry.isChar(javaType)
     }
 
@@ -96,7 +96,7 @@ object TypeChecker {
      * 判断是否为字符串类型
      */
     fun isStringType(typeName: String?): Boolean {
-        typeName?: return false
+        typeName ?: return false
         return TypeRegistry.isString(typeName)
     }
 
@@ -105,6 +105,9 @@ object TypeChecker {
         return substringAfterLast
     }
 
+    fun String.toPkg(): String {
+        return this.substringBeforeLast('.', missingDelimiterValue = "")
+    }
 
     /**
      * 判断是否为长文本类型（根据字段名推断）
