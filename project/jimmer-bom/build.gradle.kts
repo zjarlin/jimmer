@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     constraints {
-        api(projects.jimmerApt)
+        api(projects.jimmerCompiler)
         api(projects.jimmerClient)
         api(projects.jimmerClientSwagger)
         api(projects.jimmerClientScalar)
@@ -13,7 +13,6 @@ dependencies {
         api(projects.jimmerCoreKotlin)
         api(projects.jimmerDtoCompiler)
         api(projects.jimmerDdlCompiler)
-        api(projects.jimmerKsp)
         api(projects.jimmerMapstructApt)
         api(projects.jimmerSpringBootStarter)
         api(projects.jimmerSql)

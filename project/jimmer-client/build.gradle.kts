@@ -9,8 +9,8 @@ dependencies {
     compileOnly(libs.jackson.annotations)
     annotationProcessor(libs.spring.boot.configurationProcessor)
 
-    testAnnotationProcessor(projects.jimmerApt)
-    kspTest(projects.jimmerKsp)
+    testAnnotationProcessor(projects.jimmerCompiler)
+    kspTest(projects.jimmerCompiler)
 
     testImplementation(projects.jimmerSqlKotlin)
     testImplementation(libs.spring.web)

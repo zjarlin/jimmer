@@ -37,7 +37,7 @@ testing {
                 implementation(libs.mapstruct)
                 implementation(libs.javax.validation.api)
                 compileOnly(libs.lombok)
-                annotationProcessor(projects.jimmerApt)
+                annotationProcessor(projects.jimmerCompiler)
                 annotationProcessor(libs.lombok)
                 annotationProcessor(libs.mapstruct.processor)
             }

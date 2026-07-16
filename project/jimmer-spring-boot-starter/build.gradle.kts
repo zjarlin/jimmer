@@ -23,10 +23,10 @@ dependencies {
 
     annotationProcessor(libs.spring.boot.configurationProcessor)
 
-    testAnnotationProcessor(projects.jimmerApt)
+    testAnnotationProcessor(projects.jimmerCompiler)
     testAnnotationProcessor(libs.lombok)
 
-    kspTest(projects.jimmerKsp)
+    kspTest(projects.jimmerCompiler)
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.validation)

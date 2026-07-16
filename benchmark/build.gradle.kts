@@ -19,8 +19,8 @@ dependencies {
     annotationProcessor(libs.jmh.generator.annprocess)
 
     implementation(libs.jimmer.sql)
-    annotationProcessor(libs.jimmer.apt)
-    ksp(libs.jimmer.ksp)
+    annotationProcessor(libs.jimmer.compiler)
+    ksp(libs.jimmer.compiler)
 
     implementation(libs.spring.boot.jdbc)
     implementation(libs.spring.boot.data.jpa)

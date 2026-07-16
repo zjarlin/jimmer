@@ -84,7 +84,7 @@ public class Context {
 
     private final DocMetadata docMetadata;
 
-    Context(
+    public Context(
             Elements elements,
             Types types,
             Filer filer,

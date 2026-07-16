@@ -12,7 +12,7 @@ dependencies {
     compileOnly(libs.postgresql)
     compileOnly(libs.easyexcel)
 
-    ksp(projects.jimmerKsp)
+    ksp(projects.jimmerCompiler)
     ksp(files("src/main/dto-bundle"))
 }
 

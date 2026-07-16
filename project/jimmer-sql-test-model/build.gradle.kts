@@ -7,7 +7,7 @@ dependencies {
 
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
-    annotationProcessor(projects.jimmerApt)
+    annotationProcessor(projects.jimmerCompiler)
     annotationProcessor(files("src/main/dto-bundle"))
 
     compileOnly(libs.bundles.jackson)
