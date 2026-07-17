@@ -23,6 +23,8 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(kotlin("compiler-embeddable"))
     testImplementation(projects.jimmerSql)
+    testImplementation(libs.ksp.symbolProcessing.aa.embeddable)
+    testImplementation(libs.ksp.symbolProcessing.common.deps)
 }
 
 tasks.test {

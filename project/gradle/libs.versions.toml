@@ -75,6 +75,8 @@ kotlinpoet = { group = "com.squareup", name = "kotlinpoet", version.ref = "kotli
 kotlinpoet-ksp = { group = "com.squareup", name = "kotlinpoet-ksp", version.ref = "kotlinpoet" }
 
 ksp-symbolProcessing-api = { group = "com.google.devtools.ksp", name = "symbol-processing-api", version.ref = "ksp" }
+ksp-symbolProcessing-aa-embeddable = { group = "com.google.devtools.ksp", name = "symbol-processing-aa-embeddable", version.ref = "ksp" }
+ksp-symbolProcessing-common-deps = { group = "com.google.devtools.ksp", name = "symbol-processing-common-deps", version.ref = "ksp" }
 
 lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
 
