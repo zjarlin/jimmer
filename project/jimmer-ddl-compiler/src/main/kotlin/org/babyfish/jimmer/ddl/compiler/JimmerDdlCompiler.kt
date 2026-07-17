@@ -1,52 +1,50 @@
 package org.babyfish.jimmer.ddl.compiler
 
-import site.addzero.ddlgenerator.core.dialect.AutoDdlDialects
-import site.addzero.ddlgenerator.core.diff.AddComment
-import site.addzero.ddlgenerator.core.diff.AddForeignKey
-import site.addzero.ddlgenerator.core.diff.AlterColumn
-import site.addzero.ddlgenerator.core.diff.AutoDdlOperation
-import site.addzero.ddlgenerator.core.diff.CreateIndex
-import site.addzero.ddlgenerator.core.diff.CreateSequence
-import site.addzero.ddlgenerator.core.diff.CreateTable
-import site.addzero.ddlgenerator.core.diff.SchemaDiffPlanner
-import site.addzero.ddlgenerator.core.model.AutoDdlColumn
-import site.addzero.ddlgenerator.core.model.AutoDdlComment
-import site.addzero.ddlgenerator.core.model.AutoDdlCommentTargetType
-import site.addzero.ddlgenerator.core.model.AutoDdlLogicalType
-import site.addzero.ddlgenerator.core.model.AutoDdlSchema
-import site.addzero.ddlgenerator.core.model.AutoDdlTable
-import site.addzero.ddlgenerator.core.options.AutoDdlDiffOptions
-import site.addzero.ddlgenerator.lsi.LsiAutoDdlSchemaAdapter
-import site.addzero.lsi.clazz.LsiClass
-import site.addzero.lsi.field.LsiField
-import site.addzero.util.db.DatabaseType
+import org.babyfish.jimmer.ddl.generator.dialect.AutoDdlDialects
+import org.babyfish.jimmer.ddl.generator.diff.AddComment
+import org.babyfish.jimmer.ddl.generator.diff.AddForeignKey
+import org.babyfish.jimmer.ddl.generator.diff.AlterColumn
+import org.babyfish.jimmer.ddl.generator.diff.AutoDdlOperation
+import org.babyfish.jimmer.ddl.generator.diff.CreateIndex
+import org.babyfish.jimmer.ddl.generator.diff.CreateSequence
+import org.babyfish.jimmer.ddl.generator.diff.CreateTable
+import org.babyfish.jimmer.ddl.generator.diff.SchemaDiffPlanner
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlComment
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlCommentTargetType
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlSchema
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlTable
+import org.babyfish.jimmer.ddl.generator.options.AutoDdlDiffOptions
+import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiWorkspace
 
 object JimmerDdlCompiler {
     fun compile(
-        classes: Collection<LsiClass>,
+        workspace: LsiWorkspace,
+        entityTypeIds: Collection<LsiSymbolId>,
         settings: JimmerDdlCompilerSettings,
-        relationTargetClasses: Collection<LsiClass> = classes,
+        relationTargetWorkspace: LsiWorkspace = workspace,
     ): JimmerDdlCompilerResult {
         if (!settings.enabled) {
             return JimmerDdlCompilerResult.empty(settings)
         }
 
-        val entities = classes.toJimmerDdlLsiClasses()
-            .filter { it.isJimmerEntity() }
+        val entityById = workspace.jimmerEntityTypes().associateBy(LsiTypeDeclaration::id)
+        val requestedEntityIds = entityTypeIds.toSortedSet()
+        val missingEntityIds = requestedEntityIds - entityById.keys
+        require(missingEntityIds.isEmpty()) {
+            "Jimmer DDL root types must be @Entity declarations in the workspace: " +
+                missingEntityIds.joinToString { id -> id.value }
+        }
+        val entities = requestedEntityIds.map { id -> entityById.getValue(id) }
             .filter { settings.includesClass(it.qualifiedName) }
-            .distinctBy { it.qualifiedName ?: it.simpleName.orEmpty() }
-            .sortedBy { it.qualifiedName ?: it.simpleName.orEmpty() }
         if (entities.isEmpty()) {
             return JimmerDdlCompilerResult.empty(settings)
         }
-        val relationTargetEntities = relationTargetClasses.toJimmerDdlLsiClasses()
-            .filter { it.isJimmerEntity() }
-            .distinctBy { it.qualifiedName ?: it.simpleName.orEmpty() }
-            .sortedBy { it.qualifiedName ?: it.simpleName.orEmpty() }
-
-        val schema = buildSchema(
+        val schema = buildJimmerDdlSchema(
+            workspace = workspace,
             entities = entities,
-            relationTargetEntities = relationTargetEntities,
+            relationTargetWorkspace = relationTargetWorkspace,
             settings = settings,
         )
         val changePlan = JimmerDdlEntityTableSnapshot.planSchemaChanges(
@@ -164,103 +162,6 @@ object JimmerDdlCompiler {
         }
     }
 
-    private fun buildSchema(
-        entities: List<LsiClass>,
-        relationTargetEntities: List<LsiClass>,
-        settings: JimmerDdlCompilerSettings,
-    ): AutoDdlSchema {
-        val baseSchema = LsiAutoDdlSchemaAdapter.from(entities)
-        val junctionTables = if (settings.includeManyToManyTables) {
-            scanManyToManyTables(entities, relationTargetEntities)
-        } else {
-            emptyList()
-        }
-        return AutoDdlSchema(
-            (baseSchema.tables + junctionTables).distinctBy { table -> table.name.lowercase() },
-            baseSchema.sequences,
-        )
-    }
-
-    private fun scanManyToManyTables(
-        entities: List<LsiClass>,
-        relationTargetEntities: List<LsiClass>,
-    ): List<AutoDdlTable> {
-        val relationTargetByQualifiedName = relationTargetEntities
-            .mapNotNull { entity -> entity.qualifiedName?.takeIf { it.isNotBlank() }?.let { it to entity } }
-            .toMap()
-        val relationTargetBySimpleName = relationTargetEntities
-            .mapNotNull { entity -> entity.simpleName?.takeIf { it.isNotBlank() }?.let { it to entity } }
-            .toMap()
-        return entities.flatMap { entity ->
-            val ownerIdField = entity.findIdField() ?: return@flatMap emptyList()
-            entity.allDdlFields()
-                .filter { field -> field.hasAnnotation("org.babyfish.jimmer.sql.ManyToMany", "ManyToMany") }
-                .mapNotNull { field ->
-                    val targetType = field.type?.typeParameters?.firstOrNull() ?: field.type
-                    val targetClass = targetType?.lsiClass ?: field.fieldTypeClass
-                    ?: targetType?.qualifiedName?.let(relationTargetByQualifiedName::get)
-                    ?: targetType?.simpleName?.let(relationTargetBySimpleName::get)
-                    ?: return@mapNotNull null
-                    val targetIdField = targetClass.findIdField() ?: return@mapNotNull null
-                    val fieldName = field.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    val ownerName = entity.simpleName.orEmpty().toSnakeCase()
-                    val targetName = targetClass.simpleName.orEmpty().toSnakeCase()
-                    val leftColumnName = "${ownerName}_id"
-                    val rightColumnName = "${targetName}_id"
-                    AutoDdlTable(
-                        "${ownerName}_${fieldName.toSnakeCase()}_mapping",
-                        listOf(
-                            AutoDdlColumn(leftColumnName, ownerIdField.toLogicalType(), false, null, null, null, null, null, false, false, null, null),
-                            AutoDdlColumn(rightColumnName, targetIdField.toLogicalType(), false, null, null, null, null, null, false, false, null, null),
-                        ),
-                        emptyList(),
-                        emptyList(),
-                        null,
-                        null,
-                    )
-                }
-        }
-    }
-
-    private fun LsiClass.allDdlFields(): List<LsiField> {
-        val inherited = (superClasses + interfaces).flatMap { parent -> parent.allDdlFields() }
-        return inherited + fields
-    }
-
-    private fun LsiClass.findIdField(): LsiField? {
-        return allDdlFields().firstOrNull { field -> field.hasAnnotation("org.babyfish.jimmer.sql.Id", "Id") }
-    }
-
-    private fun LsiField.hasAnnotation(
-        qualifiedName: String,
-        simpleName: String,
-    ): Boolean {
-        return annotations.any { annotation -> annotation.qualifiedName == qualifiedName || annotation.simpleName == simpleName }
-    }
-
-    private fun LsiField.toLogicalType(): AutoDdlLogicalType {
-        return when (typeName ?: type?.simpleName) {
-            "Byte" -> AutoDdlLogicalType.INT8
-            "Short" -> AutoDdlLogicalType.INT16
-            "Int", "Integer" -> AutoDdlLogicalType.INT32
-            "Long" -> AutoDdlLogicalType.INT64
-            "Float" -> AutoDdlLogicalType.FLOAT32
-            "Double" -> AutoDdlLogicalType.FLOAT64
-            "Boolean" -> AutoDdlLogicalType.BOOLEAN
-            else -> AutoDdlLogicalType.STRING
-        }
-    }
-
-    private fun LsiClass.guessJimmerTableName(): String {
-        val tableName = annotations.firstNotNullOfOrNull { annotation ->
-            if (annotation.qualifiedName != "org.babyfish.jimmer.sql.Table" && annotation.simpleName != "Table") {
-                return@firstNotNullOfOrNull null
-            }
-            annotation.getAttribute("name")?.toString()?.takeIf { it.isNotBlank() }
-        }
-        return tableName ?: simpleName.orEmpty().toSnakeCase()
-    }
-
     private fun buildOfflineOperations(
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
@@ -353,7 +254,7 @@ object JimmerDdlCompiler {
     ): List<String> {
         return renameOperations.map { operation ->
             when (settings.databaseType) {
-                DatabaseType.SQLSERVER -> "EXEC sp_rename '${operation.oldTableName}', '${operation.newTableName}';"
+                JimmerDatabaseType.SQLSERVER -> "EXEC sp_rename '${operation.oldTableName}', '${operation.newTableName}';"
                 else -> "ALTER TABLE ${quoteIdentifier(operation.oldTableName, settings.databaseType)} RENAME TO ${quoteIdentifier(operation.newTableName, settings.databaseType)};"
             }
         }
@@ -363,7 +264,7 @@ object JimmerDdlCompiler {
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ): List<String> {
-        if (settings.databaseType != DatabaseType.POSTGRESQL) {
+        if (settings.databaseType != JimmerDatabaseType.POSTGRESQL) {
             return emptyList()
         }
         return schema.tables.flatMap { table ->
@@ -377,12 +278,12 @@ object JimmerDdlCompiler {
 
     private fun quoteIdentifier(
         name: String,
-        databaseType: DatabaseType,
+        databaseType: JimmerDatabaseType,
     ): String {
         val escaped = name.replace("\"", "\"\"")
         return when (databaseType) {
-            DatabaseType.MYSQL, DatabaseType.TIDB, DatabaseType.OCEANBASE, DatabaseType.POLARDB -> "`$name`"
-            DatabaseType.SQLSERVER -> "[$name]"
+            JimmerDatabaseType.MYSQL -> "`$name`"
+            JimmerDatabaseType.SQLSERVER -> "[$name]"
             else -> "\"$escaped\""
         }
     }
@@ -420,10 +321,6 @@ data class RenameTable(
     val newTableName: String,
 )
 
-private fun LsiClass.isJimmerEntity(): Boolean {
-    return annotations.any { annotation -> annotation.qualifiedName == "org.babyfish.jimmer.sql.Entity" || annotation.simpleName == "Entity" }
-}
-
 private data class JimmerDdlOperationPlan(
     val operations: List<AutoDdlOperation>,
     val snapshotSchema: AutoDdlSchema? = null,
@@ -443,7 +340,7 @@ private data class JimmerDdlColumnKey(
 
 data class JimmerDdlCompilerResult(
     val settings: JimmerDdlCompilerSettings,
-    val entities: List<LsiClass>,
+    val entities: List<LsiTypeDeclaration>,
     val schema: AutoDdlSchema,
     val snapshotSchema: AutoDdlSchema,
     val statements: List<String>,
@@ -456,7 +353,7 @@ data class JimmerDdlCompilerResult(
     companion object {
         fun empty(
             settings: JimmerDdlCompilerSettings,
-            entities: List<LsiClass> = emptyList(),
+            entities: List<LsiTypeDeclaration> = emptyList(),
             schema: AutoDdlSchema = AutoDdlSchema(emptyList(), emptyList()),
         ): JimmerDdlCompilerResult {
             return JimmerDdlCompilerResult(
@@ -470,23 +367,4 @@ data class JimmerDdlCompilerResult(
             )
         }
     }
-}
-
-private fun String.toSnakeCase(): String {
-    if (isBlank()) {
-        return this
-    }
-    val builder = StringBuilder()
-    for (index in indices) {
-        val char = this[index]
-        if (char in 'A'..'Z') {
-            if (index > 0 && builder.lastOrNull() != '_') {
-                builder.append('_')
-            }
-            builder.append(char.lowercaseChar())
-        } else {
-            builder.append(char)
-        }
-    }
-    return builder.toString()
 }

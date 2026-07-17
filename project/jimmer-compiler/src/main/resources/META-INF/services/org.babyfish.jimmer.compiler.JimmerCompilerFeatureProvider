@@ -1,0 +1,6 @@
+org.babyfish.jimmer.compiler.client.JimmerClientCompilerFeatureProvider
+org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureProvider
+org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
+org.babyfish.jimmer.compiler.module.JimmerModuleCompilerFeatureProvider
+org.babyfish.jimmer.compiler.transactional.TransactionalCompilerFeatureProvider
+org.babyfish.jimmer.compiler.tuple.TypedTupleCompilerFeatureProvider

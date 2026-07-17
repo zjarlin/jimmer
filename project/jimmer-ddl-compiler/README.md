@@ -1,10 +1,11 @@
 # Jimmer DDL Compiler
 
-Jimmer DDL Compiler is a compile-time DDL generator for Jimmer entities. It can run as either a Kotlin KSP processor or a Java APT processor, convert Jimmer entity metadata into the LSI model, and render dialect-specific schema SQL.
+Jimmer DDL Compiler is the platform-independent semantic compiler that converts Jimmer LSI metadata into dialect-specific schema SQL. The APT and KSP lifecycle adapters are owned by the main `jimmer-compiler` artifact.
 
 ## Module
 
-- `jimmer-ddl-compiler`: processor artifact containing the KSP provider, APT provider, DDL compiler, schema snapshot handling, and tests.
+- `jimmer-ddl-compiler`: semantic DDL compiler, schema diff, snapshot handling, and dialect rendering.
+- `jimmer-compiler`: the single processor artifact that invokes the DDL compiler from APT and KSP.
 
 ## Gradle usage
 
@@ -12,7 +13,7 @@ Kotlin/KSP:
 
 ```kotlin
 dependencies {
-    ksp("org.babyfish.jimmer:jimmer-ddl-compiler:<jimmer-version>")
+    ksp("org.babyfish.jimmer:jimmer-compiler:<jimmer-version>")
 }
 
 ksp {
@@ -29,7 +30,7 @@ Java/APT:
 
 ```kotlin
 dependencies {
-    annotationProcessor("org.babyfish.jimmer:jimmer-ddl-compiler:<jimmer-version>")
+    annotationProcessor("org.babyfish.jimmer:jimmer-compiler:<jimmer-version>")
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -42,7 +43,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `jimmerDdl.enabled` | `true` | Enables or disables generation. |
+| `jimmerDdl.enabled` | `false` | Enables or disables generation. |
 | `jimmerDdl.profiles` | empty | Comma-separated profile names. Each profile can override options through `jimmerDdl.profile.<name>.<option>`. |
 | `jimmerDdl.databaseType` | `auto` | Dialect code such as `postgresql`, `mysql`, `h2`, `sqlite`, `sqlserver`, `oracle`, `dm`, `kingbase`, or `taos`. `auto` resolves from JDBC URL when available. |
 | `jimmerDdl.outputFormat` | `flyway` | `flyway` writes `V<version>__<description>.sql`; `plain` writes `<description>.sql`. |
@@ -73,4 +74,5 @@ Run the focused test suite from the `project` directory:
 
 ```bash
 ./gradlew :jimmer-ddl-compiler:test
+./gradlew :jimmer-compiler:test
 ```

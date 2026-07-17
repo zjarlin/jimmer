@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
  * not the last error of IDE, this is very helpful for
  * trouble resolving</p>
  *
- * <p>The `jimmer-apt` handles these annotations</p>
+ * <p>The APT frontend of `jimmer-compiler` handles these annotations</p>
  * <ul>
  *     <li>org.babyfish.jimmer.Immutable</li>
  *     <li>org.babyfish.jimmer.sql.Entity</li>
@@ -24,7 +24,7 @@ import java.lang.annotation.Target;
  * </ul>
  *
  * If the current project does not have any classes decorated by any one of above annotations,
- * the `jimmer-apt` will not be triggered, please write an unuseful empty class and use this
+ * the APT frontend will not be triggered, please write an unuseful empty class and use this
  * annotation to decorate it.
  */
 @Retention(RetentionPolicy.SOURCE)

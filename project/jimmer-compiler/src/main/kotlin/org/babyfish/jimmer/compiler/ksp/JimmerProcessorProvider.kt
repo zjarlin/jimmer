@@ -7,6 +7,8 @@ import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.client.EnableImplicitApi
+import org.babyfish.jimmer.compiler.ddl.ksp.JimmerDdlCompilerKspFeature
+import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoUtils
@@ -17,20 +19,16 @@ import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.client.ClientProcessor
 import org.babyfish.jimmer.ksp.client.ExportDocProcessor
 import org.babyfish.jimmer.ksp.dto.DtoProcessor
-import org.babyfish.jimmer.ksp.error.ErrorProcessor
 import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
-import org.babyfish.jimmer.ksp.transactional.TxProcessor
-import org.babyfish.jimmer.ksp.tuple.TypedTupleProcessor
 import org.babyfish.jimmer.ksp.fullName
 import java.util.regex.Pattern
 
 class JimmerProcessorProvider : SymbolProcessorProvider {
 
-    override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =
-        object : SymbolProcessor {
-
-            private val isModuleRequired =
-                environment.options["jimmer.immutable.isModuleRequired"]?.trim() == "true"
+    override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
+        val lsiDriver = KspLsiCompilerDriver(environment)
+        val ddlFeature = JimmerDdlCompilerKspFeature(environment)
+        return object : SymbolProcessor {
 
             private val dtoDirs =
                 dtoDir("jimmer.dto.dirs", "src/main/") ?: listOf("src/main/dto")
@@ -70,15 +68,27 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
 
             private var explicitClientApi: Boolean? = null
 
-            private var tupleGenerated = false
-
-            private var delayedTupleTypeNames: Collection<String>? = null
-
             private var clientGenerated = false
 
             private var delayedClientTypeNames: Collection<String>? = null
 
             override fun process(resolver: Resolver): List<KSAnnotated> {
+                val deferred = linkedSetOf<KSAnnotated>()
+                deferred += lsiDriver.process(resolver)
+                deferred += ddlFeature.process(resolver)
+                deferred += processJimmer(resolver, lsiDriver.lastRoundGeneratedSources)
+                return deferred.toList()
+            }
+
+            override fun finish() {
+                lsiDriver.finish()
+                ddlFeature.finish()
+            }
+
+            private fun processJimmer(
+                resolver: Resolver,
+                lsiGeneratedSources: Boolean,
+            ): List<KSAnnotated> {
                 return try {
                     val context = Context(resolver, environment)
                     if (explicitClientApi == null) {
@@ -94,10 +104,8 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                     if (!serverGenerated) {
                         processedDeclarations += ImmutableProcessor(
                             context,
-                            isModuleRequired,
                             excludedUserAnnotationPrefixes,
                         ).process()
-                        val errorGenerated = ErrorProcessor(context, checkedException).process()
                         val dtoGenerated = DtoProcessor(
                             context,
                             dtoMutable,
@@ -111,25 +119,16 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                             },
                             defaultNullableInputModifier,
                         ).process()
-                        TxProcessor(context).process()
                         ExportDocProcessor(context).process()
                         serverGenerated = true
-                        if (processedDeclarations.isNotEmpty() || errorGenerated || dtoGenerated) {
+                        if (processedDeclarations.isNotEmpty() || lsiGeneratedSources || dtoGenerated) {
                             delayedClientTypeNames = resolver.getAllFiles().flatMap { file ->
                                 file.declarations.filterIsInstance<KSClassDeclaration>().map { it.fullName }
                             }.toList()
                             return processedDeclarations
                         }
                     }
-                    if (!tupleGenerated) {
-                        tupleGenerated = true
-                        val processedTupleDeclarations =
-                            TypedTupleProcessor(context, delayedTupleTypeNames).process()
-                        if (processedTupleDeclarations.isNotEmpty()) {
-                            return processedTupleDeclarations
-                        }
-                    }
-                    if (tupleGenerated && !clientGenerated && !context.isBuddyIgnoreResourceGeneration) {
+                    if (!clientGenerated && !context.isBuddyIgnoreResourceGeneration) {
                         clientGenerated = true
                         ClientProcessor(
                             context,
@@ -174,6 +173,7 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                     }
                     ?.let { DtoUtils.standardDtoDirs(it) }
         }
+    }
 
     companion object {
 

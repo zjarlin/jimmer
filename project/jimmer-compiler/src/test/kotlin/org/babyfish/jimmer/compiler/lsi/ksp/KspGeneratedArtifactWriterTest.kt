@@ -1,0 +1,178 @@
+package org.babyfish.jimmer.compiler.lsi.ksp
+
+import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSFile
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.OutputStream
+import java.lang.reflect.Proxy
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactKind
+import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiSymbolId
+
+class KspGeneratedArtifactWriterTest {
+
+    @Test
+    fun `writes kotlin source and resource with incremental dependencies`() {
+        val codeGenerator = CapturingCodeGenerator()
+        val writer = KspGeneratedArtifactWriter(codeGenerator)
+        val firstId = LsiSymbolId.type("demo.First")
+        val secondId = LsiSymbolId.type("demo.Second")
+        val firstFile = file("First.kt")
+        val secondFile = file("Second.kt")
+        val currentRoundFiles = mapOf(
+            firstId to firstFile,
+            secondId to secondFile,
+        )
+
+        writer.write(
+            GeneratedArtifact.source(
+                kind = ArtifactKind.KOTLIN_SOURCE,
+                qualifiedName = "demo.BookDraft",
+                content = "package demo\ninterface BookDraft",
+                aggregationMode = ArtifactAggregationMode.ISOLATING,
+                originatingSymbols = setOf(firstId),
+            ),
+            currentRoundFiles,
+        )
+        writer.write(
+            GeneratedArtifact.create(
+                kind = ArtifactKind.RESOURCE,
+                path = "META-INF/jimmer/client",
+                content = "schema",
+                aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                originatingSymbols = setOf(secondId, firstId),
+            ),
+            currentRoundFiles,
+        )
+
+        val sourceCall = codeGenerator.calls[0]
+        assertEquals("demo/BookDraft", sourceCall.path)
+        assertEquals("kt", sourceCall.extension)
+        assertEquals("package demo\ninterface BookDraft", sourceCall.content())
+        assertTrue(!sourceCall.dependencies.aggregating)
+        assertEquals(1, sourceCall.dependencies.originatingFiles.size)
+        assertSame(firstFile, sourceCall.dependencies.originatingFiles.single())
+        val resourceCall = codeGenerator.calls[1]
+        assertEquals("META-INF/jimmer/client", resourceCall.path)
+        assertEquals("", resourceCall.extension)
+        assertEquals("schema", resourceCall.content())
+        assertTrue(resourceCall.dependencies.aggregating)
+        assertEquals(2, resourceCall.dependencies.originatingFiles.size)
+        assertSame(firstFile, resourceCall.dependencies.originatingFiles[0])
+        assertSame(secondFile, resourceCall.dependencies.originatingFiles[1])
+    }
+
+    @Test
+    fun `rejects java source and missing isolating file`() {
+        val codeGenerator = CapturingCodeGenerator()
+        val writer = KspGeneratedArtifactWriter(codeGenerator)
+        val sourceId = LsiSymbolId.type("demo.Book")
+
+        assertFailsWith<IllegalArgumentException> {
+            writer.write(
+                GeneratedArtifact.source(
+                    kind = ArtifactKind.JAVA_SOURCE,
+                    qualifiedName = "demo.BookDraft",
+                    content = "package demo;",
+                    aggregationMode = ArtifactAggregationMode.ISOLATING,
+                    originatingSymbols = setOf(sourceId),
+                ),
+                emptyMap(),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            writer.write(
+                GeneratedArtifact.source(
+                    kind = ArtifactKind.KOTLIN_SOURCE,
+                    qualifiedName = "demo.BookDraft",
+                    content = "package demo",
+                    aggregationMode = ArtifactAggregationMode.ISOLATING,
+                    originatingSymbols = setOf(sourceId),
+                ),
+                emptyMap(),
+            )
+        }
+
+        assertTrue(codeGenerator.calls.isEmpty())
+    }
+
+    private fun file(label: String): KSFile {
+        lateinit var instance: Any
+        instance = Proxy.newProxyInstance(
+            KSFile::class.java.classLoader,
+            arrayOf(KSFile::class.java),
+        ) { _, method, arguments ->
+            when (method.name) {
+                "equals" -> instance === arguments?.firstOrNull()
+                "hashCode" -> System.identityHashCode(instance)
+                "toString" -> label
+                else -> null
+            }
+        }
+        return instance as KSFile
+    }
+
+    private class CapturingCodeGenerator : CodeGenerator {
+
+        val calls = mutableListOf<WriteCall>()
+
+        override fun createNewFile(
+            dependencies: Dependencies,
+            packageName: String,
+            fileName: String,
+            extensionName: String,
+        ): OutputStream {
+            error("Package-based output is not supported by this test generator")
+        }
+
+        override fun createNewFileByPath(
+            dependencies: Dependencies,
+            path: String,
+            extensionName: String,
+        ): OutputStream {
+            val output = ByteArrayOutputStream()
+            calls += WriteCall(dependencies, path, extensionName, output)
+            return output
+        }
+
+        override fun associate(
+            sources: List<KSFile>,
+            packageName: String,
+            fileName: String,
+            extensionName: String,
+        ) = Unit
+
+        override fun associateByPath(
+            sources: List<KSFile>,
+            path: String,
+            extensionName: String,
+        ) = Unit
+
+        override fun associateWithClasses(
+            classes: List<KSClassDeclaration>,
+            packageName: String,
+            fileName: String,
+            extensionName: String,
+        ) = Unit
+
+        override val generatedFile: Collection<File> = emptyList()
+    }
+
+    private data class WriteCall(
+        val dependencies: Dependencies,
+        val path: String,
+        val extension: String,
+        val output: ByteArrayOutputStream,
+    ) {
+        fun content(): String = String(output.toByteArray(), Charsets.UTF_8)
+    }
+}

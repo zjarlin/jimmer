@@ -1,0 +1,70 @@
+package org.babyfish.jimmer.compiler.lsi.apt
+
+import java.nio.charset.StandardCharsets
+import javax.annotation.processing.Filer
+import javax.lang.model.element.Element
+import javax.tools.StandardLocation
+import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactKind
+import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiSymbolId
+
+/**
+ * 把共享层生成产物写入当前 APT 编译轮的 filer。
+ */
+class AptGeneratedArtifactWriter(
+    private val filer: Filer,
+) {
+
+    fun write(
+        artifact: GeneratedArtifact,
+        currentRoundElements: Map<LsiSymbolId, Element>,
+    ) {
+        require(artifact.kind != ArtifactKind.KOTLIN_SOURCE) {
+            "APT artifact writer cannot write Kotlin source: ${artifact.path}"
+        }
+        val originatingElements = artifact.originatingElements(currentRoundElements)
+        val output = when (artifact.kind) {
+            ArtifactKind.JAVA_SOURCE -> filer.createSourceFile(
+                artifact.javaQualifiedName(),
+                *originatingElements,
+            )
+            ArtifactKind.RESOURCE -> filer.createResource(
+                StandardLocation.CLASS_OUTPUT,
+                "",
+                artifact.path,
+                *originatingElements,
+            )
+            ArtifactKind.KOTLIN_SOURCE -> error("Kotlin source was rejected before APT output creation")
+        }
+        output.openOutputStream().use { stream ->
+            stream.write(artifact.content.toByteArray(StandardCharsets.UTF_8))
+        }
+    }
+
+    private fun GeneratedArtifact.originatingElements(
+        currentRoundElements: Map<LsiSymbolId, Element>,
+    ): Array<Element> {
+        val elements = originatingSymbols
+            .sorted()
+            .mapNotNull(currentRoundElements::get)
+            .distinct()
+        if (aggregationMode == ArtifactAggregationMode.ISOLATING) {
+            require(elements.size == 1) {
+                "APT isolating artifact requires one current-round originating element: $path"
+            }
+        }
+        return elements.toTypedArray()
+    }
+
+    private fun GeneratedArtifact.javaQualifiedName(): String {
+        require(path.endsWith(JAVA_SUFFIX)) {
+            "APT Java source artifact path must end with '$JAVA_SUFFIX': $path"
+        }
+        return path.removeSuffix(JAVA_SUFFIX).replace('/', '.')
+    }
+
+    companion object {
+        private const val JAVA_SUFFIX = ".java"
+    }
+}

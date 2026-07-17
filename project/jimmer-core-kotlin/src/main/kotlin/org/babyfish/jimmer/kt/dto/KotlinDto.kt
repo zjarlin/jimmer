@@ -5,8 +5,8 @@ package org.babyfish.jimmer.kt.dto
  * to decorate kotlin types, it is a fake
  * annotation to decorate DTO types.
  * - This annotation is only processed by
- * `jimmer-ksp` of kotlin, it will always
- * be ignored by `jimmer-apt` of java.
+ * the KSP frontend of `jimmer-compiler`, it will always
+ * be ignored by the APT frontend of `jimmer-compiler`.
  *
  * Jimmer KSP can generate both immutable
  * and mutable DTO classes:

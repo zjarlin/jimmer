@@ -10,7 +10,10 @@ class GeneratedArtifactConflictException(
     val incoming: GeneratedArtifact
 ) : IllegalStateException(
     "Conflicting generated artifact '${incoming.path}' for ${incoming.kind}: " +
-        "the same output was registered with different content or metadata"
+        "contentChanged=${existing.content != incoming.content}, " +
+        "aggregation=${existing.aggregationMode}->${incoming.aggregationMode}, " +
+        "symbols=${existing.originatingSymbols}->${incoming.originatingSymbols}, " +
+        "sources=${existing.originatingSources}->${incoming.originatingSources}"
 )
 
 /**

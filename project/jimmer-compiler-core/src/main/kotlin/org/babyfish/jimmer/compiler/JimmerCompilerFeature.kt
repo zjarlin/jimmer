@@ -4,13 +4,15 @@ import java.util.ServiceLoader
 
 data class JimmerCompilerFeatureDescriptor(
     val id: String,
-    val dependsOn: Set<String> = emptySet()
+    val dependsOn: Set<String> = emptySet(),
+    val inputResourcePaths: Set<String> = emptySet(),
 ) {
 
     init {
         requireFeatureId(id)
         dependsOn.forEach(::requireFeatureId)
         require(id !in dependsOn) { "Compiler feature '$id' cannot depend on itself" }
+        inputResourcePaths.forEach(::requireCompilerResourcePath)
     }
 }
 
@@ -20,7 +22,14 @@ data class JimmerCompilerFeatureDescriptor(
 interface JimmerCompilerFeatureProvider {
     val descriptor: JimmerCompilerFeatureDescriptor
 
-    fun compile(context: JimmerCompilerFeatureContext): JimmerCompilerFeatureResult
+    fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection =
+        JimmerCompilerFeatureCollection()
+
+    fun precompile(context: JimmerCompilerPrecompileContext): JimmerCompilerFeaturePrecompileResult =
+        JimmerCompilerFeaturePrecompileResult(JimmerCompilerFeatureState.EMPTY)
+
+    fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult =
+        JimmerCompilerFeatureRenderResult()
 }
 
 /**
@@ -170,4 +179,15 @@ private fun requireFeatureId(id: String) {
     require(id.isNotBlank()) { "Compiler feature id cannot be blank" }
     require(id == id.trim()) { "Compiler feature id cannot have surrounding whitespace: '$id'" }
     require(id.none(Char::isWhitespace)) { "Compiler feature id cannot contain whitespace: '$id'" }
+}
+
+internal fun requireCompilerResourcePath(path: String) {
+    require(path.isNotBlank()) { "Compiler resource path cannot be blank" }
+    require(path == path.trim().replace('\\', '/')) {
+        "Compiler resource path must be normalized: '$path'"
+    }
+    require(!path.startsWith('/')) { "Compiler resource path must be relative: '$path'" }
+    require(path.split('/').none { segment -> segment.isBlank() || segment == "." || segment == ".." }) {
+        "Compiler resource path contains an invalid segment: '$path'"
+    }
 }

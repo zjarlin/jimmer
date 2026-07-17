@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class LsiAnnotationTest {
@@ -54,5 +55,37 @@ class LsiAnnotationTest {
         val nestedValue = assertIs<LsiAnnotationValue.NestedAnnotationValue>(array.elements.single())
         assertEquals(nested, nestedValue.annotation)
         assertEquals(LsiAnnotationUseSiteTarget.GETTER, annotation.useSiteTarget)
+    }
+
+    @Test
+    fun `稳定签名与参数映射插入顺序无关`() {
+        val type = LsiSymbolId.type("example.Constraint")
+        val first = LsiAnnotation(
+            type = type,
+            arguments = linkedMapOf(
+                "message" to LsiAnnotationArgument(
+                    LsiAnnotationValue.StringValue("a:b,c"),
+                    LsiAnnotationArgumentOrigin.EXPLICIT,
+                ),
+                "groups" to LsiAnnotationArgument(
+                    LsiAnnotationValue.ArrayValue(
+                        listOf(
+                            LsiAnnotationValue.ClassValue(
+                                LsiDeclaredType(LsiSymbolId.type("example.Group"))
+                            )
+                        )
+                    ),
+                    LsiAnnotationArgumentOrigin.DEFAULT,
+                ),
+            ),
+            useSiteTarget = LsiAnnotationUseSiteTarget.GETTER,
+        )
+        val reordered = first.copy(arguments = first.arguments.entries.reversed().associate { it.toPair() })
+
+        assertEquals(first.stableSignature(), reordered.stableSignature())
+        assertNotEquals(
+            first.stableSignature(),
+            first.copy(useSiteTarget = LsiAnnotationUseSiteTarget.FIELD).stableSignature(),
+        )
     }
 }

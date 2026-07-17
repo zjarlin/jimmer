@@ -67,7 +67,7 @@ public class Metadata {
         } catch (ClassNotFoundException ex) {
             throw new IllegalArgumentException(
                     "Cannot find draft type for \"" + immutableJavaClass.getName() + "\". " +
-                            "Jimmer requires to use `jimmer-apt`(Java) or `jimmer-ksp`(Kotlin) to " +
+                            "Jimmer requires the APT(Java) or KSP(Kotlin) frontend of `jimmer-compiler` to " +
                             "generate some code according the user-defined entity interfaces," +
                             "please view \"https://babyfish-ct.github.io/jimmer-doc/docs/quick-view/get-started/generate-code\""
             );

@@ -1,6 +1,7 @@
 package site.addzero.lsi.codegen
 
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.core.LsiSource
 
 enum class ArtifactKind {
     JAVA_SOURCE,
@@ -38,7 +39,8 @@ data class GeneratedArtifact(
     val path: String,
     val content: String,
     val aggregationMode: ArtifactAggregationMode,
-    val originatingSymbols: Set<LsiSymbolId> = emptySet()
+    val originatingSymbols: Set<LsiSymbolId> = emptySet(),
+    val originatingSources: Set<LsiSource> = emptySet(),
 ) {
     val key: GeneratedArtifactKey
         get() = GeneratedArtifactKey(kind, path)
@@ -62,13 +64,15 @@ data class GeneratedArtifact(
             path: String,
             content: String,
             aggregationMode: ArtifactAggregationMode,
-            originatingSymbols: Set<LsiSymbolId> = emptySet()
+            originatingSymbols: Set<LsiSymbolId> = emptySet(),
+            originatingSources: Set<LsiSource> = emptySet(),
         ): GeneratedArtifact = GeneratedArtifact(
             kind = kind,
             path = normalizePath(path),
             content = content,
             aggregationMode = aggregationMode,
-            originatingSymbols = originatingSymbols.toSortedSet()
+            originatingSymbols = originatingSymbols.toSortedSet(),
+            originatingSources = originatingSources.toSortedSet(),
         )
 
         fun source(
@@ -76,7 +80,8 @@ data class GeneratedArtifact(
             qualifiedName: String,
             content: String,
             aggregationMode: ArtifactAggregationMode,
-            originatingSymbols: Set<LsiSymbolId>
+            originatingSymbols: Set<LsiSymbolId>,
+            originatingSources: Set<LsiSource> = emptySet(),
         ): GeneratedArtifact {
             require(kind.isSource) { "Source artifact must use JAVA_SOURCE or KOTLIN_SOURCE" }
             require(qualifiedName.isNotBlank()) { "Generated source qualified name cannot be blank" }
@@ -86,7 +91,7 @@ data class GeneratedArtifact(
                 ArtifactKind.RESOURCE -> error("Resource artifact cannot be created as source")
             }
             val path = qualifiedName.replace('.', '/') + ".$extension"
-            return create(kind, path, content, aggregationMode, originatingSymbols)
+            return create(kind, path, content, aggregationMode, originatingSymbols, originatingSources)
         }
 
         private fun normalizePath(path: String): String {

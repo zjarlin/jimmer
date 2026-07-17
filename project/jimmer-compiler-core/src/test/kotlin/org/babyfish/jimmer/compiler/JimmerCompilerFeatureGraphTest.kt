@@ -7,6 +7,25 @@ import kotlin.test.assertFailsWith
 class JimmerCompilerFeatureGraphTest {
 
     @Test
+    fun `descriptor validates stable input resource paths`() {
+        val descriptor = JimmerCompilerFeatureDescriptor(
+            id = "module",
+            inputResourcePaths = sortedSetOf(
+                "META-INF/jimmer/entities",
+                "META-INF/jimmer/immutables",
+            ),
+        )
+
+        assertEquals(
+            sortedSetOf("META-INF/jimmer/entities", "META-INF/jimmer/immutables"),
+            descriptor.inputResourcePaths,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            JimmerCompilerFeatureDescriptor("invalid", inputResourcePaths = setOf("/absolute"))
+        }
+    }
+
+    @Test
     fun `依赖图按确定顺序排列`() {
         val client = feature("client", "dto", "error")
         val error = feature("error")
@@ -58,8 +77,5 @@ class JimmerCompilerFeatureGraphTest {
     private fun feature(id: String, vararg dependencies: String): JimmerCompilerFeatureProvider =
         object : JimmerCompilerFeatureProvider {
             override val descriptor = JimmerCompilerFeatureDescriptor(id, dependencies.toSet())
-
-            override fun compile(context: JimmerCompilerFeatureContext): JimmerCompilerFeatureResult =
-                JimmerCompilerFeatureResult()
         }
 }

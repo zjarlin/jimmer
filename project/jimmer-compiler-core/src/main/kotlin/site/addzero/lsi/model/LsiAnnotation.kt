@@ -4,6 +4,10 @@ import site.addzero.lsi.core.LsiSymbolId
 
 enum class LsiAnnotationUseSiteTarget {
     FILE,
+    TYPE,
+    CONSTRUCTOR,
+    METHOD,
+    RETURN_TYPE,
     PROPERTY,
     FIELD,
     GETTER,

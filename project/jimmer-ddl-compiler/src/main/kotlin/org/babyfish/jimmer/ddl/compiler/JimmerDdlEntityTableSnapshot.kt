@@ -1,14 +1,14 @@
 package org.babyfish.jimmer.ddl.compiler
 
-import site.addzero.ddlgenerator.core.model.AutoDdlColumn
-import site.addzero.ddlgenerator.core.model.AutoDdlForeignKey
-import site.addzero.ddlgenerator.core.model.AutoDdlIndex
-import site.addzero.ddlgenerator.core.model.AutoDdlIndexType
-import site.addzero.ddlgenerator.core.model.AutoDdlJunction
-import site.addzero.ddlgenerator.core.model.AutoDdlLogicalType
-import site.addzero.ddlgenerator.core.model.AutoDdlSchema
-import site.addzero.ddlgenerator.core.model.AutoDdlTable
-import site.addzero.lsi.clazz.LsiClass
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlColumn
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlForeignKey
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlIndex
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlIndexType
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlJunction
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlLogicalType
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlSchema
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlTable
+import site.addzero.lsi.model.LsiTypeDeclaration
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
@@ -41,7 +41,7 @@ data class JimmerDdlSchemaChangePlan(
 
 object JimmerDdlEntityTableSnapshot {
     fun planSchemaChanges(
-        entities: List<LsiClass>,
+        entities: List<LsiTypeDeclaration>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ): JimmerDdlSchemaChangePlan {
@@ -71,7 +71,7 @@ object JimmerDdlEntityTableSnapshot {
     }
 
     fun planRenameTables(
-        entities: List<LsiClass>,
+        entities: List<LsiTypeDeclaration>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ): List<RenameTable> {
@@ -118,7 +118,7 @@ object JimmerDdlEntityTableSnapshot {
     }
 
     fun writeSnapshot(
-        entities: List<LsiClass>,
+        entities: List<LsiTypeDeclaration>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ) {
@@ -132,7 +132,7 @@ object JimmerDdlEntityTableSnapshot {
     }
 
     fun writeGeneratedSnapshot(
-        entities: List<LsiClass>,
+        entities: List<LsiTypeDeclaration>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ) {
@@ -147,7 +147,7 @@ object JimmerDdlEntityTableSnapshot {
 
     private fun writeSnapshot(
         snapshotFile: File,
-        entities: List<LsiClass>,
+        entities: List<LsiTypeDeclaration>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ) {
@@ -174,12 +174,10 @@ object JimmerDdlEntityTableSnapshot {
         snapshotFile.writeText(content)
     }
 
-    private fun List<LsiClass>.toSnapshot(): Map<String, String> {
-        return mapNotNull { entity ->
-            val qualifiedName = entity.qualifiedName?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val tableName = entity.guessJimmerTableName().takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            qualifiedName to tableName
-        }.toMap()
+    private fun List<LsiTypeDeclaration>.toSnapshot(): Map<String, String> {
+        return associate { entity ->
+            entity.qualifiedName to entity.jimmerTableName()
+        }
     }
 
     private fun File.readSnapshot(): JimmerDdlSnapshot {
@@ -423,33 +421,4 @@ object JimmerDdlEntityTableSnapshot {
             .replace("=", "\\=")
             .replace(":", "\\:")
     }
-}
-
-private fun LsiClass.guessJimmerTableName(): String {
-    val tableName = annotations.firstNotNullOfOrNull { annotation ->
-        if (annotation.qualifiedName != "org.babyfish.jimmer.sql.Table" && annotation.simpleName != "Table") {
-            return@firstNotNullOfOrNull null
-        }
-        annotation.getAttribute("name")?.toString()?.takeIf { it.isNotBlank() }
-    }
-    return tableName ?: simpleName.orEmpty().toSnakeCase()
-}
-
-private fun String.toSnakeCase(): String {
-    if (isBlank()) {
-        return this
-    }
-    val builder = StringBuilder()
-    for (index in indices) {
-        val char = this[index]
-        if (char in 'A'..'Z') {
-            if (index > 0 && builder.lastOrNull() != '_') {
-                builder.append('_')
-            }
-            builder.append(char.lowercaseChar())
-        } else {
-            builder.append(char)
-        }
-    }
-    return builder.toString()
 }

@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.ddl.compiler
 
-import site.addzero.ddlgenerator.core.options.AutoDdlOptions
-import site.addzero.util.db.DatabaseType
+import org.babyfish.jimmer.ddl.generator.options.AutoDdlOptions
 import java.io.File
 import java.util.Properties
 
@@ -9,7 +8,7 @@ private const val DEFAULT_OUTPUT_DIR = "build/generated/jimmer-ddl/main/resource
 private const val DEFAULT_VERSION = "1001"
 private const val DEFAULT_DESCRIPTION = "jimmer_auto_ddl_generated"
 private const val DEFAULT_SPRING_PROFILE = "local"
-private val DEFAULT_DATABASE_TYPE = DatabaseType.POSTGRESQL
+private val DEFAULT_DATABASE_TYPE = JimmerDatabaseType.POSTGRESQL
 
 enum class JimmerDdlOutputFormat {
     PLAIN,
@@ -36,7 +35,7 @@ data class JimmerDdlJdbcSettings(
 
 data class JimmerDdlCompilerSettings(
     val enabled: Boolean = true,
-    val databaseType: DatabaseType = DEFAULT_DATABASE_TYPE,
+    val databaseType: JimmerDatabaseType = DEFAULT_DATABASE_TYPE,
     val outputFormat: JimmerDdlOutputFormat = JimmerDdlOutputFormat.FLYWAY,
     val outputDir: String = DEFAULT_OUTPUT_DIR,
     val version: String = DEFAULT_VERSION,
@@ -98,7 +97,7 @@ data class JimmerDdlCompilerSettings(
             val springProfile = options.option("jimmerDdl.springProfile", defaultValue = DEFAULT_SPRING_PROFILE)
             val jdbc = resolveJdbcSettings(options = options, profileName = null, outputDir = outputDir, springProfile = springProfile)
             return JimmerDdlCompilerSettings(
-                enabled = options.option("jimmerDdl.enabled", defaultValue = "true").toBooleanStrictOrNull() ?: true,
+                enabled = options.option("jimmerDdl.enabled", defaultValue = "false").toBooleanStrictOrNull() ?: false,
                 databaseType = resolveDatabaseType(options = options, profileName = null, jdbc = jdbc),
                 outputFormat = JimmerDdlOutputFormat.parse(options.option("jimmerDdl.outputFormat", defaultValue = "flyway")),
                 outputDir = outputDir,
@@ -132,7 +131,7 @@ data class JimmerDdlCompilerSettings(
             val springProfile = options.profileOption(profileName, "springProfile", defaultValue = DEFAULT_SPRING_PROFILE)
             val jdbc = resolveJdbcSettings(options = options, profileName = profileName, outputDir = outputDir, springProfile = springProfile)
             return JimmerDdlCompilerSettings(
-                enabled = options.profileOption(profileName, "enabled", defaultValue = "true").toBooleanStrictOrNull() ?: true,
+                enabled = options.profileOption(profileName, "enabled", defaultValue = "false").toBooleanStrictOrNull() ?: false,
                 databaseType = resolveDatabaseType(options = options, profileName = profileName, jdbc = jdbc),
                 outputFormat = JimmerDdlOutputFormat.parse(options.profileOption(profileName, "outputFormat", defaultValue = "flyway")),
                 outputDir = outputDir,
@@ -159,7 +158,7 @@ data class JimmerDdlCompilerSettings(
             options: Map<String, String>,
             profileName: String?,
             jdbc: JimmerDdlJdbcSettings,
-        ): DatabaseType {
+        ): JimmerDatabaseType {
             val rawValue = if (profileName == null) {
                 options.option(newKey = "jimmerDdl.databaseType", defaultValue = "auto")
             } else {
@@ -167,7 +166,7 @@ data class JimmerDdlCompilerSettings(
             }
             parseExplicitDatabaseType(rawValue)?.let { return it }
 
-            return jdbc.url.takeIf { it.isNotBlank() }?.let { DatabaseType.fromUrl(it) }
+            return jdbc.url.takeIf { it.isNotBlank() }?.let { JimmerDatabaseType.fromUrl(it) }
                 ?: DEFAULT_DATABASE_TYPE
         }
 
@@ -355,13 +354,13 @@ data class JimmerDdlCompilerSettings(
             }
         }
 
-        private fun parseExplicitDatabaseType(rawValue: String): DatabaseType? {
+        private fun parseExplicitDatabaseType(rawValue: String): JimmerDatabaseType? {
             val normalized = rawValue.trim().lowercase()
             if (normalized.isBlank() || normalized == "auto" || normalized == "datasource") {
                 return null
             }
             if (normalized.startsWith("jdbc:")) {
-                return DatabaseType.fromUrl(rawValue)
+                return JimmerDatabaseType.fromUrl(rawValue)
             }
             val alias = when (normalized) {
                 "pg", "postgres" -> "postgresql"
@@ -369,8 +368,7 @@ data class JimmerDdlCompilerSettings(
                 "dameng" -> "dm"
                 else -> normalized
             }
-            return DatabaseType.fromCode(alias)
-                ?: DatabaseType.fromName(alias)
+            return JimmerDatabaseType.fromCode(alias)
         }
 
         private fun String.toPackageFilters(): List<String> {

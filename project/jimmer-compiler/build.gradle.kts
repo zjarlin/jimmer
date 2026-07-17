@@ -4,13 +4,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-sourceSets.main {
-    java.srcDir("../jimmer-apt/src/main/java")
-    kotlin.srcDir("../jimmer-ksp/src/main/kotlin")
-}
-
 dependencies {
     implementation(projects.jimmerCompilerCore)
+    implementation(projects.jimmerDdlCompiler)
     implementation(projects.jimmerMapstructApt)
     implementation(projects.jimmerCore)
     implementation(projects.jimmerDtoCompiler)
@@ -23,4 +19,12 @@ dependencies {
     implementation(libs.kotlinpoet)
     implementation(libs.kotlinpoet.ksp)
     implementation(libs.jackson2.databind)
+
+    testImplementation(libs.kotlin.test)
+    testImplementation(kotlin("compiler-embeddable"))
+    testImplementation(projects.jimmerSql)
+}
+
+tasks.test {
+    useJUnit()
 }

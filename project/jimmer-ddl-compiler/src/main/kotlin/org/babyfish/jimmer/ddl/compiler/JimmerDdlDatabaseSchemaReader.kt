@@ -1,10 +1,9 @@
 package org.babyfish.jimmer.ddl.compiler
 
-import site.addzero.ddlgenerator.core.model.AutoDdlColumn
-import site.addzero.ddlgenerator.core.model.AutoDdlLogicalType
-import site.addzero.ddlgenerator.core.model.AutoDdlSchema
-import site.addzero.ddlgenerator.core.model.AutoDdlTable
-import site.addzero.util.db.DatabaseType
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlColumn
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlLogicalType
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlSchema
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlTable
 import java.sql.Connection
 import java.sql.DatabaseMetaData
 import java.sql.DriverManager
@@ -19,7 +18,7 @@ object JimmerDdlDatabaseSchemaReader {
         renamedTables: Map<String, String> = emptyMap(),
     ): AutoDdlSchema {
         val jdbc = settings.jdbc
-        val driverClassName = jdbc.driverClassName ?: DatabaseType.getDriverClassName(jdbc.url)
+        val driverClassName = jdbc.driverClassName ?: JimmerDatabaseType.driverClassName(jdbc.url)
         if (!driverClassName.isNullOrBlank()) {
             Class.forName(driverClassName)
         }

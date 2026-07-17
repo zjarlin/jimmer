@@ -1,0 +1,136 @@
+package org.babyfish.jimmer.compiler.lsi.ksp
+
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.symbol.AnnotationUseSiteTarget
+import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotation
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSValueArgument
+import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
+import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.model.LsiAnnotationValue
+
+fun KSAnnotation.toLsiAnnotation(
+    resolver: Resolver,
+    useSiteTarget: LsiAnnotationUseSiteTarget? = null,
+): LsiAnnotation {
+    return KspLsiAnnotationContext(resolver).toLsiAnnotation(this, useSiteTarget)
+}
+
+internal class KspLsiAnnotationContext(
+    resolver: Resolver,
+) {
+
+    private val typeContext = KspLsiTypeContext(resolver)
+
+    fun toLsiAnnotations(
+        annotations: Sequence<KSAnnotation>,
+        useSiteTarget: LsiAnnotationUseSiteTarget,
+    ): List<LsiAnnotation> {
+        return annotations.map { annotation ->
+            toLsiAnnotation(annotation, useSiteTarget)
+        }.toList()
+    }
+
+    fun toLsiAnnotation(
+        annotation: KSAnnotation,
+        useSiteTarget: LsiAnnotationUseSiteTarget?,
+    ): LsiAnnotation {
+        val annotationType = annotation.annotationType.resolve().declaration
+        val qualifiedName = requireNotNull(annotationType.qualifiedName?.asString()) {
+            "KSP annotation type must have a qualified name"
+        }
+        val defaultArguments = annotation.defaultArguments.associateBy(KSValueArgument::argumentName)
+        val explicitArguments = annotation.arguments.associateBy(KSValueArgument::argumentName)
+        val arguments = linkedMapOf<String, KSValueArgument>()
+        arguments.putAll(defaultArguments)
+        arguments.putAll(explicitArguments)
+        return LsiAnnotation(
+            type = LsiSymbolId.type(qualifiedName),
+            arguments = arguments
+                .toSortedMap()
+                .mapValues { (name, argument) ->
+                    LsiAnnotationArgument(
+                        value = toLsiAnnotationValue(argument.value),
+                        origin = if (defaultArguments[name] === argument) {
+                            LsiAnnotationArgumentOrigin.DEFAULT
+                        } else {
+                            LsiAnnotationArgumentOrigin.EXPLICIT
+                        },
+                    )
+                },
+            useSiteTarget = annotation.useSiteTarget?.toLsiUseSiteTarget() ?: useSiteTarget,
+        )
+    }
+
+    private fun toLsiAnnotationValue(value: Any?): LsiAnnotationValue {
+        return when (value) {
+            is Boolean -> LsiAnnotationValue.BooleanValue(value)
+            is Byte -> LsiAnnotationValue.ByteValue(value)
+            is Short -> LsiAnnotationValue.ShortValue(value)
+            is Int -> LsiAnnotationValue.IntValue(value)
+            is Long -> LsiAnnotationValue.LongValue(value)
+            is Float -> LsiAnnotationValue.FloatValue(value)
+            is Double -> LsiAnnotationValue.DoubleValue(value)
+            is Char -> LsiAnnotationValue.CharValue(value)
+            is String -> LsiAnnotationValue.StringValue(value)
+            is KSType -> value.toLsiTypeOrEnumValue()
+            is KSClassDeclaration -> value.toLsiEnumValue()
+            is KSAnnotation -> LsiAnnotationValue.NestedAnnotationValue(
+                toLsiAnnotation(value, null),
+            )
+            is List<*> -> LsiAnnotationValue.ArrayValue(
+                value.map(::toLsiAnnotationValue),
+            )
+            is Array<*> -> LsiAnnotationValue.ArrayValue(
+                value.map(::toLsiAnnotationValue),
+            )
+            else -> error("Unsupported KSP annotation value: ${value?.javaClass?.name}")
+        }
+    }
+
+    private fun KSType.toLsiTypeOrEnumValue(): LsiAnnotationValue {
+        val classDeclaration = declaration as? KSClassDeclaration
+        if (classDeclaration?.classKind == ClassKind.ENUM_ENTRY) {
+            return classDeclaration.toLsiEnumValue()
+        }
+        return LsiAnnotationValue.ClassValue(typeContext.toLsiType(this))
+    }
+
+    private fun KSClassDeclaration.toLsiEnumValue(): LsiAnnotationValue.EnumValue {
+        require(classKind == ClassKind.ENUM_ENTRY) {
+            "Unsupported KSP class annotation value: ${qualifiedName?.asString()}"
+        }
+        val enumType = parentDeclaration as? KSClassDeclaration
+            ?: error("KSP enum entry must have an enum owner: ${simpleName.asString()}")
+        val enumQualifiedName = requireNotNull(enumType.qualifiedName?.asString()) {
+            "KSP enum type must have a qualified name"
+        }
+        return LsiAnnotationValue.EnumValue(
+            enumType = LsiSymbolId.type(enumQualifiedName),
+            entryName = simpleName.asString(),
+        )
+    }
+}
+
+private fun KSValueArgument.argumentName(): String {
+    return requireNotNull(name?.asString()) { "KSP annotation argument must have a name" }
+}
+
+private fun AnnotationUseSiteTarget.toLsiUseSiteTarget(): LsiAnnotationUseSiteTarget {
+    return when (this) {
+        AnnotationUseSiteTarget.FILE -> LsiAnnotationUseSiteTarget.FILE
+        AnnotationUseSiteTarget.PROPERTY -> LsiAnnotationUseSiteTarget.PROPERTY
+        AnnotationUseSiteTarget.FIELD -> LsiAnnotationUseSiteTarget.FIELD
+        AnnotationUseSiteTarget.GET -> LsiAnnotationUseSiteTarget.GETTER
+        AnnotationUseSiteTarget.SET -> LsiAnnotationUseSiteTarget.SETTER
+        AnnotationUseSiteTarget.RECEIVER -> LsiAnnotationUseSiteTarget.RECEIVER
+        AnnotationUseSiteTarget.PARAM -> LsiAnnotationUseSiteTarget.PARAMETER
+        AnnotationUseSiteTarget.SETPARAM -> LsiAnnotationUseSiteTarget.SET_PARAMETER
+        AnnotationUseSiteTarget.DELEGATE -> LsiAnnotationUseSiteTarget.DELEGATE
+    }
+}

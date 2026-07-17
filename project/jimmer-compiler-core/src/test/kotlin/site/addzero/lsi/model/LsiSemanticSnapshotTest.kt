@@ -1,0 +1,295 @@
+package site.addzero.lsi.model
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
+import site.addzero.lsi.core.LsiOrigin
+import site.addzero.lsi.core.LsiOriginKind
+import site.addzero.lsi.core.LsiSource
+import site.addzero.lsi.core.LsiSymbolId
+
+class LsiSemanticSnapshotTest {
+
+    @Test
+    fun `normalizes frontend-only property differences`() {
+        val ownerId = LsiSymbolId.type("sample.Switch")
+        val propertyId = LsiSymbolId.property(ownerId, "status")
+        val annotationType = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
+        val javaWorkspace = workspace(
+            ownerId = ownerId,
+            property = property(
+                id = propertyId,
+                ownerId = ownerId,
+                getterName = "getStatus",
+                type = LsiDeclaredType(
+                    declarationId = LsiSymbolId.type("java.lang.Integer"),
+                    nullability = LsiNullability.PLATFORM,
+                ),
+                annotation = annotation(annotationType, LsiAnnotationUseSiteTarget.METHOD),
+            ),
+        )
+        val kotlinWorkspace = workspace(
+            ownerId = ownerId,
+            property = property(
+                id = propertyId,
+                ownerId = ownerId,
+                getterName = "status",
+                type = LsiDeclaredType(
+                    declarationId = LsiSymbolId.type("java.lang.Integer"),
+                    nullability = LsiNullability.NON_NULL,
+                ),
+                annotation = annotation(annotationType, LsiAnnotationUseSiteTarget.PROPERTY),
+            ),
+        )
+
+        assertEquals(javaWorkspace.toSemanticSnapshot(), kotlinWorkspace.toSemanticSnapshot())
+        assertNotEquals(
+            javaWorkspace.toSemanticSnapshot(
+                LsiSemanticSnapshotOptions(
+                    platformNullability = LsiNullability.UNKNOWN,
+                    includeAnnotationUseSiteTarget = true,
+                ),
+            ),
+            kotlinWorkspace.toSemanticSnapshot(
+                LsiSemanticSnapshotOptions(
+                    platformNullability = LsiNullability.UNKNOWN,
+                    includeAnnotationUseSiteTarget = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `resolves transitive originating sources`() {
+        val generatedTypeId = LsiSymbolId.type("sample.Generated")
+        val sourceTypeId = LsiSymbolId.type("sample.Source")
+        val source = LsiSource.of("src/main/kotlin/sample/Source.kt")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                LsiTypeDeclaration(
+                    id = sourceTypeId,
+                    name = "Source",
+                    qualifiedName = "sample.Source",
+                    kind = LsiTypeDeclarationKind.INTERFACE,
+                    origin = LsiOrigin(LsiOriginKind.SOURCE, source),
+                ),
+                LsiTypeDeclaration(
+                    id = generatedTypeId,
+                    name = "Generated",
+                    qualifiedName = "sample.Generated",
+                    kind = LsiTypeDeclarationKind.INTERFACE,
+                    origin = LsiOrigin(
+                        kind = LsiOriginKind.GENERATED,
+                        originatingSymbols = setOf(sourceTypeId),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(setOf(source), workspace.originatingSources(setOf(generatedTypeId)))
+    }
+
+    @Test
+    fun `normalizes constructor parameters and snapshots fields`() {
+        val ownerId = LsiSymbolId.type("sample.Model")
+        val stringId = LsiSymbolId.type("java.lang.String")
+        val constructorId = LsiSymbolId.constructor(ownerId, listOf("type:java.lang.String"))
+        val fieldId = LsiSymbolId.field(ownerId, "VERSION")
+        val javaWorkspace = declarationWorkspace(
+            ownerId = ownerId,
+            field = LsiField(
+                id = fieldId,
+                name = "VERSION",
+                ownerId = ownerId,
+                type = LsiDeclaredType(stringId, nullability = LsiNullability.PLATFORM),
+                static = true,
+                constant = true,
+                visibility = LsiVisibility.PRIVATE,
+                origin = ORIGIN,
+            ),
+            constructor = constructor(
+                id = constructorId,
+                ownerId = ownerId,
+                type = LsiDeclaredType(stringId, nullability = LsiNullability.PLATFORM),
+            ),
+        )
+        val kotlinWorkspace = declarationWorkspace(
+            ownerId = ownerId,
+            field = LsiField(
+                id = fieldId,
+                name = "VERSION",
+                ownerId = ownerId,
+                type = LsiDeclaredType(stringId, nullability = LsiNullability.NON_NULL),
+                static = true,
+                constant = true,
+                visibility = LsiVisibility.PRIVATE,
+                origin = ORIGIN,
+            ),
+            constructor = constructor(
+                id = constructorId,
+                ownerId = ownerId,
+                type = LsiDeclaredType(stringId, nullability = LsiNullability.NON_NULL),
+            ),
+        )
+
+        val snapshot = javaWorkspace.toSemanticSnapshot()
+        assertEquals(snapshot, kotlinWorkspace.toSemanticSnapshot())
+        assertTrue(snapshot.contains("field|${fieldId.value}|VERSION|${ownerId.value}"))
+        assertTrue(snapshot.contains("constructor|${constructorId.value}|${ownerId.value}"))
+        assertTrue(snapshot.contains("${constructorId.value}/parameter:0:value:value:0"))
+    }
+
+    @Test
+    fun `snapshots enclosing type and data class semantics`() {
+        val outerId = LsiSymbolId.type("sample.Outer")
+        val nestedId = LsiSymbolId.type("sample.Outer.Row")
+        val dataWorkspace = LsiWorkspace(
+            declarations = listOf(
+                LsiTypeDeclaration(
+                    id = outerId,
+                    name = "Outer",
+                    qualifiedName = "sample.Outer",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    origin = ORIGIN,
+                ),
+                LsiTypeDeclaration(
+                    id = nestedId,
+                    name = "Row",
+                    qualifiedName = "sample.Outer.Row",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    enclosingTypeId = outerId,
+                    dataClass = true,
+                    origin = ORIGIN,
+                ),
+            ),
+        )
+        val plainWorkspace = LsiWorkspace(
+            declarations = dataWorkspace.declarations.map { declaration ->
+                if (declaration is LsiTypeDeclaration && declaration.id == nestedId) {
+                    declaration.copy(enclosingTypeId = null, dataClass = false)
+                } else {
+                    declaration
+                }
+            },
+        )
+
+        val snapshot = dataWorkspace.toSemanticSnapshot()
+        assertNotEquals(snapshot, plainWorkspace.toSemanticSnapshot())
+        assertTrue(snapshot.contains("type|${nestedId.value}|Row|sample.Outer.Row|CLASS|${outerId.value}|true|"))
+    }
+
+    private fun workspace(
+        ownerId: LsiSymbolId,
+        property: LsiProperty,
+    ): LsiWorkspace {
+        return LsiWorkspace(
+            declarations = listOf(
+                LsiTypeDeclaration(
+                    id = ownerId,
+                    name = "Switch",
+                    qualifiedName = "sample.Switch",
+                    kind = LsiTypeDeclarationKind.INTERFACE,
+                    modality = LsiModality.ABSTRACT,
+                    memberIds = listOf(property.id),
+                    origin = ORIGIN,
+                ),
+                property,
+            ),
+        )
+    }
+
+    private fun property(
+        id: LsiSymbolId,
+        ownerId: LsiSymbolId,
+        getterName: String,
+        type: LsiTypeRef,
+        annotation: LsiAnnotation,
+    ): LsiProperty {
+        return LsiProperty(
+            id = id,
+            name = "status",
+            ownerId = ownerId,
+            getterName = getterName,
+            type = type,
+            modality = LsiModality.ABSTRACT,
+            annotations = listOf(annotation),
+            origin = ORIGIN,
+        )
+    }
+
+    private fun declarationWorkspace(
+        ownerId: LsiSymbolId,
+        field: LsiField,
+        constructor: LsiConstructor,
+    ): LsiWorkspace {
+        return LsiWorkspace(
+            declarations = listOf(
+                LsiTypeDeclaration(
+                    id = ownerId,
+                    name = "Model",
+                    qualifiedName = "sample.Model",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    memberIds = listOf(field.id, constructor.id),
+                    origin = ORIGIN,
+                ),
+                field,
+                constructor,
+            ),
+        )
+    }
+
+    private fun constructor(
+        id: LsiSymbolId,
+        ownerId: LsiSymbolId,
+        type: LsiTypeRef,
+    ): LsiConstructor {
+        return LsiConstructor(
+            id = id,
+            ownerId = ownerId,
+            parameters = listOf(
+                LsiParameter(
+                    id = LsiSymbolId.parameter(id, 0, "value"),
+                    name = "value",
+                    callableId = id,
+                    index = 0,
+                    type = type,
+                    annotations = listOf(
+                        annotation(
+                            type = LsiSymbolId.type("sample.ParameterMarker"),
+                            target = LsiAnnotationUseSiteTarget.PARAMETER,
+                        ),
+                    ),
+                    origin = ORIGIN,
+                ),
+            ),
+            annotations = listOf(
+                annotation(
+                    type = LsiSymbolId.type("sample.ConstructorMarker"),
+                    target = LsiAnnotationUseSiteTarget.CONSTRUCTOR,
+                ),
+            ),
+            origin = ORIGIN,
+        )
+    }
+
+    private fun annotation(
+        type: LsiSymbolId,
+        target: LsiAnnotationUseSiteTarget,
+    ): LsiAnnotation {
+        return LsiAnnotation(
+            type = type,
+            arguments = mapOf(
+                "value" to LsiAnnotationArgument(
+                    value = LsiAnnotationValue.StringValue("1"),
+                    origin = LsiAnnotationArgumentOrigin.EXPLICIT,
+                ),
+            ),
+            useSiteTarget = target,
+        )
+    }
+
+    companion object {
+        private val ORIGIN = LsiOrigin(LsiOriginKind.SYNTHETIC)
+    }
+}

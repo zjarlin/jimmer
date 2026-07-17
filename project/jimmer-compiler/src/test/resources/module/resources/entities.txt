@@ -1,0 +1,2 @@
+demo.alpha.Book
+demo.beta.Book

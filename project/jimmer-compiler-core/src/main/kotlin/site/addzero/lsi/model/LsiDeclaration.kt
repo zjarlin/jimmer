@@ -60,6 +60,8 @@ data class LsiTypeDeclaration(
     override val name: String,
     val qualifiedName: String,
     val kind: LsiTypeDeclarationKind,
+    val enclosingTypeId: LsiSymbolId? = null,
+    val dataClass: Boolean = false,
     override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
     val modality: LsiModality = LsiModality.FINAL,
     val typeParameters: List<LsiTypeParameter> = emptyList(),
@@ -75,6 +77,13 @@ data class LsiTypeDeclaration(
     init {
         require(name.isNotBlank()) { "LSI type declaration name cannot be blank" }
         require(qualifiedName.isNotBlank()) { "LSI type declaration qualified name cannot be blank" }
+        require(enclosingTypeId != id) { "LSI type declaration cannot enclose itself: ${id.value}" }
+        require(!dataClass || kind == LsiTypeDeclarationKind.CLASS) {
+            "Only LSI class declarations can be data classes: ${id.value}"
+        }
+        require(superTypes.filterIsInstance<LsiDeclaredType>().none { superType -> superType.declarationId == id }) {
+            "LSI type declaration cannot directly inherit itself: ${id.value}"
+        }
         require(memberIds.distinct().size == memberIds.size) {
             "LSI type declaration cannot contain duplicate member ids: ${id.value}"
         }
@@ -98,6 +107,26 @@ data class LsiEnumEntry(
 
     init {
         require(name.isNotBlank()) { "LSI enum entry name cannot be blank" }
+    }
+}
+
+data class LsiField(
+    override val id: LsiSymbolId,
+    override val name: String,
+    val ownerId: LsiSymbolId,
+    val type: LsiTypeRef,
+    val mutable: Boolean = false,
+    val static: Boolean = false,
+    val constant: Boolean = false,
+    override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
+    override val documentation: String? = null,
+    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val location: LsiLocation? = null,
+    override val origin: LsiOrigin
+) : LsiDeclaration {
+
+    init {
+        require(name.isNotBlank()) { "LSI field name cannot be blank" }
     }
 }
 
@@ -135,6 +164,7 @@ data class LsiFunction(
     val returnType: LsiTypeRef,
     val parameters: List<LsiParameter> = emptyList(),
     val receiverType: LsiTypeRef? = null,
+    val suspending: Boolean = false,
     val typeParameters: List<LsiTypeParameter> = emptyList(),
     val thrownTypes: List<LsiTypeRef> = emptyList(),
     val static: Boolean = false,
@@ -157,6 +187,35 @@ data class LsiFunction(
         }
         require(overrides.map(LsiOverride::declarationId).distinct().size == overrides.size) {
             "LSI function cannot override the same declaration more than once: ${id.value}"
+        }
+    }
+}
+
+data class LsiConstructor(
+    override val id: LsiSymbolId,
+    val ownerId: LsiSymbolId,
+    val primary: Boolean = false,
+    val parameters: List<LsiParameter> = emptyList(),
+    val typeParameters: List<LsiTypeParameter> = emptyList(),
+    val thrownTypes: List<LsiTypeRef> = emptyList(),
+    override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
+    override val documentation: String? = null,
+    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val location: LsiLocation? = null,
+    override val origin: LsiOrigin
+) : LsiDeclaration {
+
+    override val name: String = "constructor"
+
+    init {
+        require(parameters.map(LsiParameter::index) == parameters.indices.toList()) {
+            "LSI constructor parameters must use contiguous zero-based indexes: ${id.value}"
+        }
+        require(parameters.map(LsiParameter::id).distinct().size == parameters.size) {
+            "LSI constructor cannot contain duplicate parameter ids: ${id.value}"
+        }
+        require(parameters.all { parameter -> parameter.callableId == id }) {
+            "LSI constructor parameters must reference their constructor: ${id.value}"
         }
     }
 }

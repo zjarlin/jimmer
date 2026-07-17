@@ -1,6 +1,7 @@
 package site.addzero.lsi.codegen
 
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.core.LsiSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -73,5 +74,25 @@ class GeneratedArtifactSetTest {
                 aggregationMode = ArtifactAggregationMode.ISOLATING
             )
         }
+    }
+
+    @Test
+    fun `产物保留确定排序的源码依赖`() {
+        val artifact = GeneratedArtifact.source(
+            kind = ArtifactKind.JAVA_SOURCE,
+            qualifiedName = "example.BookDraft",
+            content = "package example; class BookDraft {}",
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(sourceId),
+            originatingSources = linkedSetOf(
+                LsiSource.of("src/main/java/example/Z.java"),
+                LsiSource.of("src/main/java/example/A.java"),
+            ),
+        )
+
+        assertEquals(
+            listOf("src/main/java/example/A.java", "src/main/java/example/Z.java"),
+            artifact.originatingSources.map(LsiSource::path),
+        )
     }
 }

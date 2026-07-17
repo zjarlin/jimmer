@@ -7,18 +7,15 @@ import org.babyfish.jimmer.apt.client.ClientProcessor
 import org.babyfish.jimmer.apt.client.ExportDocProcessor
 import org.babyfish.jimmer.apt.client.FetchByUnsupportedException
 import org.babyfish.jimmer.apt.dto.DtoProcessor
-import org.babyfish.jimmer.apt.entry.EntryProcessor
-import org.babyfish.jimmer.apt.error.ErrorProcessor
 import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
-import org.babyfish.jimmer.apt.transactional.TxProcessor
-import org.babyfish.jimmer.apt.tuple.TypedTupleProcessor
 import org.babyfish.jimmer.client.EnableImplicitApi
 import org.babyfish.jimmer.client.FetchBy
+import org.babyfish.jimmer.compiler.ddl.apt.JimmerDdlCompilerAptFeature
+import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoUtils
 import org.babyfish.jimmer.sql.EnableDtoGeneration
-import org.babyfish.jimmer.sql.TypedTuple
 import java.io.IOException
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.ProcessingEnvironment
@@ -42,8 +39,13 @@ import javax.tools.StandardLocation
     "org.babyfish.jimmer.client.ExportDoc",
     "org.springframework.web.bind.annotation.RestController",
     "org.babyfish.jimmer.sql.transaction.Tx",
+    "org.babyfish.jimmer.sql.TypedTuple",
 )
 class JimmerProcessor : AbstractProcessor() {
+
+    private lateinit var lsiDriver: AptLsiCompilerDriver
+
+    private lateinit var ddlFeature: JimmerDdlCompilerAptFeature
 
     private lateinit var context: Context
 
@@ -67,17 +69,23 @@ class JimmerProcessor : AbstractProcessor() {
 
     private var toolGenerated = false
 
-    private var delayedTupleTypeNames: Set<String>? = null
-
     private var delayedClientTypeNames: List<String>? = null
 
     private lateinit var dtoFieldModifier: Modifier
 
     override fun getSupportedSourceVersion(): SourceVersion = SourceVersion.latest()
 
+    override fun getSupportedOptions(): MutableSet<String> =
+        buildSet {
+            addAll(JimmerDdlCompilerAptFeature.SUPPORTED_OPTIONS)
+            addAll(COMPILER_OPTIONS)
+        }.toMutableSet()
+
     @Synchronized
     override fun init(processingEnv: ProcessingEnvironment) {
         super.init(processingEnv)
+        lsiDriver = AptLsiCompilerDriver(processingEnv)
+        ddlFeature = JimmerDdlCompilerAptFeature(processingEnv)
         messager = processingEnv.messager
         val includes = processingEnv.options["jimmer.source.includes"]
         val excludes = processingEnv.options["jimmer.source.excludes"]
@@ -152,6 +160,8 @@ class JimmerProcessor : AbstractProcessor() {
         roundEnv: RoundEnvironment,
     ): Boolean {
         try {
+            val lsiRoundResult = lsiDriver.process(roundEnv)
+            ddlFeature.onRound(roundEnv)
             if (clientExplicitApi == null) {
                 clientExplicitApi = roundEnv.rootElements.any {
                     it is TypeElement &&
@@ -162,21 +172,14 @@ class JimmerProcessor : AbstractProcessor() {
             if (!modelGenerated) {
                 modelGenerated = true
                 val immutableTypeElements = ImmutableProcessor(context, messager).process(roundEnv).keys
-                EntryProcessor(context, immutableTypeElements).process()
-                val errorGenerated = ErrorProcessor(context, checkedException).process(roundEnv)
                 val dtoGenerated = DtoProcessor(
                     context,
                     elements,
                     if (isTest()) dtoTestDirs else dtoDirs,
                     defaultNullableInputModifier,
                 ).process()
-                TxProcessor(context).process(roundEnv)
                 ExportDocProcessor(context).process(roundEnv)
-                if (immutableTypeElements.isNotEmpty() || errorGenerated || dtoGenerated) {
-                    delayedTupleTypeNames = roundEnv
-                        .getElementsAnnotatedWith(TypedTuple::class.java)
-                        .filterIsInstance<TypeElement>()
-                        .mapTo(linkedSetOf()) { it.qualifiedName.toString() }
+                if (immutableTypeElements.isNotEmpty() || lsiRoundResult.generatedSources || dtoGenerated) {
                     delayedClientTypeNames = roundEnv
                         .rootElements
                         .filterIsInstance<TypeElement>()
@@ -186,7 +189,6 @@ class JimmerProcessor : AbstractProcessor() {
             }
             if (!toolGenerated && !context.isBuddyIgnoreResourceGeneration) {
                 toolGenerated = true
-                TypedTupleProcessor(context, delayedTupleTypeNames).process(roundEnv)
                 val explicitApi = clientExplicitApi
                     ?: throw IllegalStateException("Internal bug: clientExplicitApi not resolved")
                 ClientProcessor(context, explicitApi, delayedClientTypeNames).process(roundEnv)
@@ -246,6 +248,28 @@ class JimmerProcessor : AbstractProcessor() {
     }
 
     companion object {
+
+        private val COMPILER_OPTIONS = setOf(
+            "jimmer.buddy.ignoreResourceGeneration",
+            "jimmer.client.checkedException",
+            "jimmer.client.ignoreJdkWarning",
+            "jimmer.dto.defaultNullableInputModifier",
+            "jimmer.dto.dirs",
+            "jimmer.dto.fieldVisibility",
+            "jimmer.dto.hibernateValidatorEnhancement",
+            "jimmer.dto.mutable",
+            "jimmer.dto.testDirs",
+            "jimmer.entry.fetchers",
+            "jimmer.entry.immutables",
+            "jimmer.entry.tableExes",
+            "jimmer.entry.tables",
+            "jimmer.excludedUserAnnotationPrefixes",
+            "jimmer.immutable.isModuleRequired",
+            "jimmer.jackson3",
+            "jimmer.keepIsPrefix",
+            "jimmer.source.excludes",
+            "jimmer.source.includes",
+        )
 
         private fun detectIsJackson3(processingEnv: ProcessingEnvironment): Boolean {
             val jackson3 = processingEnv.options["jimmer.jackson3"]
