@@ -1,0 +1,519 @@
+package org.babyfish.jimmer.compiler.dto
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import org.babyfish.jimmer.compiler.CompilerInputDocument
+import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerRound
+import org.babyfish.jimmer.compiler.CompilerRoundResult
+import org.babyfish.jimmer.compiler.CompilerSession
+import org.babyfish.jimmer.compiler.CompilerSourceSet
+import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
+import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
+import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.JimmerInheritanceStrategy
+import org.babyfish.jimmer.compiler.immutable.JimmerJoinedTableDissociateAction
+import org.babyfish.jimmer.compiler.immutable.JimmerViewKind
+import org.babyfish.jimmer.dto.compiler.DtoModifier
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiOrigin
+import site.addzero.lsi.core.LsiOriginKind
+import site.addzero.lsi.core.LsiSource
+import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiModality
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeDeclarationKind
+import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiWorkspace
+
+class JimmerDtoCompilerFeatureProviderTest {
+    @Test
+    fun `registered dto feature consumes immutable state and dto documents`() {
+        val providers = JimmerCompilerFeatureProviders.load()
+        val featureIds = providers.map { provider -> provider.descriptor.id }
+        val provider = providers.single { candidate -> candidate.descriptor.id == DTO_FEATURE_ID }
+
+        assertEquals(setOf(IMMUTABLE_FEATURE_ID), provider.descriptor.dependsOn)
+        assertEquals(setOf(CompilerInputDocumentKind.DTO), provider.descriptor.inputDocumentKinds)
+        assertTrue(featureIds.indexOf(IMMUTABLE_FEATURE_ID) < featureIds.indexOf(DTO_FEATURE_ID))
+    }
+
+    @Test
+    fun `precompiles simple dto into platform independent semantic model`() {
+        val schema = JimmerImmutableSchema(
+            listOf(
+                immutableType(
+                    id = BOOK_ID,
+                    props = listOf(
+                        prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID),
+                        prop(BOOK_ID, "name", STRING_TYPE),
+                    ),
+                )
+            )
+        )
+        val outcome = JimmerDtoPrecompiler().compile(
+            inputDocuments = listOf(bookDocument("BookView { id name }")),
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        )
+
+        assertTrue(outcome.unresolvedDocuments.isEmpty())
+        assertTrue(outcome.failures.isEmpty())
+        val document = outcome.schema.documents.single()
+        val dtoType = document.dtoTypes.single()
+        assertEquals(BOOK_ID, document.baseTypeId)
+        assertEquals("demo.Book", document.sourceTypeName)
+        assertEquals("demo.dto", dtoType.packageName)
+        assertEquals("BookView", dtoType.name)
+        assertEquals(listOf("id", "name"), dtoType.props.map { prop -> prop.name })
+        assertEquals(BOOK_ID, dtoType.baseType.id)
+    }
+
+    @Test
+    fun `uses immutable inheritance metadata for polymorphic dto branches`() {
+        val idProp = prop(CLIENT_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)
+        val discriminatorProp = prop(
+            ownerTypeId = CLIENT_ID,
+            name = "type",
+            type = STRING_TYPE,
+            primaryMapping = JimmerImmutablePrimaryMapping.DISCRIMINATOR,
+        )
+        val nameProp = prop(CLIENT_ID, "name", STRING_TYPE)
+        val root = immutableType(
+            id = CLIENT_ID,
+            props = listOf(idProp, discriminatorProp, nameProp),
+            instantiable = false,
+            inheritanceRootTypeId = CLIENT_ID,
+            inheritanceStrategy = JimmerInheritanceStrategy.SINGLE_TABLE,
+            joinedTableDissociateAction = JimmerJoinedTableDissociateAction.DELETE,
+            discriminatorPropId = discriminatorProp.id,
+        )
+        val inheritedId = idProp.inheritedBy(ORGANIZATION_ID)
+        val inheritedDiscriminator = discriminatorProp.inheritedBy(ORGANIZATION_ID)
+        val inheritedName = nameProp.inheritedBy(ORGANIZATION_ID)
+        val organization = immutableType(
+            id = ORGANIZATION_ID,
+            props = listOf(
+                inheritedId,
+                inheritedDiscriminator,
+                inheritedName,
+                prop(ORGANIZATION_ID, "taxCode", STRING_TYPE),
+            ),
+            superTypeIds = listOf(CLIENT_ID),
+            primarySuperTypeId = CLIENT_ID,
+            inheritanceRootTypeId = CLIENT_ID,
+            instantiable = true,
+            discriminatorValue = "ORGANIZATION",
+            discriminatorPropId = inheritedDiscriminator.id,
+        )
+        val outcome = JimmerDtoPrecompiler().compile(
+            inputDocuments = listOf(
+                document(
+                    relativePath = "demo/Client.dto",
+                    content = """
+                        ClientView {
+                            id
+                            #types {
+                                Organization {
+                                    taxCode
+                                }
+                            }
+                        }
+                    """.trimIndent(),
+                )
+            ),
+            immutableSchema = JimmerImmutableSchema(listOf(root, organization)),
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        )
+
+        assertTrue(outcome.failures.isEmpty())
+        val dtoType = outcome.schema.documents.single().dtoTypes.single()
+        val polymorphism = assertNotNull(dtoType.polymorphism)
+        assertFalse(polymorphism.isExhaustive())
+        assertTrue(assertNotNull(polymorphism.defaultBranch).isImplicit())
+        val branch = polymorphism.typeBranches.single()
+        assertEquals(ORGANIZATION_ID, branch.targetType?.id)
+        assertEquals(CLIENT_ID, branch.targetType?.immutableType?.primarySuperTypeId)
+        assertEquals(CLIENT_ID, branch.targetType?.immutableType?.inheritanceRootTypeId)
+        assertEquals(listOf("taxCode"), branch.dtoType.props.map { prop -> prop.name })
+        assertTrue("#types" in outcome.schema.normalizedSnapshot())
+    }
+
+    @Test
+    fun `sorts multiple documents and includes frozen content in fingerprint`() {
+        val schema = JimmerImmutableSchema(
+            listOf(
+                immutableType(
+                    id = AUTHOR_ID,
+                    props = listOf(prop(AUTHOR_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)),
+                ),
+                immutableType(
+                    id = BOOK_ID,
+                    props = listOf(
+                        prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID),
+                        prop(BOOK_ID, "name", STRING_TYPE),
+                    ),
+                ),
+            )
+        )
+        val author = document("demo/Author.dto", "AuthorView { id }")
+        val book = bookDocument("BookView { id name }")
+        val precompiler = JimmerDtoPrecompiler()
+
+        val first = precompiler.compile(
+            inputDocuments = listOf(book, author),
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        ).schema
+        val reversed = precompiler.compile(
+            inputDocuments = listOf(author, book),
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        ).schema
+        val whitespaceChanged = precompiler.compile(
+            inputDocuments = listOf(author, bookDocument("BookView { id name }\n")),
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        ).schema
+
+        assertEquals(listOf("Author.dto", "Book.dto"), first.documents.map {
+            precompiled -> precompiled.inputDocument.relativePath.substringAfterLast('/')
+        })
+        assertEquals(first.normalizedSnapshot(), reversed.normalizedSnapshot())
+        assertEquals(first.fingerprint(), reversed.fingerprint())
+        assertNotEquals(first.fingerprint(), whitespaceChanged.fingerprint())
+    }
+
+    @Test
+    fun `keeps empty dto document in stable snapshot`() {
+        val schema = JimmerImmutableSchema(
+            listOf(
+                immutableType(
+                    id = BOOK_ID,
+                    props = listOf(prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)),
+                )
+            )
+        )
+        val precompiler = JimmerDtoPrecompiler()
+        val empty = precompiler.compile(
+            inputDocuments = listOf(bookDocument("")),
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        ).schema
+        val same = precompiler.compile(
+            inputDocuments = listOf(bookDocument("")),
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        ).schema
+        val whitespaceChanged = precompiler.compile(
+            inputDocuments = listOf(bookDocument("\n")),
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = DtoModifier.STATIC,
+        ).schema
+
+        assertTrue(empty.documents.single().dtoTypes.isEmpty())
+        assertTrue("document|" in empty.normalizedSnapshot())
+        assertEquals(empty.normalizedSnapshot(), same.normalizedSnapshot())
+        assertEquals(empty.fingerprint(), same.fingerprint())
+        assertNotEquals(empty.fingerprint(), whitespaceChanged.fingerprint())
+    }
+
+    @Test
+    fun `apt defers missing base type and resolves it in a later real round`() {
+        val session = session("dto-apt-rounds")
+        val document = bookDocument("BookView { id name }")
+
+        val first = session.execute(
+            round(
+                number = 0,
+                workspace = LsiWorkspace.EMPTY,
+                currentWorkspace = LsiWorkspace.EMPTY,
+                platform = CompilerPlatform.APT,
+                inputDocuments = listOf(document),
+            )
+        )
+        val firstState = first.dtoState()
+        assertEquals(JimmerDtoCompilerFeatureStatus.DEFERRED, firstState.status)
+        assertEquals(setOf(BOOK_ID), first.unresolvedSymbols)
+        assertTrue(first.diagnostics.isEmpty())
+
+        val workspace = immutableWorkspace(LsiLanguage.JAVA)
+        val second = session.execute(
+            round(
+                number = 1,
+                workspace = workspace,
+                currentWorkspace = workspace,
+                platform = CompilerPlatform.APT,
+                inputDocuments = listOf(document),
+            )
+        )
+        val secondState = second.dtoState()
+        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, secondState.status)
+        assertEquals(listOf("BookView"), secondState.schema.documents.single().dtoTypes.map { type -> type.name })
+        assertEquals(setOf(BOOK_ID), second.dtoResult().processedSymbols)
+        assertTrue(second.dtoResult().artifacts.isEmpty())
+    }
+
+    @Test
+    fun `ksp and apt final round report missing dto base type as invalid`() {
+        val document = bookDocument("BookView { id }")
+        val ksp = session("dto-ksp-missing").execute(
+            round(
+                number = 0,
+                workspace = LsiWorkspace.EMPTY,
+                currentWorkspace = LsiWorkspace.EMPTY,
+                platform = CompilerPlatform.KSP,
+                inputDocuments = listOf(document),
+            )
+        )
+        val aptFinal = session("dto-apt-final-missing").execute(
+            round(
+                number = 0,
+                workspace = LsiWorkspace.EMPTY,
+                currentWorkspace = LsiWorkspace.EMPTY,
+                platform = CompilerPlatform.APT,
+                isFinal = true,
+                inputDocuments = listOf(document),
+            )
+        )
+
+        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, ksp.dtoState().status)
+        assertEquals("jimmer.dto.unresolved", ksp.diagnostics.single().code)
+        assertTrue(ksp.unresolvedSymbols.isEmpty())
+        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, aptFinal.dtoState().status)
+        assertEquals("jimmer.dto.unresolved", aptFinal.diagnostics.single().code)
+        assertTrue(aptFinal.unresolvedSymbols.isEmpty())
+    }
+
+    @Test
+    fun `same frozen lsi produces identical apt and ksp dto snapshots`() {
+        val workspace = immutableWorkspace(LsiLanguage.UNKNOWN)
+        val inputDocuments = listOf(bookDocument("input BookInput { id name }"))
+        val apt = session("dto-parity-apt").execute(
+            round(
+                number = 0,
+                workspace = workspace,
+                currentWorkspace = workspace,
+                platform = CompilerPlatform.APT,
+                inputDocuments = inputDocuments,
+            )
+        ).dtoState()
+        val ksp = session("dto-parity-ksp").execute(
+            round(
+                number = 0,
+                workspace = workspace,
+                currentWorkspace = workspace,
+                platform = CompilerPlatform.KSP,
+                inputDocuments = inputDocuments,
+            )
+        ).dtoState()
+
+        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, apt.status)
+        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, ksp.status)
+        assertEquals(apt.schema.normalizedSnapshot(), ksp.schema.normalizedSnapshot())
+        assertEquals(apt.schema.fingerprint(), ksp.schema.fingerprint())
+        assertEquals(apt.fingerprint, ksp.fingerprint)
+    }
+
+    private fun session(id: String): CompilerSession {
+        return CompilerSession(
+            id = id,
+            providers = listOf(
+                JimmerImmutableCompilerFeatureProvider(),
+                JimmerDtoCompilerFeatureProvider(),
+            ),
+        )
+    }
+
+    private fun round(
+        number: Int,
+        workspace: LsiWorkspace,
+        currentWorkspace: LsiWorkspace,
+        platform: CompilerPlatform,
+        inputDocuments: List<CompilerInputDocument>,
+        isFinal: Boolean = false,
+    ): CompilerRound {
+        return CompilerRound(
+            number = number,
+            workspace = workspace,
+            currentWorkspace = currentWorkspace,
+            platform = platform,
+            isFinal = isFinal,
+            inputDocuments = inputDocuments,
+        )
+    }
+
+    private fun CompilerRoundResult.dtoResult() = requireNotNull(featureResults[DTO_FEATURE_ID])
+
+    private fun CompilerRoundResult.dtoState(): JimmerDtoCompilerFeatureState {
+        return dtoResult().state as JimmerDtoCompilerFeatureState
+    }
+
+    private fun immutableWorkspace(language: LsiLanguage): LsiWorkspace {
+        val source = LsiSource.of("demo/Book.${if (language == LsiLanguage.JAVA) "java" else "kt"}", language)
+        val origin = LsiOrigin(LsiOriginKind.SOURCE, source)
+        val idPropertyId = LsiSymbolId.property(BOOK_ID, "id")
+        val namePropertyId = LsiSymbolId.property(BOOK_ID, "name")
+        return LsiWorkspace(
+            sources = listOf(source),
+            declarations = listOf(
+                LsiTypeDeclaration(
+                    id = BOOK_ID,
+                    name = "Book",
+                    qualifiedName = "demo.Book",
+                    kind = LsiTypeDeclarationKind.INTERFACE,
+                    modality = LsiModality.ABSTRACT,
+                    memberIds = listOf(idPropertyId, namePropertyId),
+                    annotations = listOf(LsiAnnotation(ENTITY_ANNOTATION)),
+                    origin = origin,
+                ),
+                LsiProperty(
+                    id = idPropertyId,
+                    name = "id",
+                    ownerId = BOOK_ID,
+                    type = LONG_TYPE,
+                    modality = LsiModality.ABSTRACT,
+                    annotations = listOf(LsiAnnotation(ID_ANNOTATION)),
+                    origin = origin,
+                ),
+                LsiProperty(
+                    id = namePropertyId,
+                    name = "name",
+                    ownerId = BOOK_ID,
+                    type = STRING_TYPE,
+                    modality = LsiModality.ABSTRACT,
+                    origin = origin,
+                ),
+            ),
+        )
+    }
+
+    private fun immutableType(
+        id: LsiSymbolId,
+        props: List<JimmerImmutableProp>,
+        superTypeIds: List<LsiSymbolId> = emptyList(),
+        primarySuperTypeId: LsiSymbolId? = null,
+        inheritanceRootTypeId: LsiSymbolId? = null,
+        inheritanceStrategy: JimmerInheritanceStrategy? = null,
+        joinedTableDissociateAction: JimmerJoinedTableDissociateAction? = null,
+        instantiable: Boolean = true,
+        discriminatorValue: String? = null,
+        discriminatorPropId: LsiSymbolId? = null,
+    ): JimmerImmutableType {
+        val qualifiedName = id.requireTypeQualifiedName()
+        return JimmerImmutableType(
+            id = id,
+            qualifiedName = qualifiedName,
+            kind = JimmerImmutableTypeKind.ENTITY,
+            documentation = null,
+            annotations = emptyList(),
+            typeParameterIds = emptyList(),
+            superTypeIds = superTypeIds,
+            props = props,
+            primarySuperTypeId = primarySuperTypeId,
+            inheritanceRootTypeId = inheritanceRootTypeId,
+            inheritanceStrategy = inheritanceStrategy,
+            joinedTableDissociateAction = joinedTableDissociateAction,
+            instantiable = instantiable,
+            discriminatorValue = discriminatorValue,
+            discriminatorPropId = discriminatorPropId,
+        )
+    }
+
+    private fun prop(
+        ownerTypeId: LsiSymbolId,
+        name: String,
+        type: LsiTypeRef,
+        primaryMapping: JimmerImmutablePrimaryMapping = JimmerImmutablePrimaryMapping.SCALAR,
+    ): JimmerImmutableProp {
+        val id = LsiSymbolId.property(ownerTypeId, name)
+        return JimmerImmutableProp(
+            id = id,
+            declarationId = id,
+            ownerTypeId = ownerTypeId,
+            declaringTypeId = ownerTypeId,
+            name = name,
+            type = type,
+            annotations = emptyList(),
+            overrideChain = listOf(id),
+            inherited = false,
+            overridden = false,
+            nullable = false,
+            list = false,
+            association = false,
+            embedded = false,
+            targetTypeId = (type as? LsiDeclaredType)?.declarationId,
+            primaryMapping = primaryMapping,
+            primaryAnnotationTypeId = null,
+            associationKind = JimmerAssociationKind.NONE,
+            formulaKind = JimmerFormulaKind.NONE,
+            viewKind = JimmerViewKind.NONE,
+            validations = emptyList(),
+            converter = null,
+        )
+    }
+
+    private fun JimmerImmutableProp.inheritedBy(ownerTypeId: LsiSymbolId): JimmerImmutableProp {
+        return copy(
+            id = LsiSymbolId.property(ownerTypeId, name),
+            ownerTypeId = ownerTypeId,
+            inherited = true,
+        )
+    }
+
+    private fun bookDocument(content: String): CompilerInputDocument {
+        return document("demo/Book.dto", content)
+    }
+
+    private fun document(
+        relativePath: String,
+        content: String,
+    ): CompilerInputDocument {
+        return CompilerInputDocument(
+            kind = CompilerInputDocumentKind.DTO,
+            sourceSet = CompilerSourceSet.MAIN,
+            projectName = "demo-project",
+            sourceRoot = "src/main/dto",
+            relativePath = relativePath,
+            content = content,
+        )
+    }
+
+    private companion object {
+        const val DTO_FEATURE_ID = "dto"
+        const val IMMUTABLE_FEATURE_ID = "immutable"
+
+        val BOOK_ID: LsiSymbolId = LsiSymbolId.type("demo.Book")
+        val AUTHOR_ID: LsiSymbolId = LsiSymbolId.type("demo.Author")
+        val CLIENT_ID: LsiSymbolId = LsiSymbolId.type("demo.Client")
+        val ORGANIZATION_ID: LsiSymbolId = LsiSymbolId.type("demo.Organization")
+        val ENTITY_ANNOTATION: LsiSymbolId = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
+        val ID_ANNOTATION: LsiSymbolId = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
+        val LONG_TYPE: LsiTypeRef = LsiPrimitiveType(LsiPrimitiveKind.LONG)
+        val STRING_TYPE: LsiTypeRef = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+    }
+}

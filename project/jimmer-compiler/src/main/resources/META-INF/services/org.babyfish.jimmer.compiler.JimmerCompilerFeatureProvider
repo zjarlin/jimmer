@@ -1,4 +1,5 @@
 org.babyfish.jimmer.compiler.client.JimmerClientCompilerFeatureProvider
+org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureProvider
 org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureProvider
 org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 org.babyfish.jimmer.compiler.module.JimmerModuleCompilerFeatureProvider
