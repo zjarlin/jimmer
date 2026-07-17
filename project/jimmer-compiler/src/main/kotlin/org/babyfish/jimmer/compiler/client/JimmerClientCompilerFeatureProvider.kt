@@ -9,6 +9,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
+import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import site.addzero.lsi.core.LsiOriginKind
@@ -64,6 +65,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             workspace = context.round.workspace,
             targets = targets.without(initialUnresolvedTypeIds),
             initialUnresolvedTypeIds = initialUnresolvedTypeIds,
+            errorSchema = dependencies.errorSchema,
         )
         val deferred = outcome.unresolvedRootTypeIds.isNotEmpty() &&
             context.round.platform == CompilerPlatform.APT &&
@@ -210,6 +212,7 @@ private data class ClientDependencies(
     val status: JimmerClientCompilerDependencyStatus,
     val immutableFingerprint: String,
     val errorFingerprint: String,
+    val errorSchema: ErrorPrecompiledSchema,
 )
 
 private data class ClientPrecompileOutcome(
@@ -263,6 +266,7 @@ private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependen
         status = status,
         immutableFingerprint = immutableState.fingerprint,
         errorFingerprint = errorState.fingerprint,
+        errorSchema = errorState.schema,
     )
 }
 
@@ -291,6 +295,7 @@ private fun precompileAvailableTargets(
     workspace: LsiWorkspace,
     targets: ClientPrecompileTargets,
     initialUnresolvedTypeIds: Set<LsiSymbolId>,
+    errorSchema: ErrorPrecompiledSchema,
 ): ClientPrecompileOutcome {
     var availableTargets = targets
     val unresolvedTypeIds = initialUnresolvedTypeIds.toCollection(sortedSetOf())
@@ -298,7 +303,7 @@ private fun precompileAvailableTargets(
     while (availableTargets.rootTypeIds.isNotEmpty()) {
         try {
             return ClientPrecompileOutcome(
-                schema = precompiler.compile(workspace, availableTargets),
+                schema = precompiler.compile(workspace, availableTargets, errorSchema),
                 unresolvedRootTypeIds = unresolvedTypeIds,
                 failures = failures,
             )

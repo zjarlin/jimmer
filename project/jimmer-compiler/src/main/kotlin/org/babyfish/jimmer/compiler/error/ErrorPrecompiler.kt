@@ -48,15 +48,27 @@ class ErrorPrecompiler(
             ?.takeIf(String::isNotBlank)
             ?: exceptionStem.toUpperSnake()
         val declaredFields = type.annotations.compileFields(type.id)
+        val packageName = type.packageName(allTypes)
+        val exceptionSimpleName = exceptionStem + "Exception"
+        val exceptionTypeId = LsiSymbolId.type(
+            if (packageName.isEmpty()) exceptionSimpleName else "$packageName.$exceptionSimpleName"
+        )
+        if (type.enumEntries.isEmpty()) {
+            throw ErrorPrecompileException(
+                declarationId = type.id,
+                message = "Error family '${type.qualifiedName}' must declare at least one error code",
+            )
+        }
         val codes = type.enumEntries.map { entry ->
-            compileCode(entry, declaredFields)
+            compileCode(entry, declaredFields, exceptionTypeId)
         }
         return ErrorFamilyModel(
             id = type.id,
             qualifiedName = type.qualifiedName,
-            packageName = type.packageName(allTypes),
+            packageName = packageName,
             family = family,
-            exceptionSimpleName = exceptionStem + "Exception",
+            exceptionTypeId = exceptionTypeId,
+            exceptionSimpleName = exceptionSimpleName,
             checkedException = options.checkedException,
             documentation = type.documentation.normalizedDocumentation(),
             originatingSources = type.origin.source?.let(::setOf).orEmpty(),
@@ -68,6 +80,7 @@ class ErrorPrecompiler(
     private fun compileCode(
         entry: LsiEnumEntry,
         sharedFields: List<ErrorFieldModel>,
+        familyExceptionTypeId: LsiSymbolId,
     ): ErrorCodeModel {
         val declaredFields = entry.annotations.compileFields(entry.id)
         val sharedNames = sharedFields.mapTo(hashSetOf(), ErrorFieldModel::name)
@@ -78,12 +91,16 @@ class ErrorPrecompiler(
                 message = "Error field '${duplicate.name}' has already been declared by the error family",
             )
         }
+        val exceptionSimpleName = entry.name.toCamelName(upperHead = true)
         return ErrorCodeModel(
             id = entry.id,
             enumEntryName = entry.name,
             code = entry.name.toUpperSnake(),
             creatorName = entry.name.toCamelName(upperHead = false),
-            exceptionSimpleName = entry.name.toCamelName(upperHead = true),
+            exceptionTypeId = LsiSymbolId.type(
+                "${familyExceptionTypeId.requireTypeQualifiedName()}.$exceptionSimpleName"
+            ),
+            exceptionSimpleName = exceptionSimpleName,
             documentation = entry.documentation.normalizedDocumentation(),
             declaredFields = declaredFields,
             fields = sharedFields + declaredFields,

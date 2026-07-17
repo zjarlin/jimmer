@@ -48,8 +48,40 @@ data class ClientOperation(
     val parameters: List<ClientParameter>,
     val ignoredParameters: List<ClientIgnoredParameter>,
     val returnType: ClientTypeRef?,
-    val directExceptionTypeIds: List<LsiSymbolId>,
+    val declaredExceptionTypeIds: List<LsiSymbolId>,
+    val exceptionTypeIds: List<LsiSymbolId>,
+    val exceptionMetadata: List<ClientExceptionMetadata>,
 )
+
+data class ClientExceptionMetadata(
+    val typeId: LsiSymbolId,
+    val errorFamilyId: LsiSymbolId?,
+    val family: String,
+    val code: String?,
+    val checked: Boolean,
+    val abstract: Boolean,
+    val superTypeId: LsiSymbolId?,
+    val subTypeIds: List<LsiSymbolId>,
+    val documentation: String?,
+) {
+    init {
+        typeId.requireTypeQualifiedName()
+        errorFamilyId?.requireTypeQualifiedName()
+        require(family.isNotBlank()) { "Client exception family cannot be blank" }
+        require(code == null || code.isNotBlank()) { "Client exception code cannot be blank" }
+        superTypeId?.requireTypeQualifiedName()
+        require(superTypeId != typeId) {
+            "Client exception metadata cannot inherit itself: ${typeId.value}"
+        }
+        subTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
+        require(subTypeIds.distinct().size == subTypeIds.size) {
+            "Client exception subtype ids must be unique: ${typeId.value}"
+        }
+        require(typeId !in subTypeIds) {
+            "Client exception metadata cannot directly reference itself: ${typeId.value}"
+        }
+    }
+}
 
 data class ClientParameter(
     val id: LsiSymbolId,

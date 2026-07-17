@@ -7,6 +7,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.babyfish.jimmer.compiler.error.ErrorCodeModel
+import org.babyfish.jimmer.compiler.error.ErrorFamilyModel
+import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -85,7 +88,7 @@ class ClientPrecompilerTest {
             ),
         )
 
-        val schema = ClientPrecompiler().compile(workspace)
+        val schema = ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA)
 
         val service = schema.services.single()
         assertEquals(serviceId, service.id)
@@ -95,7 +98,9 @@ class ClientPrecompilerTest {
         assertEquals("findBook", compiledOperation.name)
         assertEquals(listOf("public"), compiledOperation.groups)
         assertEquals("查找图书。\n  返回完整视图。", compiledOperation.doc)
-        assertEquals(exceptionId, compiledOperation.directExceptionTypeIds.single())
+        assertEquals(exceptionId, compiledOperation.declaredExceptionTypeIds.single())
+        assertTrue(compiledOperation.exceptionTypeIds.isEmpty())
+        assertTrue(compiledOperation.exceptionMetadata.isEmpty())
         assertEquals("id", compiledOperation.parameters.single().name)
         assertEquals(0, compiledOperation.parameters.single().originalIndex)
         assertEquals("principal", compiledOperation.ignoredParameters.single().name)
@@ -138,10 +143,126 @@ class ClientPrecompilerTest {
             ),
         )
 
-        assertTrue(ClientPrecompiler().compile(workspace).services.isEmpty())
-        val schema = ClientPrecompiler(ClientPrecompileOptions(explicitApi = true)).compile(workspace)
+        assertTrue(ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA).services.isEmpty())
+        val schema = ClientPrecompiler(ClientPrecompileOptions(explicitApi = true))
+            .compile(workspace, EMPTY_ERROR_SCHEMA)
 
         assertEquals(listOf("findAll"), schema.services.single().operations.map(ClientOperation::name))
+    }
+
+    @Test
+    fun `precompiles recursive error metadata with stable sorting and deduplication`() {
+        val serviceId = LsiSymbolId.type("demo.ErrorService")
+        val baseExceptionId = LsiSymbolId.type("demo.BookException")
+        val notFoundExceptionId = LsiSymbolId.type("demo.BookException.NotFound")
+        val forbiddenExceptionId = LsiSymbolId.type("demo.BookException.Forbidden")
+        val operation = function(
+            ownerId = serviceId,
+            name = "execute",
+            annotations = listOf(api()),
+            thrownTypes = listOf(
+                LsiDeclaredType(notFoundExceptionId),
+                LsiDeclaredType(baseExceptionId),
+                LsiDeclaredType(baseExceptionId),
+            ),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.ErrorService",
+                    annotations = listOf(api()),
+                    memberIds = listOf(operation.id),
+                ),
+                operation,
+            ),
+        )
+        val schema = ClientPrecompiler().compile(workspace, errorSchema())
+        val compiledOperation = schema.services.single().operations.single()
+
+        assertEquals(
+            listOf(notFoundExceptionId, baseExceptionId),
+            compiledOperation.declaredExceptionTypeIds,
+        )
+        assertEquals(
+            listOf(notFoundExceptionId, forbiddenExceptionId),
+            compiledOperation.exceptionTypeIds,
+        )
+        assertEquals(
+            listOf(baseExceptionId, notFoundExceptionId, forbiddenExceptionId),
+            compiledOperation.exceptionMetadata.map(ClientExceptionMetadata::typeId),
+        )
+        val baseMetadata = compiledOperation.exceptionMetadata.first()
+        assertEquals("BOOK", baseMetadata.family)
+        assertNull(baseMetadata.code)
+        assertTrue(baseMetadata.checked)
+        assertEquals(
+            listOf(notFoundExceptionId, forbiddenExceptionId),
+            baseMetadata.subTypeIds,
+        )
+        val notFoundMetadata = compiledOperation.exceptionMetadata.single { metadata ->
+            metadata.typeId == notFoundExceptionId
+        }
+        assertEquals("NOT_FOUND", notFoundMetadata.code)
+        assertEquals(baseExceptionId, notFoundMetadata.superTypeId)
+        assertTrue(schema.normalizedSnapshot().contains("exception|"))
+    }
+
+    @Test
+    fun `resolves multi-level exception metadata once and rejects cycles`() {
+        val familyId = LsiSymbolId.type("demo.ErrorCode")
+        val operationId = LsiSymbolId.function(SERVICE_ID, "execute")
+        val rootId = LsiSymbolId.type("demo.RootException")
+        val branchId = LsiSymbolId.type("demo.BranchException")
+        val leafId = LsiSymbolId.type("demo.LeafException")
+        val root = exceptionMetadata(rootId, familyId, subTypeIds = listOf(branchId))
+        val branch = exceptionMetadata(
+            branchId,
+            familyId,
+            superTypeId = rootId,
+            subTypeIds = listOf(leafId),
+        )
+        val leaf = exceptionMetadata(leafId, familyId, code = "LEAF", superTypeId = branchId)
+        val resolution = ClientExceptionMetadataPrecompiler(listOf(leaf, root, branch, leaf))
+            .resolve(listOf(leafId, rootId, rootId), operationId)
+
+        assertEquals(listOf(leafId), resolution.typeIds)
+        assertEquals(
+            listOf(rootId, branchId, leafId),
+            resolution.metadata.map(ClientExceptionMetadata::typeId),
+        )
+
+        val cyclicRoot = root.copy(superTypeId = branchId)
+        val cyclicBranch = branch.copy(subTypeIds = listOf(rootId))
+        val exception = assertFailsWith<ClientPrecompileException> {
+            ClientExceptionMetadataPrecompiler(listOf(cyclicRoot, cyclicBranch))
+                .resolve(listOf(rootId), operationId)
+        }
+        assertEquals(operationId, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("cycle"))
+    }
+
+    @Test
+    fun `operation without exceptions has empty exception semantics`() {
+        val serviceId = LsiSymbolId.type("demo.PlainService")
+        val operation = function(ownerId = serviceId, name = "execute", annotations = listOf(api()))
+        val schema = ClientPrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        qualifiedName = "demo.PlainService",
+                        annotations = listOf(api()),
+                        memberIds = listOf(operation.id),
+                    ),
+                    operation,
+                ),
+            ),
+            errorSchema(),
+        )
+
+        val compiledOperation = schema.services.single().operations.single()
+        assertTrue(compiledOperation.declaredExceptionTypeIds.isEmpty())
+        assertTrue(compiledOperation.exceptionTypeIds.isEmpty())
+        assertTrue(compiledOperation.exceptionMetadata.isEmpty())
     }
 
     @Test
@@ -152,7 +273,10 @@ class ClientPrecompilerTest {
             annotations = listOf(api()),
         )
         val nestedException = assertFailsWith<ClientPrecompileException> {
-            ClientPrecompiler().compile(LsiWorkspace(declarations = listOf(outer, nested)))
+            ClientPrecompiler().compile(
+                LsiWorkspace(declarations = listOf(outer, nested)),
+                EMPTY_ERROR_SCHEMA,
+            )
         }
         assertTrue(nestedException.message.orEmpty().contains("top-level"))
 
@@ -165,7 +289,10 @@ class ClientPrecompilerTest {
             ),
         )
         val genericException = assertFailsWith<ClientPrecompileException> {
-            ClientPrecompiler().compile(LsiWorkspace(declarations = listOf(generic)))
+            ClientPrecompiler().compile(
+                LsiWorkspace(declarations = listOf(generic)),
+                EMPTY_ERROR_SCHEMA,
+            )
         }
         assertTrue(genericException.message.orEmpty().contains("type parameters"))
     }
@@ -240,7 +367,8 @@ class ClientPrecompilerTest {
         )
 
         val schema = ClientPrecompiler().compile(
-            LsiWorkspace(declarations = listOf(excluded, outerProperty, nested, outer))
+            LsiWorkspace(declarations = listOf(excluded, outerProperty, nested, outer)),
+            EMPTY_ERROR_SCHEMA,
         )
 
         assertEquals(
@@ -252,8 +380,14 @@ class ClientPrecompilerTest {
 
     @Test
     fun `java getter and kotlin function produce equivalent snapshots`() {
-        val javaSchema = ClientPrecompiler().compile(languageWorkspace(LsiLanguage.JAVA, javaGetter = true))
-        val kotlinSchema = ClientPrecompiler().compile(languageWorkspace(LsiLanguage.KOTLIN, javaGetter = false))
+        val javaSchema = ClientPrecompiler().compile(
+            languageWorkspace(LsiLanguage.JAVA, javaGetter = true),
+            EMPTY_ERROR_SCHEMA,
+        )
+        val kotlinSchema = ClientPrecompiler().compile(
+            languageWorkspace(LsiLanguage.KOTLIN, javaGetter = false),
+            EMPTY_ERROR_SCHEMA,
+        )
 
         assertEquals(javaSchema.normalizedSnapshot(), kotlinSchema.normalizedSnapshot())
         assertEquals(javaSchema.fingerprint(), kotlinSchema.fingerprint())
@@ -271,7 +405,10 @@ class ClientPrecompilerTest {
             memberIds = listOf(operation.id),
         )
         val exception = assertFailsWith<ClientPrecompileException> {
-            ClientPrecompiler().compile(LsiWorkspace(declarations = listOf(service, operation)))
+            ClientPrecompiler().compile(
+                LsiWorkspace(declarations = listOf(service, operation)),
+                EMPTY_ERROR_SCHEMA,
+            )
         }
         assertTrue(exception.message.orEmpty().contains(messagePart))
     }
@@ -469,6 +606,7 @@ class ClientPrecompilerTest {
     )
 
     companion object {
+        private val EMPTY_ERROR_SCHEMA = ErrorPrecompiledSchema(emptyList())
         private val SERVICE_ID = LsiSymbolId.type("demo.Service")
         private val API = LsiSymbolId.type("org.babyfish.jimmer.client.meta.Api")
         private val API_IGNORE = LsiSymbolId.type("org.babyfish.jimmer.client.ApiIgnore")
@@ -483,4 +621,65 @@ class ClientPrecompilerTest {
             LsiSymbolId.type("org.springframework.web.bind.annotation.RestController")
         private val SYNTHETIC_ORIGIN = LsiOrigin(LsiOriginKind.SYNTHETIC)
     }
+}
+
+private fun errorSchema(): ErrorPrecompiledSchema {
+    val familyId = LsiSymbolId.type("demo.BookErrorCode")
+    return ErrorPrecompiledSchema(
+        families = listOf(
+            ErrorFamilyModel(
+                id = familyId,
+                qualifiedName = "demo.BookErrorCode",
+                packageName = "demo",
+                family = "BOOK",
+                exceptionTypeId = LsiSymbolId.type("demo.BookException"),
+                exceptionSimpleName = "BookException",
+                checkedException = true,
+                documentation = "Book errors.",
+                declaredFields = emptyList(),
+                codes = listOf(
+                    errorCode(familyId, "NOT_FOUND", "NotFound"),
+                    errorCode(familyId, "FORBIDDEN", "Forbidden"),
+                ),
+            )
+        ),
+    )
+}
+
+private fun errorCode(
+    familyId: LsiSymbolId,
+    code: String,
+    exceptionSimpleName: String,
+): ErrorCodeModel {
+    return ErrorCodeModel(
+        id = LsiSymbolId("${familyId.value}#$code"),
+        enumEntryName = code,
+        code = code,
+        creatorName = exceptionSimpleName.replaceFirstChar(Char::lowercaseChar),
+        exceptionTypeId = LsiSymbolId.type("demo.BookException.$exceptionSimpleName"),
+        exceptionSimpleName = exceptionSimpleName,
+        documentation = "$code error.",
+        declaredFields = emptyList(),
+        fields = emptyList(),
+    )
+}
+
+private fun exceptionMetadata(
+    typeId: LsiSymbolId,
+    familyId: LsiSymbolId,
+    code: String? = null,
+    superTypeId: LsiSymbolId? = null,
+    subTypeIds: List<LsiSymbolId> = emptyList(),
+): ClientExceptionMetadata {
+    return ClientExceptionMetadata(
+        typeId = typeId,
+        errorFamilyId = familyId,
+        family = "DEMO",
+        code = code,
+        checked = false,
+        abstract = code == null,
+        superTypeId = superTypeId,
+        subTypeIds = subTypeIds,
+        documentation = null,
+    )
 }

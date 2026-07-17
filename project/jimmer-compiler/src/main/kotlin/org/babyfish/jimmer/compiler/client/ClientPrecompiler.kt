@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.client
 
+import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
@@ -35,13 +36,17 @@ class ClientPrecompileException(
 class ClientPrecompiler(
     private val options: ClientPrecompileOptions = ClientPrecompileOptions(),
 ) {
-    fun compile(workspace: LsiWorkspace): ClientPrecompiledSchema {
-        return compile(workspace, targets(workspace))
+    fun compile(
+        workspace: LsiWorkspace,
+        errorSchema: ErrorPrecompiledSchema,
+    ): ClientPrecompiledSchema {
+        return compile(workspace, targets(workspace), errorSchema)
     }
 
     fun compile(
         workspace: LsiWorkspace,
         targets: ClientPrecompileTargets,
+        errorSchema: ErrorPrecompiledSchema,
     ): ClientPrecompiledSchema {
         val unresolvedTypeIds = unresolvedTargetTypeIds(workspace, targets)
         if (unresolvedTypeIds.isNotEmpty()) {
@@ -54,9 +59,10 @@ class ClientPrecompiler(
         }
         val types = workspace.declarationsOfType<LsiTypeDeclaration>()
             .sortedBy(LsiTypeDeclaration::qualifiedName)
+        val exceptionPrecompiler = ClientExceptionMetadataPrecompiler.from(workspace, errorSchema)
         val services = types
             .filter { type -> type.id in targets.serviceTypeIds }
-            .map { service -> compileService(service, types, workspace) }
+            .map { service -> compileService(service, types, workspace, exceptionPrecompiler) }
             .sortedBy { service -> service.id }
         return ClientPrecompiledSchema(
             services = services,
@@ -106,6 +112,7 @@ class ClientPrecompiler(
         service: LsiTypeDeclaration,
         allTypes: List<LsiTypeDeclaration>,
         workspace: LsiWorkspace,
+        exceptionPrecompiler: ClientExceptionMetadataPrecompiler,
     ): ClientService {
         validateService(service, allTypes)
         val groups = service.annotations.apiGroups()
@@ -121,7 +128,9 @@ class ClientPrecompiler(
             .filter { declaration -> declaration is LsiFunction || declaration is LsiProperty }
             .filterNot { declaration -> declaration.annotations.hasAnnotation(API_IGNORE_ANNOTATION) }
             .filter(::isApiOperation)
-            .map { declaration -> compileOperation(service, groups, declaration, workspace) }
+            .map { declaration ->
+                compileOperation(service, groups, declaration, workspace, exceptionPrecompiler)
+            }
             .sortedBy { operation -> operation.id }
         return ClientService(
             id = service.id,
@@ -137,6 +146,7 @@ class ClientPrecompiler(
         serviceGroups: List<String>,
         declaration: LsiDeclaration,
         workspace: LsiWorkspace,
+        exceptionPrecompiler: ClientExceptionMetadataPrecompiler,
     ): ClientOperation {
         validateOperation(declaration)
         val function = declaration as? LsiFunction
@@ -187,6 +197,11 @@ class ClientPrecompiler(
                 ).stableTypeSignature()
             },
         )
+        val declaredExceptionTypeIds = function?.thrownTypes
+            .orEmpty()
+            .mapNotNull(LsiTypeRef::declaredTypeId)
+            .distinct()
+        val exceptionResolution = exceptionPrecompiler.resolve(declaredExceptionTypeIds, operationId)
         return ClientOperation(
             id = operationId,
             name = name,
@@ -195,11 +210,9 @@ class ClientPrecompiler(
             parameters = parameters,
             ignoredParameters = ignoredParameters,
             returnType = returnType,
-            directExceptionTypeIds = function?.thrownTypes
-                .orEmpty()
-                .mapNotNull(LsiTypeRef::declaredTypeId)
-                .distinct()
-                .sorted(),
+            declaredExceptionTypeIds = declaredExceptionTypeIds,
+            exceptionTypeIds = exceptionResolution.typeIds,
+            exceptionMetadata = exceptionResolution.metadata,
         )
     }
 

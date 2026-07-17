@@ -18,6 +18,7 @@ fun ErrorPrecompiledSchema.normalizedSnapshot(): String {
                 family.qualifiedName,
                 family.packageName,
                 family.family,
+                family.exceptionTypeId.value,
                 family.exceptionSimpleName,
                 family.checkedException.toString(),
                 family.documentation.orEmpty(),
@@ -33,6 +34,7 @@ fun ErrorPrecompiledSchema.normalizedSnapshot(): String {
                     code.enumEntryName,
                     code.code,
                     code.creatorName,
+                    code.exceptionTypeId.value,
                     code.exceptionSimpleName,
                     code.documentation.orEmpty(),
                 )

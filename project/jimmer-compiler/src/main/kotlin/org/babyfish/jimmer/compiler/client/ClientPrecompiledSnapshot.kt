@@ -23,7 +23,8 @@ fun ClientPrecompiledSchema.normalizedSnapshot(): String {
                     operation.groups.joinToString(","),
                     operation.doc.orEmpty(),
                     operation.returnType?.canonicalText().orEmpty(),
-                    operation.directExceptionTypeIds.joinToString(",") { id -> id.value },
+                    operation.declaredExceptionTypeIds.joinToString(",") { id -> id.value },
+                    operation.exceptionTypeIds.joinToString(",") { id -> id.value },
                 )
                 operation.parameters.sortedBy(ClientParameter::originalIndex).forEach { parameter ->
                     appendRecord(
@@ -42,6 +43,21 @@ fun ClientPrecompiledSchema.normalizedSnapshot(): String {
                         parameter.id.value,
                         parameter.originalIndex.toString(),
                         parameter.name,
+                    )
+                }
+                operation.exceptionMetadata.sortedBy(ClientExceptionMetadata::typeId).forEach { metadata ->
+                    appendRecord(
+                        "exception",
+                        operation.id.value,
+                        metadata.typeId.value,
+                        metadata.errorFamilyId?.value.orEmpty(),
+                        metadata.family,
+                        metadata.code.orEmpty(),
+                        metadata.checked.toString(),
+                        metadata.abstract.toString(),
+                        metadata.superTypeId?.value.orEmpty(),
+                        metadata.subTypeIds.joinToString(",") { typeId -> typeId.value },
+                        metadata.documentation.orEmpty(),
                     )
                 }
             }

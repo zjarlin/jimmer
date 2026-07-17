@@ -31,12 +31,14 @@ class ErrorPrecompilerTest {
         val family = schema.families.single()
         assertEquals("demo", family.packageName)
         assertEquals("BOOK", family.family)
+        assertEquals(LsiSymbolId.type("demo.BookException"), family.exceptionTypeId)
         assertEquals("BookException", family.exceptionSimpleName)
         assertTrue(family.checkedException)
         assertEquals("demo/BookErrorCode.java", family.originatingSources.single().path)
         assertEquals(listOf("timestamp", "tags"), family.declaredFields.map(ErrorFieldModel::name))
         val code = family.codes.single()
         assertEquals("OUT_OF_RANGE", code.code)
+        assertEquals(LsiSymbolId.type("demo.BookException.OutOfRange"), code.exceptionTypeId)
         assertEquals("outOfRange", code.creatorName)
         assertEquals("OutOfRange", code.exceptionSimpleName)
         assertEquals(listOf("timestamp", "tags", "min", "max"), code.fields.map(ErrorFieldModel::name))
@@ -55,10 +57,18 @@ class ErrorPrecompilerTest {
     @Test
     fun `derives nested error exception name and package`() {
         val outer = type("demo.Outer", LsiTypeDeclarationKind.CLASS)
+        val nestedFamilyId = LsiSymbolId.type("demo.Outer.SecurityErrorCode")
+        val entry = LsiEnumEntry(
+            id = LsiSymbolId("${nestedFamilyId.value}#DENIED"),
+            name = "DENIED",
+            ownerId = nestedFamilyId,
+            origin = SYNTHETIC_ORIGIN,
+        )
         val nested = type(
             qualifiedName = "demo.Outer.SecurityErrorCode",
             kind = LsiTypeDeclarationKind.ENUM,
             annotations = listOf(errorFamily("")),
+            enumEntries = listOf(entry),
         )
 
         val family = ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(outer, nested)))
@@ -80,6 +90,16 @@ class ErrorPrecompilerTest {
             ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(nonEnum)))
         }
         assertTrue(kindException.message.orEmpty().contains("Only enum"))
+
+        val emptyFamily = type(
+            qualifiedName = "demo.EmptyError",
+            kind = LsiTypeDeclarationKind.ENUM,
+            annotations = listOf(errorFamily("EMPTY")),
+        )
+        val emptyFamilyException = assertFailsWith<ErrorPrecompileException> {
+            ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(emptyFamily)))
+        }
+        assertTrue(emptyFamilyException.message.orEmpty().contains("at least one error code"))
 
         val duplicate = errorWorkspace(
             language = LsiLanguage.JAVA,

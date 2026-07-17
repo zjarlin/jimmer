@@ -18,6 +18,8 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiEnumEntry
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -190,9 +192,62 @@ class JimmerClientCompilerFeatureProviderTest {
     }
 
     @Test
+    fun `consumes error schema into recursive operation exception metadata`() {
+        val client = apiWorkspace(
+            serviceName = "demo.ErrorService",
+            operationName = "execute",
+            returnType = STRING_TYPE,
+            source = FIRST_SOURCE,
+            thrownTypes = listOf(
+                LsiDeclaredType(BOOK_EXCEPTION_ID),
+                LsiDeclaredType(BOOK_NOT_FOUND_EXCEPTION_ID),
+                LsiDeclaredType(BOOK_EXCEPTION_ID),
+            ),
+        )
+        val oneCodeWorkspace = client.merge(errorFamilyWorkspace("NOT_FOUND"))
+        val oneCodeState = session("client-error-schema-one-code").execute(
+            round(number = 0, workspace = oneCodeWorkspace, currentWorkspace = oneCodeWorkspace)
+        ).clientResult().state as JimmerClientCompilerFeatureState
+        val operation = oneCodeState.schema.services.single().operations.single()
+
+        assertEquals(JimmerClientCompilerFeatureStatus.RESOLVED, oneCodeState.status)
+        assertEquals(
+            listOf(BOOK_EXCEPTION_ID, BOOK_NOT_FOUND_EXCEPTION_ID),
+            operation.declaredExceptionTypeIds,
+        )
+        assertEquals(listOf(BOOK_NOT_FOUND_EXCEPTION_ID), operation.exceptionTypeIds)
+        assertEquals(
+            listOf(BOOK_EXCEPTION_ID, BOOK_NOT_FOUND_EXCEPTION_ID),
+            operation.exceptionMetadata.map(ClientExceptionMetadata::typeId),
+        )
+        assertEquals("BOOK", operation.exceptionMetadata.first().family)
+        assertEquals("NOT_FOUND", operation.exceptionMetadata.last().code)
+
+        val twoCodeWorkspace = client.merge(errorFamilyWorkspace("NOT_FOUND", "FORBIDDEN"))
+        val twoCodeState = session("client-error-schema-two-codes").execute(
+            round(number = 0, workspace = twoCodeWorkspace, currentWorkspace = twoCodeWorkspace)
+        ).clientResult().state as JimmerClientCompilerFeatureState
+
+        assertEquals(
+            listOf(BOOK_NOT_FOUND_EXCEPTION_ID, BOOK_FORBIDDEN_EXCEPTION_ID),
+            twoCodeState.schema.services.single().operations.single().exceptionTypeIds,
+        )
+        assertFalse(oneCodeState.schema.fingerprint() == twoCodeState.schema.fingerprint())
+        assertFalse(oneCodeState.fingerprint == twoCodeState.fingerprint)
+    }
+
+    @Test
     fun `propagates deferred and invalid dependency states into client fingerprint`() {
-        val client = apiWorkspace("demo.Service", "execute", STRING_TYPE, FIRST_SOURCE)
-        val deferredImmutable = unresolvedImmutableWorkspace().merge(client)
+        val client = apiWorkspace(
+            serviceName = "demo.Service",
+            operationName = "execute",
+            returnType = STRING_TYPE,
+            source = FIRST_SOURCE,
+            thrownTypes = listOf(LsiDeclaredType(BOOK_EXCEPTION_ID)),
+        )
+        val deferredImmutable = unresolvedImmutableWorkspace()
+            .merge(errorFamilyWorkspace("NOT_FOUND"))
+            .merge(client)
         val deferredResult = session("client-dependency-deferred").execute(
             round(
                 number = 0,
@@ -209,6 +264,10 @@ class JimmerClientCompilerFeatureProviderTest {
         assertTrue(deferredState.immutableDependencyFingerprint.isNotBlank())
         assertTrue(deferredState.fingerprint.contains(deferredState.immutableDependencyFingerprint))
         assertTrue(deferredState.fingerprint.contains(deferredState.errorDependencyFingerprint))
+        assertEquals(
+            listOf(BOOK_NOT_FOUND_EXCEPTION_ID),
+            deferredState.schema.services.single().operations.single().exceptionTypeIds,
+        )
 
         val invalidError = invalidErrorWorkspace().merge(client)
         val invalidRoundResult = session("client-dependency-invalid").execute(
@@ -228,6 +287,8 @@ class JimmerClientCompilerFeatureProviderTest {
         assertTrue(invalidState.errorDependencyFingerprint.startsWith("INVALID:"))
         assertTrue(invalidState.fingerprint.contains(invalidState.immutableDependencyFingerprint))
         assertTrue(invalidState.fingerprint.contains(invalidState.errorDependencyFingerprint))
+        assertTrue(invalidState.schema.services.single().operations.single().exceptionTypeIds.isEmpty())
+        assertTrue(invalidState.schema.services.single().operations.single().exceptionMetadata.isEmpty())
     }
 
     @Test
@@ -344,6 +405,7 @@ class JimmerClientCompilerFeatureProviderTest {
         operationName: String,
         returnType: LsiTypeRef,
         source: LsiSource,
+        thrownTypes: List<LsiTypeRef> = emptyList(),
     ): LsiWorkspace {
         val origin = LsiOrigin(LsiOriginKind.SOURCE, source)
         val serviceId = LsiSymbolId.type(serviceName)
@@ -353,6 +415,7 @@ class JimmerClientCompilerFeatureProviderTest {
             returnType = returnType,
             annotations = listOf(annotation(API)),
             origin = origin,
+            thrownTypes = thrownTypes,
         )
         return LsiWorkspace(
             sources = listOf(source),
@@ -404,6 +467,33 @@ class JimmerClientCompilerFeatureProviderTest {
         )
     }
 
+    private fun errorFamilyWorkspace(
+        vararg codeNames: String,
+    ): LsiWorkspace {
+        val familyId = LsiSymbolId.type("demo.BookErrorCode")
+        val entries = codeNames.map { codeName ->
+            LsiEnumEntry(
+                id = LsiSymbolId("${familyId.value}#$codeName"),
+                name = codeName,
+                ownerId = familyId,
+                origin = SECOND_ORIGIN,
+            )
+        }
+        val family = LsiTypeDeclaration(
+            id = familyId,
+            name = "BookErrorCode",
+            qualifiedName = "demo.BookErrorCode",
+            kind = LsiTypeDeclarationKind.ENUM,
+            enumEntries = entries,
+            annotations = listOf(annotation(ERROR_FAMILY)),
+            origin = SECOND_ORIGIN,
+        )
+        return LsiWorkspace(
+            sources = listOf(SECOND_SOURCE),
+            declarations = listOf(family),
+        )
+    }
+
     private fun type(
         qualifiedName: String,
         memberIds: List<LsiSymbolId> = emptyList(),
@@ -427,12 +517,14 @@ class JimmerClientCompilerFeatureProviderTest {
         returnType: LsiTypeRef,
         annotations: List<LsiAnnotation>,
         origin: LsiOrigin,
+        thrownTypes: List<LsiTypeRef> = emptyList(),
     ): LsiFunction {
         return LsiFunction(
             id = LsiSymbolId.function(ownerId, name),
             name = name,
             ownerId = ownerId,
             returnType = returnType,
+            thrownTypes = thrownTypes,
             annotations = annotations,
             origin = origin,
         )
@@ -453,5 +545,8 @@ class JimmerClientCompilerFeatureProviderTest {
         val REST_CONTROLLER = LsiSymbolId.type("org.springframework.web.bind.annotation.RestController")
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
         val ERROR_FAMILY = LsiSymbolId.type("org.babyfish.jimmer.error.ErrorFamily")
+        val BOOK_EXCEPTION_ID = LsiSymbolId.type("demo.BookException")
+        val BOOK_FORBIDDEN_EXCEPTION_ID = LsiSymbolId.type("demo.BookException.Forbidden")
+        val BOOK_NOT_FOUND_EXCEPTION_ID = LsiSymbolId.type("demo.BookException.NotFound")
     }
 }
