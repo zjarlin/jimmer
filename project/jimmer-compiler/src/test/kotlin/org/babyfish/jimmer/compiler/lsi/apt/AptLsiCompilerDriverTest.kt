@@ -23,6 +23,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -54,6 +55,10 @@ class AptLsiCompilerDriverTest {
                 }
             """.trimIndent(),
         )
+        projectDir.resolve("src/main/dto/Model.dto").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("export Model")
+        }
         classesDir.mkdirs()
         generatedDir.mkdirs()
 
@@ -89,6 +94,11 @@ class AptLsiCompilerDriverTest {
             classesDir.resolve("META-INF/jimmer/driver-final").readText(),
         )
         assertTrue(provider.rounds.size >= 3)
+        assertEquals("export Model", provider.rounds.first().inputDocuments.single().content)
+        assertEquals(
+            provider.rounds.first().inputDocuments.single(),
+            provider.rounds.last().inputDocuments.single(),
+        )
         val firstRoundProperty = assertIs<LsiProperty>(provider.rounds.first().workspace[PROPERTY_ID])
         assertIs<LsiUnresolvedType>(firstRoundProperty.type)
         assertEquals(
@@ -142,7 +152,10 @@ class AptLsiCompilerDriverTest {
     }
 
     private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor("apt-driver-test")
+        override val descriptor = JimmerCompilerFeatureDescriptor(
+            id = "apt-driver-test",
+            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+        )
 
         val rounds = mutableListOf<org.babyfish.jimmer.compiler.CompilerRound>()
 

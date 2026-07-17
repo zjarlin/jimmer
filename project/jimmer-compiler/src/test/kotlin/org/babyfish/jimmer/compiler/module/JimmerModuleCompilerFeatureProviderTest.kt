@@ -312,6 +312,7 @@ class JimmerModuleCompilerFeatureProviderTest {
             isFinal = isFinal,
             options = options,
             inputResources = inputResources,
+            inputDocuments = emptyList(),
         )
     }
 

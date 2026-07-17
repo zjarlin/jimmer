@@ -13,8 +13,10 @@ import org.babyfish.jimmer.client.FetchBy
 import org.babyfish.jimmer.compiler.ddl.apt.JimmerDdlCompilerAptFeature
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
+import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoUtils
+import org.babyfish.jimmer.dto.compiler.SourceTypeFilter
 import org.babyfish.jimmer.sql.EnableDtoGeneration
 import java.io.IOException
 import javax.annotation.processing.AbstractProcessor
@@ -57,6 +59,8 @@ class JimmerProcessor : AbstractProcessor() {
 
     private lateinit var dtoTestDirs: Collection<String>
 
+    private var dtoBundleEnabled = true
+
     private var defaultNullableInputModifier = DtoModifier.STATIC
 
     private var checkedException = false
@@ -89,16 +93,6 @@ class JimmerProcessor : AbstractProcessor() {
         messager = processingEnv.messager
         val includes = processingEnv.options["jimmer.source.includes"]
         val excludes = processingEnv.options["jimmer.source.excludes"]
-        val includeArr = includes
-            ?.takeIf { it.isNotEmpty() }
-            ?.trim()
-            ?.split(Regex("\\s*,\\s*"))
-            ?.toTypedArray()
-        val excludeArr = excludes
-            ?.takeIf { it.isNotEmpty() }
-            ?.trim()
-            ?.split(Regex("\\s*,\\s*"))
-            ?.toTypedArray()
         dtoDirs = dtoDirs(
             processingEnv,
             "jimmer.dto.dirs",
@@ -111,6 +105,7 @@ class JimmerProcessor : AbstractProcessor() {
             "src/test/",
             listOf("src/test/dto"),
         )
+        dtoBundleEnabled = DtoBundleLoader.isEnabled(processingEnv.options)
         defaultNullableInputModifier = processingEnv.options["jimmer.dto.defaultNullableInputModifier"]
             ?.takeIf { it.isNotEmpty() }
             ?.let {
@@ -141,8 +136,7 @@ class JimmerProcessor : AbstractProcessor() {
             processingEnv.typeUtils,
             processingEnv.filer,
             processingEnv.options["jimmer.keepIsPrefix"] == "true",
-            includeArr,
-            excludeArr,
+            SourceTypeFilter(includes, excludes),
             detectIsJackson3(processingEnv),
             processingEnv.options["jimmer.entry.immutables"],
             processingEnv.options["jimmer.entry.tables"],
@@ -176,6 +170,7 @@ class JimmerProcessor : AbstractProcessor() {
                     context,
                     elements,
                     if (isTest()) dtoTestDirs else dtoDirs,
+                    dtoBundleEnabled,
                     defaultNullableInputModifier,
                 ).process()
                 ExportDocProcessor(context).process(roundEnv)
@@ -254,6 +249,7 @@ class JimmerProcessor : AbstractProcessor() {
             "jimmer.client.checkedException",
             "jimmer.client.ignoreJdkWarning",
             "jimmer.dto.defaultNullableInputModifier",
+            DtoBundleLoader.ENABLED_OPTION,
             "jimmer.dto.dirs",
             "jimmer.dto.fieldVisibility",
             "jimmer.dto.hibernateValidatorEnhancement",

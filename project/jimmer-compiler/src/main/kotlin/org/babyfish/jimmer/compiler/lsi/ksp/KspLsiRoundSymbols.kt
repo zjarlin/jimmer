@@ -18,6 +18,7 @@ import site.addzero.lsi.core.LsiSymbolId
  * 当前 KSP 轮内的原生符号索引，不得跨轮保存。
  */
 internal data class KspLsiRoundSymbols(
+    val sourceFiles: List<KSFile>,
     val allValidRootTypes: List<KSClassDeclaration>,
     val currentValidRootTypes: List<KSClassDeclaration>,
     val invalidRootTypes: List<KSClassDeclaration>,
@@ -28,7 +29,8 @@ internal data class KspLsiRoundSymbols(
 internal fun Resolver.toKspLsiRoundSymbols(
     frontendOptions: LsiFrontendOptions,
 ): KspLsiRoundSymbols {
-    val allRoots = getAllFiles().toKspRootTypes()
+    val sourceFiles = getAllFiles().toList()
+    val allRoots = sourceFiles.asSequence().toKspRootTypes()
     val currentRoots = getNewFiles().toKspRootTypes()
     val allValidRoots = mutableListOf<Pair<KSClassDeclaration, KSFile>>()
     val invalidRoots = mutableListOf<KSClassDeclaration>()
@@ -44,6 +46,7 @@ internal fun Resolver.toKspLsiRoundSymbols(
         allValidRoots = allValidRoots,
         currentValidRoots = currentValidRoots,
         invalidRoots = invalidRoots,
+        sourceFiles = sourceFiles,
     )
 }
 
@@ -72,9 +75,11 @@ private class KspLsiRoundSymbolIndexer(
         allValidRoots: List<Pair<KSClassDeclaration, KSFile>>,
         currentValidRoots: List<Pair<KSClassDeclaration, KSFile>>,
         invalidRoots: List<KSClassDeclaration>,
+        sourceFiles: List<KSFile>,
     ): KspLsiRoundSymbols {
         allValidRoots.forEach { (root, file) -> indexType(root, file) }
         return KspLsiRoundSymbols(
+            sourceFiles = sourceFiles,
             allValidRootTypes = allValidRoots.map { (root, _) -> root },
             currentValidRootTypes = currentValidRoots.map { (root, _) -> root },
             invalidRootTypes = invalidRoots.toList(),

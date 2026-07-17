@@ -185,6 +185,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
                 platform = platform,
                 isFinal = isFinal,
                 options = options,
+                inputDocuments = emptyList(),
             ),
             collection = JimmerCompilerFeatureCollection(),
             previousState = null,

@@ -40,11 +40,12 @@ public class DtoBundleLoaderTest {
     public void testJarBundleWithCustomPath() throws Exception {
         Path jar = tempDir.resolve("model-dto.jar");
         createJar(fixture("custom-path"), jar);
+        List<DtoFile> dtoFiles;
         try (URLClassLoader classLoader = classLoader(jar)) {
-            List<DtoFile> dtoFiles = DtoBundleLoader.load(classLoader);
-            Assertions.assertEquals(1, dtoFiles.size());
-            assertDtoFile(dtoFiles.get(0), "org.example", "Store.dto", "StoreView");
+            dtoFiles = DtoBundleLoader.load(classLoader);
         }
+        Assertions.assertEquals(1, dtoFiles.size());
+        assertDtoFile(dtoFiles.get(0), "org.example", "Store.dto", "StoreView");
     }
 
     @Test

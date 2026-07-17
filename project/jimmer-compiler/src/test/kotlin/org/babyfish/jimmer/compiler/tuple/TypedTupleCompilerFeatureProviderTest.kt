@@ -106,6 +106,7 @@ class TypedTupleCompilerFeatureProviderTest {
                 currentWorkspace = if (isFinal) LsiWorkspace.EMPTY else roundWorkspace,
                 platform = platform,
                 isFinal = isFinal,
+                inputDocuments = emptyList(),
             ),
             collection = JimmerCompilerFeatureCollection(),
             previousState = null,

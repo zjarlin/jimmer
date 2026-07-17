@@ -6,6 +6,7 @@ data class JimmerCompilerFeatureDescriptor(
     val id: String,
     val dependsOn: Set<String> = emptySet(),
     val inputResourcePaths: Set<String> = emptySet(),
+    val inputDocumentKinds: Set<CompilerInputDocumentKind> = emptySet(),
 ) {
 
     init {

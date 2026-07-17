@@ -3,15 +3,19 @@ package org.babyfish.jimmer.compiler.lsi.ksp
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.symbol.KSAnnotated
+import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
+import org.babyfish.jimmer.compiler.CompilerInputDocument
+import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.CompilerSession
-import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
+import org.babyfish.jimmer.compiler.input.FileSystemCompilerInputDocumentScanner
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
@@ -37,6 +41,9 @@ class KspLsiCompilerDriver(
     private val inputResourcePaths = providerList
         .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.inputResourcePaths }
 
+    private val inputDocumentKinds = providerList
+        .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.inputDocumentKinds }
+
     private val session = CompilerSession(sessionId, providerList)
 
     private val logger = environment.logger
@@ -45,11 +52,15 @@ class KspLsiCompilerDriver(
 
     private val inputResourceReader = KspCompilerInputResourceReader(environment.codeGenerator)
 
+    private val inputDocumentScanner = FileSystemCompilerInputDocumentScanner()
+
     private var nextRoundNumber = 0
 
     private var workspace = LsiWorkspace.EMPTY
 
     private var inputResources = emptyMap<String, String>()
+
+    private var inputDocuments = emptyList<CompilerInputDocument>()
 
     fun process(resolver: Resolver): List<KSAnnotated> {
         val currentRoundSymbols = resolver.toKspLsiRoundSymbols(frontendOptions)
@@ -59,6 +70,16 @@ class KspLsiCompilerDriver(
             frontendOptions,
         )
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
+        if (inputDocumentKinds.isNotEmpty()) {
+            val sourceFiles = currentRoundSymbols.sourceFiles
+                .map { file -> File(file.filePath) }
+            inputDocuments = inputDocumentScanner.scan(
+                startPaths = sourceFiles,
+                requestedKinds = inputDocumentKinds,
+                sourceSet = sourceFiles.compilerSourceSet(),
+                options = options,
+            )
+        }
         val roundResult = session.execute(
             CompilerRound(
                 number = nextRoundNumber,
@@ -67,6 +88,7 @@ class KspLsiCompilerDriver(
                 platform = CompilerPlatform.KSP,
                 options = options,
                 inputResources = inputResources,
+                inputDocuments = inputDocuments,
             ),
         )
         nextRoundNumber++
@@ -91,6 +113,7 @@ class KspLsiCompilerDriver(
                 isFinal = true,
                 options = options,
                 inputResources = inputResources,
+                inputDocuments = inputDocuments,
             ),
         )
         nextRoundNumber++
@@ -135,5 +158,16 @@ class KspLsiCompilerDriver(
             LsiDiagnosticSeverity.WARNING -> logger.warn(message, symbol)
             LsiDiagnosticSeverity.ERROR -> logger.error(message, symbol)
         }
+    }
+}
+
+private fun List<File>.compilerSourceSet(): CompilerSourceSet {
+    return if (any { file ->
+        val path = file.invariantSeparatorsPath
+        "/src/test/" in path || path.startsWith("src/test/")
+    }) {
+        CompilerSourceSet.TEST
+    } else {
+        CompilerSourceSet.MAIN
     }
 }

@@ -15,12 +15,19 @@ data class CompilerRound(
     val isFinal: Boolean = false,
     val options: Map<String, String> = emptyMap(),
     val inputResources: Map<String, String> = emptyMap(),
+    val inputDocuments: List<CompilerInputDocument>,
 ) {
 
     init {
         require(number >= 0) { "Compiler round number cannot be negative: $number" }
         require(options.keys.none(String::isBlank)) { "Compiler option name cannot be blank" }
         inputResources.keys.forEach(::requireCompilerResourcePath)
+        require(inputDocuments == inputDocuments.sorted()) {
+            "Compiler input documents must use stable source order"
+        }
+        require(inputDocuments.distinctBy { document -> document.kind to document.source.path }.size == inputDocuments.size) {
+            "Compiler round cannot contain duplicate input documents"
+        }
     }
 }
 

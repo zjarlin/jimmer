@@ -22,6 +22,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.apt.Context
 import org.babyfish.jimmer.apt.MetaException
+import org.babyfish.jimmer.dto.compiler.SourceTypeFilter
 import org.babyfish.jimmer.sql.Column
 import org.babyfish.jimmer.sql.Default
 
@@ -484,8 +485,7 @@ class InheritedPropAnnotationOverrideAptTest {
                     processingEnv.typeUtils,
                     processingEnv.filer,
                     false,
-                    null,
-                    null,
+                    SourceTypeFilter(null, null),
                     false,
                     null,
                     null,

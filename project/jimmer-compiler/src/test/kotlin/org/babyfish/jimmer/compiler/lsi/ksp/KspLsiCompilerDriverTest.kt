@@ -23,6 +23,7 @@ import java.io.OutputStream
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import kotlin.KotlinVersion
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -37,6 +38,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -45,6 +47,73 @@ import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 
 class KspLsiCompilerDriverTest {
+
+    @Test
+    fun `freezes dto documents from the current ksp project`() {
+        val projectDirectory = createTempDirectory(prefix = "compiler-ksp-input-documents").toFile()
+        val sourcePath = projectDirectory.resolve("src/main/kotlin/demo/Model.kt").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("interface Model")
+        }
+        projectDirectory.resolve("src/main/dto/Model.dto").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("export Model")
+        }
+        lateinit var sourceFile: KSFile
+        val root = classDeclaration(
+            qualifiedName = "demo.Valid",
+            file = { sourceFile },
+            valid = true,
+        )
+        sourceFile = file(listOf(root), sourcePath.absolutePath)
+        val provider = InputDocumentFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-input-document-test",
+        )
+
+        driver.process(resolver(sourceFile))
+
+        val document = provider.rounds.single().round.inputDocuments.single()
+        assertEquals("export Model", document.content)
+        assertEquals("src/main/dto", document.sourceRoot)
+        assertEquals("Model.dto", document.relativePath)
+    }
+
+    @Test
+    fun `finds dto documents when ksp source file has no root class`() {
+        val projectDirectory = createTempDirectory(prefix = "compiler-ksp-input-documents").toFile()
+        val sourcePath = projectDirectory.resolve("src/main/kotlin/demo/Functions.kt").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("fun execute() = Unit")
+        }
+        projectDirectory.resolve("src/main/dto/Model.dto").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("export Model")
+        }
+        val sourceFile = file(emptyList(), sourcePath.absolutePath)
+        val provider = InputDocumentFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-input-document-no-root-test",
+        )
+
+        driver.process(resolver(sourceFile))
+
+        assertEquals("export Model", provider.rounds.single().round.inputDocuments.single().content)
+    }
 
     @Test
     fun `uses all visible roots for workspace and new roots for current workspace`() {
@@ -157,7 +226,10 @@ class KspLsiCompilerDriverTest {
     }
 
     private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor("ksp-driver-test")
+        override val descriptor = JimmerCompilerFeatureDescriptor(
+            id = "ksp-driver-test",
+            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+        )
 
         val rounds = mutableListOf<JimmerCompilerCollectContext>()
 
@@ -208,6 +280,28 @@ class KspLsiCompilerDriverTest {
                         symbolId = VALID_ID,
                     ),
                 ),
+            )
+        }
+    }
+
+    private class InputDocumentFeatureProvider : JimmerCompilerFeatureProvider {
+        override val descriptor = JimmerCompilerFeatureDescriptor(
+            id = "ksp-input-document-test",
+            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+        )
+
+        val rounds = mutableListOf<JimmerCompilerCollectContext>()
+
+        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+            rounds += context
+            return JimmerCompilerFeatureCollection()
+        }
+
+        override fun precompile(
+            context: JimmerCompilerPrecompileContext,
+        ): JimmerCompilerFeaturePrecompileResult {
+            return JimmerCompilerFeaturePrecompileResult(
+                state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
             )
         }
     }
@@ -313,8 +407,10 @@ class KspLsiCompilerDriverTest {
         }
     }
 
-    private fun file(declarations: List<KSClassDeclaration>): KSFile {
-        val path = "/workspace/src/main/kotlin/demo/Models.kt"
+    private fun file(
+        declarations: List<KSClassDeclaration>,
+        path: String = "/workspace/src/main/kotlin/demo/Models.kt",
+    ): KSFile {
         return proxy(KSFile::class.java, "KSFile($path)") { method, _ ->
             when (method.name) {
                 "getPackageName" -> name("demo")

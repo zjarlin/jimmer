@@ -10,6 +10,7 @@ import org.babyfish.jimmer.client.EnableImplicitApi
 import org.babyfish.jimmer.compiler.ddl.ksp.JimmerDdlCompilerKspFeature
 import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
+import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoUtils
 import org.babyfish.jimmer.ksp.Context
@@ -35,6 +36,9 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
 
             private val dtoTestDirs =
                 dtoDir("jimmer.dto.testDirs", "src/test/") ?: listOf("src/test/dto")
+
+            private val dtoBundleEnabled =
+                DtoBundleLoader.isEnabled(environment.options)
 
             private val defaultNullableInputModifier =
                 environment.options["jimmer.dto.defaultNullableInputModifier"]
@@ -117,6 +121,7 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                             } else {
                                 dtoDirs
                             },
+                            dtoBundleEnabled,
                             defaultNullableInputModifier,
                         ).process()
                         ExportDocProcessor(context).process()

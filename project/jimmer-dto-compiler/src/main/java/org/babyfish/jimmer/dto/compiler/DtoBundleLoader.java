@@ -219,11 +219,26 @@ public final class DtoBundleLoader {
             packagePaths.add(parts[i]);
         }
         return new DtoFile(
-                new URLDtoSource(url),
+                url.toExternalForm(),
+                readContent(url),
                 "dto-bundle",
                 "",
                 packagePaths,
                 parts[parts.length - 1]
         );
+    }
+
+    private static String readContent(URL url) throws IOException {
+        URLConnection connection = url.openConnection();
+        connection.setUseCaches(false);
+        StringBuilder builder = new StringBuilder();
+        try (Reader reader = new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8)) {
+            char[] buffer = new char[1024];
+            int count;
+            while ((count = reader.read(buffer)) != -1) {
+                builder.append(buffer, 0, count);
+            }
+        }
+        return builder.toString();
     }
 }

@@ -3,9 +3,10 @@ package org.babyfish.jimmer.ksp.dto
 import com.google.devtools.ksp.symbol.KSFile
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
 import org.babyfish.jimmer.dto.compiler.DtoFile
-import org.babyfish.jimmer.dto.compiler.PathDtoSource
 import java.io.File
 import java.io.IOException
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 
 class DtoContext(anyFile: KSFile?, dtoDirs: Collection<String>, dtoBundleEnabled: Boolean) {
 
@@ -72,7 +73,14 @@ class DtoContext(anyFile: KSFile?, dtoDirs: Collection<String>, dtoBundleEnabled
         dtoFiles: MutableList<DtoFile>
     ) {
         if (file.isFile() && file.getName().endsWith(".dto")) {
-            dtoFiles += DtoFile(PathDtoSource(file.toPath()), projectDir, dtoDir, paths, file.name)
+            dtoFiles += DtoFile(
+                file.absolutePath,
+                readContent(file),
+                projectDir,
+                dtoDir,
+                paths,
+                file.name,
+            )
         } else {
             val subFiles = file.listFiles()
             if (subFiles != null) {
@@ -82,6 +90,17 @@ class DtoContext(anyFile: KSFile?, dtoDirs: Collection<String>, dtoBundleEnabled
                 }
                 paths.removeAt(paths.size - 1)
             }
+        }
+    }
+
+    private fun readContent(file: File): String {
+        return try {
+            String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)
+        } catch (ex: IOException) {
+            throw DtoException(
+                "Failed to read \"${file.absolutePath}\": ${ex.message}",
+                ex,
+            )
         }
     }
 }

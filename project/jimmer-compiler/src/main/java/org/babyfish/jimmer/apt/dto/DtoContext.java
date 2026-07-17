@@ -2,7 +2,6 @@ package org.babyfish.jimmer.apt.dto;
 
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader;
 import org.babyfish.jimmer.dto.compiler.DtoFile;
-import org.babyfish.jimmer.dto.compiler.PathDtoSource;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.processing.Filer;
@@ -11,6 +10,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 
 public class DtoContext {
@@ -106,7 +107,14 @@ public class DtoContext {
     private static void collectDtoFiles(String projectDir, String dtoDir, File file, List<String> paths, List<DtoFile> dtoFiles) {
         if (file.isFile() && file.getName().endsWith(".dto")) {
             dtoFiles.add(
-                    new DtoFile(new PathDtoSource(file.toPath()), projectDir, dtoDir, paths, file.getName())
+                    new DtoFile(
+                            file.getAbsolutePath(),
+                            readContent(file),
+                            projectDir,
+                            dtoDir,
+                            paths,
+                            file.getName()
+                    )
             );
         } else {
             File[] subFiles = file.listFiles();
@@ -117,6 +125,17 @@ public class DtoContext {
                 }
                 paths.remove(paths.size() - 1);
             }
+        }
+    }
+
+    private static String readContent(File file) {
+        try {
+            return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new DtoException(
+                    "Failed to read \"" + file.getAbsolutePath() + "\": " + ex.getMessage(),
+                    ex
+            );
         }
     }
 

@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -2858,7 +2856,8 @@ public class DtoCompilerTest {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
-                                mockedSource("file:/User/test/" + fileName, code),
+                                "file:/User/test/" + fileName,
+                                code,
                                 "project",
                                 "src/main/dto",
                                 packageParts,
@@ -2874,7 +2873,8 @@ public class DtoCompilerTest {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
-                                mockedSource("file:/User/test/" + fileName, code),
+                                "file:/User/test/" + fileName,
+                                code,
                                 "project",
                                 "src/main/dto",
                                 Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
@@ -2891,10 +2891,8 @@ public class DtoCompilerTest {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
-                                mockedSource(
-                                        "file:/User/test/Book.dto",
-                                        code
-                                ),
+                                "file:/User/test/Book.dto",
+                                code,
                                 "project",
                                 "src/main/dto",
                                 Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
@@ -2911,10 +2909,8 @@ public class DtoCompilerTest {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
-                                mockedSource(
-                                        "file:/User/test/TreeNode.dto",
-                                        code
-                                ),
+                                "file:/User/test/TreeNode.dto",
+                                code,
                                 "project",
                                 "src/main/dto",
                                 Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
@@ -2931,10 +2927,8 @@ public class DtoCompilerTest {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
-                                mockedSource(
-                                        "file:/User/test/BookStore.dto",
-                                        code
-                                ),
+                                "file:/User/test/BookStore.dto",
+                                code,
                                 "project",
                                 "src/main/dto",
                                 Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
@@ -2951,10 +2945,8 @@ public class DtoCompilerTest {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
-                                mockedSource(
-                                        "file:/User/test/Client.dto",
-                                        code
-                                ),
+                                "file:/User/test/Client.dto",
+                                code,
                                 "project",
                                 "src/main/dto",
                                 Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
@@ -2971,10 +2963,8 @@ public class DtoCompilerTest {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
-                                mockedSource(
-                                        "file:/User/test/Payment.dto",
-                                        code
-                                ),
+                                "file:/User/test/Payment.dto",
+                                code,
                                 "project",
                                 "src/main/dto",
                                 Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
@@ -3126,17 +3116,4 @@ public class DtoCompilerTest {
         }
     }
 
-    private static DtoSource mockedSource(String name, String content) {
-        return new DtoSource() {
-            @Override
-            public String getName() {
-                return name;
-            }
-
-            @Override
-            public Reader openReader() {
-                return new StringReader(content);
-            }
-        };
-    }
 }

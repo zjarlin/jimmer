@@ -301,6 +301,7 @@ class JimmerClientCompilerFeatureProviderTest {
             platform = platform,
             isFinal = isFinal,
             options = options,
+            inputDocuments = emptyList(),
         )
     }
 

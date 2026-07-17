@@ -35,6 +35,7 @@ class CompilerSessionTest {
                 number = 0,
                 workspace = LsiWorkspace.EMPTY,
                 inputResources = mapOf("META-INF/jimmer/entities" to "demo.Book\n"),
+                inputDocuments = emptyList(),
             )
         )
 
@@ -51,8 +52,10 @@ class CompilerSessionTest {
         val client = recordingFeature("client", executions, "immutable")
         val session = CompilerSession("test", listOf(client, immutable))
 
-        val first = session.execute(CompilerRound(0, LsiWorkspace.EMPTY))
-        val second = session.execute(CompilerRound(1, LsiWorkspace.EMPTY, isFinal = true))
+        val first = session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
+        val second = session.execute(
+            CompilerRound(1, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
+        )
 
         assertEquals(
             listOf(
@@ -86,7 +89,7 @@ class CompilerSessionTest {
         }
 
         val result = CompilerSession("fixed-point", listOf(provider))
-            .execute(CompilerRound(0, LsiWorkspace.EMPTY))
+            .execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
 
         assertEquals(4, result.fixedPointIterations)
         assertEquals(4, invocations)
@@ -106,8 +109,10 @@ class CompilerSessionTest {
             listOf(resultFeature("client", listOf(resource))),
         )
 
-        val first = session.execute(CompilerRound(0, LsiWorkspace.EMPTY))
-        val second = session.execute(CompilerRound(1, LsiWorkspace.EMPTY, isFinal = true))
+        val first = session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
+        val second = session.execute(
+            CompilerRound(1, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
+        )
 
         assertEquals(listOf(resource), first.newArtifacts)
         assertTrue(second.newArtifacts.isEmpty())
@@ -131,7 +136,9 @@ class CompilerSessionTest {
         )
 
         val exception = assertFailsWith<FinalRoundSourceGenerationException> {
-            session.execute(CompilerRound(0, LsiWorkspace.EMPTY, isFinal = true))
+            session.execute(
+                CompilerRound(0, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
+            )
         }
 
         assertEquals("immutable", exception.featureId)
@@ -154,7 +161,9 @@ class CompilerSessionTest {
         )
 
         val exception = assertFailsWith<FinalRoundIsolatingArtifactException> {
-            session.execute(CompilerRound(0, LsiWorkspace.EMPTY, isFinal = true))
+            session.execute(
+                CompilerRound(0, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
+            )
         }
 
         assertEquals("module", exception.featureId)
@@ -179,7 +188,7 @@ class CompilerSessionTest {
         )
 
         assertFailsWith<GeneratedArtifactConflictException> {
-            session.execute(CompilerRound(0, LsiWorkspace.EMPTY))
+            session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
         }
 
         assertTrue(session.snapshot().rounds.isEmpty())
@@ -205,7 +214,7 @@ class CompilerSessionTest {
         )
 
         val exception = assertFailsWith<CompilerFixedPointException> {
-            session.execute(CompilerRound(0, LsiWorkspace.EMPTY))
+            session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
         }
 
         assertEquals(3, exception.maximumIterations)
