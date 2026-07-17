@@ -272,7 +272,7 @@ class TypedTuplePrecompiler {
         members: List<LsiDeclaration>,
     ): PreparedTypedTupleType {
         val properties = members.filterIsInstance<LsiProperty>()
-            .filterNot { property -> property.static || property.constant }
+            .filterNot(LsiProperty::static)
         properties.forEach { property -> validateMemberOwner(type, property.id, property.ownerId) }
         val primaryConstructor = members.filterIsInstance<LsiConstructor>()
             .singleOrNull(LsiConstructor::primary)

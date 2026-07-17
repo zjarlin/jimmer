@@ -241,7 +241,6 @@ class AptLsiWorkspaceTest {
         assertEquals(LsiSymbolId.field(modelId, "SECRET"), secret.id)
         assertEquals(LsiVisibility.PRIVATE, secret.visibility)
         assertTrue(secret.static)
-        assertTrue(secret.constant)
         assertFalse(secret.mutable)
         assertTrue(secret.annotations.any { annotation ->
             annotation.type == LsiSymbolId.type("demo.FieldMarker") &&
@@ -254,7 +253,6 @@ class AptLsiWorkspaceTest {
         assertEquals(LsiVisibility.PROTECTED, valueField.visibility)
         assertTrue(valueField.mutable)
         assertFalse(valueField.static)
-        assertFalse(valueField.constant)
         assertEquals(
             model.typeParameters.single().id,
             assertIs<LsiTypeParameterRef>(valueField.type).parameterId,

@@ -29,6 +29,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiEnumEntry
+import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiOverride
 import site.addzero.lsi.model.LsiParameter
@@ -204,9 +205,13 @@ class KspLsiWorkspaceBuilder(
             "KSP LSI type declaration must have a qualified name"
         }
         val typeId = LsiSymbolId.type(qualifiedName)
-        val kotlinProperties = typeDeclaration.getDeclaredProperties()
+        val declaredProperties = typeDeclaration.getDeclaredProperties().toList()
+        val kotlinProperties = declaredProperties
+            .filterNot(KSPropertyDeclaration::isLsiJavaField)
             .map { property -> property.toLsiProperty(typeDeclaration) }
-            .toList()
+        val fields = declaredProperties
+            .filter(KSPropertyDeclaration::isLsiJavaField)
+            .map { field -> field.toLsiField(typeId) }
         val declaredFunctions = typeDeclaration.getDeclaredFunctions()
             .filterNot(KSFunctionDeclaration::isConstructor)
             .toList()
@@ -228,13 +233,14 @@ class KspLsiWorkspaceBuilder(
         val lsiType = toLsiTypeDeclaration(
             typeDeclaration = typeDeclaration,
             typeId = typeId,
-            memberIds = (callables + constructors).map(LsiDeclaration::id),
+            memberIds = (callables + constructors + fields).map(LsiDeclaration::id),
             enumEntries = enumEntries,
         )
         return buildList {
             add(lsiType)
             addAll(callables)
             addAll(constructors)
+            addAll(fields)
             addAll(enumEntries)
         }
     }
@@ -304,12 +310,36 @@ class KspLsiWorkspaceBuilder(
             getterName = propertyName,
             mutable = isMutable,
             static = Modifier.JAVA_STATIC in modifiers,
-            constant = Modifier.CONST in modifiers,
             modality = toLsiModality(),
             overrides = toLsiOverrides(owner),
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
             annotations = toLsiPropertyAnnotations(),
+            location = context.location(this),
+            origin = context.origin(this),
+        )
+    }
+
+    private fun KSPropertyDeclaration.toLsiField(ownerId: LsiSymbolId): LsiField {
+        val typeParameterIds = typeContext.typeParameterIdsInScope(this)
+        val declarationAnnotations = annotationContext.toLsiAnnotations(
+            annotations = annotations,
+            useSiteTarget = LsiAnnotationUseSiteTarget.FIELD,
+        )
+        val typeAnnotations = annotationContext.toLsiAnnotations(
+            annotations = type.annotations,
+            useSiteTarget = LsiAnnotationUseSiteTarget.FIELD,
+        )
+        return LsiField(
+            id = LsiSymbolId.field(ownerId, simpleName.asString()),
+            name = simpleName.asString(),
+            ownerId = ownerId,
+            type = typeContext.toLsiType(type.resolve(), typeParameterIds),
+            mutable = isMutable,
+            static = Modifier.JAVA_STATIC in modifiers,
+            visibility = toLsiVisibility(),
+            documentation = context.documentation(this),
+            annotations = (declarationAnnotations + typeAnnotations).distinct(),
             location = context.location(this),
             origin = context.origin(this),
         )
@@ -574,6 +604,10 @@ class KspLsiWorkspaceBuilder(
 private fun LsiTypeDeclaration.requiresFullExternalDeclaration(): Boolean {
     return kind == LsiTypeDeclarationKind.ANNOTATION ||
         annotations.any { annotation -> annotation.type in JIMMER_MANAGED_TYPE_ANNOTATIONS }
+}
+
+private fun KSPropertyDeclaration.isLsiJavaField(): Boolean {
+    return origin in setOf(Origin.JAVA, Origin.JAVA_LIB) && getter == null
 }
 
 private val JIMMER_MANAGED_TYPE_ANNOTATIONS = setOf(

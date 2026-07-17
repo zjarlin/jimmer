@@ -78,6 +78,12 @@ internal class KspLsiAnnotationContext(
             is Double -> LsiAnnotationValue.DoubleValue(value)
             is Char -> LsiAnnotationValue.CharValue(value)
             is String -> LsiAnnotationValue.StringValue(value)
+            is Enum<*> -> LsiAnnotationValue.EnumValue(
+                enumType = LsiSymbolId.type(
+                    value.declaringJavaClass.canonicalName ?: value.declaringJavaClass.name
+                ),
+                entryName = value.name,
+            )
             is KSType -> value.toLsiTypeOrEnumValue()
             is KSClassDeclaration -> value.toLsiEnumValue()
             is KSAnnotation -> LsiAnnotationValue.NestedAnnotationValue(

@@ -23,6 +23,7 @@ import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Nullability
 import com.google.devtools.ksp.symbol.Origin
 import com.google.devtools.ksp.symbol.Variance
+import java.lang.annotation.RetentionPolicy
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import kotlin.sequences.Sequence
@@ -41,6 +42,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
@@ -51,6 +53,44 @@ import site.addzero.lsi.model.LsiWorkspace
 class KspLsiWorkspaceTest {
 
     private val frontendOptions = LsiFrontendOptions.from(emptyMap())
+
+    private enum class ReflectionMode {
+        FIRST,
+    }
+
+    @Test
+    fun `freezes java reflection enum annotation values`() {
+        val retention = classDeclaration(
+            qualifiedName = "java.lang.annotation.Retention",
+            classKind = ClassKind.ANNOTATION_CLASS,
+            origin = Origin.JAVA_LIB,
+            file = null,
+        )
+        val annotation = annotation(
+            type = retention,
+            arguments = listOf(
+                valueArgument("value", RetentionPolicy.RUNTIME),
+                valueArgument("nested", ReflectionMode.FIRST),
+            ),
+        ).toLsiAnnotation(resolver())
+
+        assertEquals(
+            LsiAnnotationValue.EnumValue(
+                enumType = LsiSymbolId.type("java.lang.annotation.RetentionPolicy"),
+                entryName = "RUNTIME",
+            ),
+            annotation.arguments.getValue("value").value,
+        )
+        assertEquals(
+            LsiAnnotationValue.EnumValue(
+                enumType = LsiSymbolId.type(
+                    "org.babyfish.jimmer.compiler.lsi.ksp.KspLsiWorkspaceTest.ReflectionMode"
+                ),
+                entryName = "FIRST",
+            ),
+            annotation.arguments.getValue("nested").value,
+        )
+    }
 
     @Test
     fun `normalizes java getters and keeps kotlin property semantics`() {
@@ -120,6 +160,64 @@ class KspLsiWorkspaceTest {
         assertEquals(frozenKotlinProperty.name, javaProperty.name)
         assertTrue(defaultJavaWorkspace.declarationsOfType<LsiFunction>().none { function ->
             function.ownerId == ownerId && function.name == "isActive"
+        })
+    }
+
+    @Test
+    fun `freezes java fields separately from getter properties`() {
+        val sourceFile = file("/workspace/src/main/java/demo/Tree.java")
+        val stringDeclaration = classDeclaration(
+            qualifiedName = "java.lang.String",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA_LIB,
+            file = null,
+        )
+        val stringType = typeReference(type(stringDeclaration))
+        lateinit var treeDeclaration: KSClassDeclaration
+        val dataField = property(
+            name = "data",
+            parent = { treeDeclaration },
+            type = stringType,
+            annotations = emptySequence(),
+            modifiers = setOf(Modifier.PRIVATE),
+            origin = Origin.JAVA,
+            mutable = true,
+            documentation = "Backing field.",
+            file = sourceFile,
+            line = 3,
+        )
+        val dataGetter = function(
+            name = "getData",
+            parent = { treeDeclaration },
+            parameters = emptyList(),
+            modifiers = setOf(Modifier.PUBLIC),
+            returnType = stringType,
+            origin = Origin.JAVA,
+            file = sourceFile,
+        )
+        treeDeclaration = classDeclaration(
+            qualifiedName = "demo.Tree",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA,
+            file = sourceFile,
+            declarations = { listOf(dataField, dataGetter) },
+        )
+
+        val workspace = listOf(treeDeclaration).toLsiWorkspace(resolver(), frontendOptions)
+
+        val ownerId = LsiSymbolId.type("demo.Tree")
+        val fieldId = LsiSymbolId.field(ownerId, "data")
+        val propertyId = LsiSymbolId.property(ownerId, "data")
+        val frozenType = assertIs<LsiTypeDeclaration>(workspace[ownerId])
+        val frozenField = assertIs<LsiField>(workspace[fieldId])
+        val frozenProperty = assertIs<LsiProperty>(workspace[propertyId])
+        assertEquals(setOf(fieldId, propertyId), frozenType.memberIds.toSet())
+        assertEquals("Backing field.", frozenField.documentation)
+        assertTrue(frozenField.mutable)
+        assertEquals(LsiLanguage.JAVA, frozenField.origin.source?.language)
+        assertEquals("getData", frozenProperty.getterName)
+        assertTrue(workspace.declarationsOfType<LsiFunction>().none { function ->
+            function.ownerId == ownerId && function.name == "getData"
         })
     }
 
@@ -1045,6 +1143,9 @@ class KspLsiWorkspaceTest {
         annotations: Sequence<KSAnnotation>,
         modifiers: Set<Modifier> = emptySet(),
         overridee: () -> KSPropertyDeclaration? = { null },
+        origin: Origin = Origin.KOTLIN,
+        mutable: Boolean = false,
+        documentation: String? = null,
         file: KSFile,
         line: Int,
     ): KSPropertyDeclaration {
@@ -1059,11 +1160,12 @@ class KspLsiWorkspaceTest {
                 "getType" -> type
                 "getAnnotations" -> annotations
                 "getModifiers" -> modifiers
-                "getOrigin" -> Origin.KOTLIN
+                "getOrigin" -> origin
                 "getLocation" -> FileLocation(file.filePath, line)
-                "getDocString" -> null
+                "getDocString" -> documentation
                 "getGetter", "getSetter", "getExtensionReceiver" -> null
-                "isMutable", "getHasBackingField", "isDelegated" -> false
+                "isMutable" -> mutable
+                "getHasBackingField", "isDelegated" -> false
                 "findOverridee" -> overridee()
                 "accept" -> true
                 else -> defaultValue(method.returnType)

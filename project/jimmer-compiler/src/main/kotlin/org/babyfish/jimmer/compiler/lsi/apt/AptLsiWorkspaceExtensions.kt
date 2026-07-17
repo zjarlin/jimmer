@@ -371,7 +371,6 @@ class AptLsiWorkspaceBuilder(
             type = context.toLsiType(asType(), typeParameterIds),
             mutable = Modifier.FINAL !in modifiers,
             static = Modifier.STATIC in modifiers,
-            constant = constantValue != null,
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
             annotations = (declarationAnnotations + typeAnnotations).distinct(),

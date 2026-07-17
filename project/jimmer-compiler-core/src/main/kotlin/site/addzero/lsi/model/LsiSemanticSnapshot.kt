@@ -49,7 +49,6 @@ private fun LsiDeclaration.toSemanticSnapshotLine(options: LsiSemanticSnapshotOp
             type.toSemanticSignature(options),
             mutable.toString(),
             static.toString(),
-            constant.toString(),
             modality.name,
             visibility.name,
             overrides.toSemanticSnapshot(),
@@ -63,7 +62,6 @@ private fun LsiDeclaration.toSemanticSnapshotLine(options: LsiSemanticSnapshotOp
             type.toSemanticSignature(options),
             mutable.toString(),
             static.toString(),
-            constant.toString(),
             visibility.name,
             annotations.toSemanticSnapshot(options),
         ).joinToString("|")
