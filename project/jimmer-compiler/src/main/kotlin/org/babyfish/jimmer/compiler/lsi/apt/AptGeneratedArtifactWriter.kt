@@ -7,6 +7,7 @@ import javax.tools.StandardLocation
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 
 /**
@@ -19,11 +20,12 @@ class AptGeneratedArtifactWriter(
     fun write(
         artifact: GeneratedArtifact,
         currentRoundElements: Map<LsiSymbolId, Element>,
+        currentRoundSources: Map<LsiSymbolId, LsiSource>,
     ) {
         require(artifact.kind != ArtifactKind.KOTLIN_SOURCE) {
             "APT artifact writer cannot write Kotlin source: ${artifact.path}"
         }
-        val originatingElements = artifact.originatingElements(currentRoundElements)
+        val originatingElements = artifact.originatingElements(currentRoundElements, currentRoundSources)
         val output = when (artifact.kind) {
             ArtifactKind.JAVA_SOURCE -> filer.createSourceFile(
                 artifact.javaQualifiedName(),
@@ -44,12 +46,21 @@ class AptGeneratedArtifactWriter(
 
     private fun GeneratedArtifact.originatingElements(
         currentRoundElements: Map<LsiSymbolId, Element>,
+        currentRoundSources: Map<LsiSymbolId, LsiSource>,
     ): Array<Element> {
         val elements = originatingSymbols
             .sorted()
             .mapNotNull(currentRoundElements::get)
             .distinct()
         if (aggregationMode == ArtifactAggregationMode.ISOLATING) {
+            val representedSourcePaths = originatingSymbols
+                .mapNotNull(currentRoundSources::get)
+                .mapTo(hashSetOf(), LsiSource::path)
+            val unmatchedSources = originatingSources.filterNot { source -> source.path in representedSourcePaths }
+            require(unmatchedSources.isEmpty()) {
+                "APT isolating artifact cannot depend on non-APT sources: $path; " +
+                    unmatchedSources.joinToString { source -> source.path }
+            }
             require(elements.size == 1) {
                 "APT isolating artifact requires one current-round originating element: $path"
             }

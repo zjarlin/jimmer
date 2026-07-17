@@ -19,6 +19,8 @@ import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 
 class AptGeneratedArtifactWriterTest {
@@ -35,6 +37,10 @@ class AptGeneratedArtifactWriterTest {
             firstId to firstElement,
             secondId to secondElement,
         )
+        val currentRoundSources = mapOf(
+            firstId to LsiSource.of("/workspace/First.java", LsiLanguage.JAVA),
+            secondId to LsiSource.of("/workspace/Second.java", LsiLanguage.JAVA),
+        )
 
         writer.write(
             GeneratedArtifact.source(
@@ -43,8 +49,10 @@ class AptGeneratedArtifactWriterTest {
                 content = "package demo; public interface BookDraft {}",
                 aggregationMode = ArtifactAggregationMode.ISOLATING,
                 originatingSymbols = setOf(firstId),
+                originatingSources = setOf(currentRoundSources.getValue(firstId)),
             ),
             currentRoundElements,
+            currentRoundSources,
         )
         writer.write(
             GeneratedArtifact.create(
@@ -55,6 +63,7 @@ class AptGeneratedArtifactWriterTest {
                 originatingSymbols = setOf(secondId, firstId),
             ),
             currentRoundElements,
+            currentRoundSources,
         )
 
         val sourceCall = filer.sourceCalls.single()
@@ -88,6 +97,7 @@ class AptGeneratedArtifactWriterTest {
                     originatingSymbols = setOf(sourceId),
                 ),
                 emptyMap(),
+                emptyMap(),
             )
         }
         assertFailsWith<IllegalArgumentException> {
@@ -100,6 +110,22 @@ class AptGeneratedArtifactWriterTest {
                     originatingSymbols = setOf(sourceId),
                 ),
                 emptyMap(),
+                emptyMap(),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            writer.write(
+                GeneratedArtifact.source(
+                    kind = ArtifactKind.JAVA_SOURCE,
+                    qualifiedName = "demo.BookDraft",
+                    content = "package demo;",
+                    aggregationMode = ArtifactAggregationMode.ISOLATING,
+                    originatingSymbols = setOf(sourceId),
+                    originatingSources = setOf(LsiSource.of("catalog/src/main/dto/Book.dto")),
+                ),
+                mapOf(sourceId to element("Book")),
+                mapOf(sourceId to LsiSource.of("/workspace/Book.java", LsiLanguage.JAVA)),
             )
         }
 

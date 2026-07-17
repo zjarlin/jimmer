@@ -107,8 +107,15 @@ class AptLsiCompilerDriver(
         roundResult.diagnostics.forEach { diagnostic ->
             emitDiagnostic(diagnostic, currentRoundSymbols)
         }
+        val currentRoundSources = currentWorkspace.declarations.mapNotNull { declaration ->
+            declaration.origin.source?.let { source -> declaration.id to source }
+        }.toMap()
         roundResult.newArtifacts.forEach { artifact ->
-            writer.write(artifact, currentRoundSymbols.elementsById)
+            writer.write(
+                artifact = artifact,
+                currentRoundElements = currentRoundSymbols.elementsById,
+                currentRoundSources = currentRoundSources,
+            )
         }
         return roundResult
     }

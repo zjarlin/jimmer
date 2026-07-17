@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 
 /**
@@ -19,11 +20,12 @@ class KspGeneratedArtifactWriter(
     fun write(
         artifact: GeneratedArtifact,
         currentRoundFiles: Map<LsiSymbolId, KSFile>,
+        currentRoundSourceFiles: Collection<KSFile>,
     ) {
         require(artifact.kind != ArtifactKind.JAVA_SOURCE) {
             "KSP artifact writer cannot write Java source: ${artifact.path}"
         }
-        val dependencies = artifact.dependencies(currentRoundFiles)
+        val dependencies = artifact.dependencies(currentRoundFiles, currentRoundSourceFiles)
         val output = when (artifact.kind) {
             ArtifactKind.KOTLIN_SOURCE -> codeGenerator.createNewFileByPath(
                 dependencies = dependencies,
@@ -44,15 +46,26 @@ class KspGeneratedArtifactWriter(
 
     private fun GeneratedArtifact.dependencies(
         currentRoundFiles: Map<LsiSymbolId, KSFile>,
+        currentRoundSourceFiles: Collection<KSFile>,
     ): Dependencies {
-        val files = originatingSymbols
-            .sorted()
-            .mapNotNull(currentRoundFiles::get)
-            .distinct()
+        val allFiles = currentRoundSourceFiles.distinct()
+        val filesBySourcePath = allFiles.associateBy { file ->
+            LsiSource.of(file.filePath).path
+        }
+        val files = linkedSetOf<KSFile>()
+        originatingSymbols.sorted().mapNotNullTo(files, currentRoundFiles::get)
+        originatingSources.sorted().mapNotNullTo(files) { source -> filesBySourcePath[source.path] }
+        val unmatchedSources = originatingSources.filterNot { source -> source.path in filesBySourcePath }
         if (aggregationMode == ArtifactAggregationMode.ISOLATING) {
+            require(unmatchedSources.isEmpty()) {
+                "KSP isolating artifact cannot depend on non-KSP sources: $path; " +
+                    unmatchedSources.joinToString { source -> source.path }
+            }
             require(files.size == 1) {
                 "KSP isolating artifact requires one current-round originating file: $path"
             }
+        } else if (unmatchedSources.isNotEmpty()) {
+            files += allFiles
         }
         return Dependencies(
             aggregationMode == ArtifactAggregationMode.AGGREGATING,

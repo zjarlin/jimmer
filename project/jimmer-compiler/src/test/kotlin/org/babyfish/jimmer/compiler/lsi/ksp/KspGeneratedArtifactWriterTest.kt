@@ -16,6 +16,8 @@ import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 
 class KspGeneratedArtifactWriterTest {
@@ -26,8 +28,9 @@ class KspGeneratedArtifactWriterTest {
         val writer = KspGeneratedArtifactWriter(codeGenerator)
         val firstId = LsiSymbolId.type("demo.First")
         val secondId = LsiSymbolId.type("demo.Second")
-        val firstFile = file("First.kt")
-        val secondFile = file("Second.kt")
+        val firstFile = file("/workspace/First.kt")
+        val secondFile = file("/workspace/Second.kt")
+        val thirdFile = file("/workspace/Third.kt")
         val currentRoundFiles = mapOf(
             firstId to firstFile,
             secondId to secondFile,
@@ -40,8 +43,10 @@ class KspGeneratedArtifactWriterTest {
                 content = "package demo\ninterface BookDraft",
                 aggregationMode = ArtifactAggregationMode.ISOLATING,
                 originatingSymbols = setOf(firstId),
+                originatingSources = setOf(LsiSource.of("/workspace/First.kt", LsiLanguage.KOTLIN)),
             ),
             currentRoundFiles,
+            listOf(firstFile, secondFile),
         )
         writer.write(
             GeneratedArtifact.create(
@@ -50,8 +55,10 @@ class KspGeneratedArtifactWriterTest {
                 content = "schema",
                 aggregationMode = ArtifactAggregationMode.AGGREGATING,
                 originatingSymbols = setOf(secondId, firstId),
+                originatingSources = setOf(LsiSource.of("catalog/src/main/dto/Book.dto")),
             ),
             currentRoundFiles,
+            listOf(firstFile, secondFile, thirdFile),
         )
 
         val sourceCall = codeGenerator.calls[0]
@@ -66,9 +73,10 @@ class KspGeneratedArtifactWriterTest {
         assertEquals("", resourceCall.extension)
         assertEquals("schema", resourceCall.content())
         assertTrue(resourceCall.dependencies.aggregating)
-        assertEquals(2, resourceCall.dependencies.originatingFiles.size)
+        assertEquals(3, resourceCall.dependencies.originatingFiles.size)
         assertSame(firstFile, resourceCall.dependencies.originatingFiles[0])
         assertSame(secondFile, resourceCall.dependencies.originatingFiles[1])
+        assertSame(thirdFile, resourceCall.dependencies.originatingFiles[2])
     }
 
     @Test
@@ -87,6 +95,7 @@ class KspGeneratedArtifactWriterTest {
                     originatingSymbols = setOf(sourceId),
                 ),
                 emptyMap(),
+                emptyList(),
             )
         }
         assertFailsWith<IllegalArgumentException> {
@@ -99,13 +108,29 @@ class KspGeneratedArtifactWriterTest {
                     originatingSymbols = setOf(sourceId),
                 ),
                 emptyMap(),
+                emptyList(),
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            writer.write(
+                GeneratedArtifact.source(
+                    kind = ArtifactKind.KOTLIN_SOURCE,
+                    qualifiedName = "demo.BookDraft",
+                    content = "package demo",
+                    aggregationMode = ArtifactAggregationMode.ISOLATING,
+                    originatingSymbols = setOf(sourceId),
+                    originatingSources = setOf(LsiSource.of("catalog/src/main/dto/Book.dto")),
+                ),
+                mapOf(sourceId to file("/workspace/Book.kt")),
+                listOf(file("/workspace/Book.kt")),
             )
         }
 
         assertTrue(codeGenerator.calls.isEmpty())
     }
 
-    private fun file(label: String): KSFile {
+    private fun file(path: String): KSFile {
         lateinit var instance: Any
         instance = Proxy.newProxyInstance(
             KSFile::class.java.classLoader,
@@ -114,7 +139,8 @@ class KspGeneratedArtifactWriterTest {
             when (method.name) {
                 "equals" -> instance === arguments?.firstOrNull()
                 "hashCode" -> System.identityHashCode(instance)
-                "toString" -> label
+                "getFilePath" -> path
+                "toString" -> path
                 else -> null
             }
         }

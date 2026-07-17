@@ -97,7 +97,11 @@ class KspLsiCompilerDriver(
             emitDiagnostic(diagnostic, currentRoundSymbols.annotatedById)
         }
         roundResult.newArtifacts.forEach { artifact ->
-            writer.write(artifact, currentRoundSymbols.filesById)
+            writer.write(
+                artifact = artifact,
+                currentRoundFiles = currentRoundSymbols.filesById,
+                currentRoundSourceFiles = currentRoundSymbols.sourceFiles,
+            )
         }
         return deferredSymbols(currentRoundSymbols, roundResult)
     }
@@ -122,7 +126,11 @@ class KspLsiCompilerDriver(
             emitDiagnostic(diagnostic, emptyMap())
         }
         roundResult.newArtifacts.forEach { artifact ->
-            writer.write(artifact, emptyMap())
+            writer.write(
+                artifact = artifact,
+                currentRoundFiles = emptyMap(),
+                currentRoundSourceFiles = emptyList(),
+            )
         }
         return roundResult
     }
