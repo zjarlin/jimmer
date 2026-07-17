@@ -325,9 +325,18 @@ class JimmerModulePrecompilerTest {
                     id = LsiSymbolId.type(qualifiedName),
                     qualifiedName = qualifiedName,
                     kind = kind,
+                    documentation = null,
+                    annotations = emptyList(),
                     typeParameterIds = emptyList(),
                     superTypeIds = emptyList(),
                     props = emptyList(),
+                    primarySuperTypeId = null,
+                    inheritanceRootTypeId = null,
+                    inheritanceStrategy = null,
+                    joinedTableDissociateAction = null,
+                    instantiable = kind == JimmerImmutableTypeKind.ENTITY,
+                    discriminatorValue = null,
+                    discriminatorPropId = null,
                 )
             },
         )

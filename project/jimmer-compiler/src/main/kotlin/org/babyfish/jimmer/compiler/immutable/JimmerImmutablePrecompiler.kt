@@ -48,6 +48,10 @@ class JimmerImmutablePrecompiler {
         }
         val semanticTypeIds = managedTypeClosure(targetTypeIds, typeDeclarations, kindByTypeId)
         val typeSystem = LsiTypeSystem(workspace)
+        val hierarchyResolver = JimmerImmutableHierarchyResolver(
+            typeDeclarations.associateBy(LsiTypeDeclaration::id),
+            kindByTypeId,
+        )
         val types = typeDeclarations
             .filter { type -> type.id in semanticTypeIds }
             .map { type ->
@@ -58,6 +62,7 @@ class JimmerImmutablePrecompiler {
                     kindByTypeId = kindByTypeId,
                     typeSystem = typeSystem,
                     workspace = workspace,
+                    hierarchy = hierarchyResolver.resolve(type.id),
                 )
             }
             .sortedBy(JimmerImmutableType::id)
@@ -113,6 +118,7 @@ class JimmerImmutablePrecompiler {
         kindByTypeId: Map<LsiSymbolId, JimmerImmutableTypeKind>,
         typeSystem: LsiTypeSystem,
         workspace: LsiWorkspace,
+        hierarchy: JimmerImmutableHierarchy,
     ): JimmerImmutableType {
         val resolvedProps = try {
             typeSystem.effectiveProperties(type.id)
@@ -132,32 +138,156 @@ class JimmerImmutablePrecompiler {
                 workspace = workspace,
             )
         }
-        val directSuperTypeIds = type.superTypes
-            .filterIsInstance<LsiDeclaredType>()
-            .map(LsiDeclaredType::declarationId)
-            .filter(kindByTypeId::containsKey)
-        val primarySuperTypeIds = directSuperTypeIds.filter { superTypeId ->
-            kindByTypeId.getValue(superTypeId) != JimmerImmutableTypeKind.MAPPED_SUPERCLASS
-        }
-        if (primarySuperTypeIds.size > 1) {
-            throw JimmerImmutablePrecompileException(
-                declarationId = type.id,
-                message = "Immutable type '${type.qualifiedName}' cannot have more than one primary super type: " +
-                    primarySuperTypeIds.joinToString { superTypeId -> superTypeId.value },
-            )
-        }
         val orderedProps = orderResolvedProperties(type, resolvedProps, workspace)
+        val props = orderedProps.map { property ->
+            property.toImmutableProp(type.id, kindByTypeId, workspace, typeSystem)
+        }
+        val discriminatorPropId = discriminatorPropId(
+            type = type,
+            kind = kind,
+            hierarchy = hierarchy,
+            props = props,
+            typeSystem = typeSystem,
+            workspace = workspace,
+        )
         return JimmerImmutableType(
             id = type.id,
             qualifiedName = type.qualifiedName,
             kind = kind,
+            documentation = type.documentation,
+            annotations = type.annotations,
             typeParameterIds = type.typeParameters.map { parameter -> parameter.id },
-            superTypeIds = directSuperTypeIds,
-            props = orderedProps.map { property ->
-                property.toImmutableProp(type.id, kindByTypeId, workspace, typeSystem)
-            },
-            primarySuperTypeId = primarySuperTypeIds.singleOrNull(),
+            superTypeIds = hierarchy.directSuperTypeIds,
+            props = props,
+            primarySuperTypeId = hierarchy.primarySuperTypeId,
+            inheritanceRootTypeId = hierarchy.inheritanceRootTypeId,
+            inheritanceStrategy = hierarchy.inheritanceStrategy,
+            joinedTableDissociateAction = hierarchy.joinedTableDissociateAction,
+            instantiable = hierarchy.instantiable,
+            discriminatorValue = hierarchy.discriminatorValue,
+            discriminatorPropId = discriminatorPropId,
         )
+    }
+
+    private fun discriminatorPropId(
+        type: LsiTypeDeclaration,
+        kind: JimmerImmutableTypeKind,
+        hierarchy: JimmerImmutableHierarchy,
+        props: List<JimmerImmutableProp>,
+        typeSystem: LsiTypeSystem,
+        workspace: LsiWorkspace,
+    ): LsiSymbolId? {
+        if (kind != JimmerImmutableTypeKind.ENTITY) {
+            return null
+        }
+        val discriminatorProps = props.filter { prop ->
+            prop.annotations.hasAnnotation(DISCRIMINATOR_ANNOTATION)
+        }
+        discriminatorProps.forEach { prop ->
+            validateDiscriminatorProp(prop, workspace)
+        }
+        val inheritanceRootTypeId = hierarchy.inheritanceRootTypeId
+        if (inheritanceRootTypeId == null) {
+            val discriminatorProp = discriminatorProps.firstOrNull() ?: return null
+            throw JimmerImmutablePrecompileException(
+                declarationId = discriminatorProp.declarationId,
+                message = "Immutable property '${discriminatorProp.declarationId.value}' decorated by " +
+                    "@${DISCRIMINATOR_ANNOTATION.value} can only be used by an inheritance entity",
+            )
+        }
+        if (inheritanceRootTypeId != type.id) {
+            val declaredDiscriminatorProp = discriminatorProps.firstOrNull { prop ->
+                prop.declaringTypeId == type.id
+            }
+            if (declaredDiscriminatorProp != null) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = declaredDiscriminatorProp.declarationId,
+                    message = "Immutable property '${declaredDiscriminatorProp.declarationId.value}' decorated by " +
+                        "@${DISCRIMINATOR_ANNOTATION.value} cannot be declared by an inheritance derived type",
+                )
+            }
+            val rootDiscriminatorOriginalId = rootDiscriminatorOriginalId(
+                rootTypeId = inheritanceRootTypeId,
+                typeSystem = typeSystem,
+            )
+            val invalidDiscriminatorProp = discriminatorProps.firstOrNull { prop ->
+                prop.overrideChain.lastOrNull() != rootDiscriminatorOriginalId
+            }
+            if (invalidDiscriminatorProp != null) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = invalidDiscriminatorProp.declarationId,
+                    message = "Immutable property '${invalidDiscriminatorProp.declarationId.value}' decorated by " +
+                        "@${DISCRIMINATOR_ANNOTATION.value} cannot be declared or inherited by an inheritance " +
+                        "derived type except from its inheritance root",
+                )
+            }
+            if (discriminatorProps.size != 1) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = type.id,
+                    message = "Immutable inheritance derived type '${type.qualifiedName}' must have exactly one " +
+                        "discriminator property inherited from its inheritance root",
+                )
+            }
+            return discriminatorProps.single().id
+        }
+        if (discriminatorProps.isEmpty()) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "Immutable inheritance root '${type.qualifiedName}' must declare or inherit one property " +
+                    "decorated by @${DISCRIMINATOR_ANNOTATION.value}",
+            )
+        }
+        if (discriminatorProps.size > 1) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = discriminatorProps[1].declarationId,
+                message = "Immutable inheritance root '${type.qualifiedName}' has multiple discriminator properties",
+            )
+        }
+        return discriminatorProps.single().id
+    }
+
+    private fun rootDiscriminatorOriginalId(
+        rootTypeId: LsiSymbolId,
+        typeSystem: LsiTypeSystem,
+    ): LsiSymbolId {
+        val rootDiscriminatorProps = try {
+            typeSystem.effectiveProperties(rootTypeId)
+        } catch (exception: IllegalArgumentException) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = rootTypeId,
+                message = exception.message ?: "Cannot resolve immutable inheritance root '${rootTypeId.value}'",
+            )
+        }.filter { prop ->
+            prop.annotations.hasAnnotation(DISCRIMINATOR_ANNOTATION)
+        }
+        if (rootDiscriminatorProps.size != 1) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = rootTypeId,
+                message = "Immutable inheritance root '${rootTypeId.value}' must have exactly one discriminator property",
+            )
+        }
+        return rootDiscriminatorProps.single().overrideChain.last().id
+    }
+
+    private fun validateDiscriminatorProp(
+        prop: JimmerImmutableProp,
+        workspace: LsiWorkspace,
+    ) {
+        val declaredType = prop.type as? LsiDeclaredType
+        val validType = declaredType != null && (
+            declaredType.arguments.isEmpty() && declaredType.declarationId in STRING_TYPE_IDS ||
+                (workspace[declaredType.declarationId] as? LsiTypeDeclaration)?.kind == LsiTypeDeclarationKind.ENUM
+        )
+        val conflictingPrimaryAnnotation = prop.annotations.firstOrNull { annotation ->
+            annotation.type in PRIMARY_PROP_ANNOTATIONS && annotation.type != DISCRIMINATOR_ANNOTATION
+        }
+        if (prop.list || prop.association || !validType || conflictingPrimaryAnnotation != null) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = prop.declarationId,
+                message = "Immutable property '${prop.declarationId.value}' decorated by " +
+                    "@${DISCRIMINATOR_ANNOTATION.value} must be a scalar string or enum property",
+            )
+        }
     }
 
     private fun validateOverride(
@@ -272,6 +402,296 @@ class JimmerImmutablePrecompiler {
             .zip(resolvedSuperType.arguments)
             .associate { (parameter, argument) -> parameter.id to argument }
         return typeSystem.substitute(inheritedType, substitutions)
+    }
+}
+
+private data class JimmerImmutableHierarchy(
+    val directSuperTypeIds: List<LsiSymbolId>,
+    val primarySuperTypeId: LsiSymbolId?,
+    val inheritanceRootTypeId: LsiSymbolId?,
+    val inheritanceStrategy: JimmerInheritanceStrategy?,
+    val joinedTableDissociateAction: JimmerJoinedTableDissociateAction?,
+    val instantiable: Boolean,
+    val discriminatorValue: String?,
+)
+
+private class JimmerImmutableHierarchyResolver(
+    private val declarationsById: Map<LsiSymbolId, LsiTypeDeclaration>,
+    private val kindByTypeId: Map<LsiSymbolId, JimmerImmutableTypeKind>,
+) {
+
+    private val cache = mutableMapOf<LsiSymbolId, JimmerImmutableHierarchy>()
+
+    private val resolving = linkedSetOf<LsiSymbolId>()
+
+    fun resolve(typeId: LsiSymbolId): JimmerImmutableHierarchy {
+        cache[typeId]?.let { hierarchy -> return hierarchy }
+        val type = declarationsById[typeId]
+            ?: throw JimmerImmutablePrecompileException(
+                declarationId = typeId,
+                recoverable = true,
+                message = "Cannot resolve immutable type '${typeId.value}'",
+            )
+        if (!resolving.add(typeId)) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = typeId,
+                message = "Immutable inheritance cycle detected: " +
+                    (resolving + typeId).joinToString(" -> ") { id -> id.value },
+            )
+        }
+        val hierarchy = try {
+            resolve(type, kindByTypeId.getValue(typeId))
+        } finally {
+            resolving.remove(typeId)
+        }
+        cache[typeId] = hierarchy
+        return hierarchy
+    }
+
+    private fun resolve(
+        type: LsiTypeDeclaration,
+        kind: JimmerImmutableTypeKind,
+    ): JimmerImmutableHierarchy {
+        val directSuperTypeIds = type.superTypes
+            .filterIsInstance<LsiDeclaredType>()
+            .map(LsiDeclaredType::declarationId)
+            .filter(kindByTypeId::containsKey)
+        val primarySuperTypeIds = directSuperTypeIds.filter { superTypeId ->
+            kindByTypeId.getValue(superTypeId) != JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+        }
+        if (primarySuperTypeIds.size > 1) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "Immutable type '${type.qualifiedName}' cannot have more than one primary super type: " +
+                    primarySuperTypeIds.joinToString { superTypeId -> superTypeId.value },
+            )
+        }
+        val primarySuperTypeId = primarySuperTypeIds.singleOrNull()
+        val inheritance = type.annotations.annotation(INHERITANCE_ANNOTATION)
+        val discriminatorValue = type.annotations.annotation(DISCRIMINATOR_VALUE_ANNOTATION)
+        if (kind != JimmerImmutableTypeKind.ENTITY) {
+            validateNonEntityAnnotations(type, inheritance, discriminatorValue)
+            return JimmerImmutableHierarchy(
+                directSuperTypeIds = directSuperTypeIds,
+                primarySuperTypeId = primarySuperTypeId,
+                inheritanceRootTypeId = null,
+                inheritanceStrategy = null,
+                joinedTableDissociateAction = null,
+                instantiable = false,
+                discriminatorValue = null,
+            )
+        }
+        val primaryEntitySuperTypeId = primarySuperTypeId?.takeIf { superTypeId ->
+            kindByTypeId[superTypeId] == JimmerImmutableTypeKind.ENTITY
+        }
+        if (primaryEntitySuperTypeId != null) {
+            return derivedEntityHierarchy(
+                type = type,
+                directSuperTypeIds = directSuperTypeIds,
+                primarySuperTypeId = primarySuperTypeId,
+                primaryEntitySuperTypeId = primaryEntitySuperTypeId,
+                inheritance = inheritance,
+                discriminatorValue = discriminatorValue,
+            )
+        }
+        if (inheritance != null) {
+            return rootEntityHierarchy(
+                type = type,
+                directSuperTypeIds = directSuperTypeIds,
+                primarySuperTypeId = primarySuperTypeId,
+                inheritance = inheritance,
+                discriminatorValue = discriminatorValue,
+            )
+        }
+        if (discriminatorValue != null) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "@${DISCRIMINATOR_VALUE_ANNOTATION.value} can only be declared by inheritance entities",
+            )
+        }
+        return JimmerImmutableHierarchy(
+            directSuperTypeIds = directSuperTypeIds,
+            primarySuperTypeId = primarySuperTypeId,
+            inheritanceRootTypeId = null,
+            inheritanceStrategy = null,
+            joinedTableDissociateAction = null,
+            instantiable = determineInstantiable(type, null),
+            discriminatorValue = null,
+        )
+    }
+
+    private fun validateNonEntityAnnotations(
+        type: LsiTypeDeclaration,
+        inheritance: LsiAnnotation?,
+        discriminatorValue: LsiAnnotation?,
+    ) {
+        if (inheritance != null) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "@${INHERITANCE_ANNOTATION.value} can only be declared by an entity type",
+            )
+        }
+        if (discriminatorValue != null) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "@${DISCRIMINATOR_VALUE_ANNOTATION.value} can only be declared by an entity type",
+            )
+        }
+    }
+
+    private fun derivedEntityHierarchy(
+        type: LsiTypeDeclaration,
+        directSuperTypeIds: List<LsiSymbolId>,
+        primarySuperTypeId: LsiSymbolId,
+        primaryEntitySuperTypeId: LsiSymbolId,
+        inheritance: LsiAnnotation?,
+        discriminatorValue: LsiAnnotation?,
+    ): JimmerImmutableHierarchy {
+        if (inheritance != null) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "@${INHERITANCE_ANNOTATION.value} can only be declared by an inheritance root type",
+            )
+        }
+        val rootTypeId = resolve(primaryEntitySuperTypeId).inheritanceRootTypeId
+            ?: throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "Immutable entity '${type.qualifiedName}' cannot inherit entity " +
+                    "'${primaryEntitySuperTypeId.value}' because it is not an inheritance root or derived type",
+            )
+        val instantiable = determineInstantiable(type, rootTypeId)
+        validateDiscriminatorValue(type, discriminatorValue, instantiable)
+        return JimmerImmutableHierarchy(
+            directSuperTypeIds = directSuperTypeIds,
+            primarySuperTypeId = primarySuperTypeId,
+            inheritanceRootTypeId = rootTypeId,
+            inheritanceStrategy = null,
+            joinedTableDissociateAction = null,
+            instantiable = instantiable,
+            discriminatorValue = discriminatorValue(type, discriminatorValue, instantiable),
+        )
+    }
+
+    private fun rootEntityHierarchy(
+        type: LsiTypeDeclaration,
+        directSuperTypeIds: List<LsiSymbolId>,
+        primarySuperTypeId: LsiSymbolId?,
+        inheritance: LsiAnnotation,
+        discriminatorValue: LsiAnnotation?,
+    ): JimmerImmutableHierarchy {
+        val strategy = inheritance.enumEntryName(
+            name = "strategy",
+            expectedEnumType = INHERITANCE_TYPE,
+            sourceId = type.id,
+        )?.let { entryName ->
+            try {
+                JimmerInheritanceStrategy.valueOf(entryName)
+            } catch (exception: IllegalArgumentException) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = type.id,
+                    message = "Unsupported immutable inheritance strategy '$entryName'",
+                )
+            }
+        } ?: JimmerInheritanceStrategy.SINGLE_TABLE
+        val joinedTableDissociateAction = inheritance.enumEntryName(
+            name = "joinedTableDissociateAction",
+            expectedEnumType = JOINED_TABLE_DISSOCIATE_ACTION_TYPE,
+            sourceId = type.id,
+        )?.let { entryName ->
+            try {
+                JimmerJoinedTableDissociateAction.valueOf(entryName)
+            } catch (exception: IllegalArgumentException) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = type.id,
+                    message = "Unsupported joined table dissociate action '$entryName'",
+                )
+            }
+        } ?: JimmerJoinedTableDissociateAction.DELETE
+        if (
+            strategy != JimmerInheritanceStrategy.JOINED &&
+            joinedTableDissociateAction != JimmerJoinedTableDissociateAction.DELETE
+        ) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "The joinedTableDissociateAction of @${INHERITANCE_ANNOTATION.value} can only be " +
+                    "LAX when the inheritance strategy is JOINED",
+            )
+        }
+        val instantiable = determineInstantiable(type, type.id)
+        validateDiscriminatorValue(type, discriminatorValue, instantiable)
+        return JimmerImmutableHierarchy(
+            directSuperTypeIds = directSuperTypeIds,
+            primarySuperTypeId = primarySuperTypeId,
+            inheritanceRootTypeId = type.id,
+            inheritanceStrategy = strategy,
+            joinedTableDissociateAction = joinedTableDissociateAction,
+            instantiable = instantiable,
+            discriminatorValue = discriminatorValue(type, discriminatorValue, instantiable),
+        )
+    }
+
+    private fun determineInstantiable(
+        type: LsiTypeDeclaration,
+        inheritanceRootTypeId: LsiSymbolId?,
+    ): Boolean {
+        val entity = requireNotNull(type.annotations.annotation(ENTITY_ANNOTATION)) {
+            "Immutable entity '${type.qualifiedName}' must be decorated by @${ENTITY_ANNOTATION.value}"
+        }
+        val entryName = entity.enumEntryName(
+            name = "instantiability",
+            expectedEnumType = ENTITY_INSTANTIABILITY_TYPE,
+            sourceId = type.id,
+        ) ?: "AUTO"
+        return when (entryName) {
+            "AUTO" -> inheritanceRootTypeId == null || inheritanceRootTypeId != type.id
+            "ABSTRACT" -> {
+                if (inheritanceRootTypeId == null) {
+                    throw JimmerImmutablePrecompileException(
+                        declarationId = type.id,
+                        message = "@${ENTITY_ANNOTATION.value}(instantiability = ABSTRACT) can only be used by " +
+                            "inheritance entity types",
+                    )
+                }
+                false
+            }
+            "INSTANTIABLE" -> true
+            else -> throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "Unsupported entity instantiability '$entryName'",
+            )
+        }
+    }
+
+    private fun validateDiscriminatorValue(
+        type: LsiTypeDeclaration,
+        discriminatorValue: LsiAnnotation?,
+        instantiable: Boolean,
+    ) {
+        if (!instantiable && discriminatorValue != null) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "@${DISCRIMINATOR_VALUE_ANNOTATION.value} can only be declared by instantiable " +
+                    "inheritance entity types",
+            )
+        }
+    }
+
+    private fun discriminatorValue(
+        type: LsiTypeDeclaration,
+        annotation: LsiAnnotation?,
+        instantiable: Boolean,
+    ): String? {
+        if (!instantiable) {
+            return null
+        }
+        if (annotation == null) {
+            return type.name
+        }
+        return annotation.stringValue("value")
+            ?: throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "@${DISCRIMINATOR_VALUE_ANNOTATION.value} must declare its typed string value",
+            )
     }
 }
 
@@ -588,6 +1008,7 @@ private fun LsiSymbolId?.toPrimaryMapping(): JimmerImmutablePrimaryMapping? {
         ID_ANNOTATION -> JimmerImmutablePrimaryMapping.ID
         VERSION_ANNOTATION -> JimmerImmutablePrimaryMapping.VERSION
         LOGICAL_DELETED_ANNOTATION -> JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+        DISCRIMINATOR_ANNOTATION -> JimmerImmutablePrimaryMapping.DISCRIMINATOR
         ONE_TO_ONE_ANNOTATION,
         MANY_TO_ONE_ANNOTATION,
         ONE_TO_MANY_ANNOTATION,
@@ -616,6 +1037,26 @@ private fun List<LsiAnnotation>.hasAnnotation(type: LsiSymbolId): Boolean {
 
 private fun LsiAnnotation.stringValue(name: String): String? {
     return (arguments[name]?.value as? LsiAnnotationValue.StringValue)?.value
+}
+
+private fun LsiAnnotation.enumEntryName(
+    name: String,
+    expectedEnumType: LsiSymbolId,
+    sourceId: LsiSymbolId,
+): String? {
+    val argument = arguments[name] ?: return null
+    val enumValue = argument.value as? LsiAnnotationValue.EnumValue
+        ?: throw JimmerImmutablePrecompileException(
+            declarationId = sourceId,
+            message = "Annotation argument '${type.value}.$name' must be a typed enum value",
+        )
+    if (enumValue.enumType != expectedEnumType) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = sourceId,
+            message = "Annotation argument '${type.value}.$name' must use enum '${expectedEnumType.value}'",
+        )
+    }
+    return enumValue.entryName
 }
 
 private fun LsiAnnotation.classTypeId(name: String): LsiSymbolId? {
@@ -678,6 +1119,16 @@ private val ENTITY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity
 private val MAPPED_SUPERCLASS_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
 private val EMBEDDABLE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Embeddable")
+private val INHERITANCE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Inheritance")
+private val DISCRIMINATOR_VALUE_ANNOTATION =
+    LsiSymbolId.type("org.babyfish.jimmer.sql.DiscriminatorValue")
+private val DISCRIMINATOR_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Discriminator")
+
+private val ENTITY_INSTANTIABILITY_TYPE =
+    LsiSymbolId.type("org.babyfish.jimmer.sql.EntityInstantiability")
+private val INHERITANCE_TYPE = LsiSymbolId.type("org.babyfish.jimmer.sql.InheritanceType")
+private val JOINED_TABLE_DISSOCIATE_ACTION_TYPE =
+    LsiSymbolId.type("org.babyfish.jimmer.sql.JoinedTableDissociateAction")
 
 private val ID_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
 private val VERSION_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Version")
@@ -712,6 +1163,7 @@ private val PRIMARY_PROP_ANNOTATIONS = setOf(
     ID_ANNOTATION,
     VERSION_ANNOTATION,
     LOGICAL_DELETED_ANNOTATION,
+    DISCRIMINATOR_ANNOTATION,
     ONE_TO_ONE_ANNOTATION,
     MANY_TO_ONE_ANNOTATION,
     ONE_TO_MANY_ANNOTATION,
@@ -726,6 +1178,11 @@ private val LIST_TYPE_IDS = setOf(
     "java.util.List",
     "kotlin.collections.List",
     "kotlin.collections.MutableList",
+).mapTo(linkedSetOf(), LsiSymbolId::type)
+
+private val STRING_TYPE_IDS = setOf(
+    "java.lang.String",
+    "kotlin.String",
 ).mapTo(linkedSetOf(), LsiSymbolId::type)
 
 private val NULLABLE_ANNOTATIONS = setOf(

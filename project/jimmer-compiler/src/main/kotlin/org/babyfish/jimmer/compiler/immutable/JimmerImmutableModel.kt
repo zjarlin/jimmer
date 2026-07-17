@@ -12,15 +12,56 @@ data class JimmerImmutableType(
     val id: LsiSymbolId,
     val qualifiedName: String,
     val kind: JimmerImmutableTypeKind,
+    val documentation: String?,
+    val annotations: List<LsiAnnotation>,
     val typeParameterIds: List<LsiSymbolId>,
     val superTypeIds: List<LsiSymbolId>,
     val props: List<JimmerImmutableProp>,
-    val primarySuperTypeId: LsiSymbolId? = null,
+    val primarySuperTypeId: LsiSymbolId?,
+    val inheritanceRootTypeId: LsiSymbolId?,
+    val inheritanceStrategy: JimmerInheritanceStrategy?,
+    val joinedTableDissociateAction: JimmerJoinedTableDissociateAction?,
+    val instantiable: Boolean,
+    val discriminatorValue: String?,
+    val discriminatorPropId: LsiSymbolId?,
 ) {
 
     init {
         require(primarySuperTypeId == null || primarySuperTypeId in superTypeIds) {
             "Primary immutable super type must be one of direct super types: ${id.value}"
+        }
+        require(!instantiable || kind == JimmerImmutableTypeKind.ENTITY) {
+            "Only immutable entity type can be instantiable: ${id.value}"
+        }
+        require(inheritanceRootTypeId == null || kind == JimmerImmutableTypeKind.ENTITY) {
+            "Only immutable entity type can have an inheritance root: ${id.value}"
+        }
+        require(inheritanceStrategy == null || inheritanceRootTypeId == id) {
+            "Only immutable inheritance root can declare an inheritance strategy: ${id.value}"
+        }
+        require(inheritanceRootTypeId != id || inheritanceStrategy != null) {
+            "Immutable inheritance root must declare an inheritance strategy: ${id.value}"
+        }
+        require(joinedTableDissociateAction == null || inheritanceStrategy != null) {
+            "Only immutable inheritance root can declare a joined table dissociate action: ${id.value}"
+        }
+        require(inheritanceStrategy == null || joinedTableDissociateAction != null) {
+            "Immutable inheritance root must declare a joined table dissociate action: ${id.value}"
+        }
+        require(
+            joinedTableDissociateAction != JimmerJoinedTableDissociateAction.LAX ||
+                inheritanceStrategy == JimmerInheritanceStrategy.JOINED
+        ) {
+            "LAX joined table dissociate action requires JOINED inheritance: ${id.value}"
+        }
+        require(discriminatorValue == null || inheritanceRootTypeId != null && instantiable) {
+            "Only instantiable inheritance entity can have a discriminator value: ${id.value}"
+        }
+        require((discriminatorPropId == null) == (inheritanceRootTypeId == null)) {
+            "Immutable inheritance entity must have exactly one discriminator property: ${id.value}"
+        }
+        require(discriminatorPropId == null || props.any { prop -> prop.id == discriminatorPropId }) {
+            "Immutable discriminator property must belong to its type: ${id.value}"
         }
     }
 }
@@ -72,10 +113,21 @@ enum class JimmerImmutableTypeKind {
     EMBEDDABLE,
 }
 
+enum class JimmerInheritanceStrategy {
+    SINGLE_TABLE,
+    JOINED,
+}
+
+enum class JimmerJoinedTableDissociateAction {
+    DELETE,
+    LAX,
+}
+
 enum class JimmerImmutablePrimaryMapping {
     ID,
     VERSION,
     LOGICAL_DELETED,
+    DISCRIMINATOR,
     ASSOCIATION,
     FORMULA,
     TRANSIENT,

@@ -373,9 +373,18 @@ class JimmerModuleCompilerFeatureProviderTest {
                         id = typeId,
                         qualifiedName = qualifiedName,
                         kind = JimmerImmutableTypeKind.ENTITY,
+                        documentation = null,
+                        annotations = emptyList(),
                         typeParameterIds = emptyList(),
                         superTypeIds = emptyList(),
                         props = emptyList(),
+                        primarySuperTypeId = null,
+                        inheritanceRootTypeId = null,
+                        inheritanceStrategy = null,
+                        joinedTableDissociateAction = null,
+                        instantiable = true,
+                        discriminatorValue = null,
+                        discriminatorPropId = null,
                     )
                 )
             ),

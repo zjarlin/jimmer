@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -63,6 +64,278 @@ class JimmerImmutablePrecompilerTest {
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
         assertEquals(64, aptSchema.fingerprint().length)
+    }
+
+    @Test
+    fun `apt and ksp inheritance fixtures preserve equivalent type metadata`() {
+        val aptSchema = JimmerImmutablePrecompiler().compile(inheritanceWorkspace(LsiLanguage.JAVA))
+        val kspSchema = JimmerImmutablePrecompiler().compile(inheritanceWorkspace(LsiLanguage.KOTLIN))
+        val rootId = LsiSymbolId.type("demo.Account")
+        val childId = LsiSymbolId.type("demo.AdminAccount")
+        val aptRoot = aptSchema.types.single { type -> type.id == rootId }
+        val aptChild = aptSchema.types.single { type -> type.id == childId }
+
+        assertEquals("账户继承根。\n用于多态 DTO。", aptRoot.documentation)
+        assertEquals(
+            listOf(ENTITY, INHERITANCE, DISCRIMINATOR_VALUE, API_MODEL),
+            aptRoot.annotations.map(LsiAnnotation::type),
+        )
+        assertTrue(aptRoot.instantiable)
+        assertEquals(rootId, aptRoot.inheritanceRootTypeId)
+        assertEquals(JimmerInheritanceStrategy.JOINED, aptRoot.inheritanceStrategy)
+        assertEquals(JimmerJoinedTableDissociateAction.DELETE, aptRoot.joinedTableDissociateAction)
+        assertEquals("ACCOUNT", aptRoot.discriminatorValue)
+        assertEquals(LsiSymbolId.property(rootId, "kind"), aptRoot.discriminatorPropId)
+        assertEquals(JimmerImmutablePrimaryMapping.DISCRIMINATOR, aptRoot.props.single().primaryMapping)
+
+        assertEquals(rootId, aptChild.primarySuperTypeId)
+        assertEquals(rootId, aptChild.inheritanceRootTypeId)
+        assertEquals(null, aptChild.inheritanceStrategy)
+        assertEquals(null, aptChild.joinedTableDissociateAction)
+        assertTrue(aptChild.instantiable)
+        assertEquals("ADMIN", aptChild.discriminatorValue)
+        assertEquals(LsiSymbolId.property(childId, "kind"), aptChild.discriminatorPropId)
+
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        val rootSnapshot = aptSchema.normalizedSnapshot().lineSequence().single { line ->
+            line.startsWith("type|${rootId.value}|")
+        }
+        assertTrue(rootSnapshot.contains("账户继承根。\\n用于多态 DTO。"))
+        assertTrue(rootSnapshot.contains("${INHERITANCE.value}("))
+        assertTrue(rootSnapshot.contains("|true|${rootId.value}|JOINED|DELETE|ACCOUNT|"))
+
+        val changedDocumentation = aptSchema.copy(
+            types = aptSchema.types.map { type ->
+                if (type.id == rootId) type.copy(documentation = "已修改") else type
+            },
+        )
+        assertNotEquals(aptSchema.fingerprint(), changedDocumentation.fingerprint())
+    }
+
+    @Test
+    fun `inheritance defaults preserve legacy instantiability and discriminator values`() {
+        val schema = JimmerImmutablePrecompiler().compile(defaultInheritanceWorkspace())
+        val rootId = LsiSymbolId.type("demo.AbstractAccount")
+        val childId = LsiSymbolId.type("demo.ConcreteAccount")
+        val root = schema.types.single { type -> type.id == rootId }
+        val child = schema.types.single { type -> type.id == childId }
+
+        assertFalse(root.instantiable)
+        assertEquals(rootId, root.inheritanceRootTypeId)
+        assertEquals(JimmerInheritanceStrategy.SINGLE_TABLE, root.inheritanceStrategy)
+        assertEquals(JimmerJoinedTableDissociateAction.DELETE, root.joinedTableDissociateAction)
+        assertEquals(null, root.discriminatorValue)
+        assertEquals(LsiSymbolId.property(rootId, "kind"), root.discriminatorPropId)
+
+        assertTrue(child.instantiable)
+        assertEquals(rootId, child.inheritanceRootTypeId)
+        assertEquals(null, child.inheritanceStrategy)
+        assertEquals(null, child.joinedTableDissociateAction)
+        assertEquals("ConcreteAccount", child.discriminatorValue)
+        assertEquals(LsiSymbolId.property(childId, "kind"), child.discriminatorPropId)
+    }
+
+    @Test
+    fun `joined inheritance preserves lax dissociate action and single table rejects it`() {
+        val joinedSchema = JimmerImmutablePrecompiler().compile(
+            inheritanceActionWorkspace(
+                strategy = "JOINED",
+                joinedTableDissociateAction = "LAX",
+            )
+        )
+        val root = joinedSchema.types.single()
+
+        assertEquals(JimmerInheritanceStrategy.JOINED, root.inheritanceStrategy)
+        assertEquals(JimmerJoinedTableDissociateAction.LAX, root.joinedTableDissociateAction)
+        assertTrue(joinedSchema.normalizedSnapshot().contains("|JOINED|LAX|"))
+
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                inheritanceActionWorkspace(
+                    strategy = "SINGLE_TABLE",
+                    joinedTableDissociateAction = "LAX",
+                )
+            )
+        }
+        assertTrue(exception.message.orEmpty().contains("only be LAX when the inheritance strategy is JOINED"))
+    }
+
+    @Test
+    fun `derived entity only accepts discriminator inherited from inheritance root`() {
+        val rootId = LsiSymbolId.type("demo.Account")
+        val mappedId = LsiSymbolId.type("demo.AdminBase")
+        val childId = LsiSymbolId.type("demo.AdminAccount")
+        val rootDiscriminator = property(
+            ownerId = rootId,
+            name = "kind",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+        )
+        val extraDiscriminator = property(
+            ownerId = mappedId,
+            name = "adminKind",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.Account",
+                    marker = ENTITY,
+                    memberIds = listOf(rootDiscriminator.id),
+                    typeAnnotations = listOf(annotation(INHERITANCE)),
+                ),
+                rootDiscriminator,
+                type(
+                    qualifiedName = "demo.AdminBase",
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(extraDiscriminator.id),
+                ),
+                extraDiscriminator,
+                type(
+                    qualifiedName = "demo.AdminAccount",
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    superTypes = listOf(
+                        LsiDeclaredType(rootId),
+                        LsiDeclaredType(mappedId),
+                    ),
+                ),
+            ),
+        )
+
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(workspace)
+        }
+
+        assertEquals(extraDiscriminator.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("except from its inheritance root"))
+
+        val declaredDiscriminator = property(
+            ownerId = childId,
+            name = "kind",
+            type = LsiDeclaredType(STRING_TYPE),
+            overrides = listOf(LsiOverride(rootDiscriminator.id)),
+        )
+        val declaredWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.Account",
+                    marker = ENTITY,
+                    memberIds = listOf(rootDiscriminator.id),
+                    typeAnnotations = listOf(annotation(INHERITANCE)),
+                ),
+                rootDiscriminator,
+                type(
+                    qualifiedName = "demo.AdminAccount",
+                    marker = ENTITY,
+                    memberIds = listOf(declaredDiscriminator.id),
+                    superTypes = listOf(LsiDeclaredType(rootId)),
+                ),
+                declaredDiscriminator,
+            ),
+        )
+        val declaredException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(declaredWorkspace)
+        }
+        assertEquals(declaredDiscriminator.id, declaredException.declarationId)
+        assertTrue(declaredException.message.orEmpty().contains("cannot be declared by an inheritance derived type"))
+    }
+
+    @Test
+    fun `inheritance root requires exactly one discriminator property`() {
+        val missingWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.MissingDiscriminatorRoot",
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    typeAnnotations = listOf(annotation(INHERITANCE)),
+                )
+            ),
+        )
+        val missingException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(missingWorkspace)
+        }
+        assertTrue(missingException.message.orEmpty().contains("must declare or inherit one property"))
+
+        val rootId = LsiSymbolId.type("demo.MultipleDiscriminatorRoot")
+        val first = property(
+            ownerId = rootId,
+            name = "kind",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+        )
+        val second = property(
+            ownerId = rootId,
+            name = "category",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+        )
+        val multipleWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.MultipleDiscriminatorRoot",
+                    marker = ENTITY,
+                    memberIds = listOf(first.id, second.id),
+                    typeAnnotations = listOf(annotation(INHERITANCE)),
+                ),
+                first,
+                second,
+            ),
+        )
+        val multipleException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(multipleWorkspace)
+        }
+        assertTrue(multipleException.message.orEmpty().contains("multiple discriminator properties"))
+    }
+
+    @Test
+    fun `discriminator must be scalar string or enum property`() {
+        val enumId = LsiSymbolId.type("demo.AccountKind")
+        val enumSchema = JimmerImmutablePrecompiler().compile(
+            discriminatorWorkspace(
+                discriminatorType = LsiDeclaredType(enumId),
+                extraDeclarations = listOf(declaration("demo.AccountKind", LsiTypeDeclarationKind.ENUM)),
+            )
+        )
+        assertEquals(
+            JimmerImmutablePrimaryMapping.DISCRIMINATOR,
+            enumSchema.types.single().props.single().primaryMapping,
+        )
+
+        val invalidTypes = listOf<LsiTypeRef>(
+            LsiPrimitiveType(LsiPrimitiveKind.INT),
+            listType(STRING_TYPE),
+        )
+        invalidTypes.forEach { invalidType ->
+            val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(discriminatorWorkspace(invalidType))
+            }
+            assertTrue(exception.message.orEmpty().contains("must be a scalar string or enum property"))
+        }
+
+        val targetId = LsiSymbolId.type("demo.Target")
+        val associationException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                discriminatorWorkspace(
+                    discriminatorType = LsiDeclaredType(targetId),
+                    extraDeclarations = listOf(type("demo.Target", ENTITY, emptyList())),
+                )
+            )
+        }
+        assertTrue(associationException.message.orEmpty().contains("must be a scalar string or enum property"))
+
+        val formulaException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                discriminatorWorkspace(
+                    discriminatorType = LsiDeclaredType(STRING_TYPE),
+                    additionalAnnotations = listOf(formula(sql = "TYPE")),
+                )
+            )
+        }
+        assertTrue(formulaException.message.orEmpty().contains("must be a scalar string or enum property"))
     }
 
     @Test
@@ -301,8 +574,12 @@ class JimmerImmutablePrecompilerTest {
         val entityParent = overrideCategoryWorkspace(
             baseMarker = ENTITY,
             childMarker = ENTITY,
-            baseAnnotations = listOf(default("0", LsiLanguage.KOTLIN)),
+            baseAnnotations = listOf(
+                default("0", LsiLanguage.KOTLIN),
+                annotation(DISCRIMINATOR),
+            ),
             childAnnotations = listOf(default("1", LsiLanguage.KOTLIN)),
+            baseTypeAnnotations = listOf(annotation(INHERITANCE)),
         )
         val entityException = assertFailsWith<JimmerImmutablePrecompileException> {
             JimmerImmutablePrecompiler().compile(entityParent)
@@ -313,7 +590,7 @@ class JimmerImmutablePrecompilerTest {
     @Test
     fun `ordinary property override does not require mapped superclass annotation override rules`() {
         val workspace = overrideCategoryWorkspace(
-            baseMarker = ENTITY,
+            baseMarker = MAPPED_SUPERCLASS,
             childMarker = ENTITY,
             baseAnnotations = listOf(annotation(JAVA_OVERRIDE)),
             childAnnotations = listOf(annotation(JAVA_OVERRIDE)),
@@ -458,6 +735,177 @@ class JimmerImmutablePrecompilerTest {
         )
     }
 
+    private fun inheritanceWorkspace(language: LsiLanguage): LsiWorkspace {
+        val origin = sourceOrigin(language)
+        val baseId = LsiSymbolId.type("demo.AccountBase")
+        val rootId = LsiSymbolId.type("demo.Account")
+        val childId = LsiSymbolId.type("demo.AdminAccount")
+        val discriminatorProp = property(
+            ownerId = baseId,
+            name = "kind",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+            origin = origin,
+        )
+        val base = type(
+            qualifiedName = "demo.AccountBase",
+            marker = MAPPED_SUPERCLASS,
+            memberIds = listOf(discriminatorProp.id),
+            documentation = "账户公共字段。",
+            origin = origin,
+        )
+        val root = declaration(
+            qualifiedName = "demo.Account",
+            kind = LsiTypeDeclarationKind.INTERFACE,
+            documentation = "账户继承根。\n用于多态 DTO。",
+            annotations = listOf(
+                annotation(
+                    ENTITY,
+                    mapOf(
+                        "instantiability" to LsiAnnotationValue.EnumValue(
+                            ENTITY_INSTANTIABILITY,
+                            "INSTANTIABLE",
+                        )
+                    ),
+                ),
+                annotation(
+                    INHERITANCE,
+                    mapOf(
+                        "strategy" to LsiAnnotationValue.EnumValue(
+                            INHERITANCE_TYPE,
+                            "JOINED",
+                        )
+                    ),
+                ),
+                annotation(
+                    DISCRIMINATOR_VALUE,
+                    mapOf("value" to LsiAnnotationValue.StringValue("ACCOUNT")),
+                ),
+                annotation(
+                    API_MODEL,
+                    mapOf("name" to LsiAnnotationValue.StringValue("AccountModel")),
+                ),
+            ),
+            superTypes = listOf(LsiDeclaredType(baseId)),
+            origin = origin,
+        )
+        val child = declaration(
+            qualifiedName = "demo.AdminAccount",
+            kind = LsiTypeDeclarationKind.INTERFACE,
+            documentation = "管理员账户。",
+            annotations = listOf(
+                annotation(
+                    ENTITY,
+                    mapOf(
+                        "instantiability" to LsiAnnotationValue.EnumValue(
+                            ENTITY_INSTANTIABILITY,
+                            "AUTO",
+                        )
+                    ),
+                ),
+                annotation(
+                    DISCRIMINATOR_VALUE,
+                    mapOf("value" to LsiAnnotationValue.StringValue("ADMIN")),
+                ),
+            ),
+            superTypes = listOf(LsiDeclaredType(rootId)),
+            origin = origin,
+        )
+        val declarations = listOf(base, discriminatorProp, root, child)
+        return LsiWorkspace(
+            sources = listOf(requireNotNull(origin.source)),
+            declarations = if (language == LsiLanguage.JAVA) declarations else declarations.reversed(),
+        )
+    }
+
+    private fun defaultInheritanceWorkspace(): LsiWorkspace {
+        val rootId = LsiSymbolId.type("demo.AbstractAccount")
+        val childId = LsiSymbolId.type("demo.ConcreteAccount")
+        val discriminatorProp = property(
+            ownerId = rootId,
+            name = "kind",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+        )
+        return LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.AbstractAccount",
+                    marker = ENTITY,
+                    memberIds = listOf(discriminatorProp.id),
+                    typeAnnotations = listOf(annotation(INHERITANCE)),
+                ),
+                discriminatorProp,
+                type(
+                    qualifiedName = "demo.ConcreteAccount",
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    superTypes = listOf(LsiDeclaredType(rootId)),
+                ),
+            ),
+        )
+    }
+
+    private fun inheritanceActionWorkspace(
+        strategy: String,
+        joinedTableDissociateAction: String,
+    ): LsiWorkspace {
+        val rootId = LsiSymbolId.type("demo.ActionRoot")
+        val discriminatorProp = property(
+            ownerId = rootId,
+            name = "kind",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+        )
+        return LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.ActionRoot",
+                    marker = ENTITY,
+                    memberIds = listOf(discriminatorProp.id),
+                    typeAnnotations = listOf(
+                        annotation(
+                            INHERITANCE,
+                            mapOf(
+                                "strategy" to LsiAnnotationValue.EnumValue(INHERITANCE_TYPE, strategy),
+                                "joinedTableDissociateAction" to LsiAnnotationValue.EnumValue(
+                                    JOINED_TABLE_DISSOCIATE_ACTION,
+                                    joinedTableDissociateAction,
+                                ),
+                            ),
+                        )
+                    ),
+                ),
+                discriminatorProp,
+            ),
+        )
+    }
+
+    private fun discriminatorWorkspace(
+        discriminatorType: LsiTypeRef,
+        extraDeclarations: List<LsiTypeDeclaration> = emptyList(),
+        additionalAnnotations: List<LsiAnnotation> = emptyList(),
+    ): LsiWorkspace {
+        val rootId = LsiSymbolId.type("demo.DiscriminatorRoot")
+        val discriminatorProp = property(
+            ownerId = rootId,
+            name = "kind",
+            type = discriminatorType,
+            annotations = listOf(annotation(DISCRIMINATOR)) + additionalAnnotations,
+        )
+        return LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.DiscriminatorRoot",
+                    marker = ENTITY,
+                    memberIds = listOf(discriminatorProp.id),
+                    typeAnnotations = listOf(annotation(INHERITANCE)),
+                ),
+                discriminatorProp,
+            ) + extraDeclarations,
+        )
+    }
+
     private fun orderedHierarchyWorkspace(language: LsiLanguage): LsiWorkspace {
         val origin = sourceOrigin(language)
         val auditTypeId = LsiSymbolId.type("demo.ZAuditBase")
@@ -469,7 +917,13 @@ class JimmerImmutablePrecompilerTest {
             property(auditTypeId, "auditA", LsiDeclaredType(STRING_TYPE), origin = origin),
         )
         val primaryProps = listOf(
-            property(primaryTypeId, "rootZ", LsiDeclaredType(STRING_TYPE), origin = origin),
+            property(
+                primaryTypeId,
+                "rootZ",
+                LsiDeclaredType(STRING_TYPE),
+                annotations = listOf(annotation(DISCRIMINATOR)),
+                origin = origin,
+            ),
             property(primaryTypeId, "rootA", LsiDeclaredType(STRING_TYPE), origin = origin),
         )
         val tenantProps = listOf(
@@ -498,6 +952,7 @@ class JimmerImmutablePrecompilerTest {
                 qualifiedName = "demo.APrimaryEntity",
                 marker = ENTITY,
                 memberIds = primaryProps.map(LsiProperty::id),
+                typeAnnotations = listOf(annotation(INHERITANCE)),
                 origin = origin,
             ),
             type(
@@ -533,6 +988,7 @@ class JimmerImmutablePrecompilerTest {
         childAnnotations: List<LsiAnnotation> = emptyList(),
         baseModality: LsiModality = LsiModality.ABSTRACT,
         childModality: LsiModality = LsiModality.ABSTRACT,
+        baseTypeAnnotations: List<LsiAnnotation> = emptyList(),
         extraTypes: List<LsiTypeDeclaration> = emptyList(),
     ): LsiWorkspace {
         val baseId = LsiSymbolId.type("demo.Base")
@@ -541,7 +997,12 @@ class JimmerImmutablePrecompilerTest {
         val childPropertyId = LsiSymbolId.property(childId, "value")
         return LsiWorkspace(
             declarations = listOf(
-                type("demo.Base", baseMarker, listOf(basePropertyId)),
+                type(
+                    qualifiedName = "demo.Base",
+                    marker = baseMarker,
+                    memberIds = listOf(basePropertyId),
+                    typeAnnotations = baseTypeAnnotations,
+                ),
                 property(
                     ownerId = baseId,
                     name = "value",
@@ -573,12 +1034,15 @@ class JimmerImmutablePrecompilerTest {
         memberIds: List<LsiSymbolId>,
         typeParameters: List<LsiTypeParameter> = emptyList(),
         superTypes: List<LsiTypeRef> = emptyList(),
+        documentation: String? = null,
+        typeAnnotations: List<LsiAnnotation> = emptyList(),
         origin: LsiOrigin = SYNTHETIC_ORIGIN,
     ): LsiTypeDeclaration {
         return declaration(
             qualifiedName = qualifiedName,
             kind = LsiTypeDeclarationKind.INTERFACE,
-            annotations = listOf(annotation(marker)),
+            documentation = documentation,
+            annotations = listOf(annotation(marker)) + typeAnnotations,
             memberIds = memberIds,
             typeParameters = typeParameters,
             superTypes = superTypes,
@@ -589,6 +1053,7 @@ class JimmerImmutablePrecompilerTest {
     private fun declaration(
         qualifiedName: String,
         kind: LsiTypeDeclarationKind,
+        documentation: String? = null,
         annotations: List<LsiAnnotation> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
         typeParameters: List<LsiTypeParameter> = emptyList(),
@@ -603,6 +1068,7 @@ class JimmerImmutablePrecompilerTest {
             typeParameters = typeParameters,
             superTypes = superTypes,
             memberIds = memberIds,
+            documentation = documentation,
             annotations = annotations,
             origin = origin,
         )
@@ -709,6 +1175,15 @@ class JimmerImmutablePrecompilerTest {
         private val IMMUTABLE = LsiSymbolId.type("org.babyfish.jimmer.Immutable")
         private val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
         private val EMBEDDABLE = LsiSymbolId.type("org.babyfish.jimmer.sql.Embeddable")
+        private val INHERITANCE = LsiSymbolId.type("org.babyfish.jimmer.sql.Inheritance")
+        private val DISCRIMINATOR_VALUE = LsiSymbolId.type("org.babyfish.jimmer.sql.DiscriminatorValue")
+        private val DISCRIMINATOR = LsiSymbolId.type("org.babyfish.jimmer.sql.Discriminator")
+        private val ENTITY_INSTANTIABILITY =
+            LsiSymbolId.type("org.babyfish.jimmer.sql.EntityInstantiability")
+        private val INHERITANCE_TYPE = LsiSymbolId.type("org.babyfish.jimmer.sql.InheritanceType")
+        private val JOINED_TABLE_DISSOCIATE_ACTION =
+            LsiSymbolId.type("org.babyfish.jimmer.sql.JoinedTableDissociateAction")
+        private val API_MODEL = LsiSymbolId.type("demo.ApiModel")
         private val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         private val VERSION = LsiSymbolId.type("org.babyfish.jimmer.sql.Version")
         private val LOGICAL_DELETED = LsiSymbolId.type("org.babyfish.jimmer.sql.LogicalDeleted")

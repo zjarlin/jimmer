@@ -22,6 +22,14 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                 type.typeParameterIds.joinToString(",") { id -> id.value },
                 type.superTypeIds.joinToString(",") { id -> id.value },
                 type.primarySuperTypeId?.value.orEmpty(),
+                type.documentation.orEmpty(),
+                type.annotations.canonicalText(),
+                type.instantiable.toString(),
+                type.inheritanceRootTypeId?.value.orEmpty(),
+                type.inheritanceStrategy?.name.orEmpty(),
+                type.joinedTableDissociateAction?.name.orEmpty(),
+                type.discriminatorValue.orEmpty(),
+                type.discriminatorPropId?.value.orEmpty(),
             )
             type.props.forEach { prop ->
                 appendRecord(
