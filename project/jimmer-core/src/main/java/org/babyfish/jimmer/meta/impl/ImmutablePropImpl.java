@@ -30,6 +30,7 @@ import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
 
@@ -88,6 +89,8 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
     private final DissociateAction dissociateAction;
 
     private final ImmutablePropImpl original;
+
+    private final ImmutablePropImpl annotationBase;
 
     private ConverterMetadata converterMetadata;
 
@@ -163,40 +166,57 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
             boolean nullable,
             Class<? extends Annotation> associationType
     ) {
+        this(
+                declaringType,
+                id,
+                name,
+                category,
+                elementClass,
+                nullable,
+                associationType,
+                null
+        );
+    }
+
+    private ImmutablePropImpl(
+            ImmutableTypeImpl declaringType,
+            PropId id,
+            String name,
+            ImmutablePropCategory category,
+            Class<?> elementClass,
+            boolean nullable,
+            Class<? extends Annotation> associationType,
+            ImmutablePropImpl annotationBase
+    ) {
         this.declaringType = declaringType;
         this.id = id;
         this.name = name;
         this.category = category;
-        this.elementClass = elementClass;
         this.nullable = nullable;
+        this.annotationBase = annotationBase;
+        ImmutablePropImpl original = annotationBase;
+        while (original != null && original.original != null) {
+            original = original.original;
+        }
+        this.original = original;
 
         KClass<?> kotlinClass = declaringType.getKotlinClass();
         if (kotlinClass != null) {
-            kotlinProp = KClasses.getDeclaredMemberProperties(kotlinClass)
+            KProperty1<?, ?> declaredKotlinProp = KClasses.getDeclaredMemberProperties(kotlinClass)
                     .stream()
                     .filter(it -> name.equals(it.getName()))
                     .findFirst()
-                    .get();
+                    .orElse(null);
+            kotlinProp = declaredKotlinProp != null ?
+                    declaredKotlinProp :
+                    annotationBase != null ? annotationBase.kotlinProp : null;
         } else {
             kotlinProp = null;
         }
-        Method javaGetter = null;
-        try {
-            javaGetter = declaringType.getJavaClass().getDeclaredMethod(name);
-        } catch (NoSuchMethodException ignored) {
-        }
-        try {
-            javaGetter = declaringType.getJavaClass().getDeclaredMethod(
-                    "get" + name.substring(0, 1).toUpperCase() + name.substring(1));
-        } catch (NoSuchMethodException ignored) {
-        }
-        try {
-            javaGetter = declaringType.getJavaClass().getDeclaredMethod(
-                    "is" + name.substring(0, 1).toUpperCase() + name.substring(1));
-            if (javaGetter.getReturnType() != boolean.class) {
-                javaGetter = null;
-            }
-        } catch (NoSuchMethodException ignored) {
+        Method javaGetter = declaredJavaGetter(declaringType.getJavaClass(), name);
+        boolean getterOverridden = javaGetter != null;
+        if (javaGetter == null && annotationBase != null) {
+            javaGetter = annotationBase.javaGetter;
         }
         if (javaGetter == null) {
             throw new AssertionError(
@@ -208,8 +228,22 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
             );
         }
         this.javaGetter = javaGetter;
-        this.returnClass = javaGetter.getReturnType();
-        this.genericType = javaGetter.getGenericReturnType();
+        if (getterOverridden || annotationBase == null) {
+            this.genericType = javaGetter.getGenericReturnType();
+        } else {
+            ImmutablePropImpl genericTypeBase = original != null ? original : annotationBase;
+            this.genericType = Generics.resolve(
+                    genericTypeBase.javaGetter.getGenericReturnType(),
+                    declaringType.getJavaClass(),
+                    genericTypeBase.declaringType.getJavaClass()
+            );
+        }
+        this.returnClass = rawClass(genericType);
+        this.elementClass = annotationBase != null ?
+                category.isList() ?
+                        elementClass(genericType, annotationBase.elementClass) :
+                        returnClass :
+                elementClass;
 
         OneToMany oneToMany = getAnnotation(OneToMany.class);
         OneToOne oneToOne = getAnnotation(OneToOne.class);
@@ -254,7 +288,8 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
         }
         Discriminator discriminator = getAnnotation(Discriminator.class);
         if (discriminator != null) {
-            if (category != ImmutablePropCategory.SCALAR || (elementClass != String.class && !elementClass.isEnum())) {
+            if (category != ImmutablePropCategory.SCALAR ||
+                    (this.elementClass != String.class && !this.elementClass.isEnum())) {
                 throw new ModelException(
                         "Illegal property \"" +
                                 this +
@@ -341,13 +376,28 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
             }
         }
 
-        this.original = null;
     }
 
     ImmutablePropImpl(
             ImmutablePropImpl original,
             ImmutableTypeImpl declaringType,
             PropId id
+    ) {
+        this(
+                declaringType,
+                id != null ? id : original.id,
+                original.name,
+                original.category,
+                original.elementClass,
+                original.nullable,
+                original.associationAnnotation != null ? original.primaryAnnotationType : null,
+                validatedAnnotationBase(original, declaringType)
+        );
+    }
+
+    private static ImmutablePropImpl validatedAnnotationBase(
+            ImmutablePropImpl original,
+            ImmutableTypeImpl declaringType
     ) {
         if (!original.getDeclaringType().isAssignableFrom(declaringType)) {
             throw new IllegalArgumentException(
@@ -358,35 +408,27 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
                             "\""
             );
         }
-        while (original.original != null) {
-            original = original.original;
+        return original;
+    }
+
+    private static Method declaredJavaGetter(Class<?> javaClass, String name) {
+        String suffix = name.substring(0, 1).toUpperCase() + name.substring(1);
+        try {
+            Method javaGetter = javaClass.getDeclaredMethod("is" + suffix);
+            if (javaGetter.getReturnType() == boolean.class) {
+                return javaGetter;
+            }
+        } catch (NoSuchMethodException ignored) {
         }
-        this.declaringType = declaringType;
-        this.id = id != null ? id : original.id;
-        this.name = original.name;
-        this.category = original.category;
-        this.genericType = Generics.resolve(
-                original.javaGetter.getGenericReturnType(),
-                declaringType.getJavaClass(),
-                original.declaringType.getJavaClass()
-        );
-        this.returnClass = rawClass(genericType);
-        this.elementClass = category.isList() ?
-                elementClass(genericType, original.elementClass) :
-                returnClass;
-        this.nullable = original.nullable;
-        this.inputNotNull = original.inputNotNull;
-        this.kotlinProp = original.kotlinProp;
-        this.javaGetter = original.javaGetter;
-        this.associationAnnotation = original.associationAnnotation;
-        this.primaryAnnotationType = original.primaryAnnotationType;
-        this.targetTransferMode = original.targetTransferMode;
-        this.isTransient = original.isTransient;
-        this.isFormula = original.isFormula;
-        this.sqlTemplate = original.sqlTemplate;
-        this.hasTransientResolver = original.hasTransientResolver;
-        this.dissociateAction = original.dissociateAction;
-        this.original = original;
+        try {
+            return javaClass.getDeclaredMethod("get" + suffix);
+        } catch (NoSuchMethodException ignored) {
+        }
+        try {
+            return javaClass.getDeclaredMethod(name);
+        } catch (NoSuchMethodException ignored) {
+            return null;
+        }
     }
 
     @NotNull
@@ -518,7 +560,11 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
                 return (A) annotation;
             }
         }
-        return javaGetter.getAnnotation(annotationType);
+        A annotation = javaGetter.getAnnotation(annotationType);
+        if (annotation != null) {
+            return annotation;
+        }
+        return annotationBase != null ? annotationBase.getAnnotation(annotationType) : null;
     }
 
     @Override
@@ -528,34 +574,54 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
         if (kotlinProp != null) {
             propArr = kotlinProp.getAnnotations().toArray(EMPTY_ANNOTATIONS);
         }
+        Annotation[] declaredArr;
         if (propArr == null || propArr.length == 0) {
-            return getterArr;
+            declaredArr = getterArr;
+        } else {
+            declaredArr = new Annotation[propArr.length + getterArr.length];
+            System.arraycopy(propArr, 0, declaredArr, 0, propArr.length);
+            System.arraycopy(getterArr, 0, declaredArr, propArr.length, getterArr.length);
         }
-        Annotation[] mergedArr = new Annotation[propArr.length + getterArr.length];
-        System.arraycopy(propArr, 0, mergedArr, 0, propArr.length);
-        System.arraycopy(getterArr, 0, mergedArr, propArr.length, getterArr.length);
-        return mergedArr;
+        if (annotationBase == null) {
+            return declaredArr;
+        }
+        Set<Class<? extends Annotation>> declaredTypes = new HashSet<>();
+        for (Annotation annotation : declaredArr) {
+            declaredTypes.add(annotation.annotationType());
+        }
+        List<Annotation> mergedAnnotations = new ArrayList<>(Arrays.asList(declaredArr));
+        for (Annotation annotation : annotationBase.getAnnotations()) {
+            if (!declaredTypes.contains(annotation.annotationType())) {
+                mergedAnnotations.add(annotation);
+            }
+        }
+        return mergedAnnotations.toArray(EMPTY_ANNOTATIONS);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <A extends Annotation> A[] getAnnotations(Class<A> annotationType) {
         A[] getterArr = javaGetter.getAnnotationsByType(annotationType);
-        A[] propArr = null;
+        List<A> propAnnotations = Collections.emptyList();
         if (kotlinProp != null) {
-            propArr = (A[]) kotlinProp
+            propAnnotations = kotlinProp
                     .getAnnotations()
                     .stream()
                     .filter(it -> it.annotationType() == annotationType)
-                    .toArray();
+                    .map(it -> (A) it)
+                    .collect(Collectors.toList());
         }
-        if (propArr == null || propArr.length == 0) {
-            return getterArr;
+        if (propAnnotations.isEmpty() && getterArr.length == 0) {
+            return annotationBase != null ?
+                    annotationBase.getAnnotations(annotationType) :
+                    getterArr;
         }
-        A[] mergedArr = (A[]) new Object[propArr.length + getterArr.length];
-        System.arraycopy(propArr, 0, mergedArr, 0, propArr.length);
-        System.arraycopy(getterArr, 0, mergedArr, propArr.length, getterArr.length);
-        return mergedArr;
+        A[] declaredArr = Arrays.copyOf(getterArr, propAnnotations.size() + getterArr.length);
+        System.arraycopy(getterArr, 0, declaredArr, propAnnotations.size(), getterArr.length);
+        for (int i = 0; i < propAnnotations.size(); i++) {
+            declaredArr[i] = propAnnotations.get(i);
+        }
+        return declaredArr;
     }
 
     @Override
@@ -1569,16 +1635,8 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
             try {
                 ref = isExcludedFromAllScalarsRef;
                 if (ref == null) {
-                    boolean isExecluded = false;
-                    if (kotlinProp != null) {
-                        isExecluded = kotlinProp.getAnnotations().stream().anyMatch(it ->
-                                it.annotationType() == ExcludeFromAllScalars.class
-                        );
-                    }
-                    if (!isExecluded) {
-                        isExecluded = javaGetter.isAnnotationPresent(ExcludeFromAllScalars.class);
-                    }
-                    this.isExcludedFromAllScalarsRef = ref = isExecluded;
+                    this.isExcludedFromAllScalarsRef = ref =
+                            getAnnotation(ExcludeFromAllScalars.class) != null;
                 }
             } finally {
                 META_LOCK.unlock();

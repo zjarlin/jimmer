@@ -507,7 +507,7 @@ class ImmutableTypeImpl extends AbstractImmutableTypeImpl implements ImmutableTy
         }
         this.declaredLogicalDeletedInfo = declaredLogicalDeletedInfo;
         if (superInfo != null) {
-            logicalDeletedInfo = superInfo.to(
+            logicalDeletedInfo = LogicalDeletedInfo.of(
                     getProp(superInfo.getProp().getName())
             );
         } else {
