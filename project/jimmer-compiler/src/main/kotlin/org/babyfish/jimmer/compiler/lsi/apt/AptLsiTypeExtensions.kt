@@ -118,6 +118,7 @@ internal fun ExecutableElement.isLsiPropertyGetter(): Boolean {
     return parameters.isEmpty() &&
         returnType.kind != TypeKind.VOID &&
         typeParameters.isEmpty() &&
+        thrownTypes.isEmpty() &&
         javax.lang.model.element.Modifier.STATIC !in modifiers
 }
 
