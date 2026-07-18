@@ -891,57 +891,11 @@ class DtoGenerator private constructor(
 
             cfg.filterType != null -> {
                 val filterTypeName = cfg.filterType!!.qualifiedName
-                val fetcherDeclaration = ctx.resolver.getClassDeclarationByName(filterTypeName)
-                    ?: throw DtoException(
-                        "There is no filter class: $filterTypeName"
-                    )
-                val entityTypeName = GenericParser(
-                    "filter",
-                    fetcherDeclaration,
-                    "org.babyfish.jimmer.sql.kt.fetcher.KFieldFilter"
-                ).parse().argumentTypeNames[0]
-                val targetTypeName = prop.toTailProp().baseProp.targetTypeName(overrideNullable = false)
-                if (entityTypeName != targetTypeName) {
-                    throw DtoException(
-                        "The filter class \"" +
-                                filterTypeName +
-                                "\" is illegal, it specify the generic type argument of \"" +
-                                "org.babyfish.jimmer.sql.kt.fetcher.KFieldFilter" +
-                                "\" as \"" +
-                                entityTypeName +
-                                "\", which is not associated entity type \"" +
-                                targetTypeName +
-                                "\""
-                    )
-                }
                 add("\nfilter(%L())", filterTypeName)
             }
         }
         if (cfg.recursionType !== null) {
             val recursionTypeName = cfg.recursionType!!.qualifiedName
-            val recursionDeclaration = ctx.resolver.getClassDeclarationByName(recursionTypeName)
-                ?: throw DtoException(
-                    "There is no recursion class: $recursionTypeName"
-                )
-            val entityTypeName = GenericParser(
-                "recursion",
-                recursionDeclaration,
-                "org.babyfish.jimmer.sql.fetcher.RecursionStrategy"
-            ).parse().argumentTypeNames[0]
-            val targetTypeName = prop.toTailProp().baseProp.targetTypeName(overrideNullable = false)
-            if (entityTypeName != targetTypeName) {
-                throw DtoException(
-                    "The recursion class \"" +
-                            recursionTypeName +
-                            "\" is illegal, it specify the generic type argument of \"" +
-                            "org.babyfish.jimmer.sql.fetcher.RecursionStrategy" +
-                            "\" as \"" +
-                            entityTypeName +
-                            "\", which is not associated entity type \"" +
-                            targetTypeName +
-                            "\""
-                )
-            }
             add("\nrecursive(%L())", recursionTypeName)
         }
         if (cfg.fetchType !== "AUTO") {

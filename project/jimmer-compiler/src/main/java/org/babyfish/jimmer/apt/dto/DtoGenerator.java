@@ -9,7 +9,6 @@ import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.apt.util.ConverterMetadata;
 import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
-import org.babyfish.jimmer.apt.util.GenericParser;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.client.meta.Doc;
 import org.babyfish.jimmer.dto.compiler.*;
@@ -850,47 +849,11 @@ public class DtoGenerator {
         }
         if (cfg.getFilterType() != null) {
             String filterClassName = cfg.getFilterType().getQualifiedName();
-            TypeElement filterTypeElement = ctx.getElements().getTypeElement(filterClassName);
-            if (filterTypeElement == null) {
-                throw new DtoException(
-                        "There is no filter class: " + filterClassName
-                );
-            }
-            new GenericParser(
-                    "filter",
-                    filterTypeElement,
-                    "org.babyfish.jimmer.sql.fetcher.FieldFilter"
-            ).parse();
-            cb.add("\n.filter(new $T())", filterTypeElement);
+            cb.add("\n.filter(new $T())", ClassName.bestGuess(filterClassName));
         }
         if (cfg.getRecursionType() != null) {
             String recursionClassName = cfg.getRecursionType().getQualifiedName();
-            TypeElement recursionTypeElement = ctx.getElements().getTypeElement(recursionClassName);
-            if (recursionTypeElement == null) {
-                throw new DtoException(
-                        "There is no recursion class: " + recursionClassName
-                );
-            }
-            TypeName entityTypeName = new GenericParser(
-                    "recursion",
-                    recursionTypeElement,
-                    "org.babyfish.jimmer.sql.fetcher.RecursionStrategy"
-            ).parse().argumentTypeNames.get(0);
-            TypeName associatedEntityTypeName = prop.toTailProp().getBaseProp().getTargetType().getClassName();
-            if (!associatedEntityTypeName.equals(entityTypeName)) {
-                throw new DtoException(
-                        "The recursion class \"" +
-                                recursionClassName +
-                                "\" is illegal, it specify the generic type argument of \"" +
-                                "org.babyfish.jimmer.sql.fetcher.RecursionStrategy" +
-                                "\" as \"" +
-                                entityTypeName +
-                                "\", which is not associated entity type \"" +
-                                associatedEntityTypeName +
-                                "\""
-                );
-            }
-            cb.add("\n.recursive(new $T())", recursionTypeElement);
+            cb.add("\n.recursive(new $T())", ClassName.bestGuess(recursionClassName));
         }
         if (cfg.getLimit() != Integer.MAX_VALUE) {
             if (cfg.getOffset() != 0) {
