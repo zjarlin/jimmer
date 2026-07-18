@@ -25,7 +25,9 @@ import org.babyfish.jimmer.compiler.lsi.referencedTypeIds
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationMember
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiEnumEntry
@@ -44,6 +46,7 @@ import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.mergeLsiTypeSeeds
+import site.addzero.lsi.model.toAnnotationMemberType
 
 fun Resolver.toLsiWorkspace(
     frontendOptions: LsiFrontendOptions,
@@ -83,7 +86,7 @@ class KspLsiWorkspaceBuilder(
     private val frontendOptions: LsiFrontendOptions,
 ) {
 
-    private val context = KspLsiContext()
+    private val context = KspLsiContext(resolver, frontendOptions)
 
     private val typeContext = KspLsiTypeContext(resolver)
 
@@ -136,7 +139,7 @@ class KspLsiWorkspaceBuilder(
                 declarationsByTypeId[seed.typeId] = listOf(header)
                 return@forEach
             }
-            collectTypeDeclarations(declaration)
+            collectTypeDeclarations(declaration.topLevelEnclosingType())
                 .sortedBy { nestedType -> nestedType.qualifiedName?.asString().orEmpty() }
                 .forEach nestedTypeLoop@{ nestedType ->
                     val qualifiedName = nestedType.qualifiedName?.asString()?.takeIf(String::isNotBlank)
@@ -232,6 +235,14 @@ class KspLsiWorkspaceBuilder(
         return result
     }
 
+    private fun KSClassDeclaration.topLevelEnclosingType(): KSClassDeclaration {
+        var topLevelType = this
+        while (topLevelType.parentDeclaration is KSClassDeclaration) {
+            topLevelType = topLevelType.parentDeclaration as KSClassDeclaration
+        }
+        return topLevelType
+    }
+
     private fun toLsiDeclarations(typeDeclaration: KSClassDeclaration): List<LsiDeclaration> {
         val qualifiedName = requireNotNull(typeDeclaration.qualifiedName?.asString()) {
             "KSP LSI type declaration must have a qualified name"
@@ -301,12 +312,27 @@ class KspLsiWorkspaceBuilder(
             parameters = typeDeclaration.typeParameters,
             inheritedIds = inheritedTypeParameterIds,
         )
+        val javaDeclaration = typeDeclaration.origin == Origin.JAVA || typeDeclaration.origin == Origin.JAVA_LIB
+        val enclosingDeclaration = typeDeclaration.parentDeclaration as? KSClassDeclaration
+        val javaMemberClassRequiresEnclosingInstance =
+            javaDeclaration &&
+                typeDeclaration.classKind == ClassKind.CLASS &&
+                enclosingDeclaration?.classKind in setOf(ClassKind.CLASS, ClassKind.ENUM_CLASS) &&
+                Modifier.JAVA_STATIC !in typeDeclaration.modifiers &&
+                !typeDeclaration.isJavaRecord()
         return LsiTypeDeclaration(
             id = typeId,
             name = typeDeclaration.simpleName.asString(),
             qualifiedName = typeId.requireTypeQualifiedName(),
             kind = typeDeclaration.classKind.toLsiTypeDeclarationKind(),
-            enclosingTypeId = (typeDeclaration.parentDeclaration as? KSClassDeclaration)?.toLsiTypeId(),
+            enclosingTypeId = enclosingDeclaration?.toLsiTypeId(),
+            requiresEnclosingInstance =
+                Modifier.INNER in typeDeclaration.modifiers || javaMemberClassRequiresEnclosingInstance,
+            abstractDeclaration =
+                Modifier.ABSTRACT in typeDeclaration.modifiers ||
+                    (!javaDeclaration && Modifier.SEALED in typeDeclaration.modifiers) ||
+                    typeDeclaration.classKind == ClassKind.INTERFACE ||
+                    typeDeclaration.classKind == ClassKind.ANNOTATION_CLASS,
             dataClass = typeDeclaration.classKind == ClassKind.CLASS && Modifier.DATA in typeDeclaration.modifiers,
             visibility = typeDeclaration.toLsiVisibility(),
             modality = typeDeclaration.toLsiModality(),
@@ -320,6 +346,7 @@ class KspLsiWorkspaceBuilder(
                 .toList(),
             memberIds = memberIds,
             enumEntries = enumEntries,
+            annotationMembers = typeDeclaration.toLsiAnnotationMembers(typeParameterIds),
             documentation = context.documentation(typeDeclaration),
             annotations = annotationContext.toLsiAnnotations(
                 annotations = typeDeclaration.annotations,
@@ -328,6 +355,66 @@ class KspLsiWorkspaceBuilder(
             location = context.location(typeDeclaration),
             origin = context.origin(typeDeclaration),
         )
+    }
+
+    private fun KSClassDeclaration.isJavaRecord(): Boolean {
+        return superTypes.any { superType ->
+            val resolvedType = superType.resolve()
+            !resolvedType.isError &&
+                resolvedType.declaration.qualifiedName?.asString() == JAVA_LANG_RECORD
+        }
+    }
+
+    private fun KSClassDeclaration.toLsiAnnotationMembers(
+        typeParameterIds: Map<KSTypeParameter, LsiSymbolId>,
+    ): List<LsiAnnotationMember> {
+        if (classKind != ClassKind.ANNOTATION_CLASS) {
+            return emptyList()
+        }
+        val constructor = primaryConstructor ?: getConstructors().firstOrNull()
+        if (origin == Origin.KOTLIN || origin == Origin.KOTLIN_LIB) {
+            val parameters = constructor?.parameters.orEmpty()
+            if (parameters.isNotEmpty()) {
+                return parameters.map { parameter ->
+                    val parameterType = typeContext.toLsiType(parameter.type.resolve(), typeParameterIds)
+                    LsiAnnotationMember(
+                        name = parameter.name?.asString()?.takeIf(String::isNotBlank)
+                            ?: error("Kotlin annotation member must have a name"),
+                        type = if (parameter.isVararg) {
+                            LsiArrayType(parameterType).toAnnotationMemberType()
+                        } else {
+                            parameterType.toAnnotationMemberType()
+                        },
+                        vararg = parameter.isVararg,
+                        hasDefault = parameter.hasDefault,
+                    )
+                }.sortedBy(LsiAnnotationMember::name)
+            }
+        }
+        val propertyMembers = declarations
+            .filterIsInstance<KSPropertyDeclaration>()
+            .filter { member -> member.getter != null }
+            .map { member ->
+                LsiAnnotationMember(
+                    name = member.simpleName.asString(),
+                    type = typeContext.toLsiType(member.type.resolve(), typeParameterIds).toAnnotationMemberType(),
+                )
+            }
+            .toList()
+        if (propertyMembers.isNotEmpty()) {
+            return propertyMembers.sortedBy(LsiAnnotationMember::name)
+        }
+        return getAllFunctions()
+            .filterNot(KSFunctionDeclaration::isConstructor)
+            .mapNotNull { member ->
+                val returnType = member.returnType ?: return@mapNotNull null
+                LsiAnnotationMember(
+                    name = member.simpleName.asString(),
+                    type = typeContext.toLsiType(returnType.resolve(), typeParameterIds).toAnnotationMemberType(),
+                )
+            }
+            .toList()
+            .sortedBy(LsiAnnotationMember::name)
     }
 
     private fun KSPropertyDeclaration.toLsiProperty(owner: KSClassDeclaration): LsiProperty {
@@ -649,6 +736,8 @@ private val JIMMER_MANAGED_TYPE_ANNOTATIONS = setOf(
     LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass"),
     LsiSymbolId.type("org.babyfish.jimmer.sql.Embeddable"),
 )
+
+private const val JAVA_LANG_RECORD = "java.lang.Record"
 
 private fun KSClassDeclaration.toLsiTypeId(): LsiSymbolId {
     val qualifiedName = requireNotNull(qualifiedName?.asString()) {

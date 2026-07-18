@@ -32,6 +32,7 @@ private fun MutableSet<LsiSymbolId>.collect(declaration: LsiDeclaration) {
             declaration.enclosingTypeId?.let(::add)
             declaration.typeParameters.forEach(::collect)
             declaration.superTypes.forEach(::collect)
+            declaration.annotationMembers.forEach { member -> collect(member.type) }
         }
         is LsiField -> collect(declaration.type)
         is LsiProperty -> collect(declaration.type)

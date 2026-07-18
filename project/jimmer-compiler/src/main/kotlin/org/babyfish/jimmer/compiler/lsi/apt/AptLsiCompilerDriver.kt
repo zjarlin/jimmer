@@ -39,6 +39,9 @@ class AptLsiCompilerDriver(
     private val inputResourcePaths = providerList
         .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.inputResourcePaths }
 
+    private val classpathTypeIds = providerList
+        .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.classpathTypeIds }
+
     private val inputDocumentKinds = providerList
         .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.inputDocumentKinds }
 
@@ -58,10 +61,17 @@ class AptLsiCompilerDriver(
 
     private var inputResources = emptyMap<String, String>()
 
+    private var availableTypeIds = emptySet<LsiSymbolId>()
+
     private var inputDocumentSnapshots = emptyList<CompilerInputDocumentSnapshot>()
 
     fun process(roundEnvironment: RoundEnvironment): CompilerRoundResult {
         val isFinal = roundEnvironment.processingOver()
+        if (!isFinal) {
+            availableTypeIds = classpathTypeIds.filterTo(sortedSetOf()) { typeId ->
+                processingEnvironment.elementUtils.getTypeElement(typeId.requireTypeQualifiedName()) != null
+            }
+        }
         if (!isFinal && inputDocumentKinds.isNotEmpty()) {
             val marker = classOutputMarker()
             inputDocumentSnapshots = inputDocumentScanner.scan(
@@ -118,6 +128,7 @@ class AptLsiCompilerDriver(
                 platform = CompilerPlatform.APT,
                 isFinal = isFinal,
                 options = options,
+                availableTypeIds = availableTypeIds,
                 inputResources = inputResources,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),

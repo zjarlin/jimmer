@@ -41,6 +41,9 @@ class KspLsiCompilerDriver(
     private val inputResourcePaths = providerList
         .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.inputResourcePaths }
 
+    private val classpathTypeIds = providerList
+        .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.classpathTypeIds }
+
     private val inputDocumentKinds = providerList
         .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.inputDocumentKinds }
 
@@ -60,9 +63,15 @@ class KspLsiCompilerDriver(
 
     private var inputResources = emptyMap<String, String>()
 
+    private var availableTypeIds = emptySet<LsiSymbolId>()
+
     private var inputDocumentSnapshots = emptyList<CompilerInputDocumentSnapshot>()
 
     fun process(resolver: Resolver): List<KSAnnotated> {
+        availableTypeIds = classpathTypeIds.filterTo(sortedSetOf()) { typeId ->
+            val name = resolver.getKSNameFromString(typeId.requireTypeQualifiedName())
+            resolver.getClassDeclarationByName(name) != null
+        }
         val currentRoundSymbols = resolver.toKspLsiRoundSymbols(frontendOptions)
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         if (inputDocumentKinds.isNotEmpty()) {
@@ -96,6 +105,7 @@ class KspLsiCompilerDriver(
                 currentRootTypeIds = currentRootTypeIds,
                 platform = CompilerPlatform.KSP,
                 options = options,
+                availableTypeIds = availableTypeIds,
                 inputResources = inputResources,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),
@@ -126,6 +136,7 @@ class KspLsiCompilerDriver(
                 platform = CompilerPlatform.KSP,
                 isFinal = true,
                 options = options,
+                availableTypeIds = availableTypeIds,
                 inputResources = inputResources,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),

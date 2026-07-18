@@ -26,9 +26,9 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
 
     private List<PropConfig.OrderItem<P>> orderItems = Collections.emptyList();
 
-    private String filterClassName;
+    private ConfigTypeRef filterType;
 
-    private String recursionClassName;
+    private ConfigTypeRef recursionType;
 
     private String fetchType = "AUTO";
 
@@ -55,7 +55,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
     }
 
     public void setPredicate(DtoParser.WhereContext where) {
-        if (filterClassName != null) {
+        if (filterType != null) {
             throw ctx.exception(
                     where.start.getLine(),
                     where.start.getCharPositionInLine(),
@@ -81,7 +81,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
     }
 
     void setOrderItems(DtoParser.OrderByContext orderBy) {
-        if (filterClassName != null) {
+        if (filterType != null) {
             throw ctx.exception(
                     orderBy.start.getLine(),
                     orderBy.start.getCharPositionInLine(),
@@ -118,7 +118,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         this.modified = true;
     }
 
-    void setFilterClassName(DtoParser.FilterContext filter) {
+    void setFilterType(DtoParser.FilterContext filter) {
         if (predicate != null) {
             throw ctx.exception(
                     filter.start.getLine(),
@@ -146,15 +146,20 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
                 .stream()
                 .map(Token::getText)
                 .collect(Collectors.joining("."));
-        this.filterClassName = ctx.resolve(
-                qualifiedName,
-                filter.qualifiedName().start.getLine(),
-                filter.qualifiedName().start.getCharPositionInLine()
+        Token start = filter.qualifiedName().start;
+        this.filterType = new ConfigTypeRef(
+                ctx.resolve(
+                        qualifiedName,
+                        start.getLine(),
+                        start.getCharPositionInLine()
+                ),
+                start.getLine(),
+                start.getCharPositionInLine() + 1
         );
         this.modified = true;
     }
 
-    void setRecursionClassName(DtoParser.RecursionContext recursion) {
+    void setRecursionType(DtoParser.RecursionContext recursion) {
         if (depth != Integer.MAX_VALUE) {
             throw ctx.exception(
                     recursion.start.getLine(),
@@ -175,10 +180,15 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
                 .stream()
                 .map(Token::getText)
                 .collect(Collectors.joining("."));
-        this.recursionClassName = ctx.resolve(
-                qualifiedName,
-                recursion.qualifiedName().start.getLine(),
-                recursion.qualifiedName().start.getCharPositionInLine()
+        Token start = recursion.qualifiedName().start;
+        this.recursionType = new ConfigTypeRef(
+                ctx.resolve(
+                        qualifiedName,
+                        start.getLine(),
+                        start.getCharPositionInLine()
+                ),
+                start.getLine(),
+                start.getCharPositionInLine() + 1
         );
         this.modified = true;
     }
@@ -254,7 +264,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
     }
 
     void setDepth(DtoParser.RecursionDepthContext depth) {
-        if (recursionClassName != null) {
+        if (recursionType != null) {
             throw ctx.exception(
                     depth.start.getLine(),
                     depth.start.getCharPositionInLine(),
@@ -287,8 +297,8 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         return new PropConfigImpl<>(
                 predicate,
                 orderItems,
-                filterClassName,
-                recursionClassName,
+                filterType,
+                recursionType,
                 fetchType,
                 limit,
                 offset,
@@ -734,9 +744,9 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
 
         private final List<PropConfig.OrderItem<P>> orderItems;
 
-        private final String filterClassName;
+        private final ConfigTypeRef filterType;
 
-        private final String recursionClassName;
+        private final ConfigTypeRef recursionType;
 
         private final String fetchType;
 
@@ -751,8 +761,8 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         private PropConfigImpl(
                 Predicate predicate,
                 List<OrderItem<P>> orderItems,
-                String filterClassName,
-                String recursionClassName,
+                ConfigTypeRef filterType,
+                ConfigTypeRef recursionType,
                 String fetchType,
                 int limit,
                 int offset,
@@ -761,8 +771,8 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         ) {
             this.predicate = predicate;
             this.orderItems = orderItems;
-            this.filterClassName = filterClassName;
-            this.recursionClassName = recursionClassName;
+            this.filterType = filterType;
+            this.recursionType = recursionType;
             this.fetchType = fetchType;
             this.limit = limit;
             this.offset = offset;
@@ -783,14 +793,14 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
 
         @Nullable
         @Override
-        public String getFilterClassName() {
-            return filterClassName;
+        public ConfigTypeRef getFilterType() {
+            return filterType;
         }
 
         @Nullable
         @Override
-        public String getRecursionClassName() {
-            return recursionClassName;
+        public ConfigTypeRef getRecursionType() {
+            return recursionType;
         }
 
         @Nullable
@@ -838,11 +848,11 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
                 }
                 builder.append(") ");
             }
-            if (filterClassName != null) {
-                builder.append("!filter(").append(filterClassName).append(") ");
+            if (filterType != null) {
+                builder.append("!filter(").append(filterType.getQualifiedName()).append(") ");
             }
-            if (recursionClassName != null) {
-                builder.append("!recursion(").append(recursionClassName).append(") ");
+            if (recursionType != null) {
+                builder.append("!recursion(").append(recursionType.getQualifiedName()).append(") ");
             }
             if (!"AUTO".equals(fetchType)) {
                 builder.append("!fetchType(").append(fetchType).append(") ");

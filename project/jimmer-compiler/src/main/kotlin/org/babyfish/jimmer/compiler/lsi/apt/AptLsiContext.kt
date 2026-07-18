@@ -13,7 +13,10 @@ import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiVisibility
 import javax.annotation.processing.ProcessingEnvironment
 import javax.lang.model.element.Element
+import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
+import javax.lang.model.element.TypeElement
+import javax.lang.model.type.TypeKind
 
 internal class AptLsiContext(
     val processingEnvironment: ProcessingEnvironment,
@@ -31,9 +34,12 @@ internal class AptLsiContext(
     }
 
     fun documentation(element: Element): String? {
-        return elements.getDocComment(element)
+        elements.getDocComment(element)
             ?.trim()
             ?.takeIf(String::isNotEmpty)
+            ?.let { return it }
+        element.description()?.let { return it }
+        return element.generatedImmutableDocumentation()
     }
 
     fun source(element: Element): LsiSource? {
@@ -46,7 +52,7 @@ internal class AptLsiContext(
         return LsiSource.of(
             path = path,
             language = LsiLanguage.JAVA,
-            kind = LsiSourceKind.SOURCE,
+            kind = path.toLsiSourceKind(),
         )
     }
 
@@ -84,10 +90,97 @@ internal class AptLsiContext(
                 source = source,
             )
         } else {
-            LsiOrigin(LsiOriginKind.BINARY)
+            LsiOrigin(
+                kind = LsiOriginKind.BINARY,
+                language = LsiLanguage.JAVA,
+            )
+        }
+    }
+
+    private fun Element.description(): String? {
+        val annotation = annotationMirrors.firstOrNull { mirror ->
+            val annotationType = mirror.annotationType.asElement() as? TypeElement
+            annotationType?.qualifiedName?.contentEquals(DESCRIPTION_ANNOTATION) == true
+        } ?: return null
+        return elements.getElementValuesWithDefaults(annotation)
+            .entries
+            .firstOrNull { (member, _) -> member.simpleName.contentEquals("value") }
+            ?.value
+            ?.value
+            ?.let { value -> value as? String }
+            ?.takeIf(String::isNotBlank)
+    }
+
+    private fun Element.generatedImmutableDocumentation(): String? {
+        val owner = when (this) {
+            is TypeElement -> this
+            is ExecutableElement -> enclosingElement as? TypeElement
+            else -> null
+        } ?: return null
+        if (!owner.isImmutableType()) {
+            return null
+        }
+        val ownerSource = source(owner)
+        if (ownerSource != null && ownerSource.kind != LsiSourceKind.GENERATED) {
+            return null
+        }
+        val draft = elements.getTypeElement("${owner.qualifiedName}Draft") ?: return null
+        val producer = draft.enclosedElements
+            .filterIsInstance<TypeElement>()
+            .firstOrNull { type -> type.simpleName.contentEquals("Producer") }
+            ?: return null
+        val impl = producer.enclosedElements
+            .filterIsInstance<TypeElement>()
+            .firstOrNull { type -> type.simpleName.contentEquals("Impl") }
+            ?: return null
+        if (this is TypeElement) {
+            return impl.description()
+        }
+        val property = this as ExecutableElement
+        if (!property.isLsiPropertyGetter()) {
+            return null
+        }
+        val propertyName = property.toLsiPropertyName(frontendOptions)
+        return impl.enclosedElements
+            .filterIsInstance<ExecutableElement>()
+            .firstOrNull { candidate ->
+                candidate.returnType.kind != TypeKind.VOID &&
+                    candidate.parameters.isEmpty() &&
+                    candidate.typeParameters.isEmpty() &&
+                    candidate.isLsiPropertyGetter() &&
+                    candidate.toLsiPropertyName(frontendOptions) == propertyName
+            }
+            ?.description()
+    }
+
+    private fun TypeElement.isImmutableType(): Boolean {
+        return annotationMirrors.any { mirror ->
+            val annotationType = mirror.annotationType.asElement() as? TypeElement
+            annotationType?.qualifiedName?.toString() in IMMUTABLE_TYPE_ANNOTATIONS
         }
     }
 }
+
+private fun String.toLsiSourceKind(): LsiSourceKind {
+    val normalized = replace('\\', '/')
+    return if (
+        normalized.contains("/build/generated/") ||
+        normalized.startsWith("build/generated/")
+    ) {
+        LsiSourceKind.GENERATED
+    } else {
+        LsiSourceKind.SOURCE
+    }
+}
+
+private const val DESCRIPTION_ANNOTATION = "org.babyfish.jimmer.client.Description"
+
+private val IMMUTABLE_TYPE_ANNOTATIONS = setOf(
+    "org.babyfish.jimmer.Immutable",
+    "org.babyfish.jimmer.sql.Entity",
+    "org.babyfish.jimmer.sql.MappedSuperclass",
+    "org.babyfish.jimmer.sql.Embeddable",
+)
 
 internal fun Element.toLsiVisibility(): LsiVisibility {
     return when {

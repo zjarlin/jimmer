@@ -1,6 +1,9 @@
 package org.babyfish.jimmer.compiler.lsi.ksp
 
+import com.google.devtools.ksp.getClassDeclarationByName
+import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.FileLocation
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
@@ -18,12 +21,18 @@ import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiVisibility
 
-internal class KspLsiContext {
+internal class KspLsiContext(
+    private val resolver: Resolver,
+    private val frontendOptions: org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions,
+) {
 
     fun documentation(declaration: KSDeclaration): String? {
-        return declaration.docString
+        declaration.docString
             ?.trim()
             ?.takeIf(String::isNotEmpty)
+            ?.let { return it }
+        declaration.description()?.let { return it }
+        return declaration.generatedImmutableDocumentation()
     }
 
     fun source(node: KSNode): LsiSource? {
@@ -70,7 +79,85 @@ internal class KspLsiContext {
         return LsiOrigin(
             kind = kind,
             source = source,
+            language = node.origin.toLsiLanguage(),
         )
+    }
+
+    private fun KSDeclaration.description(): String? {
+        return annotations
+            .firstOrNull { annotation -> annotation.isDescription() }
+            ?.arguments
+            ?.firstOrNull { argument -> argument.name?.asString() == "value" }
+            ?.value
+            ?.let { value -> value as? String }
+            ?.takeIf(String::isNotBlank)
+    }
+
+    private fun KSDeclaration.generatedImmutableDocumentation(): String? {
+        val owner = when (this) {
+            is KSClassDeclaration -> this
+            is KSPropertyDeclaration -> parentDeclaration as? KSClassDeclaration
+            is KSFunctionDeclaration -> parentDeclaration as? KSClassDeclaration
+            else -> null
+        } ?: return null
+        if (!owner.isImmutableType()) {
+            return null
+        }
+        val ownerSource = source(owner)
+        if (
+            owner.origin != Origin.JAVA_LIB &&
+            owner.origin != Origin.KOTLIN_LIB &&
+            ownerSource?.kind != LsiSourceKind.GENERATED
+        ) {
+            return null
+        }
+        val qualifiedName = owner.qualifiedName?.asString()?.takeIf(String::isNotBlank) ?: return null
+        val draft = resolver.getClassDeclarationByName("${qualifiedName}Draft") ?: return null
+        val producer = draft.declarations
+            .filterIsInstance<KSClassDeclaration>()
+            .firstOrNull { type -> type.simpleName.asString() == "$" }
+            ?: return null
+        val impl = producer.declarations
+            .filterIsInstance<KSClassDeclaration>()
+            .firstOrNull { type -> type.simpleName.asString() == "Impl" }
+            ?: return null
+        if (this is KSClassDeclaration) {
+            return impl.description()
+        }
+        val propertyName = when (this) {
+            is KSPropertyDeclaration -> simpleName.asString()
+            is KSFunctionDeclaration -> {
+                if (!isLsiJavaPropertyGetter()) {
+                    return null
+                }
+                toLsiJavaPropertyName(frontendOptions)
+            }
+            else -> return null
+        }
+        return impl.declarations
+            .firstNotNullOfOrNull { member ->
+                val memberName = when (member) {
+                    is KSPropertyDeclaration -> member.simpleName.asString()
+                    is KSFunctionDeclaration -> {
+                        if (!member.isLsiJavaPropertyGetter()) {
+                            return@firstNotNullOfOrNull null
+                        }
+                        member.toLsiJavaPropertyName(frontendOptions)
+                    }
+                    else -> return@firstNotNullOfOrNull null
+                }
+                member.description().takeIf { memberName == propertyName }
+            }
+    }
+
+    private fun KSAnnotation.isDescription(): Boolean {
+        return annotationType.resolve().declaration.qualifiedName?.asString() == DESCRIPTION_ANNOTATION
+    }
+
+    private fun KSClassDeclaration.isImmutableType(): Boolean {
+        return annotations.any { annotation ->
+            annotation.annotationType.resolve().declaration.qualifiedName?.asString() in IMMUTABLE_TYPE_ANNOTATIONS
+        }
     }
 }
 
@@ -139,3 +226,12 @@ private fun String.toLsiSourceKind(): LsiSourceKind {
         LsiSourceKind.SOURCE
     }
 }
+
+private const val DESCRIPTION_ANNOTATION = "org.babyfish.jimmer.client.Description"
+
+private val IMMUTABLE_TYPE_ANNOTATIONS = setOf(
+    "org.babyfish.jimmer.Immutable",
+    "org.babyfish.jimmer.sql.Entity",
+    "org.babyfish.jimmer.sql.MappedSuperclass",
+    "org.babyfish.jimmer.sql.Embeddable",
+)

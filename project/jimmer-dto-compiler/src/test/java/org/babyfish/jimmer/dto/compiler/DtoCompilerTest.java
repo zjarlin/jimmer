@@ -1541,6 +1541,34 @@ public class DtoCompilerTest {
     }
 
     @Test
+    public void testConfigTypeLocation() {
+        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+                "TreeNodeView {\n" +
+                        "    #allScalars\n" +
+                        "    !recursion(TreeNodeRecursiveStrategy)\n" +
+                        "    childNodes*\n" +
+                        "}"
+        );
+        DtoProp<BaseType, BaseProp> childNodes = dtoTypes
+                .get(0)
+                .getProps()
+                .stream()
+                .filter(prop -> prop.getName().equals("childNodes"))
+                .map(prop -> (DtoProp<BaseType, BaseProp>) prop)
+                .findFirst()
+                .orElseThrow(AssertionError::new);
+        ConfigTypeRef recursionType = childNodes.getConfig().getRecursionType();
+
+        Assertions.assertNotNull(recursionType);
+        Assertions.assertEquals(
+                "org.babyfish.jimmer.sql.model.TreeNodeRecursiveStrategy",
+                recursionType.getQualifiedName()
+        );
+        Assertions.assertEquals(3, recursionType.getLine());
+        Assertions.assertEquals(16, recursionType.getColumn());
+    }
+
+    @Test
     public void testIllegalPropertyName() {
         DtoAstException ex = Assertions.assertThrows(DtoAstException.class, () -> {
             MyDtoCompiler.book(

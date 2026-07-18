@@ -1,6 +1,8 @@
 package org.babyfish.jimmer.compiler.lsi.apt
 
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
@@ -39,6 +41,136 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class AptLsiWorkspaceTest {
+
+    @Test
+    fun `freezes description after direct doc comment`() {
+        val compilation = compile(
+            "demo/DocumentedModels.java" to """
+                package demo;
+
+                import org.babyfish.jimmer.client.Description;
+
+                @Description("annotated type")
+                interface AnnotatedModel {
+                    @Description("annotated property")
+                    String name();
+                }
+
+                /** direct type */
+                @Description("ignored type")
+                interface DirectModel {
+                    /** direct property */
+                    @Description("ignored property")
+                    String name();
+                }
+            """.trimIndent(),
+        )
+
+        assertTrue(compilation.success, compilation.diagnostics)
+        val annotatedTypeId = LsiSymbolId.type("demo.AnnotatedModel")
+        val directTypeId = LsiSymbolId.type("demo.DirectModel")
+        assertEquals(
+            "annotated type",
+            assertIs<LsiTypeDeclaration>(compilation.workspace[annotatedTypeId]).documentation,
+        )
+        assertEquals(
+            "annotated property",
+            compilation.workspace.requireProperty(annotatedTypeId, "name").documentation,
+        )
+        assertEquals(
+            "direct type",
+            assertIs<LsiTypeDeclaration>(compilation.workspace[directTypeId]).documentation,
+        )
+        assertEquals(
+            "direct property",
+            compilation.workspace.requireProperty(directTypeId, "name").documentation,
+        )
+    }
+
+    @Test
+    fun `freezes binary immutable documentation from generated draft impl`() {
+        val dependency = compileDependency(
+            "demo/BinaryBook.java" to """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                public interface BinaryBook {
+                    @Id
+                    long id();
+
+                    String name();
+                }
+            """.trimIndent(),
+            "demo/BinaryBookDraft.java" to """
+                package demo;
+
+                import org.babyfish.jimmer.client.Description;
+
+                public interface BinaryBookDraft {
+                    class Producer {
+                        @Description("binary type")
+                        public static class Impl {
+                            @Description("binary property")
+                            public String name() {
+                                return "";
+                            }
+                        }
+                    }
+                }
+            """.trimIndent(),
+        )
+        val compilation = compile(
+            "demo/BinaryConsumer.java" to """
+                package demo;
+
+                interface BinaryConsumer {
+                    BinaryBook book();
+                }
+            """.trimIndent(),
+            additionalClasspath = listOf(dependency),
+        )
+
+        assertTrue(compilation.success, compilation.diagnostics)
+        val bookId = LsiSymbolId.type("demo.BinaryBook")
+        assertEquals(
+            "binary type",
+            assertIs<LsiTypeDeclaration>(compilation.workspace[bookId]).documentation,
+        )
+        assertEquals(
+            "binary property",
+            compilation.workspace.requireProperty(bookId, "name").documentation,
+        )
+    }
+
+    @Test
+    fun `freezes source and binary declarations with java frontend projection language`() {
+        val compilation = compile(
+            "demo/Projection.java" to """
+                package demo;
+
+                import java.lang.annotation.RetentionPolicy;
+
+                interface Projection {
+                    RetentionPolicy policy();
+                }
+            """.trimIndent(),
+        )
+
+        assertTrue(compilation.success, compilation.diagnostics)
+        val sourceType = assertIs<LsiTypeDeclaration>(
+            compilation.workspace[LsiSymbolId.type("demo.Projection")]
+        )
+        val binaryType = assertIs<LsiTypeDeclaration>(
+            compilation.workspace[LsiSymbolId.type("java.lang.annotation.RetentionPolicy")]
+        )
+        assertEquals(LsiOriginKind.SOURCE, sourceType.origin.kind)
+        assertEquals(LsiLanguage.JAVA, sourceType.origin.language)
+        assertEquals(LsiOriginKind.BINARY, binaryType.origin.kind)
+        assertEquals(LsiLanguage.JAVA, binaryType.origin.language)
+    }
 
     @Test
     fun `freezes nested type use nullability`() {
@@ -148,6 +280,8 @@ class AptLsiWorkspaceTest {
 
                 class Model<T extends Number> {
                     static class Nested {}
+
+                    class Inner {}
 
                     @FieldMarker
                     private static final String SECRET = "secret";
@@ -268,7 +402,11 @@ class AptLsiWorkspaceTest {
         assertFalse(model.dataClass)
         val nested = assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.Model.Nested")])
         assertEquals(modelId, nested.enclosingTypeId)
+        assertFalse(nested.requiresEnclosingInstance)
         assertFalse(nested.dataClass)
+        val inner = assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.Model.Inner")])
+        assertEquals(modelId, inner.enclosingTypeId)
+        assertTrue(inner.requiresEnclosingInstance)
         val fields = workspace.declarationsOfType<LsiField>()
             .filter { field -> field.ownerId == modelId }
         val secret = fields.single { field -> field.name == "SECRET" }

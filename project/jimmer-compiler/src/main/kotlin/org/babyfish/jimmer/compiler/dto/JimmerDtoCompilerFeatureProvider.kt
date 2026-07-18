@@ -21,6 +21,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     override val descriptor = JimmerCompilerFeatureDescriptor(
         id = DTO_FEATURE_ID,
         dependsOn = setOf(IMMUTABLE_FEATURE_ID),
+        classpathTypeIds = setOf(JACKSON_3_OBJECT_MAPPER_TYPE_ID),
         inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
     )
 
@@ -34,6 +35,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }
         val dependencyStatus = immutableState.status.toDtoDependencyStatus()
         val defaultNullableInputModifier = context.round.options.defaultNullableInputModifier()
+        val rendererOptions = context.round.toJimmerDtoRendererOptions()
         val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
         val outcome = JimmerDtoPrecompiler().compile(
             inputDocumentSnapshots = context.round.inputDocumentSnapshots,
@@ -42,6 +44,11 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             workspace = context.round.workspace,
             sourceFilter = sourceFilter,
             defaultNullableInputModifier = defaultNullableInputModifier,
+            platform = context.round.platform,
+        )
+        val effectiveKspMutableByRootTypeId = rendererOptions.effectiveKspMutableByRootTypeId(
+            platform = context.round.platform,
+            schema = outcome.schema,
         )
         val unresolvedStatus = dtoUnresolvedStatus(
             platform = context.round.platform,
@@ -60,6 +67,8 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             unresolvedDocuments = outcome.unresolvedDocuments,
             failures = outcome.failures,
             defaultNullableInputModifier = defaultNullableInputModifier,
+            rendererOptions = rendererOptions,
+            effectiveKspMutableByRootTypeId = effectiveKspMutableByRootTypeId,
             immutableDependencyFingerprint = immutableState.fingerprint,
         )
         val unavailableTypeIds = buildSet {
@@ -112,6 +121,8 @@ internal data class JimmerDtoCompilerFeatureState(
     val unresolvedDocuments: List<JimmerDtoUnresolvedDocument>,
     val failures: List<JimmerDtoCompilerFailure>,
     val defaultNullableInputModifier: DtoModifier,
+    val rendererOptions: JimmerDtoRendererOptions,
+    val effectiveKspMutableByRootTypeId: Map<JimmerDtoTypeId, Boolean>,
     val immutableDependencyFingerprint: String,
     override val fingerprint: String = buildString {
         append(status.name)
@@ -120,6 +131,10 @@ internal data class JimmerDtoCompilerFeatureState(
         append(':')
         append(defaultNullableInputModifier.name)
         append(':')
+        append(rendererOptions.fingerprint)
+        append(':')
+        appendEffectiveKspMutableByRootTypeId(effectiveKspMutableByRootTypeId)
+        append(':')
         append(schema.fingerprint())
         unresolvedDocuments.forEach { document ->
             appendDtoDocumentState(
@@ -127,8 +142,14 @@ internal data class JimmerDtoCompilerFeatureState(
                 inputSnapshot = document.inputSnapshot,
                 baseTypeId = document.baseTypeId,
                 unresolvedTypeIds = document.unresolvedTypeIds,
+                diagnosticCode = "jimmer.dto.unresolved",
+                diagnosticSeverity = LsiDiagnosticSeverity.ERROR,
+                diagnosticSymbolId = document.unresolvedTypeIds.first(),
                 diagnosticLocation = null,
                 message = document.message,
+                diagnosticDetails = sortedMapOf(
+                    "document" to document.inputSnapshot.document.source.path,
+                ),
             )
         }
         failures.forEach { failure ->
@@ -137,8 +158,12 @@ internal data class JimmerDtoCompilerFeatureState(
                 inputSnapshot = failure.inputSnapshot,
                 baseTypeId = failure.baseTypeId,
                 unresolvedTypeIds = emptyList(),
+                diagnosticCode = failure.code,
+                diagnosticSeverity = failure.severity,
+                diagnosticSymbolId = failure.symbolId,
                 diagnosticLocation = failure.location,
                 message = failure.message,
+                diagnosticDetails = failure.details,
             )
         }
         append(':')
@@ -152,8 +177,20 @@ internal data class JimmerDtoCompilerFeatureState(
         require(unresolvedDocuments == unresolvedDocuments.sortedBy(JimmerDtoUnresolvedDocument::inputSnapshot)) {
             "Unresolved DTO documents must use stable input order"
         }
-        require(failures == failures.sortedBy(JimmerDtoCompilerFailure::inputSnapshot)) {
-            "DTO compiler failures must use stable input order"
+        require(failures == failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR)) {
+            "DTO compiler failures must use stable diagnostic order"
+        }
+        require(
+            effectiveKspMutableByRootTypeId.keys.toList() ==
+                effectiveKspMutableByRootTypeId.keys.sorted()
+        ) {
+            "DTO KSP renderer plan must use stable root type id order"
+        }
+        val rootTypeIds = schema.documents
+            .flatMap { document -> document.renderGraph.rootTypeIds }
+            .sorted()
+        require(effectiveKspMutableByRootTypeId.keys.toList() == rootTypeIds) {
+            "DTO KSP renderer plan must cover every frozen root type"
         }
         require(
             unresolvedDocuments.map { document -> document.inputSnapshot.document.source.path }.toSet()
@@ -260,12 +297,12 @@ private fun JimmerDtoPrecompileOutcome.diagnostics(
         failures.forEach { failure ->
             add(
                 LsiDiagnostic(
-                    code = "jimmer.dto.invalid",
-                    severity = LsiDiagnosticSeverity.ERROR,
+                    code = failure.code,
+                    severity = failure.severity,
                     message = failure.message,
-                    symbolId = failure.baseTypeId,
+                    symbolId = failure.symbolId,
                     location = failure.location,
-                    details = mapOf("document" to failure.inputSnapshot.document.source.path),
+                    details = failure.details,
                 )
             )
         }
@@ -277,8 +314,12 @@ private fun StringBuilder.appendDtoDocumentState(
     inputSnapshot: CompilerInputDocumentSnapshot,
     baseTypeId: LsiSymbolId?,
     unresolvedTypeIds: List<LsiSymbolId>,
+    diagnosticCode: String,
+    diagnosticSeverity: LsiDiagnosticSeverity,
+    diagnosticSymbolId: LsiSymbolId?,
     diagnosticLocation: LsiLocation?,
     message: String,
+    diagnosticDetails: Map<String, String>,
 ) {
     append(':')
     append(kind)
@@ -307,15 +348,56 @@ private fun StringBuilder.appendDtoDocumentState(
     append(':')
     append(unresolvedTypeIds.joinToString(",") { typeId -> typeId.value })
     append(':')
+    append(diagnosticCode)
+    append(':')
+    append(diagnosticSeverity.name)
+    append(':')
+    append(diagnosticSymbolId?.value.orEmpty())
+    append(':')
+    append(diagnosticLocation?.source?.path.orEmpty())
+    append(':')
+    append(diagnosticLocation?.source?.language?.name.orEmpty())
+    append(':')
+    append(diagnosticLocation?.source?.kind?.name.orEmpty())
+    append(':')
     append(diagnosticLocation?.start?.line?.toString().orEmpty())
     append(':')
     append(diagnosticLocation?.start?.column?.toString().orEmpty())
     append(':')
+    append(diagnosticLocation?.end?.line?.toString().orEmpty())
+    append(':')
+    append(diagnosticLocation?.end?.column?.toString().orEmpty())
+    append(':')
     append(message.length)
     append(':')
     append(message)
+    diagnosticDetails.toSortedMap().forEach { (name, value) ->
+        append(':')
+        append(name.length)
+        append(':')
+        append(name)
+        append(':')
+        append(value.length)
+        append(':')
+        append(value)
+    }
+}
+
+private fun StringBuilder.appendEffectiveKspMutableByRootTypeId(
+    effectiveKspMutableByRootTypeId: Map<JimmerDtoTypeId, Boolean>,
+) {
+    append(effectiveKspMutableByRootTypeId.size)
+    effectiveKspMutableByRootTypeId.forEach { (rootTypeId, mutable) ->
+        append(':')
+        append(rootTypeId.value.length)
+        append(':')
+        append(rootTypeId.value)
+        append(':')
+        append(mutable)
+    }
 }
 
 private const val DTO_FEATURE_ID = "dto"
 private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val DEFAULT_NULLABLE_INPUT_MODIFIER_OPTION = "jimmer.dto.defaultNullableInputModifier"
+internal val JACKSON_3_OBJECT_MAPPER_TYPE_ID = LsiSymbolId.type("tools.jackson.databind.ObjectMapper")

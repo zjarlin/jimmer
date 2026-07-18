@@ -12,6 +12,7 @@ dependencies {
     implementation(projects.jimmerDtoCompiler)
 
     implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlin.metadata.jvm)
     implementation(libs.ksp.symbolProcessing.api)
     implementation(libs.spring.core)
     implementation(libs.intellij.annotations)
@@ -23,6 +24,7 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(kotlin("compiler-embeddable"))
     testImplementation(projects.jimmerSql)
+    testImplementation(projects.jimmerSqlKotlin)
     testImplementation(libs.ksp.symbolProcessing.aa.embeddable)
     testImplementation(libs.ksp.symbolProcessing.common.deps)
 }

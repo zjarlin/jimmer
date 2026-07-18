@@ -59,6 +59,200 @@ class KspLsiWorkspaceTest {
     }
 
     @Test
+    fun `freezes description after direct doc string`() {
+        val sourceFile = file("/workspace/src/main/kotlin/demo/DocumentedModels.kt")
+        val descriptionType = classDeclaration(
+            qualifiedName = DESCRIPTION_ANNOTATION,
+            classKind = ClassKind.ANNOTATION_CLASS,
+            origin = Origin.JAVA_LIB,
+            file = null,
+        )
+        val stringType = classDeclaration(
+            qualifiedName = "kotlin.String",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val description = { value: String ->
+            annotation(descriptionType, listOf(valueArgument("value", value)))
+        }
+        lateinit var annotatedModel: KSClassDeclaration
+        val annotatedName = property(
+            name = "name",
+            parent = { annotatedModel },
+            type = typeReference(type(stringType)),
+            annotations = sequenceOf(description("annotated property")),
+            file = sourceFile,
+            line = 2,
+        )
+        annotatedModel = classDeclaration(
+            qualifiedName = "demo.AnnotatedModel",
+            classKind = ClassKind.INTERFACE,
+            file = sourceFile,
+            declarations = { listOf(annotatedName) },
+            annotations = sequenceOf(description("annotated type")),
+        )
+        lateinit var directModel: KSClassDeclaration
+        val directName = property(
+            name = "name",
+            parent = { directModel },
+            type = typeReference(type(stringType)),
+            annotations = sequenceOf(description("ignored property")),
+            documentation = "direct property",
+            file = sourceFile,
+            line = 4,
+        )
+        directModel = classDeclaration(
+            qualifiedName = "demo.DirectModel",
+            classKind = ClassKind.INTERFACE,
+            file = sourceFile,
+            declarations = { listOf(directName) },
+            annotations = sequenceOf(description("ignored type")),
+            documentation = "direct type",
+        )
+        val workspace = listOf(annotatedModel, directModel).toLsiWorkspace(
+            resolver(
+                classesByName = mapOf(
+                    DESCRIPTION_ANNOTATION to descriptionType,
+                    "kotlin.String" to stringType,
+                )
+            ),
+            frontendOptions,
+        )
+
+        val annotatedTypeId = LsiSymbolId.type("demo.AnnotatedModel")
+        val directTypeId = LsiSymbolId.type("demo.DirectModel")
+        assertEquals(
+            "annotated type",
+            assertIs<LsiTypeDeclaration>(workspace[annotatedTypeId]).documentation,
+        )
+        assertEquals("annotated property", workspace.requireProperty(annotatedTypeId, "name").documentation)
+        assertEquals(
+            "direct type",
+            assertIs<LsiTypeDeclaration>(workspace[directTypeId]).documentation,
+        )
+        assertEquals("direct property", workspace.requireProperty(directTypeId, "name").documentation)
+    }
+
+    @Test
+    fun `freezes binary immutable documentation from generated draft impl`() {
+        val descriptionType = classDeclaration(
+            qualifiedName = DESCRIPTION_ANNOTATION,
+            classKind = ClassKind.ANNOTATION_CLASS,
+            origin = Origin.JAVA_LIB,
+            file = null,
+        )
+        val entityType = classDeclaration(
+            qualifiedName = ENTITY_ANNOTATION,
+            classKind = ClassKind.ANNOTATION_CLASS,
+            origin = Origin.JAVA_LIB,
+            file = null,
+        )
+        val stringType = classDeclaration(
+            qualifiedName = "kotlin.String",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val description = { value: String ->
+            annotation(descriptionType, listOf(valueArgument("value", value)))
+        }
+        lateinit var binaryBook: KSClassDeclaration
+        val binaryName = property(
+            name = "name",
+            parent = { binaryBook },
+            type = typeReference(type(stringType)),
+            annotations = emptySequence(),
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+            line = 1,
+        )
+        binaryBook = classDeclaration(
+            qualifiedName = "demo.BinaryBook",
+            classKind = ClassKind.INTERFACE,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+            declarations = { listOf(binaryName) },
+            annotations = sequenceOf(annotation(entityType, emptyList())),
+        )
+        lateinit var impl: KSClassDeclaration
+        val implName = property(
+            name = "name",
+            parent = { impl },
+            type = typeReference(type(stringType)),
+            annotations = sequenceOf(description("binary property")),
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+            line = 1,
+        )
+        impl = classDeclaration(
+            qualifiedName = "demo.BinaryBookDraft.\$.Impl",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+            declarations = { listOf(implName) },
+            annotations = sequenceOf(description("binary type")),
+        )
+        lateinit var producer: KSClassDeclaration
+        producer = classDeclaration(
+            qualifiedName = "demo.BinaryBookDraft.\$",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+            declarations = { listOf(impl) },
+        )
+        val draft = classDeclaration(
+            qualifiedName = "demo.BinaryBookDraft",
+            classKind = ClassKind.INTERFACE,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+            declarations = { listOf(producer) },
+        )
+        val workspace = listOf(binaryBook).toLsiWorkspace(
+            resolver(
+                classesByName = mapOf(
+                    DESCRIPTION_ANNOTATION to descriptionType,
+                    ENTITY_ANNOTATION to entityType,
+                    "kotlin.String" to stringType,
+                    "demo.BinaryBook" to binaryBook,
+                    "demo.BinaryBookDraft" to draft,
+                )
+            ),
+            frontendOptions,
+        )
+
+        val bookId = LsiSymbolId.type("demo.BinaryBook")
+        assertEquals("binary type", assertIs<LsiTypeDeclaration>(workspace[bookId]).documentation)
+        assertEquals("binary property", workspace.requireProperty(bookId, "name").documentation)
+    }
+
+    @Test
+    fun `freezes binary declarations with ksp frontend projection language`() {
+        val javaBinary = classDeclaration(
+            qualifiedName = "demo.JavaBinary",
+            classKind = ClassKind.INTERFACE,
+            origin = Origin.JAVA_LIB,
+            file = null,
+        )
+        val kotlinBinary = classDeclaration(
+            qualifiedName = "demo.KotlinBinary",
+            classKind = ClassKind.INTERFACE,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val workspace = listOf(javaBinary, kotlinBinary).toLsiWorkspace(resolver(), frontendOptions)
+        val javaDeclaration = assertIs<LsiTypeDeclaration>(
+            workspace[LsiSymbolId.type("demo.JavaBinary")]
+        )
+        val kotlinDeclaration = assertIs<LsiTypeDeclaration>(
+            workspace[LsiSymbolId.type("demo.KotlinBinary")]
+        )
+
+        assertEquals(LsiLanguage.JAVA, javaDeclaration.origin.language)
+        assertEquals(LsiLanguage.KOTLIN, kotlinDeclaration.origin.language)
+    }
+
+    @Test
     fun `freezes java reflection enum annotation values`() {
         val retention = classDeclaration(
             qualifiedName = "java.lang.annotation.Retention",
@@ -232,11 +426,18 @@ class KspLsiWorkspaceTest {
             parent = { outer },
             modifiers = setOf(Modifier.DATA),
         )
+        val inner = classDeclaration(
+            qualifiedName = "demo.Outer.Inner",
+            classKind = ClassKind.CLASS,
+            file = sourceFile,
+            parent = { outer },
+            modifiers = setOf(Modifier.INNER),
+        )
         outer = classDeclaration(
             qualifiedName = "demo.Outer",
             classKind = ClassKind.CLASS,
             file = sourceFile,
-            declarations = { listOf(nested) },
+            declarations = { listOf(nested, inner) },
         )
 
         val workspace = listOf(outer).toLsiWorkspace(resolver(), frontendOptions)
@@ -247,7 +448,93 @@ class KspLsiWorkspaceTest {
         assertFalse(outerSnapshot.dataClass)
         val nestedSnapshot = assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.Outer.Row")])
         assertEquals(outerId, nestedSnapshot.enclosingTypeId)
+        assertFalse(nestedSnapshot.requiresEnclosingInstance)
         assertTrue(nestedSnapshot.dataClass)
+        val innerSnapshot = assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.Outer.Inner")])
+        assertEquals(outerId, innerSnapshot.enclosingTypeId)
+        assertTrue(innerSnapshot.requiresEnclosingInstance)
+    }
+
+    @Test
+    fun `freezes java member class record and sealed declaration facts`() {
+        val sourceFile = file("/workspace/src/main/java/demo/JavaTypes.java")
+        val recordBase = classDeclaration(
+            qualifiedName = "java.lang.Record",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA_LIB,
+            file = null,
+        )
+        lateinit var outer: KSClassDeclaration
+        val inner = classDeclaration(
+            qualifiedName = "demo.JavaTypes.Inner",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA,
+            file = sourceFile,
+            parent = { outer },
+        )
+        val staticNested = classDeclaration(
+            qualifiedName = "demo.JavaTypes.StaticNested",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA,
+            file = sourceFile,
+            parent = { outer },
+            modifiers = setOf(Modifier.JAVA_STATIC),
+        )
+        val nestedRecord = classDeclaration(
+            qualifiedName = "demo.JavaTypes.NestedRecord",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA,
+            file = sourceFile,
+            parent = { outer },
+            superTypes = { listOf(typeReference(type(recordBase))) },
+        )
+        outer = classDeclaration(
+            qualifiedName = "demo.JavaTypes",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA,
+            file = sourceFile,
+            declarations = { listOf(inner, staticNested, nestedRecord) },
+        )
+        val javaSealed = classDeclaration(
+            qualifiedName = "demo.JavaSealed",
+            classKind = ClassKind.CLASS,
+            origin = Origin.JAVA,
+            file = sourceFile,
+            modifiers = setOf(Modifier.SEALED),
+        )
+        val kotlinSealed = classDeclaration(
+            qualifiedName = "demo.KotlinSealed",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN,
+            file = file("/workspace/src/main/kotlin/demo/KotlinSealed.kt"),
+            modifiers = setOf(Modifier.SEALED),
+        )
+
+        val workspace = listOf(outer, javaSealed, kotlinSealed).toLsiWorkspace(
+            resolver(classesByName = mapOf("java.lang.Record" to recordBase)),
+            frontendOptions,
+        )
+
+        assertTrue(
+            assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.JavaTypes.Inner")])
+                .requiresEnclosingInstance,
+        )
+        assertFalse(
+            assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.JavaTypes.StaticNested")])
+                .requiresEnclosingInstance,
+        )
+        assertFalse(
+            assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.JavaTypes.NestedRecord")])
+                .requiresEnclosingInstance,
+        )
+        assertFalse(
+            assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.JavaSealed")])
+                .abstractDeclaration,
+        )
+        assertTrue(
+            assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.KotlinSealed")])
+                .abstractDeclaration,
+        )
     }
 
     @Test
@@ -1146,7 +1433,7 @@ class KspLsiWorkspaceTest {
         origin: Origin = Origin.KOTLIN,
         mutable: Boolean = false,
         documentation: String? = null,
-        file: KSFile,
+        file: KSFile?,
         line: Int,
     ): KSPropertyDeclaration {
         lateinit var declaration: KSPropertyDeclaration
@@ -1161,7 +1448,8 @@ class KspLsiWorkspaceTest {
                 "getAnnotations" -> annotations
                 "getModifiers" -> modifiers
                 "getOrigin" -> origin
-                "getLocation" -> FileLocation(file.filePath, line)
+                "getLocation" -> file?.let { sourceFile -> FileLocation(sourceFile.filePath, line) }
+                    ?: com.google.devtools.ksp.symbol.NonExistLocation
                 "getDocString" -> documentation
                 "getGetter", "getSetter", "getExtensionReceiver" -> null
                 "isMutable" -> mutable
@@ -1406,5 +1694,10 @@ class KspLsiWorkspaceTest {
             Set::class.java.isAssignableFrom(returnType) -> emptySet<Any>()
             else -> null
         }
+    }
+
+    private companion object {
+        const val DESCRIPTION_ANNOTATION = "org.babyfish.jimmer.client.Description"
+        const val ENTITY_ANNOTATION = "org.babyfish.jimmer.sql.Entity"
     }
 }

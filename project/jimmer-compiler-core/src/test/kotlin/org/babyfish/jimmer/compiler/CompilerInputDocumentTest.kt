@@ -68,20 +68,27 @@ class CompilerInputDocumentTest {
             kind = CompilerInputDocumentReferenceKind.TYPE_USAGE,
             location = LsiLocation(document.source, LsiPosition(3, 1)),
         )
+        val config = CompilerInputDocumentReference(
+            typeId = LsiSymbolId.type("demo.Filter"),
+            kind = CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION,
+            location = LsiLocation(document.source, LsiPosition(4, 1)),
+        )
 
-        val snapshot = CompilerInputDocumentSnapshot(document, listOf(subject, annotation, usage))
+        val snapshot = CompilerInputDocumentSnapshot(document, listOf(subject, annotation, usage, config))
 
         assertEquals(
             setOf(
                 LsiSymbolId.type("demo.Book"),
                 LsiSymbolId.type("demo.Tag"),
                 LsiSymbolId.type("demo.Payload"),
+                LsiSymbolId.type("demo.Filter"),
             ),
             snapshot.referencedTypeIds,
         )
         assertEquals(
             listOf(
                 LsiTypeSeed(LsiSymbolId.type("demo.Book"), LsiTypeSeedMode.FULL_DECLARATION),
+                LsiTypeSeed(LsiSymbolId.type("demo.Filter"), LsiTypeSeedMode.FULL_DECLARATION),
                 LsiTypeSeed(LsiSymbolId.type("demo.Payload"), LsiTypeSeedMode.HEADER),
                 LsiTypeSeed(LsiSymbolId.type("demo.Tag"), LsiTypeSeedMode.FULL_DECLARATION),
             ),

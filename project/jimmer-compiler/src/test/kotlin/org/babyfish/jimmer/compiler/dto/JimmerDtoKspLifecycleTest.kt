@@ -186,7 +186,9 @@ class JimmerDtoKspLifecycleTest {
                 unresolvedSymbols = result.unresolvedSymbols,
                 diagnosticCodes = result.diagnostics.map { diagnostic -> diagnostic.code },
                 dtoTypeNames = state.schema.documents.flatMap { document ->
-                    document.dtoTypes.mapNotNull { dtoType -> dtoType.name }
+                    document.renderGraph.rootTypeIds.mapNotNull { typeId ->
+                        document.renderGraph.typesById.getValue(typeId).name
+                    }
                 },
             )
         }

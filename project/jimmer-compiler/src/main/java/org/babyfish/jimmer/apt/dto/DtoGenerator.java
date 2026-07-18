@@ -848,8 +848,8 @@ public class DtoGenerator {
         if (!cfg.getFetchType().equals("AUTO")) {
             cb.add("\n.fetchType($T.$L)", Constants.REFERENCE_FETCH_TYPE_CLASS_NAME, cfg.getFetchType());
         }
-        if (cfg.getFilterClassName() != null) {
-            String filterClassName = cfg.getFilterClassName();
+        if (cfg.getFilterType() != null) {
+            String filterClassName = cfg.getFilterType().getQualifiedName();
             TypeElement filterTypeElement = ctx.getElements().getTypeElement(filterClassName);
             if (filterTypeElement == null) {
                 throw new DtoException(
@@ -863,8 +863,8 @@ public class DtoGenerator {
             ).parse();
             cb.add("\n.filter(new $T())", filterTypeElement);
         }
-        if (cfg.getRecursionClassName() != null) {
-            String recursionClassName = cfg.getRecursionClassName();
+        if (cfg.getRecursionType() != null) {
+            String recursionClassName = cfg.getRecursionType().getQualifiedName();
             TypeElement recursionTypeElement = ctx.getElements().getTypeElement(recursionClassName);
             if (recursionTypeElement == null) {
                 throw new DtoException(

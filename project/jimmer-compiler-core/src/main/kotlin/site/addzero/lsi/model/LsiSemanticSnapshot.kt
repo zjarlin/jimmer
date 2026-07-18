@@ -33,12 +33,15 @@ private fun LsiDeclaration.toSemanticSnapshotLine(options: LsiSemanticSnapshotOp
             qualifiedName,
             kind.name,
             enclosingTypeId?.value.orEmpty(),
+            requiresEnclosingInstance.toString(),
+            abstractDeclaration.toString(),
             dataClass.toString(),
             visibility.name,
             modality.name,
             typeParameters.joinToString(",") { parameter -> parameter.toSemanticSnapshot(options) },
             superTypes.joinToString(",") { type -> type.toSemanticSignature(options) },
             memberIds.joinToString(",") { memberId -> memberId.value },
+            annotationMembers.joinToString(",") { member -> member.toSemanticSnapshot(options) },
             annotations.toSemanticSnapshot(options),
         ).joinToString("|")
         is LsiProperty -> listOf(
@@ -111,6 +114,15 @@ private fun LsiDeclaration.toSemanticSnapshotLine(options: LsiSemanticSnapshotOp
             annotations.toSemanticSnapshot(options),
         ).joinToString("|")
     }
+}
+
+private fun LsiAnnotationMember.toSemanticSnapshot(options: LsiSemanticSnapshotOptions): String {
+    return listOf(
+        name,
+        type.toSemanticSignature(options),
+        vararg.toString(),
+        hasDefault.toString(),
+    ).joinToString(":")
 }
 
 private fun LsiParameter.toSemanticSnapshot(options: LsiSemanticSnapshotOptions): String {

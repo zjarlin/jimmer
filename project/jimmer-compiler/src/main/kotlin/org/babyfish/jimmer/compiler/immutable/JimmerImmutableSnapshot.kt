@@ -41,8 +41,9 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.declarationId.value,
                     prop.declaringTypeId.value,
                     prop.name,
+                    prop.documentation.orEmpty(),
                     prop.type.normalizedTypeSignature(),
-                    prop.annotations.canonicalText(),
+                    prop.annotations.semanticCanonicalText(),
                     prop.overrideChain.joinToString(",") { id -> id.value },
                     prop.inherited.toString(),
                     prop.overridden.toString(),
@@ -126,6 +127,11 @@ private fun String.escapeSnapshotField(): String {
 
 private fun List<LsiAnnotation>.canonicalText(): String {
     return map(LsiAnnotation::canonicalText).sorted().joinToString(";")
+}
+
+private fun List<LsiAnnotation>.semanticCanonicalText(): String {
+    return filterNot { annotation -> annotation.type.annotationNullability() != null }
+        .canonicalText()
 }
 
 private fun LsiAnnotation.canonicalText(): String {

@@ -111,17 +111,21 @@ enum class LsiOriginKind {
 }
 
 /**
- * 声明的来源以及生成链上的直接起点。
+ * 声明的来源以及生成链上的直接起点；语言表示前端冻结时观察到的投影视图。
  */
 data class LsiOrigin(
     val kind: LsiOriginKind,
     val source: LsiSource? = null,
+    val language: LsiLanguage = source?.language ?: LsiLanguage.UNKNOWN,
     val originatingSymbols: Set<LsiSymbolId> = emptySet()
 ) {
 
     init {
         if (kind == LsiOriginKind.SOURCE) {
             requireNotNull(source) { "Source declaration origin requires an LSI source" }
+        }
+        require(source == null || language == source.language) {
+            "LSI origin language must match its source language"
         }
     }
 }

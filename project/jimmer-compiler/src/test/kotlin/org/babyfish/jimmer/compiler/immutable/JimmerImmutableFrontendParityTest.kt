@@ -9,7 +9,9 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSNode
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.RoundEnvironment
@@ -30,10 +32,52 @@ import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
 import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
+import org.jetbrains.kotlin.cli.common.ExitCode
+import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableFrontendParityTest {
+
+    @Test
+    fun `binary draft documentation produces identical immutable fingerprints`() {
+        val apt = compileApt(
+            source = """
+                package demo;
+
+                interface Consumer {
+                    demo.binary.BinaryBook book();
+                }
+            """.trimIndent(),
+            libraries = listOf(compileJavaDocumentationLibrary()),
+        )
+        val ksp = compileKsp(
+            source = """
+                package demo
+
+                interface Consumer {
+                    val book: demo.binary.BinaryBook
+                }
+            """.trimIndent(),
+            libraries = listOf(compileKotlinDocumentationLibrary()),
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        val aptBook = aptSchema.types.single { type -> type.qualifiedName == "demo.binary.BinaryBook" }
+        val kspBook = kspSchema.types.single { type -> type.qualifiedName == "demo.binary.BinaryBook" }
+        assertEquals("binary type", aptBook.documentation)
+        assertEquals("binary property", aptBook.props.single { prop -> prop.name == "name" }.documentation)
+        assertEquals(aptBook.documentation, kspBook.documentation)
+        assertEquals(
+            aptBook.props.single { prop -> prop.name == "name" }.documentation,
+            kspBook.props.single { prop -> prop.name == "name" }.documentation,
+        )
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+    }
 
     @Test
     fun `real apt and ksp frontends produce identical inheritance metadata`() {
@@ -151,7 +195,10 @@ class JimmerImmutableFrontendParityTest {
         )
     }
 
-    private fun compileApt(source: String): FrontendResult {
+    private fun compileApt(
+        source: String,
+        libraries: List<File> = emptyList(),
+    ): FrontendResult {
         val projectDir = createTempDirectory(prefix = "jimmer-immutable-apt-parity").toFile()
         val sourceFile = projectDir.resolve("src/main/java/demo/Models.java").also { file ->
             file.parentFile.mkdirs()
@@ -173,7 +220,9 @@ class JimmerImmutableFrontendParityTest {
                 listOf(
                     "-proc:only",
                     "-classpath",
-                    System.getProperty("java.class.path"),
+                    (libraries + runtimeClasspath())
+                        .distinct()
+                        .joinToString(File.pathSeparator, transform = File::getAbsolutePath),
                 ),
                 null,
                 fileManager.getJavaFileObjects(sourceFile),
@@ -198,7 +247,10 @@ class JimmerImmutableFrontendParityTest {
         return frontendResult
     }
 
-    private fun compileKsp(source: String): FrontendResult {
+    private fun compileKsp(
+        source: String,
+        libraries: List<File> = emptyList(),
+    ): FrontendResult {
         val projectDir = createTempDirectory(prefix = "jimmer-immutable-ksp-parity").toFile()
         val sourceFile = projectDir.resolve("src/main/kotlin/demo/Models.kt").also { file ->
             file.parentFile.mkdirs()
@@ -210,7 +262,7 @@ class JimmerImmutableFrontendParityTest {
         val configuration = KSPJvmConfig.Builder().apply {
             moduleName = "immutable-frontend-parity"
             sourceRoots = listOf(sourceFile)
-            libraries = runtimeClasspath()
+            this.libraries = (libraries + runtimeClasspath()).distinct()
             projectBaseDir = projectDir
             outputBaseDir = outputDir
             cachesDir = outputDir.resolve("caches").apply(File::mkdirs)
@@ -240,6 +292,126 @@ class JimmerImmutableFrontendParityTest {
             assertTrue(logger.errors.contains(frontendResult.diagnostic))
         }
         return frontendResult
+    }
+
+    private fun compileJavaDocumentationLibrary(): File {
+        val projectDir = createTempDirectory(prefix = "jimmer-immutable-java-doc-library").toFile()
+        val sourceDir = projectDir.resolve("src/main/java/demo/binary")
+        val bookSource = sourceDir.resolve("BinaryBook.java").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText(
+                """
+                    package demo.binary;
+
+                    import org.babyfish.jimmer.sql.Entity;
+                    import org.babyfish.jimmer.sql.Id;
+
+                    @Entity
+                    public interface BinaryBook {
+                        @Id
+                        long id();
+
+                        String name();
+                    }
+                """.trimIndent()
+            )
+        }
+        val draftSource = sourceDir.resolve("BinaryBookDraft.java").also { file ->
+            file.writeText(
+                """
+                    package demo.binary;
+
+                    import org.babyfish.jimmer.client.Description;
+
+                    public interface BinaryBookDraft {
+                        class Producer {
+                            @Description("binary type")
+                            public static class Impl {
+                                @Description("binary property")
+                                public String name() {
+                                    return "";
+                                }
+                            }
+                        }
+                    }
+                """.trimIndent()
+            )
+        }
+        val output = projectDir.resolve("build/classes").apply(File::mkdirs)
+        val diagnostics = DiagnosticCollector<JavaFileObject>()
+        val compiler = ToolProvider.getSystemJavaCompiler()
+            ?: error("Immutable documentation parity requires a JDK compiler")
+        val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
+            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, listOf(output))
+            compiler.getTask(
+                null,
+                fileManager,
+                diagnostics,
+                listOf(
+                    "-proc:none",
+                    "-classpath",
+                    runtimeClasspath().joinToString(File.pathSeparator, transform = File::getAbsolutePath),
+                ),
+                null,
+                fileManager.getJavaFileObjects(bookSource, draftSource),
+            ).call()
+        }
+        assertTrue(
+            success,
+            diagnostics.diagnostics.joinToString("\n") { diagnostic -> diagnostic.getMessage(null) },
+        )
+        return output
+    }
+
+    private fun compileKotlinDocumentationLibrary(): File {
+        val projectDir = createTempDirectory(prefix = "jimmer-immutable-kotlin-doc-library").toFile()
+        val source = projectDir.resolve("src/main/kotlin/demo/binary/BinaryBook.kt").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText(
+                """
+                    package demo.binary
+
+                    import org.babyfish.jimmer.client.Description
+                    import org.babyfish.jimmer.sql.Entity
+                    import org.babyfish.jimmer.sql.Id
+
+                    @Entity
+                    interface BinaryBook {
+                        @get:Id
+                        val id: Long
+
+                        val name: String
+                    }
+
+                    interface BinaryBookDraft {
+                        class `${'$'}` {
+                            @Description("binary type")
+                            class Impl {
+                                @Description("binary property")
+                                val name: String
+                                    get() = ""
+                            }
+                        }
+                    }
+                """.trimIndent()
+            )
+        }
+        val output = projectDir.resolve("build/classes").apply(File::mkdirs)
+        val messages = ByteArrayOutputStream()
+        val exitCode = PrintStream(messages, true, StandardCharsets.UTF_8).use { stream ->
+            K2JVMCompiler().exec(
+                stream,
+                "-no-stdlib",
+                "-no-reflect",
+                "-classpath",
+                runtimeClasspath().joinToString(File.pathSeparator, transform = File::getAbsolutePath),
+                "-d",
+                output.absolutePath,
+                source.absolutePath,
+            )
+        }
+        assertEquals(ExitCode.OK, exitCode, messages.toString(StandardCharsets.UTF_8))
+        return output
     }
 
     private class ImmutableSnapshotAptProcessor(

@@ -13,10 +13,10 @@ public interface PropConfig<P extends BaseProp> {
     List<OrderItem<P>> getOrderItems();
 
     @Nullable
-    String getFilterClassName();
+    ConfigTypeRef getFilterType();
 
     @Nullable
-    String getRecursionClassName();
+    ConfigTypeRef getRecursionType();
 
     String getFetchType();
 

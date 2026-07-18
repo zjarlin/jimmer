@@ -11,6 +11,7 @@ enum class DtoDocumentReferenceKind {
     SUPER_TYPE,
     MODEL_TYPE,
     TYPE_USAGE,
+    CONFIG_IMPLEMENTATION,
 }
 
 /**
@@ -130,13 +131,13 @@ private class DtoDocumentReferenceListener(
 
     override fun enterFilter(context: DtoParser.FilterContext) {
         context.qualifiedName()?.let { typeName ->
-            collect(typeName, DtoDocumentReferenceKind.TYPE_USAGE)
+            collect(typeName, DtoDocumentReferenceKind.CONFIG_IMPLEMENTATION)
         }
     }
 
     override fun enterRecursion(context: DtoParser.RecursionContext) {
         context.qualifiedName()?.let { typeName ->
-            collect(typeName, DtoDocumentReferenceKind.TYPE_USAGE)
+            collect(typeName, DtoDocumentReferenceKind.CONFIG_IMPLEMENTATION)
         }
     }
 

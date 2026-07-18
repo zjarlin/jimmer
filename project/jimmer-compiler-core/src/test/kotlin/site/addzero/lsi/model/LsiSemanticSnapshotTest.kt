@@ -157,6 +157,8 @@ class LsiSemanticSnapshotTest {
                     qualifiedName = "sample.Outer.Row",
                     kind = LsiTypeDeclarationKind.CLASS,
                     enclosingTypeId = outerId,
+                    requiresEnclosingInstance = true,
+                    abstractDeclaration = false,
                     dataClass = true,
                     origin = ORIGIN,
                 ),
@@ -165,7 +167,12 @@ class LsiSemanticSnapshotTest {
         val plainWorkspace = LsiWorkspace(
             declarations = dataWorkspace.declarations.map { declaration ->
                 if (declaration is LsiTypeDeclaration && declaration.id == nestedId) {
-                    declaration.copy(enclosingTypeId = null, dataClass = false)
+                    declaration.copy(
+                        enclosingTypeId = null,
+                        requiresEnclosingInstance = false,
+                        abstractDeclaration = false,
+                        dataClass = false,
+                    )
                 } else {
                     declaration
                 }
@@ -174,7 +181,7 @@ class LsiSemanticSnapshotTest {
 
         val snapshot = dataWorkspace.toSemanticSnapshot()
         assertNotEquals(snapshot, plainWorkspace.toSemanticSnapshot())
-        assertTrue(snapshot.contains("type|${nestedId.value}|Row|sample.Outer.Row|CLASS|${outerId.value}|true|"))
+        assertTrue(snapshot.contains("type|${nestedId.value}|Row|sample.Outer.Row|CLASS|${outerId.value}|true|false|true|"))
     }
 
     private fun workspace(

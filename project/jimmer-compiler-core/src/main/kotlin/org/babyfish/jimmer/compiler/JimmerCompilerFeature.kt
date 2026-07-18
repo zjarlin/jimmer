@@ -1,10 +1,12 @@
 package org.babyfish.jimmer.compiler
 
 import java.util.ServiceLoader
+import site.addzero.lsi.core.LsiSymbolId
 
 data class JimmerCompilerFeatureDescriptor(
     val id: String,
     val dependsOn: Set<String> = emptySet(),
+    val classpathTypeIds: Set<LsiSymbolId> = emptySet(),
     val inputResourcePaths: Set<String> = emptySet(),
     val inputDocumentKinds: Set<CompilerInputDocumentKind> = emptySet(),
 ) {
@@ -13,6 +15,7 @@ data class JimmerCompilerFeatureDescriptor(
         requireFeatureId(id)
         dependsOn.forEach(::requireFeatureId)
         require(id !in dependsOn) { "Compiler feature '$id' cannot depend on itself" }
+        classpathTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
         inputResourcePaths.forEach(::requireCompilerResourcePath)
     }
 }

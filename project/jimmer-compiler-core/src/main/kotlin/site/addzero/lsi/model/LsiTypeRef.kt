@@ -105,6 +105,27 @@ data class LsiTypeParameter(
 }
 
 /**
+ * 注解成员类型在语言模型中不可空，递归消除前端投影产生的平台可空性差异。
+ */
+fun LsiTypeRef.toAnnotationMemberType(): LsiTypeRef {
+    return when (this) {
+        is LsiDeclaredType -> copy(
+            arguments = arguments.map { argument ->
+                argument.copy(type = argument.type?.toAnnotationMemberType())
+            },
+            nullability = LsiNullability.NON_NULL,
+        )
+        is LsiTypeParameterRef -> copy(nullability = LsiNullability.NON_NULL)
+        is LsiPrimitiveType -> copy(nullability = LsiNullability.NON_NULL)
+        is LsiArrayType -> copy(
+            elementType = elementType.toAnnotationMemberType(),
+            nullability = LsiNullability.NON_NULL,
+        )
+        is LsiUnresolvedType -> copy(nullability = LsiNullability.NON_NULL)
+    }
+}
+
+/**
  * 提供不依赖平台类型对象的确定性类型签名。
  */
 fun LsiTypeRef.stableSignature(): String {

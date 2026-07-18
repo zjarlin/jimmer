@@ -15,6 +15,7 @@ data class CompilerRound(
     val platform: CompilerPlatform = CompilerPlatform.UNKNOWN,
     val isFinal: Boolean = false,
     val options: Map<String, String> = emptyMap(),
+    val availableTypeIds: Set<LsiSymbolId> = emptySet(),
     val inputResources: Map<String, String> = emptyMap(),
     val inputDocumentSnapshots: List<CompilerInputDocumentSnapshot>,
 ) {
@@ -29,6 +30,7 @@ data class CompilerRound(
             "Current compiler root types must exist in the current workspace"
         }
         require(options.keys.none(String::isBlank)) { "Compiler option name cannot be blank" }
+        availableTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
         inputResources.keys.forEach(::requireCompilerResourcePath)
         require(inputDocumentSnapshots == inputDocumentSnapshots.sorted()) {
             "Compiler input document snapshots must use stable source order"
@@ -185,6 +187,9 @@ class CompilerSession(
 ) {
     private val orderedProviders = JimmerCompilerFeatureGraph.sort(providers)
 
+    private val classpathTypeIds = orderedProviders
+        .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.classpathTypeIds }
+
     private val artifactSet = GeneratedArtifactSet()
 
     private val roundResults = mutableListOf<CompilerRoundResult>()
@@ -314,6 +319,9 @@ class CompilerSession(
             throw CompilerSessionStateException(
                 "Compiler session '$id' expected round ${roundResults.size}, got ${round.number}",
             )
+        }
+        require(round.availableTypeIds.all(classpathTypeIds::contains)) {
+            "Available compiler types must be declared by a compiler feature"
         }
     }
 

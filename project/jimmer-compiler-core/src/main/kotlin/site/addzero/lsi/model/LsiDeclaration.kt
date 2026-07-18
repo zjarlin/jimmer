@@ -61,6 +61,8 @@ data class LsiTypeDeclaration(
     val qualifiedName: String,
     val kind: LsiTypeDeclarationKind,
     val enclosingTypeId: LsiSymbolId? = null,
+    val requiresEnclosingInstance: Boolean = false,
+    val abstractDeclaration: Boolean = false,
     val dataClass: Boolean = false,
     override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
     val modality: LsiModality = LsiModality.FINAL,
@@ -68,6 +70,7 @@ data class LsiTypeDeclaration(
     val superTypes: List<LsiTypeRef> = emptyList(),
     val memberIds: List<LsiSymbolId> = emptyList(),
     val enumEntries: List<LsiEnumEntry> = emptyList(),
+    val annotationMembers: List<LsiAnnotationMember> = emptyList(),
     override val documentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
@@ -78,6 +81,9 @@ data class LsiTypeDeclaration(
         require(name.isNotBlank()) { "LSI type declaration name cannot be blank" }
         require(qualifiedName.isNotBlank()) { "LSI type declaration qualified name cannot be blank" }
         require(enclosingTypeId != id) { "LSI type declaration cannot enclose itself: ${id.value}" }
+        require(!requiresEnclosingInstance || enclosingTypeId != null) {
+            "LSI type requiring an enclosing instance must be nested: ${id.value}"
+        }
         require(!dataClass || kind == LsiTypeDeclarationKind.CLASS) {
             "Only LSI class declarations can be data classes: ${id.value}"
         }
@@ -89,6 +95,32 @@ data class LsiTypeDeclaration(
         }
         require(enumEntries.map(LsiEnumEntry::id).distinct().size == enumEntries.size) {
             "LSI type declaration cannot contain duplicate enum entry ids: ${id.value}"
+        }
+        require(annotationMembers.isEmpty() || kind == LsiTypeDeclarationKind.ANNOTATION) {
+            "Only LSI annotation declarations can contain annotation members: ${id.value}"
+        }
+        require(annotationMembers == annotationMembers.sortedBy(LsiAnnotationMember::name)) {
+            "LSI annotation members must use stable name order: ${id.value}"
+        }
+        require(annotationMembers.map(LsiAnnotationMember::name).distinct().size == annotationMembers.size) {
+            "LSI annotation declaration cannot contain duplicate member names: ${id.value}"
+        }
+    }
+}
+
+data class LsiAnnotationMember(
+    val name: String,
+    val type: LsiTypeRef,
+    val vararg: Boolean = false,
+    val hasDefault: Boolean = false,
+) {
+    init {
+        require(name.isNotBlank()) { "LSI annotation member name cannot be blank" }
+        require(type == type.toAnnotationMemberType()) {
+            "LSI annotation member type must use canonical non-null semantics: $name"
+        }
+        require(!vararg || type is LsiArrayType) {
+            "LSI annotation vararg member must expose its array type: $name"
         }
     }
 }

@@ -54,6 +54,23 @@ class JimmerImmutablePrecompilerTest {
         )
         assertEquals("1", status.annotationString(DEFAULT, "value"))
         assertEquals("STATUS", status.annotationString(COLUMN, "name"))
+        assertEquals("Base status documentation", status.documentation)
+        assertNotEquals(
+            schema.fingerprint(),
+            schema.copy(
+                types = schema.types.map { type ->
+                    if (type.id != entity.id) {
+                        type
+                    } else {
+                        type.copy(
+                            props = type.props.map { prop ->
+                                if (prop.id == status.id) prop.copy(documentation = "Changed") else prop
+                            }
+                        )
+                    }
+                }
+            ).fingerprint(),
+        )
     }
 
     @Test
@@ -1441,6 +1458,57 @@ class JimmerImmutablePrecompilerTest {
     }
 
     @Test
+    fun `canonicalizes property type nullability and ignores nullity annotation spelling in snapshot`() {
+        val entityId = LsiSymbolId.type("demo.NullabilityModel")
+        val propertyId = LsiSymbolId.property(entityId, "rating")
+        val aptSchema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.NullabilityModel", IMMUTABLE, listOf(propertyId)),
+                    property(
+                        ownerId = entityId,
+                        name = "rating",
+                        type = LsiPrimitiveType(
+                            LsiPrimitiveKind.INT,
+                            nullability = LsiNullability.PLATFORM,
+                        ),
+                        annotations = listOf(
+                            annotation(LsiSymbolId.type("org.jetbrains.annotations.Nullable")),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val kspSchema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.NullabilityModel", IMMUTABLE, listOf(propertyId)),
+                    property(
+                        ownerId = entityId,
+                        name = "rating",
+                        type = LsiPrimitiveType(
+                            LsiPrimitiveKind.INT,
+                            nullability = LsiNullability.NULLABLE,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val aptProp = aptSchema.types.single().props.single()
+        val kspProp = kspSchema.types.single().props.single()
+        assertTrue(aptProp.nullable)
+        assertEquals(LsiNullability.NULLABLE, aptProp.type.nullability)
+        assertEquals("primitive:int?", aptProp.type.normalizedTypeSignature())
+        assertEquals(kspProp.type, aptProp.type)
+        assertTrue(aptProp.annotations.any { annotation ->
+            annotation.type == LsiSymbolId.type("org.jetbrains.annotations.Nullable")
+        })
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+    }
+
+    @Test
     fun `extracts validation and converter typed metadata`() {
         val entityId = LsiSymbolId.type("demo.CodeEntity")
         val property = property(
@@ -1908,6 +1976,7 @@ class JimmerImmutablePrecompilerTest {
             ownerId = BASE_TYPE,
             name = "status",
             type = LsiTypeParameterRef(parameterId, nullability),
+            documentation = "Base status documentation",
             annotations = listOf(
                 default("0", language),
                 annotation(
@@ -2363,12 +2432,14 @@ class JimmerImmutablePrecompilerTest {
         overrides: List<LsiOverride> = emptyList(),
         modality: LsiModality = LsiModality.ABSTRACT,
         origin: LsiOrigin = SYNTHETIC_ORIGIN,
+        documentation: String? = null,
     ): LsiProperty {
         return LsiProperty(
             id = LsiSymbolId.property(ownerId, name),
             name = name,
             ownerId = ownerId,
             type = type,
+            documentation = documentation,
             modality = modality,
             overrides = overrides,
             annotations = annotations,

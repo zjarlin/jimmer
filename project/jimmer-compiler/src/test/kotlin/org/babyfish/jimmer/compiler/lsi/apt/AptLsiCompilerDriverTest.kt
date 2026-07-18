@@ -118,6 +118,8 @@ class AptLsiCompilerDriverTest {
         assertTrue(provider.rounds.last().workspace.contains(MODEL_ID))
         assertTrue(provider.rounds.last().currentWorkspace.declarations.isEmpty())
         assertTrue(provider.rounds.last().currentRootTypeIds.isEmpty())
+        assertEquals(setOf(JAVA_STRING_ID), provider.rounds.first().availableTypeIds)
+        assertEquals(setOf(JAVA_STRING_ID), provider.rounds.last().availableTypeIds)
         val warning = diagnostics.diagnostics.single { diagnostic ->
             diagnostic.kind == Diagnostic.Kind.WARNING &&
                 diagnostic.getMessage(null).contains("[driver.warning]")
@@ -246,6 +248,7 @@ class AptLsiCompilerDriverTest {
     private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
         override val descriptor = JimmerCompilerFeatureDescriptor(
             id = "apt-driver-test",
+            classpathTypeIds = setOf(JAVA_STRING_ID, MISSING_TYPE_ID),
             inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
         )
 
@@ -329,5 +332,7 @@ class AptLsiCompilerDriverTest {
         val GENERATED_ID = LsiSymbolId.type("demo.Generated")
         val PROPERTY_ID = LsiSymbolId.property(MODEL_ID, "value")
         val ACTIVE_PROPERTY_ID = LsiSymbolId.property(MODEL_ID, "isActive")
+        val JAVA_STRING_ID = LsiSymbolId.type("java.lang.String")
+        val MISSING_TYPE_ID = LsiSymbolId.type("missing.NotThere")
     }
 }

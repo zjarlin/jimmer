@@ -5,6 +5,8 @@ import kotlin.test.assertEquals
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotationMember
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 
@@ -23,5 +25,22 @@ class LsiReferencedTypesTest {
         )
 
         assertEquals(setOf(outerId), listOf(nested).referencedTypeIds())
+    }
+
+    @Test
+    fun `collects annotation member types`() {
+        val memberTypeId = LsiSymbolId.type("sample.Payload")
+        val annotation = LsiTypeDeclaration(
+            id = LsiSymbolId.type("sample.Marker"),
+            name = "Marker",
+            qualifiedName = "sample.Marker",
+            kind = LsiTypeDeclarationKind.ANNOTATION,
+            annotationMembers = listOf(
+                LsiAnnotationMember("value", LsiDeclaredType(memberTypeId))
+            ),
+            origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+        )
+
+        assertEquals(setOf(memberTypeId), listOf(annotation).referencedTypeIds())
     }
 }

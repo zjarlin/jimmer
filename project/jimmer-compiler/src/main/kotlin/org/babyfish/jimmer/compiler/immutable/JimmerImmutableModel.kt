@@ -205,6 +205,7 @@ data class JimmerImmutableProp(
     val ownerTypeId: LsiSymbolId,
     val declaringTypeId: LsiSymbolId,
     val name: String,
+    val documentation: String?,
     val type: LsiTypeRef,
     val annotations: List<LsiAnnotation>,
     val overrideChain: List<LsiSymbolId>,

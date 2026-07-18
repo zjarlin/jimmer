@@ -1263,7 +1263,9 @@ private fun LsiResolvedProperty.toImmutableProp(
         ownerTypeId = ownerTypeId,
         declaringTypeId = declaration.ownerId,
         name = declaration.name,
-        type = type,
+        documentation = declaration.documentation
+            ?: overrideChain.drop(1).firstNotNullOfOrNull(LsiProperty::documentation),
+        type = type.withRootNullability(nullable),
         annotations = annotations,
         overrideChain = overrideChain.map { property -> property.id },
         inherited = declaration.ownerId != ownerTypeId,
@@ -1588,7 +1590,7 @@ private fun LsiResolvedProperty.nullable(): Boolean {
     return explicitNullable ?: annotationNullable ?: false
 }
 
-private fun LsiSymbolId.annotationNullability(): Boolean? {
+internal fun LsiSymbolId.annotationNullability(): Boolean? {
     if (this == CLIENT_T_NULLABLE_ANNOTATION) {
         return true
     }
@@ -1596,6 +1598,17 @@ private fun LsiSymbolId.annotationNullability(): Boolean? {
         value.endsWith(".Null") || value.endsWith(".Nullable") -> true
         value.endsWith(".NotNull") || value.endsWith(".NonNull") -> false
         else -> null
+    }
+}
+
+private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
+    val nullability = if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
+    return when (this) {
+        is LsiDeclaredType -> copy(nullability = nullability)
+        is LsiTypeParameterRef -> copy(nullability = nullability)
+        is LsiPrimitiveType -> copy(nullability = nullability)
+        is LsiArrayType -> copy(nullability = nullability)
+        is LsiUnresolvedType -> copy(nullability = nullability)
     }
 }
 

@@ -38,6 +38,8 @@ internal class CompilerInputDocumentReferenceFreezer {
                         CompilerInputDocumentReferenceKind.MODEL_TYPE
                     DtoDocumentReferenceKind.TYPE_USAGE ->
                         CompilerInputDocumentReferenceKind.TYPE_USAGE
+                    DtoDocumentReferenceKind.CONFIG_IMPLEMENTATION ->
+                        CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION
                 },
                 location = LsiLocation(
                     source = document.source,

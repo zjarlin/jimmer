@@ -1,10 +1,13 @@
 package org.babyfish.jimmer.compiler.lsi.apt
 
+import kotlin.Metadata
+import kotlin.metadata.jvm.KotlinClassMetadata
 import org.babyfish.jimmer.compiler.lsi.mergeDeclarationsById
 import org.babyfish.jimmer.compiler.lsi.referencedTypeIds
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.model.LsiAnnotationMember
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiEnumEntry
@@ -22,6 +25,7 @@ import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.mergeLsiTypeSeeds
+import site.addzero.lsi.model.toAnnotationMemberType
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.element.Element
@@ -106,7 +110,7 @@ class AptLsiWorkspaceBuilder(
                 declarationsByTypeId[seed.typeId] = listOf(header)
                 return@forEach
             }
-            collectTypeElements(typeElement)
+            collectTypeElements(typeElement.topLevelEnclosingType())
                 .sortedBy { nestedType -> nestedType.qualifiedName.toString() }
                 .forEach { nestedType ->
                     val nestedTypeId = LsiSymbolId.type(nestedType.qualifiedName.toString())
@@ -191,6 +195,14 @@ class AptLsiWorkspaceBuilder(
         return result
     }
 
+    private fun TypeElement.topLevelEnclosingType(): TypeElement {
+        var topLevelType = this
+        while (topLevelType.enclosingElement is TypeElement) {
+            topLevelType = topLevelType.enclosingElement as TypeElement
+        }
+        return topLevelType
+    }
+
     private fun toLsiDeclarations(typeElement: TypeElement): List<LsiDeclaration> {
         val typeId = LsiSymbolId.type(typeElement.qualifiedName.toString())
         val callables = typeElement.enclosedElements
@@ -261,6 +273,14 @@ class AptLsiWorkspaceBuilder(
             enclosingTypeId = (typeElement.enclosingElement as? TypeElement)?.let { enclosingType ->
                 LsiSymbolId.type(enclosingType.qualifiedName.toString())
             },
+            requiresEnclosingInstance =
+                typeElement.enclosingElement is TypeElement &&
+                    typeElement.kind == ElementKind.CLASS &&
+                    Modifier.STATIC !in typeElement.modifiers,
+            abstractDeclaration =
+                Modifier.ABSTRACT in typeElement.modifiers ||
+                    typeElement.kind == ElementKind.INTERFACE ||
+                    typeElement.kind == ElementKind.ANNOTATION_TYPE,
             dataClass = false,
             visibility = typeElement.toLsiVisibility(),
             modality = typeElement.toLsiModality(),
@@ -268,6 +288,7 @@ class AptLsiWorkspaceBuilder(
             superTypes = superTypes,
             memberIds = memberIds,
             enumEntries = enumEntries,
+            annotationMembers = typeElement.toLsiAnnotationMembers(typeParameterIds),
             documentation = context.documentation(typeElement),
             annotations = context.toLsiAnnotations(
                 annotations = typeElement.annotationMirrors,
@@ -276,6 +297,39 @@ class AptLsiWorkspaceBuilder(
             location = context.location(typeElement),
             origin = context.origin(typeElement),
         )
+    }
+
+    private fun TypeElement.toLsiAnnotationMembers(
+        typeParameterIds: Map<javax.lang.model.element.TypeParameterElement, LsiSymbolId>,
+    ): List<LsiAnnotationMember> {
+        if (kind != ElementKind.ANNOTATION_TYPE) {
+            return emptyList()
+        }
+        val kotlinMetadata = kotlinAnnotationMetadata()
+        return enclosedElements
+            .filterIsInstance<ExecutableElement>()
+            .filter { member -> member.kind == ElementKind.METHOD }
+            .map { member ->
+                val type = context.toLsiType(member.returnType, typeParameterIds)
+                LsiAnnotationMember(
+                    name = member.simpleName.toString(),
+                    type = type.toAnnotationMemberType(),
+                    vararg = member.simpleName.toString() in kotlinMetadata?.varargNames.orEmpty(),
+                    hasDefault = member.defaultValue != null,
+                )
+            }
+            .sortedBy(LsiAnnotationMember::name)
+    }
+
+    private fun TypeElement.kotlinAnnotationMetadata(): KotlinAnnotationMetadata? {
+        val metadata = getAnnotation(Metadata::class.java) ?: return null
+        val classMetadata = KotlinClassMetadata.readLenient(metadata) as? KotlinClassMetadata.Class
+            ?: return null
+        val varargNames = classMetadata.kmClass.constructors
+            .flatMap { constructor -> constructor.valueParameters }
+            .filter { parameter -> parameter.varargElementType != null }
+            .mapTo(linkedSetOf()) { parameter -> parameter.name }
+        return KotlinAnnotationMetadata(varargNames)
     }
 
     private fun ExecutableElement.toLsiCallable(owner: TypeElement): LsiDeclaration {
@@ -507,6 +561,10 @@ class AptLsiWorkspaceBuilder(
         return result
     }
 }
+
+private data class KotlinAnnotationMetadata(
+    val varargNames: Set<String>,
+)
 
 private fun LsiTypeDeclaration.requiresFullExternalDeclaration(): Boolean {
     return kind == LsiTypeDeclarationKind.ANNOTATION ||

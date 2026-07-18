@@ -12,6 +12,7 @@ enum class CompilerInputDocumentReferenceKind {
     SUPER_TYPE,
     MODEL_TYPE,
     TYPE_USAGE,
+    CONFIG_IMPLEMENTATION,
 }
 
 /**
@@ -66,6 +67,7 @@ class CompilerInputDocumentSnapshot(
                     CompilerInputDocumentReferenceKind.ANNOTATION_TYPE,
                     CompilerInputDocumentReferenceKind.SUPER_TYPE,
                     CompilerInputDocumentReferenceKind.MODEL_TYPE,
+                    CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION,
                     -> LsiTypeSeedMode.FULL_DECLARATION
                     CompilerInputDocumentReferenceKind.TYPE_USAGE -> LsiTypeSeedMode.HEADER
                 },

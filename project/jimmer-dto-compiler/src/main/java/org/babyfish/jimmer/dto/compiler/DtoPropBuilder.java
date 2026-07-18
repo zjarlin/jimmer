@@ -222,9 +222,9 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
             } else if (configuration.orderBy() != null) {
                 propConfigBuilder.setOrderItems(configuration.orderBy());
             } else if (configuration.filter() != null) {
-                propConfigBuilder.setFilterClassName(configuration.filter());
+                propConfigBuilder.setFilterType(configuration.filter());
             } else if (configuration.recursion() != null) {
-                propConfigBuilder.setRecursionClassName(configuration.recursion());
+                propConfigBuilder.setRecursionType(configuration.recursion());
             } else if (configuration.fetchType() != null) {
                 propConfigBuilder.setFetchType(configuration.fetchType());
             } else if (configuration.limit() != null) {

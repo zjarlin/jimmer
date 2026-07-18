@@ -307,7 +307,10 @@ class KspLsiCompilerDriverTest {
             onDeclarationsRead = { invalidDeclarationsRead = true },
         )
         sourceFile = file(listOf(validRoot, invalidRoot))
-        val resolver = resolver(sourceFile)
+        val resolver = resolver(
+            sourceFile,
+            knownTypes = mapOf(VALID_ID.requireTypeQualifiedName() to validRoot),
+        )
         val codeGenerator = CapturingCodeGenerator()
         val logger = CapturingLogger()
         val provider = DriverFeatureProvider()
@@ -343,6 +346,8 @@ class KspLsiCompilerDriverTest {
         assertTrue(finalRound.round.workspace.contains(LsiSymbolId.type("demo.Valid")))
         assertTrue(finalRound.round.currentWorkspace.declarations.isEmpty())
         assertTrue(finalRound.round.currentRootTypeIds.isEmpty())
+        assertEquals(setOf(VALID_ID), provider.rounds.first().round.availableTypeIds)
+        assertEquals(setOf(VALID_ID), finalRound.round.availableTypeIds)
         val resourceCall = codeGenerator.calls.last()
         assertEquals("META-INF/jimmer/driver-final", resourceCall.path)
         assertEquals("", resourceCall.extension)
@@ -362,6 +367,7 @@ class KspLsiCompilerDriverTest {
     private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
         override val descriptor = JimmerCompilerFeatureDescriptor(
             id = "ksp-driver-test",
+            classpathTypeIds = setOf(VALID_ID, MISSING_TYPE_ID),
             inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
         )
 
@@ -522,8 +528,11 @@ class KspLsiCompilerDriverTest {
         val output: ByteArrayOutputStream,
     )
 
-    private fun resolver(file: KSFile): Resolver {
-        return resolver(listOf(file), listOf(file))
+    private fun resolver(
+        file: KSFile,
+        knownTypes: Map<String, KSClassDeclaration> = emptyMap(),
+    ): Resolver {
+        return resolver(listOf(file), listOf(file), knownTypes)
     }
 
     private fun resolver(
@@ -655,6 +664,8 @@ class KspLsiCompilerDriverTest {
 
     companion object {
         private val VALID_ID = LsiSymbolId.type("demo.Valid")
+
+        private val MISSING_TYPE_ID = LsiSymbolId.type("missing.NotThere")
 
         private val UNHANDLED = Any()
     }

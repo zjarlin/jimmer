@@ -15,6 +15,7 @@ javaxValidation = "2.0.1.Final"
 jetbrainsAnnotations = "24.0.0"
 jspecify = "1.0.0"
 kafka = "0.10.0.0"
+kotlin = "2.1.20"
 kotlinpoet = "2.2.0"
 ksp = "2.1.20-2.0.0"
 lombok = "1.18.38"
@@ -68,6 +69,7 @@ jspecify = { group = "org.jspecify", name = "jspecify", version.ref = "jspecify"
 kafka-connect-api = { group = "org.apache.kafka", name = "connect-api", version.ref = "kafka" }
 
 kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect" }
+kotlin-metadata-jvm = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlin" }
 kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test" }
 
