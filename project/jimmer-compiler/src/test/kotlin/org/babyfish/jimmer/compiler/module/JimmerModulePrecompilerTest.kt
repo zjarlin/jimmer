@@ -337,6 +337,8 @@ class JimmerModulePrecompilerTest {
                     instantiable = kind == JimmerImmutableTypeKind.ENTITY,
                     discriminatorValue = null,
                     discriminatorPropId = null,
+                    acrossMicroServices = false,
+                    microServiceName = "",
                 )
             },
         )

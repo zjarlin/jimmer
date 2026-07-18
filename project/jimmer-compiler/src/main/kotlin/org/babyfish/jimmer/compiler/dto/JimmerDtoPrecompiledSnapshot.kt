@@ -7,19 +7,32 @@ import org.babyfish.jimmer.dto.compiler.DtoModifier
 internal fun JimmerDtoPrecompiledSchema.normalizedSnapshot(): String {
     return buildString {
         documents.forEach { document ->
+            val inputDocument = document.inputSnapshot.document
             appendRecord(
                 "document",
-                document.inputDocument.source.path,
-                document.inputDocument.sourceSet.name,
-                document.inputDocument.fingerprint,
+                inputDocument.source.path,
+                inputDocument.sourceSet.name,
+                inputDocument.fingerprint,
                 document.baseTypeId.value,
                 document.sourceTypeName,
                 document.targetPackageName.orEmpty(),
             )
+            document.inputSnapshot.references.forEach { reference ->
+                appendRecord(
+                    "reference",
+                    inputDocument.source.path,
+                    reference.kind.name,
+                    reference.typeId.value,
+                    reference.location.start.line.toString(),
+                    reference.location.start.column.toString(),
+                    reference.location.end.line.toString(),
+                    reference.location.end.column.toString(),
+                )
+            }
             document.dtoTypes.forEachIndexed { index, dtoType ->
                 appendRecord(
                     "type",
-                    document.inputDocument.source.path,
+                    inputDocument.source.path,
                     index.toString(),
                     dtoType.baseType.id.value,
                     dtoType.packageName,

@@ -152,7 +152,13 @@ class JimmerModuleCompilerFeatureProviderTest {
         assertTrue(first.moduleArtifacts().isEmpty())
 
         val changed = session.execute(
-            round(1, cumulativeWorkspace, storeWorkspace, CompilerPlatform.APT)
+            round(
+                number = 1,
+                workspace = cumulativeWorkspace,
+                currentWorkspace = cumulativeWorkspace,
+                platform = CompilerPlatform.APT,
+                currentRootTypeIds = setOf(LsiSymbolId.type("demo.Store")),
+            )
         )
         val changedState = changed.moduleState()
         assertEquals(1, changedState.stableNonFinalRoundCount)
@@ -181,6 +187,7 @@ class JimmerModuleCompilerFeatureProviderTest {
         val deferredDependency = JimmerImmutableCompilerFeatureState(
             schema = JimmerImmutableSchema(emptyList()),
             targetTypeIds = setOf(brokenId),
+            semanticRootTypeIds = setOf(brokenId),
             currentTypeIds = setOf(brokenId),
             unresolvedRootTypeIds = setOf(brokenId),
             status = JimmerImmutableCompilerFeatureStatus.DEFERRED,
@@ -300,6 +307,9 @@ class JimmerModuleCompilerFeatureProviderTest {
         workspace: LsiWorkspace,
         currentWorkspace: LsiWorkspace,
         platform: CompilerPlatform,
+        currentRootTypeIds: Set<LsiSymbolId> = currentWorkspace.declarations
+            .filterIsInstance<LsiTypeDeclaration>()
+            .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
         inputResources: Map<String, String> = emptyMap(),
@@ -308,11 +318,12 @@ class JimmerModuleCompilerFeatureProviderTest {
             number = number,
             workspace = workspace,
             currentWorkspace = currentWorkspace,
+            currentRootTypeIds = currentRootTypeIds,
             platform = platform,
             isFinal = isFinal,
             options = options,
             inputResources = inputResources,
-            inputDocuments = emptyList(),
+            inputDocumentSnapshots = emptyList(),
         )
     }
 
@@ -385,10 +396,13 @@ class JimmerModuleCompilerFeatureProviderTest {
                         instantiable = true,
                         discriminatorValue = null,
                         discriminatorPropId = null,
+                        acrossMicroServices = false,
+                        microServiceName = "",
                     )
                 )
             ),
             targetTypeIds = setOf(typeId),
+            semanticRootTypeIds = setOf(typeId),
             currentTypeIds = setOf(typeId),
         )
     }

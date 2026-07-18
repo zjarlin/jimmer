@@ -67,6 +67,304 @@ class JimmerImmutablePrecompilerTest {
     }
 
     @Test
+    fun `apt and ksp preserve microservice remote and generic recursive semantics`() {
+        val aptSchema = JimmerImmutablePrecompiler().compile(microServiceWorkspace(LsiLanguage.JAVA))
+        val kspSchema = JimmerImmutablePrecompiler().compile(microServiceWorkspace(LsiLanguage.KOTLIN))
+        val base = aptSchema.types.single { type -> type.id == REMOTE_BASE_TYPE }
+        val node = aptSchema.types.single { type -> type.id == REMOTE_NODE_TYPE }
+        val product = aptSchema.types.single { type -> type.id == REMOTE_PRODUCT_TYPE }
+        val baseParent = base.props.single { prop -> prop.name == "parent" }
+        val props = node.props.associateBy(JimmerImmutableProp::name)
+        val parent = requireNotNull(props["parent"])
+        val remoteProduct = requireNotNull(props["product"])
+
+        assertTrue(base.acrossMicroServices)
+        assertEquals("", base.microServiceName)
+        assertTrue(baseParent.genericTarget)
+        assertEquals(null, baseParent.targetTypeId)
+        assertFalse(baseParent.recursive)
+        assertFalse(node.acrossMicroServices)
+        assertEquals("node-service", node.microServiceName)
+        assertEquals("product-service", product.microServiceName)
+        assertEquals(REMOTE_NODE_TYPE, parent.targetTypeId)
+        assertFalse(parent.genericTarget)
+        assertFalse(parent.remote)
+        assertTrue(parent.recursive)
+        assertEquals(REMOTE_PRODUCT_TYPE, remoteProduct.targetTypeId)
+        assertTrue(remoteProduct.remote)
+        assertFalse(remoteProduct.recursive)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        val nodeSnapshot = aptSchema.normalizedSnapshot().lineSequence().single { line ->
+            line.startsWith("type|${REMOTE_NODE_TYPE.value}|")
+        }
+        assertTrue(nodeSnapshot.endsWith("|false|node-service"))
+
+        val changedMicroService = aptSchema.copy(
+            types = aptSchema.types.map { type ->
+                if (type.id == REMOTE_NODE_TYPE) type.copy(microServiceName = "changed-service") else type
+            }
+        )
+        val changedRemote = aptSchema.copy(
+            types = aptSchema.types.map { type ->
+                if (type.id != REMOTE_NODE_TYPE) {
+                    type
+                } else {
+                    type.copy(
+                        props = type.props.map { prop ->
+                            if (prop.name == "product") prop.copy(remote = false) else prop
+                        }
+                    )
+                }
+            }
+        )
+        assertNotEquals(aptSchema.fingerprint(), changedMicroService.fingerprint())
+        assertNotEquals(aptSchema.fingerprint(), changedRemote.fingerprint())
+    }
+
+    @Test
+    fun `includes binary managed property targets in semantic schema`() {
+        val ownerId = LsiSymbolId.type("demo.LocalBook")
+        val targetId = LsiSymbolId.type("dependency.BinaryAuthor")
+        val authorProp = property(
+            ownerId = ownerId,
+            name = "author",
+            type = LsiDeclaredType(targetId),
+            annotations = listOf(annotation(MANY_TO_ONE)),
+            origin = sourceOrigin(LsiLanguage.KOTLIN),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = ownerId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = listOf(authorProp.id),
+                    origin = sourceOrigin(LsiLanguage.KOTLIN),
+                ),
+                authorProp,
+                type(
+                    qualifiedName = targetId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    origin = LsiOrigin(LsiOriginKind.BINARY),
+                ),
+            ),
+        )
+
+        val schema = JimmerImmutablePrecompiler().compile(workspace, setOf(ownerId))
+
+        assertEquals(listOf(ownerId, targetId), schema.types.map(JimmerImmutableType::id))
+        assertEquals(targetId, schema.types.first().props.single().targetTypeId)
+    }
+
+    @Test
+    fun `generic mapped superclass association closes over binary target after substitution`() {
+        val baseId = LsiSymbolId.type("demo.GenericAssociationBase")
+        val childId = LsiSymbolId.type("demo.GenericAssociationChild")
+        val targetId = LsiSymbolId.type("dependency.BinaryTarget")
+        val parameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val targetProp = property(
+            ownerId = baseId,
+            name = "target",
+            type = LsiTypeParameterRef(parameterId, LsiNullability.NON_NULL),
+            annotations = listOf(annotation(MANY_TO_ONE)),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = baseId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(targetProp.id),
+                    typeParameters = listOf(LsiTypeParameter(parameterId, "T")),
+                ),
+                targetProp,
+                type(
+                    qualifiedName = childId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    superTypes = listOf(
+                        LsiDeclaredType(
+                            declarationId = baseId,
+                            arguments = listOf(
+                                LsiTypeArgument.invariant(LsiDeclaredType(targetId))
+                            ),
+                        )
+                    ),
+                ),
+                type(
+                    qualifiedName = targetId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    origin = LsiOrigin(LsiOriginKind.BINARY),
+                ),
+            ),
+        )
+
+        val schema = JimmerImmutablePrecompiler().compile(workspace, setOf(childId))
+        val child = schema.types.single { type -> type.id == childId }
+        val effectiveTarget = child.props.single { prop -> prop.name == "target" }
+
+        assertEquals(
+            setOf(baseId, childId, targetId),
+            schema.types.mapTo(sortedSetOf(), JimmerImmutableType::id),
+        )
+        assertEquals(targetId, effectiveTarget.targetTypeId)
+        assertFalse(effectiveTarget.genericTarget)
+    }
+
+    @Test
+    fun `rejects named across-microservice mapped superclass`() {
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.InvalidBase",
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = emptyList(),
+                    markerArguments = mapOf(
+                        "acrossMicroServices" to LsiAnnotationValue.BooleanValue(true),
+                        "microServiceName" to LsiAnnotationValue.StringValue("base-service"),
+                    ),
+                )
+            )
+        )
+
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(workspace)
+        }
+
+        assertTrue(exception.message.orEmpty().contains("cannot specify microServiceName"))
+    }
+
+    @Test
+    fun `rejects microservice mismatch with non-across superclass`() {
+        val baseId = LsiSymbolId.type("demo.ServiceBase")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.ServiceBase",
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = emptyList(),
+                    markerArguments = mapOf(
+                        "microServiceName" to LsiAnnotationValue.StringValue("base-service")
+                    ),
+                ),
+                type(
+                    qualifiedName = "demo.ServiceEntity",
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    markerArguments = mapOf(
+                        "microServiceName" to LsiAnnotationValue.StringValue("entity-service")
+                    ),
+                    superTypes = listOf(LsiDeclaredType(baseId)),
+                ),
+            )
+        )
+
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(workspace)
+        }
+
+        assertTrue(exception.message.orEmpty().contains("has micro service name 'entity-service'"))
+        assertTrue(exception.message.orEmpty().contains("has micro service name 'base-service'"))
+    }
+
+    @Test
+    fun `rejects concrete association declared by across-microservice mapped superclass`() {
+        val baseId = LsiSymbolId.type("demo.CrossServiceBase")
+        val targetId = LsiSymbolId.type("demo.CrossServiceTarget")
+        val association = property(
+            ownerId = baseId,
+            name = "target",
+            type = LsiDeclaredType(targetId),
+            annotations = listOf(annotation(MANY_TO_ONE)),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.CrossServiceBase",
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(association.id),
+                    markerArguments = mapOf(
+                        "acrossMicroServices" to LsiAnnotationValue.BooleanValue(true)
+                    ),
+                ),
+                association,
+                type(
+                    qualifiedName = "demo.CrossServiceTarget",
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    markerArguments = mapOf(
+                        "microServiceName" to LsiAnnotationValue.StringValue("target-service")
+                    ),
+                ),
+            )
+        )
+
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(workspace)
+        }
+
+        assertEquals(association.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("is across microservices"))
+    }
+
+    @Test
+    fun `rejects remote association with empty service name or join sql`() {
+        val ownerId = LsiSymbolId.type("demo.RemoteOwner")
+        val targetId = LsiSymbolId.type("demo.RemoteTarget")
+        val target = type(
+            qualifiedName = "demo.RemoteTarget",
+            marker = ENTITY,
+            memberIds = emptyList(),
+            markerArguments = mapOf(
+                "microServiceName" to LsiAnnotationValue.StringValue("target-service")
+            ),
+        )
+        val association = property(
+            ownerId = ownerId,
+            name = "target",
+            type = LsiDeclaredType(targetId),
+            annotations = listOf(annotation(MANY_TO_ONE)),
+        )
+        val unnamedWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type("demo.RemoteOwner", ENTITY, listOf(association.id)),
+                association,
+                target,
+            )
+        )
+        val unnamedException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(unnamedWorkspace)
+        }
+        assertTrue(unnamedException.message.orEmpty().contains("requires non-empty micro service names"))
+
+        val joinSqlAssociation = association.copy(
+            annotations = association.annotations + annotation(
+                JOIN_SQL,
+                mapOf("value" to LsiAnnotationValue.StringValue("%alias.ID = %target_alias.ID")),
+            )
+        )
+        val joinSqlWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.RemoteOwner",
+                    marker = ENTITY,
+                    memberIds = listOf(joinSqlAssociation.id),
+                    markerArguments = mapOf(
+                        "microServiceName" to LsiAnnotationValue.StringValue("owner-service")
+                    ),
+                ),
+                joinSqlAssociation,
+                target,
+            )
+        )
+        val joinSqlException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(joinSqlWorkspace)
+        }
+        assertTrue(joinSqlException.message.orEmpty().contains("cannot be decorated by @${JOIN_SQL.value}"))
+    }
+
+    @Test
     fun `apt and ksp inheritance fixtures preserve equivalent type metadata`() {
         val aptSchema = JimmerImmutablePrecompiler().compile(inheritanceWorkspace(LsiLanguage.JAVA))
         val kspSchema = JimmerImmutablePrecompiler().compile(inheritanceWorkspace(LsiLanguage.KOTLIN))
@@ -735,6 +1033,74 @@ class JimmerImmutablePrecompilerTest {
         )
     }
 
+    private fun microServiceWorkspace(language: LsiLanguage): LsiWorkspace {
+        val origin = sourceOrigin(language)
+        val nullability = if (language == LsiLanguage.JAVA) {
+            LsiNullability.PLATFORM
+        } else {
+            LsiNullability.NON_NULL
+        }
+        val parameterId = LsiSymbolId.typeParameter(REMOTE_BASE_TYPE, "T")
+        val baseParentId = LsiSymbolId.property(REMOTE_BASE_TYPE, "parent")
+        val productId = LsiSymbolId.property(REMOTE_NODE_TYPE, "product")
+        val base = type(
+            qualifiedName = REMOTE_BASE_TYPE.requireTypeQualifiedName(),
+            marker = MAPPED_SUPERCLASS,
+            memberIds = listOf(baseParentId),
+            typeParameters = listOf(LsiTypeParameter(parameterId, "T")),
+            markerArguments = mapOf(
+                "acrossMicroServices" to LsiAnnotationValue.BooleanValue(true),
+            ),
+            origin = origin,
+        )
+        val baseParent = property(
+            ownerId = REMOTE_BASE_TYPE,
+            name = "parent",
+            type = LsiTypeParameterRef(parameterId, nullability),
+            annotations = listOf(annotation(MANY_TO_ONE)),
+            origin = origin,
+        )
+        val node = type(
+            qualifiedName = REMOTE_NODE_TYPE.requireTypeQualifiedName(),
+            marker = ENTITY,
+            memberIds = listOf(productId),
+            superTypes = listOf(
+                LsiDeclaredType(
+                    declarationId = REMOTE_BASE_TYPE,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(
+                            LsiDeclaredType(REMOTE_NODE_TYPE, nullability = nullability),
+                        )
+                    ),
+                )
+            ),
+            markerArguments = mapOf(
+                "microServiceName" to LsiAnnotationValue.StringValue("node-service"),
+            ),
+            origin = origin,
+        )
+        val productAssociation = property(
+            ownerId = REMOTE_NODE_TYPE,
+            name = "product",
+            type = LsiDeclaredType(REMOTE_PRODUCT_TYPE, nullability = nullability),
+            annotations = listOf(annotation(MANY_TO_ONE)),
+            origin = origin,
+        )
+        val product = type(
+            qualifiedName = REMOTE_PRODUCT_TYPE.requireTypeQualifiedName(),
+            marker = ENTITY,
+            memberIds = emptyList(),
+            markerArguments = mapOf(
+                "microServiceName" to LsiAnnotationValue.StringValue("product-service"),
+            ),
+            origin = origin,
+        )
+        return LsiWorkspace(
+            sources = listOf(requireNotNull(origin.source)),
+            declarations = listOf(base, baseParent, node, productAssociation, product),
+        )
+    }
+
     private fun inheritanceWorkspace(language: LsiLanguage): LsiWorkspace {
         val origin = sourceOrigin(language)
         val baseId = LsiSymbolId.type("demo.AccountBase")
@@ -1035,6 +1401,7 @@ class JimmerImmutablePrecompilerTest {
         typeParameters: List<LsiTypeParameter> = emptyList(),
         superTypes: List<LsiTypeRef> = emptyList(),
         documentation: String? = null,
+        markerArguments: Map<String, LsiAnnotationValue> = emptyMap(),
         typeAnnotations: List<LsiAnnotation> = emptyList(),
         origin: LsiOrigin = SYNTHETIC_ORIGIN,
     ): LsiTypeDeclaration {
@@ -1042,7 +1409,7 @@ class JimmerImmutablePrecompilerTest {
             qualifiedName = qualifiedName,
             kind = LsiTypeDeclarationKind.INTERFACE,
             documentation = documentation,
-            annotations = listOf(annotation(marker)) + typeAnnotations,
+            annotations = listOf(annotation(marker, markerArguments)) + typeAnnotations,
             memberIds = memberIds,
             typeParameters = typeParameters,
             superTypes = superTypes,
@@ -1189,6 +1556,7 @@ class JimmerImmutablePrecompilerTest {
         private val LOGICAL_DELETED = LsiSymbolId.type("org.babyfish.jimmer.sql.LogicalDeleted")
         private val ONE_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToOne")
         private val MANY_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
+        private val JOIN_SQL = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
         private val FORMULA = LsiSymbolId.type("org.babyfish.jimmer.Formula")
         private val TRANSIENT = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")
         private val ID_VIEW = LsiSymbolId.type("org.babyfish.jimmer.sql.IdView")
@@ -1196,6 +1564,10 @@ class JimmerImmutablePrecompilerTest {
         private val DEFAULT = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
         private val COLUMN = LsiSymbolId.type("org.babyfish.jimmer.sql.Column")
         private val JAVA_OVERRIDE = LsiSymbolId.type("java.lang.Override")
+
+        private val REMOTE_BASE_TYPE = LsiSymbolId.type("demo.RemoteBase")
+        private val REMOTE_NODE_TYPE = LsiSymbolId.type("demo.RemoteNode")
+        private val REMOTE_PRODUCT_TYPE = LsiSymbolId.type("demo.RemoteProduct")
 
         private val VALID_CODE = LsiSymbolId.type("demo.ValidCode")
         private val CODE_FORMAT = LsiSymbolId.type("demo.CodeFormat")

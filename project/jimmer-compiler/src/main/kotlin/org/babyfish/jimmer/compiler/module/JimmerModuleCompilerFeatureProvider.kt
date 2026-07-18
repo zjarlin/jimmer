@@ -13,10 +13,6 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStat
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.module.apt.JimmerModuleJavaRenderer
 import org.babyfish.jimmer.compiler.module.ksp.JimmerModuleKotlinRenderer
-import site.addzero.lsi.core.LsiOriginKind
-import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiTypeDeclaration
-import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
@@ -67,7 +63,7 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val scope = JimmerModuleCompilationScope(
             cumulativeImmutableTypeIds = immutableState.targetTypeIds.sorted(),
             currentImmutableTypeIds = immutableState.currentTypeIds.sorted(),
-            compilationSourceTypeIds = context.round.currentWorkspace.compilationSourceTypeIds(),
+            compilationSourceTypeIds = context.round.currentRootTypeIds.sorted(),
         )
         val schema = JimmerModulePrecompiler(
             context.round.options.toModuleOptions(platform)
@@ -290,16 +286,6 @@ private fun String?.resourceTypeNames(): List<String> {
         .orEmpty()
 }
 
-private fun LsiWorkspace.compilationSourceTypeIds(): List<LsiSymbolId> {
-    return declarationsOfType<LsiTypeDeclaration>()
-        .asSequence()
-        .filter { type -> type.origin.kind in COMPILATION_ORIGIN_KINDS }
-        .map(LsiTypeDeclaration::id)
-        .distinct()
-        .sorted()
-        .toList()
-}
-
 private fun JimmerModuleSchema.sourcePlanFingerprint(): String {
     return copy(
         summaries = summaries.map { summary ->
@@ -343,7 +329,3 @@ private const val MODULE_REQUIRED_OPTION = "jimmer.immutable.isModuleRequired"
 private const val IGNORE_RESOURCE_GENERATION_OPTION = "jimmer.buddy.ignoreResourceGeneration"
 private const val ENTITIES_RESOURCE_PATH = "META-INF/jimmer/entities"
 private const val IMMUTABLES_RESOURCE_PATH = "META-INF/jimmer/immutables"
-private val COMPILATION_ORIGIN_KINDS = setOf(
-    LsiOriginKind.SOURCE,
-    LsiOriginKind.GENERATED,
-)

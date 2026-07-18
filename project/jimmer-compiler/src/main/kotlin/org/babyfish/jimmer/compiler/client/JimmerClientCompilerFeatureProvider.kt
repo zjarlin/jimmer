@@ -47,15 +47,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             platform = context.round.platform,
             sourceFilter = sourceFilter,
         )
-        val currentTargets = if (context.round.isFinal) {
-            EMPTY_TARGETS
-        } else {
-            precompiler.targets(context.round.currentWorkspace).compilationTargets(
-                workspace = context.round.currentWorkspace,
-                platform = context.round.platform,
-                sourceFilter = sourceFilter,
-            )
-        }
+        val currentTargets = targets.only(context.round.currentRootTypeIds)
         val initialUnresolvedTypeIds = precompiler.unresolvedTargetTypeIds(
             workspace = context.round.workspace,
             targets = targets,
@@ -387,6 +379,13 @@ private fun ClientPrecompileTargets.compilationTargets(
     )
 }
 
+private fun ClientPrecompileTargets.only(typeIds: Set<LsiSymbolId>): ClientPrecompileTargets {
+    return ClientPrecompileTargets(
+        serviceTypeIds = serviceTypeIds intersect typeIds,
+        exportedTypeIds = exportedTypeIds intersect typeIds,
+    )
+}
+
 private fun LsiWorkspace.hasImplicitApiMarker(
     platform: CompilerPlatform,
     sourceFilter: JimmerCompilerSourceFilter,
@@ -422,7 +421,6 @@ private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val IGNORE_RESOURCE_GENERATION_OPTION = "jimmer.buddy.ignoreResourceGeneration"
 
 private val EMPTY_SCHEMA = ClientPrecompiledSchema(emptyList(), emptyList())
-private val EMPTY_TARGETS = ClientPrecompileTargets(emptySet(), emptySet())
 private val ENABLE_IMPLICIT_API_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.client.EnableImplicitApi")
 private val KOTLIN_METADATA_ANNOTATION = LsiSymbolId.type("kotlin.Metadata")

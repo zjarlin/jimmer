@@ -30,6 +30,8 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                 type.joinedTableDissociateAction?.name.orEmpty(),
                 type.discriminatorValue.orEmpty(),
                 type.discriminatorPropId?.value.orEmpty(),
+                type.acrossMicroServices.toString(),
+                type.microServiceName,
             )
             type.props.forEach { prop ->
                 appendRecord(
@@ -54,6 +56,9 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.associationKind.name,
                     prop.formulaKind.name,
                     prop.viewKind.name,
+                    prop.genericTarget.toString(),
+                    prop.remote.toString(),
+                    prop.recursive.toString(),
                 )
                 prop.validations.sortedBy(JimmerValidation::annotationTypeId).forEach { validation ->
                     appendRecord(

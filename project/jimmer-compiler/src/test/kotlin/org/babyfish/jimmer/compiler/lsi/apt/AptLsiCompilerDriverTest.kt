@@ -94,10 +94,10 @@ class AptLsiCompilerDriverTest {
             classesDir.resolve("META-INF/jimmer/driver-final").readText(),
         )
         assertTrue(provider.rounds.size >= 3)
-        assertEquals("export Model", provider.rounds.first().inputDocuments.single().content)
+        assertEquals("export Model", provider.rounds.first().inputDocumentSnapshots.single().document.content)
         assertEquals(
-            provider.rounds.first().inputDocuments.single(),
-            provider.rounds.last().inputDocuments.single(),
+            provider.rounds.first().inputDocumentSnapshots.single(),
+            provider.rounds.last().inputDocumentSnapshots.single(),
         )
         val firstRoundProperty = assertIs<LsiProperty>(provider.rounds.first().workspace[PROPERTY_ID])
         assertIs<LsiUnresolvedType>(firstRoundProperty.type)
@@ -107,6 +107,7 @@ class AptLsiCompilerDriverTest {
         )
         val refreshedRound = provider.rounds.single { round -> round.number == 1 }
         assertTrue(refreshedRound.currentWorkspace.contains(MODEL_ID))
+        assertEquals(setOf(GENERATED_ID), refreshedRound.currentRootTypeIds)
         assertEquals(
             GENERATED_ID,
             assertIs<LsiDeclaredType>(
@@ -116,6 +117,7 @@ class AptLsiCompilerDriverTest {
         assertTrue(provider.rounds.last().isFinal)
         assertTrue(provider.rounds.last().workspace.contains(MODEL_ID))
         assertTrue(provider.rounds.last().currentWorkspace.declarations.isEmpty())
+        assertTrue(provider.rounds.last().currentRootTypeIds.isEmpty())
         val warning = diagnostics.diagnostics.single { diagnostic ->
             diagnostic.kind == Diagnostic.Kind.WARNING &&
                 diagnostic.getMessage(null).contains("[driver.warning]")
@@ -124,8 +126,80 @@ class AptLsiCompilerDriverTest {
         assertTrue(warning.lineNumber > 0)
     }
 
+    @Test
+    fun `freezes types referenced only by dto documents`() {
+        val projectDir = createTempDirectory(prefix = "jimmer-lsi-apt-document-seeds").toFile()
+        val sourceDir = projectDir.resolve("src/main/java")
+        val classesDir = projectDir.resolve("build/classes")
+        val generatedDir = projectDir.resolve("build/generated")
+        val sourceFile = sourceDir.resolve("demo/Model.java")
+        sourceFile.parentFile.mkdirs()
+        sourceFile.writeText("package demo; interface Model {}")
+        projectDir.resolve("src/main/dto/Model.dto").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText(
+                """
+                    export demo.Model
+                    @java.lang.Deprecated
+                    ModelView implements java.lang.Runnable {
+                        value: java.lang.CharSequence
+                        retention: java.lang.annotation.RetentionPolicy
+                    }
+                """.trimIndent(),
+            )
+        }
+        classesDir.mkdirs()
+        generatedDir.mkdirs()
+
+        val diagnostics = DiagnosticCollector<JavaFileObject>()
+        val provider = InputDocumentFeatureProvider("apt-document-seeds")
+        val compiler = ToolProvider.getSystemJavaCompiler()
+            ?: error("APT integration tests require a JDK compiler")
+        val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
+            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, listOf(classesDir))
+            fileManager.setLocation(StandardLocation.SOURCE_OUTPUT, listOf(generatedDir))
+            val task = compiler.getTask(
+                null,
+                fileManager,
+                diagnostics,
+                listOf(
+                    "-proc:only",
+                    "-classpath",
+                    System.getProperty("java.class.path"),
+                ),
+                null,
+                fileManager.getJavaFileObjects(sourceFile),
+            )
+            task.setProcessors(listOf(DriverProcessor(provider)))
+            task.call()
+        }
+
+        assertTrue(success, diagnostics.diagnostics.joinToString("\n"))
+        val workspace = provider.rounds.first().workspace
+        assertTrue(workspace.contains(LsiSymbolId.type("demo.Model")))
+        assertTrue(workspace.contains(LsiSymbolId.type("java.lang.Deprecated")))
+        assertTrue(workspace.contains(LsiSymbolId.type("java.lang.Runnable")))
+        assertTrue(workspace.contains(LsiSymbolId.type("java.lang.CharSequence")))
+        assertTrue(
+            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+                workspace[LsiSymbolId.type("java.lang.Runnable")],
+            ).memberIds.isNotEmpty(),
+        )
+        assertTrue(
+            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+                workspace[LsiSymbolId.type("java.lang.CharSequence")],
+            ).memberIds.isEmpty(),
+        )
+        assertEquals(
+            listOf("SOURCE", "CLASS", "RUNTIME"),
+            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+                workspace[LsiSymbolId.type("java.lang.annotation.RetentionPolicy")],
+            ).enumEntries.map { entry -> entry.name },
+        )
+    }
+
     private class DriverProcessor(
-        private val provider: DriverFeatureProvider,
+        private val provider: JimmerCompilerFeatureProvider,
     ) : AbstractProcessor() {
         private lateinit var driver: AptLsiCompilerDriver
 
@@ -148,6 +222,24 @@ class AptLsiCompilerDriverTest {
         ): Boolean {
             driver.process(roundEnvironment)
             return false
+        }
+    }
+
+    private class InputDocumentFeatureProvider(
+        id: String,
+    ) : JimmerCompilerFeatureProvider {
+        override val descriptor = JimmerCompilerFeatureDescriptor(
+            id = id,
+            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+        )
+
+        val rounds = mutableListOf<org.babyfish.jimmer.compiler.CompilerRound>()
+
+        override fun collect(
+            context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
+        ): JimmerCompilerFeatureCollection {
+            rounds += context.round
+            return JimmerCompilerFeatureCollection()
         }
     }
 

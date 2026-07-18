@@ -6,7 +6,6 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.JimmerViewKind
 import org.babyfish.jimmer.compiler.immutable.normalizedTypeSignature
 import org.babyfish.jimmer.dto.compiler.DtoCompiler
 import org.babyfish.jimmer.dto.compiler.DtoFile
@@ -68,27 +67,6 @@ internal class LsiDtoTypeRegistry(
 
     fun targetType(prop: LsiDtoBaseProp): LsiDtoBaseType? {
         return prop.immutableProp.targetTypeId?.let(typesById::get)
-    }
-
-    fun isSubType(typeId: LsiSymbolId, superTypeId: LsiSymbolId): Boolean {
-        if (typeId == superTypeId) {
-            return true
-        }
-        val pending = ArrayDeque<LsiSymbolId>()
-        val visited = mutableSetOf<LsiSymbolId>()
-        pending += typeId
-        while (pending.isNotEmpty()) {
-            val currentId = pending.removeFirst()
-            if (!visited.add(currentId)) {
-                continue
-            }
-            val current = typesById[currentId] ?: continue
-            if (superTypeId in current.immutableType.superTypeIds) {
-                return true
-            }
-            current.immutableType.superTypeIds.sorted().forEach(pending::addLast)
-        }
-        return false
     }
 
     fun genericTypeCount(qualifiedName: String): Int? {
@@ -168,12 +146,7 @@ internal class LsiDtoBaseProp(
 
     override val isKey: Boolean = immutableProp.annotations.hasAnnotation(KEY_ANNOTATION)
 
-    override val isRecursive: Boolean by lazy {
-        val targetTypeId = immutableProp.targetTypeId ?: return@lazy false
-        ownerType.isEntity &&
-            immutableProp.viewKind != JimmerViewKind.MANY_TO_MANY &&
-            registry.isSubType(targetTypeId, ownerType.id)
-    }
+    override val isRecursive: Boolean = immutableProp.recursive
 
     override val isEmbedded: Boolean = immutableProp.embedded
 

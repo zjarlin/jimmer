@@ -18,7 +18,10 @@ import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeHierarchyEntry
+import site.addzero.lsi.model.LsiTypeSeed
+import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.mergeLsiTypeSeeds
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.element.Element
@@ -41,8 +44,9 @@ fun RoundEnvironment.toLsiWorkspace(
 fun Collection<TypeElement>.toLsiWorkspace(
     processingEnvironment: ProcessingEnvironment,
     frontendOptions: LsiFrontendOptions,
+    additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
 ): LsiWorkspace {
-    return AptLsiWorkspaceBuilder(processingEnvironment, frontendOptions).build(this)
+    return AptLsiWorkspaceBuilder(processingEnvironment, frontendOptions).build(this, additionalSeeds)
 }
 
 fun TypeElement.toLsiTypeDeclaration(
@@ -63,11 +67,14 @@ class AptLsiWorkspaceBuilder(
 
     private val context = AptLsiContext(processingEnvironment, frontendOptions)
 
-    fun build(rootTypes: Collection<TypeElement>): LsiWorkspace {
+    fun build(
+        rootTypes: Collection<TypeElement>,
+        additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
+    ): LsiWorkspace {
         val sourceTypeElements = rootTypes
             .flatMap(::collectTypeElements)
             .distinctBy { typeElement -> typeElement.qualifiedName.toString() }
-        val declarations = freezeSemanticDeclarations(sourceTypeElements)
+        val declarations = freezeSemanticDeclarations(sourceTypeElements, additionalSeeds)
         val sources = declarations.mapNotNull { declaration -> declaration.origin.source }
         return LsiWorkspace(
             sources = sources,
@@ -78,6 +85,7 @@ class AptLsiWorkspaceBuilder(
 
     private fun freezeSemanticDeclarations(
         sourceTypeElements: Collection<TypeElement>,
+        additionalSeeds: Collection<LsiTypeSeed>,
     ): List<LsiDeclaration> {
         val declarationsByTypeId = linkedMapOf<LsiSymbolId, List<LsiDeclaration>>()
         sourceTypeElements
@@ -86,6 +94,25 @@ class AptLsiWorkspaceBuilder(
                 val typeId = LsiSymbolId.type(typeElement.qualifiedName.toString())
                 declarationsByTypeId[typeId] = toLsiDeclarations(typeElement)
             }
+        additionalSeeds.mergeLsiTypeSeeds().forEach { seed ->
+            if (seed.typeId in declarationsByTypeId) {
+                return@forEach
+            }
+            val typeElement = context.elements.getTypeElement(
+                seed.typeId.requireTypeQualifiedName(),
+            ) ?: return@forEach
+            val header = toLsiTypeHeader(typeElement)
+            if (seed.mode == LsiTypeSeedMode.HEADER && !header.requiresFullExternalDeclaration()) {
+                declarationsByTypeId[seed.typeId] = listOf(header)
+                return@forEach
+            }
+            collectTypeElements(typeElement)
+                .sortedBy { nestedType -> nestedType.qualifiedName.toString() }
+                .forEach { nestedType ->
+                    val nestedTypeId = LsiSymbolId.type(nestedType.qualifiedName.toString())
+                    declarationsByTypeId.putIfAbsent(nestedTypeId, toLsiDeclarations(nestedType))
+                }
+        }
         val pendingTypeIds = ArrayDeque<LsiSymbolId>()
         declarationsByTypeId.values
             .flatten()
@@ -483,6 +510,7 @@ class AptLsiWorkspaceBuilder(
 
 private fun LsiTypeDeclaration.requiresFullExternalDeclaration(): Boolean {
     return kind == LsiTypeDeclarationKind.ANNOTATION ||
+        kind == LsiTypeDeclarationKind.ENUM ||
         annotations.any { annotation -> annotation.type in JIMMER_MANAGED_TYPE_ANNOTATIONS }
 }
 

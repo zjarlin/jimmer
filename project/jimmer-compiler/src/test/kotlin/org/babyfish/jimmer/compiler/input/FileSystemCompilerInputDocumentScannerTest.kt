@@ -25,7 +25,7 @@ class FileSystemCompilerInputDocumentScannerTest {
             requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.MAIN,
             options = emptyMap(),
-        )
+        ).map { snapshot -> snapshot.document }
 
         assertEquals(listOf("Book.dto", "store/Store.dto"), documents.map { document -> document.relativePath })
         assertEquals(listOf("export Book", "export Store"), documents.map { document -> document.content })
@@ -49,14 +49,14 @@ class FileSystemCompilerInputDocumentScannerTest {
             requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.TEST,
             options = options,
-        ).single()
+        ).single().document
         source.writeText("second")
         val second = scanner.scan(
             startPaths = listOf(start),
             requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.TEST,
             options = options,
-        ).single()
+        ).single().document
         val renamed = source.parentFile.resolve("Renamed.dto")
         assertTrue(source.renameTo(renamed))
         val third = scanner.scan(
@@ -64,7 +64,7 @@ class FileSystemCompilerInputDocumentScannerTest {
             requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.TEST,
             options = options,
-        ).single()
+        ).single().document
 
         assertEquals("first", first.content)
         assertEquals("second", second.content)
@@ -126,6 +126,63 @@ class FileSystemCompilerInputDocumentScannerTest {
                 options = mapOf("jimmer.dto.dirs" to "src/test/dto"),
             )
         }
+    }
+
+    @Test
+    fun `freezes dto reference ids with each document`() {
+        val project = project()
+        project.write(
+            "src/main/dto/demo/Book.dto",
+            """
+                export demo.Book
+                import demo.api.Marker
+                @demo.api.Tag
+                BookView implements Marker {
+                    payload: demo.api.Payload
+                }
+            """.trimIndent(),
+        )
+        val start = project.resolve("src/main/kotlin/demo/Model.kt").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("interface Model")
+        }
+
+        val snapshot = scanner.scan(
+            startPaths = listOf(start),
+            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
+            sourceSet = CompilerSourceSet.MAIN,
+            options = emptyMap(),
+        ).single()
+
+        assertEquals(
+            listOf("demo.Book", "demo.api.Tag", "demo.api.Marker", "demo.api.Payload"),
+            snapshot.references.map { reference -> reference.typeId.requireTypeQualifiedName() },
+        )
+        assertEquals(
+            setOf("demo.Book", "demo.api.Tag", "demo.api.Marker", "demo.api.Payload"),
+            snapshot.referencedTypeIds.mapTo(linkedSetOf()) { typeId -> typeId.requireTypeQualifiedName() },
+        )
+        assertTrue(snapshot.references.all { reference -> reference.location.source == snapshot.document.source })
+    }
+
+    @Test
+    fun `keeps malformed dto for formal compiler diagnostics`() {
+        val project = project()
+        project.write("src/main/dto/demo/Broken.dto", "@broken(")
+        val start = project.resolve("src/main/kotlin/demo/Model.kt").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("interface Model")
+        }
+
+        val snapshot = scanner.scan(
+            startPaths = listOf(start),
+            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
+            sourceSet = CompilerSourceSet.MAIN,
+            options = emptyMap(),
+        ).single()
+
+        assertEquals("@broken(", snapshot.document.content)
+        assertTrue(snapshot.referencedTypeIds.contains(site.addzero.lsi.core.LsiSymbolId.type("demo.Broken")))
     }
 
     private fun project(): File = createTempDirectory(prefix = "compiler-input-documents").toFile()

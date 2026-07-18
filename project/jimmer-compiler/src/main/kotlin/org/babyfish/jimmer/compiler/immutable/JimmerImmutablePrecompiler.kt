@@ -37,6 +37,10 @@ class JimmerImmutablePrecompiler {
         val kindByTypeId = typeDeclarations.mapNotNull { type ->
             type.immutableKind()?.let { kind -> type.id to kind }
         }.toMap()
+        val microServiceMetadataByTypeId = typeDeclarations.mapNotNull { type ->
+            val kind = kindByTypeId[type.id] ?: return@mapNotNull null
+            type.id to type.microServiceMetadata(kind)
+        }.toMap()
         val unknownTargetTypeIds = targetTypeIds.filterNot(kindByTypeId::containsKey).sorted()
         if (unknownTargetTypeIds.isNotEmpty()) {
             val targetTypeId = unknownTargetTypeIds.first()
@@ -46,8 +50,14 @@ class JimmerImmutablePrecompiler {
                 message = "Cannot resolve immutable target type '${targetTypeId.value}'",
             )
         }
-        val semanticTypeIds = managedTypeClosure(targetTypeIds, typeDeclarations, kindByTypeId)
         val typeSystem = LsiTypeSystem(workspace)
+        val semanticTypeIds = managedTypeClosure(
+            targetTypeIds = targetTypeIds,
+            typeDeclarations = typeDeclarations,
+            kindByTypeId = kindByTypeId,
+            workspace = workspace,
+            typeSystem = typeSystem,
+        )
         val hierarchyResolver = JimmerImmutableHierarchyResolver(
             typeDeclarations.associateBy(LsiTypeDeclaration::id),
             kindByTypeId,
@@ -55,11 +65,16 @@ class JimmerImmutablePrecompiler {
         val types = typeDeclarations
             .filter { type -> type.id in semanticTypeIds }
             .map { type ->
-                validateType(type, kindByTypeId.getValue(type.id))
+                validateType(
+                    type = type,
+                    kind = kindByTypeId.getValue(type.id),
+                    microServiceMetadata = microServiceMetadataByTypeId.getValue(type.id),
+                )
                 compileType(
                     type = type,
                     kind = kindByTypeId.getValue(type.id),
                     kindByTypeId = kindByTypeId,
+                    microServiceMetadataByTypeId = microServiceMetadataByTypeId,
                     typeSystem = typeSystem,
                     workspace = workspace,
                     hierarchy = hierarchyResolver.resolve(type.id),
@@ -81,6 +96,7 @@ class JimmerImmutablePrecompiler {
     private fun validateType(
         type: LsiTypeDeclaration,
         kind: JimmerImmutableTypeKind,
+        microServiceMetadata: JimmerMicroServiceMetadata,
     ) {
         if (type.enclosingTypeId != null) {
             throw JimmerImmutablePrecompileException(
@@ -110,16 +126,31 @@ class JimmerImmutablePrecompiler {
                 message = "Immutable type '${type.qualifiedName}' cannot be private, protected or local",
             )
         }
+        if (microServiceMetadata.acrossMicroServices && microServiceMetadata.microServiceName.isNotEmpty()) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "Immutable mapped superclass '${type.qualifiedName}' cannot specify microServiceName " +
+                    "when acrossMicroServices is true",
+            )
+        }
     }
 
     private fun compileType(
         type: LsiTypeDeclaration,
         kind: JimmerImmutableTypeKind,
         kindByTypeId: Map<LsiSymbolId, JimmerImmutableTypeKind>,
+        microServiceMetadataByTypeId: Map<LsiSymbolId, JimmerMicroServiceMetadata>,
         typeSystem: LsiTypeSystem,
         workspace: LsiWorkspace,
         hierarchy: JimmerImmutableHierarchy,
     ): JimmerImmutableType {
+        val microServiceMetadata = microServiceMetadataByTypeId.getValue(type.id)
+        validateMicroServiceInheritance(
+            type = type,
+            hierarchy = hierarchy,
+            microServiceMetadata = microServiceMetadata,
+            microServiceMetadataByTypeId = microServiceMetadataByTypeId,
+        )
         val resolvedProps = try {
             typeSystem.effectiveProperties(type.id)
         } catch (exception: IllegalArgumentException) {
@@ -134,13 +165,20 @@ class JimmerImmutablePrecompiler {
                 ownerKind = kind,
                 property = property,
                 kindByTypeId = kindByTypeId,
+                microServiceMetadataByTypeId = microServiceMetadataByTypeId,
                 typeSystem = typeSystem,
                 workspace = workspace,
             )
         }
         val orderedProps = orderResolvedProperties(type, resolvedProps, workspace)
         val props = orderedProps.map { property ->
-            property.toImmutableProp(type.id, kindByTypeId, workspace, typeSystem)
+            property.toImmutableProp(
+                ownerTypeId = type.id,
+                kindByTypeId = kindByTypeId,
+                microServiceMetadataByTypeId = microServiceMetadataByTypeId,
+                workspace = workspace,
+                typeSystem = typeSystem,
+            )
         }
         val discriminatorPropId = discriminatorPropId(
             type = type,
@@ -166,7 +204,31 @@ class JimmerImmutablePrecompiler {
             instantiable = hierarchy.instantiable,
             discriminatorValue = hierarchy.discriminatorValue,
             discriminatorPropId = discriminatorPropId,
+            acrossMicroServices = microServiceMetadata.acrossMicroServices,
+            microServiceName = microServiceMetadata.microServiceName,
         )
+    }
+
+    private fun validateMicroServiceInheritance(
+        type: LsiTypeDeclaration,
+        hierarchy: JimmerImmutableHierarchy,
+        microServiceMetadata: JimmerMicroServiceMetadata,
+        microServiceMetadataByTypeId: Map<LsiSymbolId, JimmerMicroServiceMetadata>,
+    ) {
+        hierarchy.directSuperTypeIds.forEach { superTypeId ->
+            val superMetadata = microServiceMetadataByTypeId.getValue(superTypeId)
+            if (
+                !superMetadata.acrossMicroServices &&
+                superMetadata.microServiceName != microServiceMetadata.microServiceName
+            ) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = type.id,
+                    message = "Immutable type '${type.qualifiedName}' has micro service name " +
+                        "'${microServiceMetadata.microServiceName}', but its super type '${superTypeId.value}' has " +
+                        "micro service name '${superMetadata.microServiceName}'",
+                )
+            }
+        }
     }
 
     private fun discriminatorPropId(
@@ -295,6 +357,7 @@ class JimmerImmutablePrecompiler {
         ownerKind: JimmerImmutableTypeKind,
         property: LsiResolvedProperty,
         kindByTypeId: Map<LsiSymbolId, JimmerImmutableTypeKind>,
+        microServiceMetadataByTypeId: Map<LsiSymbolId, JimmerMicroServiceMetadata>,
         typeSystem: LsiTypeSystem,
         workspace: LsiWorkspace,
     ) {
@@ -352,8 +415,20 @@ class JimmerImmutablePrecompiler {
             ownerId = ownerType.id,
             type = inheritedType,
         )
-        val currentModel = property.toImmutableProp(ownerType.id, kindByTypeId, workspace, typeSystem)
-        val inheritedModel = inheritedInOwner.toImmutableProp(ownerType.id, kindByTypeId, workspace, typeSystem)
+        val currentModel = property.toImmutableProp(
+            ownerTypeId = ownerType.id,
+            kindByTypeId = kindByTypeId,
+            microServiceMetadataByTypeId = microServiceMetadataByTypeId,
+            workspace = workspace,
+            typeSystem = typeSystem,
+        )
+        val inheritedModel = inheritedInOwner.toImmutableProp(
+            ownerTypeId = ownerType.id,
+            kindByTypeId = kindByTypeId,
+            microServiceMetadataByTypeId = microServiceMetadataByTypeId,
+            workspace = workspace,
+            typeSystem = typeSystem,
+        )
         val violations = buildList {
             if (currentModel.type.normalizedTypeSignature(ignoreRootNullability = true) !=
                 inheritedModel.type.normalizedTypeSignature(ignoreRootNullability = true)
@@ -413,6 +488,11 @@ private data class JimmerImmutableHierarchy(
     val joinedTableDissociateAction: JimmerJoinedTableDissociateAction?,
     val instantiable: Boolean,
     val discriminatorValue: String?,
+)
+
+private data class JimmerMicroServiceMetadata(
+    val acrossMicroServices: Boolean,
+    val microServiceName: String,
 )
 
 private class JimmerImmutableHierarchyResolver(
@@ -738,6 +818,23 @@ internal fun LsiTypeDeclaration.immutableKind(): JimmerImmutableTypeKind? {
     return markers.singleOrNull()
 }
 
+private fun LsiTypeDeclaration.microServiceMetadata(
+    kind: JimmerImmutableTypeKind,
+): JimmerMicroServiceMetadata {
+    val marker = when (kind) {
+        JimmerImmutableTypeKind.ENTITY -> annotations.annotation(ENTITY_ANNOTATION)
+        JimmerImmutableTypeKind.MAPPED_SUPERCLASS -> annotations.annotation(MAPPED_SUPERCLASS_ANNOTATION)
+        JimmerImmutableTypeKind.IMMUTABLE,
+        JimmerImmutableTypeKind.EMBEDDABLE,
+        -> null
+    }
+    return JimmerMicroServiceMetadata(
+        acrossMicroServices = kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS &&
+            marker?.booleanValue("acrossMicroServices") == true,
+        microServiceName = marker?.stringValue("microServiceName").orEmpty(),
+    )
+}
+
 internal fun LsiTypeDeclaration.hasImmutableMarker(): Boolean {
     return annotations.any { annotation -> annotation.type in IMMUTABLE_TYPE_ANNOTATION_IDS }
 }
@@ -752,6 +849,8 @@ private fun managedTypeClosure(
     targetTypeIds: Set<LsiSymbolId>,
     typeDeclarations: List<LsiTypeDeclaration>,
     kindByTypeId: Map<LsiSymbolId, JimmerImmutableTypeKind>,
+    workspace: LsiWorkspace,
+    typeSystem: LsiTypeSystem,
 ): Set<LsiSymbolId> {
     val declarationsById = typeDeclarations.associateBy(LsiTypeDeclaration::id)
     val result = sortedSetOf<LsiSymbolId>()
@@ -768,8 +867,40 @@ private fun managedTypeClosure(
             .filter { superTypeId -> superTypeId in kindByTypeId }
             .sorted()
             .forEach(pending::addLast)
+        val propertyTypes = try {
+            typeSystem.effectiveProperties(typeId).map(LsiResolvedProperty::type)
+        } catch (_: IllegalArgumentException) {
+            type.memberIds
+                .mapNotNull { memberId -> workspace[memberId] as? LsiProperty }
+                .map(LsiProperty::type)
+        }
+        propertyTypes
+            .flatMap { propertyType -> propertyType.managedTypeIds(kindByTypeId) }
+            .distinct()
+            .sorted()
+            .forEach(pending::addLast)
     }
     return result
+}
+
+private fun LsiTypeRef.managedTypeIds(
+    kindByTypeId: Map<LsiSymbolId, JimmerImmutableTypeKind>,
+): List<LsiSymbolId> {
+    return when (this) {
+        is LsiDeclaredType -> buildList {
+            if (declarationId in kindByTypeId) {
+                add(declarationId)
+            }
+            arguments.forEach { argument ->
+                argument.type?.managedTypeIds(kindByTypeId)?.let(::addAll)
+            }
+        }
+        is LsiArrayType -> elementType.managedTypeIds(kindByTypeId)
+        is LsiPrimitiveType,
+        is LsiTypeParameterRef,
+        is LsiUnresolvedType,
+        -> emptyList()
+    }
 }
 
 private fun LsiWorkspace.hasUnresolvedImmutableType(targetTypeId: LsiSymbolId): Boolean {
@@ -852,10 +983,12 @@ private fun LsiAnnotationValue.containsUnresolvedType(): Boolean {
 private fun LsiResolvedProperty.toImmutableProp(
     ownerTypeId: LsiSymbolId,
     kindByTypeId: Map<LsiSymbolId, JimmerImmutableTypeKind>,
+    microServiceMetadataByTypeId: Map<LsiSymbolId, JimmerMicroServiceMetadata>,
     workspace: LsiWorkspace,
     typeSystem: LsiTypeSystem,
 ): JimmerImmutableProp {
     val list = type.isListType()
+    val genericTarget = type.targetType(list) is LsiTypeParameterRef
     val targetTypeId = type.targetTypeId(list)
     val associationKind = associationKind()
     val targetKind = targetTypeId?.let(kindByTypeId::get)
@@ -868,6 +1001,29 @@ private fun LsiResolvedProperty.toImmutableProp(
     val primaryMapping = primaryAnnotation?.type.toPrimaryMapping()
         ?: if (association) JimmerImmutablePrimaryMapping.ASSOCIATION
         else JimmerImmutablePrimaryMapping.SCALAR
+    val viewKind = viewKind()
+    val ownerMicroServiceMetadata = microServiceMetadataByTypeId.getValue(ownerTypeId)
+    val targetMicroServiceMetadata = targetTypeId?.let(microServiceMetadataByTypeId::get)
+    val remote = association &&
+        targetKind == JimmerImmutableTypeKind.ENTITY &&
+        targetMicroServiceMetadata != null &&
+        targetMicroServiceMetadata.microServiceName != ownerMicroServiceMetadata.microServiceName
+    validateMicroServiceAssociation(
+        ownerTypeId = ownerTypeId,
+        targetTypeId = targetTypeId,
+        targetKind = targetKind,
+        association = association,
+        primaryMapping = primaryMapping,
+        ownerMicroServiceMetadata = ownerMicroServiceMetadata,
+        targetMicroServiceMetadata = targetMicroServiceMetadata,
+        remote = remote,
+    )
+    val recursive = kindByTypeId[ownerTypeId] == JimmerImmutableTypeKind.ENTITY &&
+        targetKind == JimmerImmutableTypeKind.ENTITY &&
+        viewKind != JimmerViewKind.MANY_TO_MANY &&
+        !genericTarget &&
+        !remote &&
+        typeSystem.resolveSuperType(requireNotNull(targetTypeId), ownerTypeId) != null
     return JimmerImmutableProp(
         id = LsiSymbolId.property(ownerTypeId, declaration.name),
         declarationId = declaration.id,
@@ -892,10 +1048,59 @@ private fun LsiResolvedProperty.toImmutableProp(
             associationKind
         },
         formulaKind = formulaKind(),
-        viewKind = viewKind(),
+        viewKind = viewKind,
+        genericTarget = genericTarget,
+        remote = remote,
+        recursive = recursive,
         validations = validations(workspace),
         converter = converter(workspace, typeSystem, nullable),
     )
+}
+
+private fun LsiResolvedProperty.validateMicroServiceAssociation(
+    ownerTypeId: LsiSymbolId,
+    targetTypeId: LsiSymbolId?,
+    targetKind: JimmerImmutableTypeKind?,
+    association: Boolean,
+    primaryMapping: JimmerImmutablePrimaryMapping,
+    ownerMicroServiceMetadata: JimmerMicroServiceMetadata,
+    targetMicroServiceMetadata: JimmerMicroServiceMetadata?,
+    remote: Boolean,
+) {
+    if (
+        ownerMicroServiceMetadata.acrossMicroServices &&
+        association &&
+        targetKind == JimmerImmutableTypeKind.ENTITY &&
+        primaryMapping != JimmerImmutablePrimaryMapping.TRANSIENT
+    ) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' cannot declare an entity association because " +
+                "mapped superclass '${ownerTypeId.value}' is across microservices",
+        )
+    }
+    if (!remote) {
+        return
+    }
+    checkNotNull(targetTypeId)
+    checkNotNull(targetMicroServiceMetadata)
+    if (
+        ownerMicroServiceMetadata.microServiceName.isEmpty() ||
+        targetMicroServiceMetadata.microServiceName.isEmpty()
+    ) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Remote association '${declaration.id.value}' requires non-empty micro service names for " +
+                "both declaring type '${ownerTypeId.value}' and target type '${targetTypeId.value}'",
+        )
+    }
+    if (annotations.hasAnnotation(JOIN_SQL_ANNOTATION)) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Remote association '${declaration.id.value}' cannot be decorated by " +
+                "@${JOIN_SQL_ANNOTATION.value}",
+        )
+    }
 }
 
 private fun LsiResolvedProperty.validations(workspace: LsiWorkspace): List<JimmerValidation> {
@@ -989,13 +1194,15 @@ private fun LsiTypeRef.isListType(): Boolean {
 }
 
 private fun LsiTypeRef.targetTypeId(list: Boolean): LsiSymbolId? {
-    val declaredType = this as? LsiDeclaredType ?: return null
+    return (targetType(list) as? LsiDeclaredType)?.declarationId
+}
+
+private fun LsiTypeRef.targetType(list: Boolean): LsiTypeRef? {
+    val declaredType = this as? LsiDeclaredType
     if (!list) {
-        return declaredType.declarationId
+        return this
     }
-    return declaredType.arguments.firstOrNull()?.type?.let { argumentType ->
-        (argumentType as? LsiDeclaredType)?.declarationId
-    }
+    return declaredType?.arguments?.firstOrNull()?.type
 }
 
 private fun LsiTypeRef.isNullable(annotations: List<LsiAnnotation>): Boolean {
@@ -1037,6 +1244,10 @@ private fun List<LsiAnnotation>.hasAnnotation(type: LsiSymbolId): Boolean {
 
 private fun LsiAnnotation.stringValue(name: String): String? {
     return (arguments[name]?.value as? LsiAnnotationValue.StringValue)?.value
+}
+
+private fun LsiAnnotation.booleanValue(name: String): Boolean? {
+    return (arguments[name]?.value as? LsiAnnotationValue.BooleanValue)?.value
 }
 
 private fun LsiAnnotation.enumEntryName(
@@ -1137,6 +1348,7 @@ private val ONE_TO_ONE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.On
 private val MANY_TO_ONE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
 private val ONE_TO_MANY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToMany")
 private val MANY_TO_MANY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToMany")
+private val JOIN_SQL_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
 private val FORMULA_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.Formula")
 private val TRANSIENT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")
 private val ID_VIEW_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.IdView")

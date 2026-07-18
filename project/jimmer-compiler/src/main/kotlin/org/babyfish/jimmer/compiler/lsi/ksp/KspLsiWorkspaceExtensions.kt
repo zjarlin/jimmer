@@ -40,7 +40,10 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiTypeHierarchyEntry
+import site.addzero.lsi.model.LsiTypeSeed
+import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.mergeLsiTypeSeeds
 
 fun Resolver.toLsiWorkspace(
     frontendOptions: LsiFrontendOptions,
@@ -55,8 +58,9 @@ fun Resolver.toLsiWorkspace(
 fun Collection<KSClassDeclaration>.toLsiWorkspace(
     resolver: Resolver,
     frontendOptions: LsiFrontendOptions,
+    additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
 ): LsiWorkspace {
-    return KspLsiWorkspaceBuilder(resolver, frontendOptions).build(this)
+    return KspLsiWorkspaceBuilder(resolver, frontendOptions).build(this, additionalSeeds)
 }
 
 fun KSClassDeclaration.toLsiTypeDeclaration(
@@ -85,14 +89,17 @@ class KspLsiWorkspaceBuilder(
 
     private val annotationContext = KspLsiAnnotationContext(resolver)
 
-    fun build(rootTypes: Collection<KSClassDeclaration>): LsiWorkspace {
+    fun build(
+        rootTypes: Collection<KSClassDeclaration>,
+        additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
+    ): LsiWorkspace {
         require(rootTypes.all(KSClassDeclaration::validate)) {
             "KSP LSI workspace can only freeze symbols that are valid in the current round"
         }
         val sourceTypeDeclarations = rootTypes
             .flatMap(::collectTypeDeclarations)
             .distinctBy { declaration -> declaration.qualifiedName?.asString() }
-        val declarations = freezeSemanticDeclarations(sourceTypeDeclarations)
+        val declarations = freezeSemanticDeclarations(sourceTypeDeclarations, additionalSeeds)
         val sources = declarations.mapNotNull { declaration -> declaration.origin.source }
         return LsiWorkspace(
             sources = sources,
@@ -103,6 +110,7 @@ class KspLsiWorkspaceBuilder(
 
     private fun freezeSemanticDeclarations(
         sourceTypeDeclarations: Collection<KSClassDeclaration>,
+        additionalSeeds: Collection<LsiTypeSeed>,
     ): List<LsiDeclaration> {
         val declarationsByTypeId = linkedMapOf<LsiSymbolId, List<LsiDeclaration>>()
         sourceTypeDeclarations
@@ -113,6 +121,30 @@ class KspLsiWorkspaceBuilder(
                 val typeId = LsiSymbolId.type(qualifiedName)
                 declarationsByTypeId[typeId] = toLsiDeclarations(declaration)
             }
+        additionalSeeds.mergeLsiTypeSeeds().forEach { seed ->
+            if (seed.typeId in declarationsByTypeId) {
+                return@forEach
+            }
+            val declaration = resolver.getClassDeclarationByName(
+                seed.typeId.requireTypeQualifiedName(),
+            ) ?: return@forEach
+            if (!declaration.validate()) {
+                return@forEach
+            }
+            val header = toLsiTypeHeader(declaration, seed.typeId)
+            if (seed.mode == LsiTypeSeedMode.HEADER && !header.requiresFullExternalDeclaration()) {
+                declarationsByTypeId[seed.typeId] = listOf(header)
+                return@forEach
+            }
+            collectTypeDeclarations(declaration)
+                .sortedBy { nestedType -> nestedType.qualifiedName?.asString().orEmpty() }
+                .forEach nestedTypeLoop@{ nestedType ->
+                    val qualifiedName = nestedType.qualifiedName?.asString()?.takeIf(String::isNotBlank)
+                        ?: return@nestedTypeLoop
+                    val nestedTypeId = LsiSymbolId.type(qualifiedName)
+                    declarationsByTypeId.putIfAbsent(nestedTypeId, toLsiDeclarations(nestedType))
+                }
+        }
         val pendingTypeIds = ArrayDeque<LsiSymbolId>()
         declarationsByTypeId.values
             .flatten()
@@ -603,6 +635,7 @@ class KspLsiWorkspaceBuilder(
 
 private fun LsiTypeDeclaration.requiresFullExternalDeclaration(): Boolean {
     return kind == LsiTypeDeclarationKind.ANNOTATION ||
+        kind == LsiTypeDeclarationKind.ENUM ||
         annotations.any { annotation -> annotation.type in JIMMER_MANAGED_TYPE_ANNOTATIONS }
 }
 

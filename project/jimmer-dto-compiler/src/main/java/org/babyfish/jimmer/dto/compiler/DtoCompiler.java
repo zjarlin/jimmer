@@ -6,6 +6,7 @@ import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -28,29 +29,33 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
 
     protected DtoCompiler(DtoFile dtoFile) throws IOException {
         this.dtoFile = dtoFile;
-        DtoLexer lexer = new DtoLexer(CharStreams.fromReader(dtoFile.openReader()));
-        DtoParser parser = new DtoParser(new CommonTokenStream(lexer));
-        DtoErrorListener listener = new DtoErrorListener();
-        lexer.removeErrorListeners();
-        lexer.addErrorListener(listener);
-        parser.removeErrorListeners();
-        parser.addErrorListener(listener);
-        this.ast = parser.dto();
-        DtoParser.ExportStatementContext export = ast.exportStatement();
-        DtoParser.PackageStatementContext packageStatement = ast.packageStatement();
+        DtoParser.ExportStatementContext export;
+        DtoParser.PackageStatementContext packageStatement;
+        try (Reader reader = dtoFile.openReader()) {
+            DtoLexer lexer = new DtoLexer(CharStreams.fromReader(reader));
+            DtoParser parser = new DtoParser(new CommonTokenStream(lexer));
+            DtoErrorListener listener = new DtoErrorListener();
+            lexer.removeErrorListeners();
+            lexer.addErrorListener(listener);
+            parser.removeErrorListeners();
+            parser.addErrorListener(listener);
+            this.ast = parser.dto();
+            export = ast.exportStatement();
+            packageStatement = ast.packageStatement();
+        }
         String sourceTypeName = null;
         String targetPackageName = null;
         if (export != null) {
             List<Token> typeParts = export.typeParts;
             if (typeParts.size() == 1) {
-                sourceTypeName = dtoFile.getPackageName() + '.' + typeParts.get(0).getText();
+                sourceTypeName = qualify(dtoFile.getPackageName(), typeParts.get(0).getText());
             } else {
                 sourceTypeName = typeParts.stream().map(Token::getText).collect(Collectors.joining("."));
             }
             List<Token> packageParts = export.packageParts;
             if (packageParts.isEmpty()) {
                 int lastIndex = sourceTypeName.lastIndexOf('.');
-                targetPackageName = lastIndex != -1 ? sourceTypeName.substring(0, lastIndex) + ".dto" : "";
+                targetPackageName = lastIndex != -1 ? sourceTypeName.substring(0, lastIndex) + ".dto" : "dto";
             } else {
                 targetPackageName = packageParts.stream().map(Token::getText).collect(Collectors.joining("."));
             }
@@ -70,7 +75,11 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
         }
         if (sourceTypeName == null) {
             String name = dtoFile.getName();
-            sourceTypeName = dtoFile.getPackageName() + '.' + name.substring(0, name.length() - 4);
+            String modelName = name.endsWith(".dto") ? name.substring(0, name.length() - 4) : name;
+            if (modelName.isEmpty()) {
+                throw exception(1, 0, "The DTO file name must contain a model type name");
+            }
+            sourceTypeName = qualify(dtoFile.getPackageName(), modelName);
         }
         int lastDotIndex = sourceTypeName.lastIndexOf('.');
         String defaultBasePackageName = lastDotIndex != -1 ?
@@ -291,6 +300,10 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
 
     public DtoModifier getDefaultNullableInputModifier() {
         return DtoModifier.STATIC;
+    }
+
+    private static String qualify(String packageName, String simpleName) {
+        return packageName.isEmpty() ? simpleName : packageName + '.' + simpleName;
     }
 
     private class DtoErrorListener extends BaseErrorListener {

@@ -132,6 +132,8 @@ class JimmerModuleRendererTest {
                     instantiable = true,
                     discriminatorValue = null,
                     discriminatorPropId = null,
+                    acrossMicroServices = false,
+                    microServiceName = "",
                 )
             },
         )

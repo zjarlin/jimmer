@@ -405,6 +405,58 @@ public class DtoCompilerTest {
     }
 
     @Test
+    public void testDefaultPackageModelName() throws IOException {
+        MyDtoCompiler compiler = new MyDtoCompiler(
+                new DtoFile(
+                        "/User/test/Book.dto",
+                        "",
+                        "project",
+                        "src/main/dto",
+                        Collections.emptyList(),
+                        "Book.dto"
+                )
+        );
+        Assertions.assertEquals("Book", compiler.getSourceTypeName());
+        Assertions.assertEquals("dto", compiler.getTargetPackageName());
+    }
+
+    @Test
+    public void testDefaultPackageSingleSegmentExport() throws IOException {
+        MyDtoCompiler compiler = new MyDtoCompiler(
+                new DtoFile(
+                        "/User/test/Book.dto",
+                        "export Book",
+                        "project",
+                        "src/main/dto",
+                        Collections.emptyList(),
+                        "Book.dto"
+                )
+        );
+        Assertions.assertEquals("Book", compiler.getSourceTypeName());
+        Assertions.assertEquals("dto", compiler.getTargetPackageName());
+    }
+
+    @Test
+    public void testEmptyModelNameIsReportedAsDtoAstException() {
+        DtoAstException ex = Assertions.assertThrows(
+                DtoAstException.class,
+                () -> new MyDtoCompiler(
+                        new DtoFile(
+                                "/User/test/.dto",
+                                "",
+                                "project",
+                                "src/main/dto",
+                                Collections.emptyList(),
+                                ".dto"
+                        )
+                )
+        );
+        Assertions.assertEquals(1, ex.getLineNumber());
+        Assertions.assertEquals(0, ex.getColNumber());
+        Assertions.assertTrue(ex.getMessage().contains("model type name"));
+    }
+
+    @Test
     public void testSimpleByAlias() {
         List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "import org.babyfish.jimmer.sql.model.{Book as B}" +

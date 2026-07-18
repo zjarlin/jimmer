@@ -34,8 +34,9 @@ class CompilerSessionTest {
             CompilerRound(
                 number = 0,
                 workspace = LsiWorkspace.EMPTY,
+                currentRootTypeIds = emptySet(),
                 inputResources = mapOf("META-INF/jimmer/entities" to "demo.Book\n"),
-                inputDocuments = emptyList(),
+                inputDocumentSnapshots = emptyList(),
             )
         )
 
@@ -46,16 +47,47 @@ class CompilerSessionTest {
     }
 
     @Test
+    fun `round rejects current roots outside current workspace`() {
+        val exception = assertFailsWith<IllegalArgumentException> {
+            CompilerRound(
+                number = 0,
+                workspace = LsiWorkspace.EMPTY,
+                currentWorkspace = LsiWorkspace.EMPTY,
+                currentRootTypeIds = setOf(LsiSymbolId.type("example.Drifting")),
+                inputDocumentSnapshots = emptyList(),
+            )
+        }
+
+        assertEquals(
+            "Current compiler root types must exist in the current workspace",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `final round rejects current roots`() {
+        val exception = assertFailsWith<IllegalArgumentException> {
+            CompilerRound(
+                number = 0,
+                workspace = LsiWorkspace.EMPTY,
+                currentRootTypeIds = setOf(LsiSymbolId.type("example.Final")),
+                isFinal = true,
+                inputDocumentSnapshots = emptyList(),
+            )
+        }
+
+        assertEquals("Final compiler round cannot contain current root types", exception.message)
+    }
+
+    @Test
     fun `多轮会话按阶段传递依赖和上一轮快照`() {
         val executions = mutableListOf<String>()
         val immutable = recordingFeature("immutable", executions)
         val client = recordingFeature("client", executions, "immutable")
         val session = CompilerSession("test", listOf(client, immutable))
 
-        val first = session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
-        val second = session.execute(
-            CompilerRound(1, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
-        )
+        val first = session.execute(emptyRound(0))
+        val second = session.execute(emptyRound(1, isFinal = true))
 
         assertEquals(
             listOf(
@@ -89,7 +121,7 @@ class CompilerSessionTest {
         }
 
         val result = CompilerSession("fixed-point", listOf(provider))
-            .execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
+            .execute(emptyRound(0))
 
         assertEquals(4, result.fixedPointIterations)
         assertEquals(4, invocations)
@@ -109,10 +141,8 @@ class CompilerSessionTest {
             listOf(resultFeature("client", listOf(resource))),
         )
 
-        val first = session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
-        val second = session.execute(
-            CompilerRound(1, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
-        )
+        val first = session.execute(emptyRound(0))
+        val second = session.execute(emptyRound(1, isFinal = true))
 
         assertEquals(listOf(resource), first.newArtifacts)
         assertTrue(second.newArtifacts.isEmpty())
@@ -137,7 +167,7 @@ class CompilerSessionTest {
 
         val exception = assertFailsWith<FinalRoundSourceGenerationException> {
             session.execute(
-                CompilerRound(0, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
+                emptyRound(0, isFinal = true)
             )
         }
 
@@ -162,7 +192,7 @@ class CompilerSessionTest {
 
         val exception = assertFailsWith<FinalRoundIsolatingArtifactException> {
             session.execute(
-                CompilerRound(0, LsiWorkspace.EMPTY, isFinal = true, inputDocuments = emptyList())
+                emptyRound(0, isFinal = true)
             )
         }
 
@@ -188,7 +218,7 @@ class CompilerSessionTest {
         )
 
         assertFailsWith<GeneratedArtifactConflictException> {
-            session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
+            session.execute(emptyRound(0))
         }
 
         assertTrue(session.snapshot().rounds.isEmpty())
@@ -214,7 +244,7 @@ class CompilerSessionTest {
         )
 
         val exception = assertFailsWith<CompilerFixedPointException> {
-            session.execute(CompilerRound(0, LsiWorkspace.EMPTY, inputDocuments = emptyList()))
+            session.execute(emptyRound(0))
         }
 
         assertEquals(3, exception.maximumIterations)
@@ -246,6 +276,19 @@ class CompilerSessionTest {
             }
             return JimmerCompilerFeatureRenderResult()
         }
+    }
+
+    private fun emptyRound(
+        number: Int,
+        isFinal: Boolean = false,
+    ): CompilerRound {
+        return CompilerRound(
+            number = number,
+            workspace = LsiWorkspace.EMPTY,
+            currentRootTypeIds = emptySet(),
+            isFinal = isFinal,
+            inputDocumentSnapshots = emptyList(),
+        )
     }
 
     private fun resultFeature(

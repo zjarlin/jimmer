@@ -41,7 +41,7 @@ class JimmerClientCompilerFeatureProviderTest {
     }
 
     @Test
-    fun `keeps cumulative schema and reports only current roots across real rounds`() {
+    fun `current dependency closure does not pollute processed client roots`() {
         val first = implicitApiWorkspace(
             serviceName = "demo.FirstController",
             operationName = "first",
@@ -67,7 +67,12 @@ class JimmerClientCompilerFeatureProviderTest {
 
         val cumulative = first.merge(second)
         val secondResult = session.execute(
-            round(number = 1, workspace = cumulative, currentWorkspace = second)
+            round(
+                number = 1,
+                workspace = cumulative,
+                currentWorkspace = cumulative,
+                currentRootTypeIds = setOf(LsiSymbolId.type("demo.SecondController")),
+            )
         ).clientResult()
         val secondState = secondResult.state as JimmerClientCompilerFeatureState
 
@@ -351,6 +356,9 @@ class JimmerClientCompilerFeatureProviderTest {
         number: Int,
         workspace: LsiWorkspace,
         currentWorkspace: LsiWorkspace,
+        currentRootTypeIds: Set<LsiSymbolId> = currentWorkspace.declarations
+            .filterIsInstance<LsiTypeDeclaration>()
+            .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
         platform: CompilerPlatform = CompilerPlatform.APT,
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
@@ -359,10 +367,11 @@ class JimmerClientCompilerFeatureProviderTest {
             number = number,
             workspace = workspace,
             currentWorkspace = currentWorkspace,
+            currentRootTypeIds = currentRootTypeIds,
             platform = platform,
             isFinal = isFinal,
             options = options,
-            inputDocuments = emptyList(),
+            inputDocumentSnapshots = emptyList(),
         )
     }
 

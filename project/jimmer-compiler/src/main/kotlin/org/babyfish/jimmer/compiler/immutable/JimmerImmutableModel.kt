@@ -24,6 +24,8 @@ data class JimmerImmutableType(
     val instantiable: Boolean,
     val discriminatorValue: String?,
     val discriminatorPropId: LsiSymbolId?,
+    val acrossMicroServices: Boolean,
+    val microServiceName: String,
 ) {
 
     init {
@@ -63,6 +65,19 @@ data class JimmerImmutableType(
         require(discriminatorPropId == null || props.any { prop -> prop.id == discriminatorPropId }) {
             "Immutable discriminator property must belong to its type: ${id.value}"
         }
+        require(!acrossMicroServices || kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
+            "Only immutable mapped superclass can be across microservices: ${id.value}"
+        }
+        require(!acrossMicroServices || microServiceName.isEmpty()) {
+            "Immutable type across microservices cannot declare a micro service name: ${id.value}"
+        }
+        require(
+            microServiceName.isEmpty() ||
+                kind == JimmerImmutableTypeKind.ENTITY ||
+                kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+        ) {
+            "Only immutable entity or mapped superclass can declare a micro service name: ${id.value}"
+        }
     }
 }
 
@@ -87,9 +102,31 @@ data class JimmerImmutableProp(
     val associationKind: JimmerAssociationKind,
     val formulaKind: JimmerFormulaKind,
     val viewKind: JimmerViewKind,
+    val genericTarget: Boolean,
+    val remote: Boolean,
+    val recursive: Boolean,
     val validations: List<JimmerValidation>,
     val converter: JimmerConverter?,
-)
+) {
+
+    init {
+        require(!remote || association && targetTypeId != null) {
+            "Only immutable association with a concrete target can be remote: ${id.value}"
+        }
+        require(!genericTarget || targetTypeId == null) {
+            "Immutable property with a generic target cannot have a concrete target type: ${id.value}"
+        }
+        require(!recursive || association && targetTypeId != null && !remote) {
+            "Only local immutable association with a concrete target can be recursive: ${id.value}"
+        }
+        require(!recursive || !genericTarget) {
+            "Immutable property with a generic target cannot be recursive: ${id.value}"
+        }
+        require(!recursive || viewKind != JimmerViewKind.MANY_TO_MANY) {
+            "Many-to-many view property cannot be recursive: ${id.value}"
+        }
+    }
+}
 
 data class JimmerValidation(
     val annotationTypeId: LsiSymbolId,

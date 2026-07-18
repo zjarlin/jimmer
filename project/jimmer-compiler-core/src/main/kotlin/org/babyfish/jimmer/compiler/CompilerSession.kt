@@ -11,22 +11,34 @@ data class CompilerRound(
     val number: Int,
     val workspace: LsiWorkspace,
     val currentWorkspace: LsiWorkspace = workspace,
+    val currentRootTypeIds: Set<LsiSymbolId>,
     val platform: CompilerPlatform = CompilerPlatform.UNKNOWN,
     val isFinal: Boolean = false,
     val options: Map<String, String> = emptyMap(),
     val inputResources: Map<String, String> = emptyMap(),
-    val inputDocuments: List<CompilerInputDocument>,
+    val inputDocumentSnapshots: List<CompilerInputDocumentSnapshot>,
 ) {
 
     init {
         require(number >= 0) { "Compiler round number cannot be negative: $number" }
+        currentRootTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
+        require(!isFinal || currentRootTypeIds.isEmpty()) {
+            "Final compiler round cannot contain current root types"
+        }
+        require(currentRootTypeIds.all(currentWorkspace::contains)) {
+            "Current compiler root types must exist in the current workspace"
+        }
         require(options.keys.none(String::isBlank)) { "Compiler option name cannot be blank" }
         inputResources.keys.forEach(::requireCompilerResourcePath)
-        require(inputDocuments == inputDocuments.sorted()) {
-            "Compiler input documents must use stable source order"
+        require(inputDocumentSnapshots == inputDocumentSnapshots.sorted()) {
+            "Compiler input document snapshots must use stable source order"
         }
-        require(inputDocuments.distinctBy { document -> document.kind to document.source.path }.size == inputDocuments.size) {
-            "Compiler round cannot contain duplicate input documents"
+        require(
+            inputDocumentSnapshots
+                .distinctBy { snapshot -> snapshot.document.kind to snapshot.document.source.path }
+                .size == inputDocumentSnapshots.size
+        ) {
+            "Compiler round cannot contain duplicate input document snapshots"
         }
     }
 }

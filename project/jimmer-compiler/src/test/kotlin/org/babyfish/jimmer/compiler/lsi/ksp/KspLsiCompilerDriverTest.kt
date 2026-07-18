@@ -27,6 +27,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.JimmerCompilerCollectContext
@@ -80,7 +81,7 @@ class KspLsiCompilerDriverTest {
 
         driver.process(resolver(sourceFile))
 
-        val document = provider.rounds.single().round.inputDocuments.single()
+        val document = provider.rounds.single().round.inputDocumentSnapshots.single().document
         assertEquals("export Model", document.content)
         assertEquals("src/main/dto", document.sourceRoot)
         assertEquals("Model.dto", document.relativePath)
@@ -112,7 +113,139 @@ class KspLsiCompilerDriverTest {
 
         driver.process(resolver(sourceFile))
 
-        assertEquals("export Model", provider.rounds.single().round.inputDocuments.single().content)
+        assertEquals(
+            "export Model",
+            provider.rounds.single().round.inputDocumentSnapshots.single().document.content,
+        )
+    }
+
+    @Test
+    fun `freezes dto-only seeds with full and header modes`() {
+        val projectDirectory = createTempDirectory(prefix = "compiler-ksp-document-seeds").toFile()
+        val sourcePath = projectDirectory.resolve("src/main/kotlin/demo/Model.kt").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("interface Model")
+        }
+        projectDirectory.resolve("src/main/dto/Model.dto").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText(
+                """
+                    export demo.Model
+                    import demo.{Tag, Marker, Mode, Payload, SpecialModel}
+                    @Tag
+                    ModelView implements Marker {
+                        mode: Mode
+                        payload: Payload
+                        #types {
+                            SpecialModel { }
+                        }
+                    }
+                """.trimIndent(),
+            )
+        }
+        lateinit var sourceFile: KSFile
+        val model = classDeclaration(
+            qualifiedName = "demo.Model",
+            file = { sourceFile },
+            valid = true,
+        )
+        sourceFile = file(listOf(model), sourcePath.absolutePath)
+        var tagDeclarationsRead = false
+        var markerDeclarationsRead = false
+        var modeDeclarationsRead = false
+        var payloadDeclarationsRead = false
+        var specialModelDeclarationsRead = false
+        lateinit var externalFile: KSFile
+        val tag = classDeclaration(
+            qualifiedName = "demo.Tag",
+            file = { externalFile },
+            valid = true,
+            onDeclarationsRead = { tagDeclarationsRead = true },
+        )
+        val marker = classDeclaration(
+            qualifiedName = "demo.Marker",
+            file = { externalFile },
+            valid = true,
+            onDeclarationsRead = { markerDeclarationsRead = true },
+        )
+        val active = classDeclaration(
+            qualifiedName = "demo.Mode.ACTIVE",
+            file = { externalFile },
+            valid = true,
+            classKind = ClassKind.ENUM_ENTRY,
+            origin = Origin.KOTLIN_LIB,
+        )
+        val inactive = classDeclaration(
+            qualifiedName = "demo.Mode.INACTIVE",
+            file = { externalFile },
+            valid = true,
+            classKind = ClassKind.ENUM_ENTRY,
+            origin = Origin.KOTLIN_LIB,
+        )
+        val mode = classDeclaration(
+            qualifiedName = "demo.Mode",
+            file = { externalFile },
+            valid = true,
+            onDeclarationsRead = { modeDeclarationsRead = true },
+            classKind = ClassKind.ENUM_CLASS,
+            origin = Origin.KOTLIN_LIB,
+            declarations = { listOf(active, inactive) },
+        )
+        val payload = classDeclaration(
+            qualifiedName = "demo.Payload",
+            file = { externalFile },
+            valid = true,
+            onDeclarationsRead = { payloadDeclarationsRead = true },
+        )
+        val specialModel = classDeclaration(
+            qualifiedName = "demo.SpecialModel",
+            file = { externalFile },
+            valid = true,
+            onDeclarationsRead = { specialModelDeclarationsRead = true },
+        )
+        externalFile = file(
+            declarations = listOf(tag, marker, mode, payload, specialModel),
+            path = projectDirectory.resolve("dependencies/demo/Types.kt").absolutePath,
+        )
+        val provider = InputDocumentFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-document-seeds-test",
+        )
+
+        driver.process(
+            resolver(
+                allFiles = listOf(sourceFile),
+                newFiles = listOf(sourceFile),
+                knownTypes = listOf(tag, marker, mode, payload, specialModel).associateBy { declaration ->
+                    requireNotNull(declaration.qualifiedName?.asString())
+                },
+            ),
+        )
+
+        val workspace = provider.rounds.single().round.workspace
+        assertTrue(workspace.contains(LsiSymbolId.type("demo.Tag")))
+        assertTrue(workspace.contains(LsiSymbolId.type("demo.Marker")))
+        assertTrue(workspace.contains(LsiSymbolId.type("demo.Mode")))
+        assertTrue(workspace.contains(LsiSymbolId.type("demo.Payload")))
+        assertTrue(workspace.contains(LsiSymbolId.type("demo.SpecialModel")))
+        assertTrue(tagDeclarationsRead)
+        assertTrue(markerDeclarationsRead)
+        assertTrue(modeDeclarationsRead)
+        assertFalse(payloadDeclarationsRead)
+        assertTrue(specialModelDeclarationsRead)
+        assertEquals(
+            listOf("ACTIVE", "INACTIVE"),
+            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+                workspace[LsiSymbolId.type("demo.Mode")],
+            ).enumEntries.map { entry -> entry.name },
+        )
     }
 
     @Test
@@ -155,10 +288,11 @@ class KspLsiCompilerDriverTest {
         assertTrue(round.workspace.contains(LsiSymbolId.type("demo.Valid")))
         assertFalse(round.currentWorkspace.contains(LsiSymbolId.type("demo.Existing")))
         assertTrue(round.currentWorkspace.contains(LsiSymbolId.type("demo.Valid")))
+        assertEquals(setOf(LsiSymbolId.type("demo.Valid")), round.currentRootTypeIds)
     }
 
     @Test
-    fun `defers invalid and unresolved symbols then finishes without native symbols`() {
+    fun `defers only invalid symbols then finishes without native symbols`() {
         var invalidDeclarationsRead = false
         lateinit var sourceFile: KSFile
         val validRoot = classDeclaration(
@@ -191,9 +325,8 @@ class KspLsiCompilerDriverTest {
 
         val deferred = driver.process(resolver)
 
-        assertEquals(2, deferred.size)
-        assertSame(invalidRoot, deferred[0])
-        assertSame(validRoot, deferred[1])
+        assertEquals(1, deferred.size)
+        assertSame(invalidRoot, deferred.single())
         assertFalse(invalidDeclarationsRead)
         val sourceCall = codeGenerator.calls.single()
         assertEquals("demo/ValidGenerated", sourceCall.path)
@@ -209,6 +342,7 @@ class KspLsiCompilerDriverTest {
         assertTrue(finalRound.round.isFinal)
         assertTrue(finalRound.round.workspace.contains(LsiSymbolId.type("demo.Valid")))
         assertTrue(finalRound.round.currentWorkspace.declarations.isEmpty())
+        assertTrue(finalRound.round.currentRootTypeIds.isEmpty())
         val resourceCall = codeGenerator.calls.last()
         assertEquals("META-INF/jimmer/driver-final", resourceCall.path)
         assertEquals("", resourceCall.extension)
@@ -395,11 +529,17 @@ class KspLsiCompilerDriverTest {
     private fun resolver(
         allFiles: List<KSFile>,
         newFiles: List<KSFile>,
+        knownTypes: Map<String, KSClassDeclaration> = emptyMap(),
     ): Resolver {
-        return proxy(Resolver::class.java, "Resolver") { method, _ ->
+        return proxy(Resolver::class.java, "Resolver") { method, arguments ->
             when (method.name) {
                 "getAllFiles" -> allFiles.asSequence()
                 "getNewFiles" -> newFiles.asSequence()
+                "getKSNameFromString" -> name(arguments.first() as String)
+                "getClassDeclarationByName" -> {
+                    val qualifiedName = (arguments.first() as KSName).asString()
+                    knownTypes[qualifiedName]
+                }
                 "getJvmCheckedException" -> emptySequence<KSType>()
                 "overrides" -> false
                 else -> UNHANDLED
@@ -432,21 +572,24 @@ class KspLsiCompilerDriverTest {
         file: () -> KSFile,
         valid: Boolean,
         onDeclarationsRead: () -> Unit = {},
+        classKind: ClassKind = ClassKind.INTERFACE,
+        origin: Origin = Origin.KOTLIN,
+        declarations: () -> List<KSClassDeclaration> = { emptyList() },
     ): KSClassDeclaration {
         return proxy(KSClassDeclaration::class.java, "KSClassDeclaration($qualifiedName)") { method, _ ->
             when (method.name) {
                 "getSimpleName" -> name(qualifiedName.substringAfterLast('.'))
                 "getQualifiedName" -> name(qualifiedName)
                 "getPackageName" -> name(qualifiedName.substringBeforeLast('.', ""))
-                "getClassKind" -> ClassKind.INTERFACE
-                "getOrigin" -> Origin.KOTLIN
+                "getClassKind" -> classKind
+                "getOrigin" -> origin
                 "getContainingFile" -> file()
                 "getParentDeclaration" -> null
                 "getParent" -> file()
                 "getTypeParameters" -> emptyList<com.google.devtools.ksp.symbol.KSTypeParameter>()
                 "getDeclarations" -> {
                     onDeclarationsRead()
-                    emptySequence<com.google.devtools.ksp.symbol.KSDeclaration>()
+                    declarations().asSequence()
                 }
                 "getSuperTypes" -> emptySequence<KSTypeReference>()
                 "getAnnotations" -> emptySequence<KSAnnotation>()

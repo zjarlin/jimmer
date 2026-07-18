@@ -4,9 +4,10 @@ import java.io.File
 import java.io.IOException
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
+import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 import javax.tools.StandardLocation
-import org.babyfish.jimmer.compiler.CompilerInputDocument
+import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerRoundResult
@@ -57,10 +58,19 @@ class AptLsiCompilerDriver(
 
     private var inputResources = emptyMap<String, String>()
 
-    private var inputDocuments = emptyList<CompilerInputDocument>()
+    private var inputDocumentSnapshots = emptyList<CompilerInputDocumentSnapshot>()
 
     fun process(roundEnvironment: RoundEnvironment): CompilerRoundResult {
         val isFinal = roundEnvironment.processingOver()
+        if (!isFinal && inputDocumentKinds.isNotEmpty()) {
+            val marker = classOutputMarker()
+            inputDocumentSnapshots = inputDocumentScanner.scan(
+                startPaths = listOf(marker),
+                requestedKinds = inputDocumentKinds,
+                sourceSet = marker.compilerSourceSet(),
+                options = options,
+            )
+        }
         val currentRoundSymbols = if (isFinal) {
             AptLsiRoundSymbols.EMPTY
         } else {
@@ -73,32 +83,43 @@ class AptLsiCompilerDriver(
                 pendingRootTypes,
             )
         }
+        val roundWorkspace = if (isFinal) {
+            LsiWorkspace.EMPTY
+        } else {
+            currentRoundSymbols.rootTypes.toLsiWorkspace(
+                processingEnvironment = processingEnvironment,
+                frontendOptions = frontendOptions,
+                additionalSeeds = inputDocumentSnapshots.flatMap { snapshot -> snapshot.typeSeeds },
+            )
+        }
         val currentWorkspace = if (isFinal) {
             LsiWorkspace.EMPTY
         } else {
-            currentRoundSymbols.rootTypes.toLsiWorkspace(processingEnvironment, frontendOptions)
-        }
-        inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
-        if (!isFinal && inputDocumentKinds.isNotEmpty()) {
-            val marker = classOutputMarker()
-            inputDocuments = inputDocumentScanner.scan(
-                startPaths = listOf(marker),
-                requestedKinds = inputDocumentKinds,
-                sourceSet = marker.compilerSourceSet(),
-                options = options,
+            currentRoundSymbols.rootTypes.toLsiWorkspace(
+                processingEnvironment = processingEnvironment,
+                frontendOptions = frontendOptions,
             )
         }
-        workspace = workspace.merge(currentWorkspace)
+        inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
+        workspace = workspace.merge(roundWorkspace)
+        val currentRootTypeIds = if (isFinal) {
+            emptySet()
+        } else {
+            roundEnvironment.rootElements
+                .filterIsInstance<TypeElement>()
+                .mapTo(sortedSetOf()) { type -> LsiSymbolId.type(type.qualifiedName.toString()) }
+        }
         val roundResult = session.execute(
             CompilerRound(
                 number = nextRoundNumber,
                 workspace = workspace,
                 currentWorkspace = currentWorkspace,
+                currentRootTypeIds = currentRootTypeIds,
                 platform = CompilerPlatform.APT,
                 isFinal = isFinal,
                 options = options,
                 inputResources = inputResources,
-                inputDocuments = inputDocuments,
+                inputDocumentSnapshots = inputDocumentSnapshots,
             ),
         )
         nextRoundNumber++

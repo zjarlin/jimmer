@@ -5,16 +5,22 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import org.babyfish.jimmer.compiler.CompilerInputDocument
+import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
+import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
+import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
@@ -111,7 +117,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
     }
 
     @Test
-    fun `current processed ids do not repeat cumulative immutable roots`() {
+    fun `current dependency closure does not pollute processed immutable roots`() {
         val firstId = LsiSymbolId.type("demo.First")
         val secondId = LsiSymbolId.type("demo.Second")
         val firstWorkspace = LsiWorkspace(
@@ -127,7 +133,8 @@ class JimmerImmutableCompilerFeatureProviderTest {
         val result = PROVIDER.precompile(
             context(
                 workspace = cumulative,
-                currentWorkspace = secondWorkspace,
+                currentWorkspace = cumulative,
+                currentRootTypeIds = setOf(secondId),
                 platform = CompilerPlatform.KSP,
             )
         )
@@ -136,6 +143,69 @@ class JimmerImmutableCompilerFeatureProviderTest {
         assertEquals(setOf(firstId, secondId), state.targetTypeIds)
         assertEquals(setOf(secondId), state.currentTypeIds)
         assertEquals(setOf(secondId), result.processedSymbols)
+    }
+
+    @Test
+    fun `binary dto subject and model roots enrich schema without becoming generation roots`() {
+        val localId = LsiSymbolId.type("demo.LocalModel")
+        val binaryBaseId = LsiSymbolId.type("demo.BinaryBook")
+        val binaryBranchId = LsiSymbolId.type("demo.BinarySpecialBook")
+        val localWorkspace = LsiWorkspace(
+            sources = listOf(SOURCE),
+            declarations = listOf(immutableType(localId, ENTITY)),
+        )
+        val binarySource = LsiSource.of(
+            path = "dependencies/demo-models.jar",
+            kind = LsiSourceKind.BINARY,
+        )
+        val binaryOrigin = LsiOrigin(LsiOriginKind.BINARY, binarySource)
+        val binaryWorkspace = LsiWorkspace(
+            sources = listOf(binarySource),
+            declarations = listOf(
+                immutableType(binaryBaseId, ENTITY, origin = binaryOrigin),
+                immutableType(binaryBranchId, ENTITY, origin = binaryOrigin),
+            ),
+        )
+        val snapshot = REFERENCE_FREEZER.freeze(
+            CompilerInputDocument(
+                kind = CompilerInputDocumentKind.DTO,
+                sourceSet = CompilerSourceSet.MAIN,
+                projectName = "demo-project",
+                sourceRoot = "src/main/dto",
+                relativePath = "demo/BinaryBook.dto",
+                content = """
+                    export demo.BinaryBook
+                    BinaryBookView {
+                        #types {
+                            demo.BinarySpecialBook {}
+                        }
+                    }
+                """.trimIndent(),
+            )
+        )
+
+        val result = PROVIDER.precompile(
+            context(
+                workspace = localWorkspace.merge(binaryWorkspace),
+                currentWorkspace = localWorkspace,
+                currentRootTypeIds = setOf(localId),
+                inputDocumentSnapshots = listOf(snapshot),
+            )
+        )
+        val state = assertIs<JimmerImmutableCompilerFeatureState>(result.state)
+
+        assertEquals(JimmerImmutableCompilerFeatureStatus.RESOLVED, state.status)
+        assertEquals(setOf(localId), state.targetTypeIds)
+        assertEquals(setOf(localId), state.currentTypeIds)
+        assertEquals(setOf(localId), result.processedSymbols)
+        assertEquals(
+            setOf(localId, binaryBaseId, binaryBranchId),
+            state.semanticRootTypeIds,
+        )
+        assertEquals(
+            setOf(localId, binaryBaseId, binaryBranchId),
+            state.schema.types.mapTo(sortedSetOf()) { type -> type.id },
+        )
     }
 
     @Test
@@ -172,9 +242,13 @@ class JimmerImmutableCompilerFeatureProviderTest {
     private fun context(
         workspace: LsiWorkspace,
         currentWorkspace: LsiWorkspace = workspace,
+        currentRootTypeIds: Set<LsiSymbolId> = currentWorkspace.declarations
+            .filterIsInstance<LsiTypeDeclaration>()
+            .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
         platform: CompilerPlatform = CompilerPlatform.APT,
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
+        inputDocumentSnapshots: List<CompilerInputDocumentSnapshot> = emptyList(),
     ): JimmerCompilerPrecompileContext {
         return JimmerCompilerPrecompileContext(
             session = CompilerSessionSnapshot("immutable-feature-test", emptyList()),
@@ -182,10 +256,11 @@ class JimmerImmutableCompilerFeatureProviderTest {
                 number = 0,
                 workspace = workspace,
                 currentWorkspace = currentWorkspace,
+                currentRootTypeIds = currentRootTypeIds,
                 platform = platform,
                 isFinal = isFinal,
                 options = options,
-                inputDocuments = emptyList(),
+                inputDocumentSnapshots = inputDocumentSnapshots,
             ),
             collection = JimmerCompilerFeatureCollection(),
             previousState = null,
@@ -280,5 +355,6 @@ class JimmerImmutableCompilerFeatureProviderTest {
         val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
         val DEFAULT = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
         val KOTLIN_METADATA = LsiSymbolId.type("kotlin.Metadata")
+        val REFERENCE_FREEZER = CompilerInputDocumentReferenceFreezer()
     }
 }

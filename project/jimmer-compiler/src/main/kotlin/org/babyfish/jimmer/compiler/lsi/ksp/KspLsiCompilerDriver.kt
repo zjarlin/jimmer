@@ -6,7 +6,7 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
-import org.babyfish.jimmer.compiler.CompilerInputDocument
+import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerRoundResult
@@ -60,35 +60,44 @@ class KspLsiCompilerDriver(
 
     private var inputResources = emptyMap<String, String>()
 
-    private var inputDocuments = emptyList<CompilerInputDocument>()
+    private var inputDocumentSnapshots = emptyList<CompilerInputDocumentSnapshot>()
 
     fun process(resolver: Resolver): List<KSAnnotated> {
         val currentRoundSymbols = resolver.toKspLsiRoundSymbols(frontendOptions)
-        workspace = currentRoundSymbols.allValidRootTypes.toLsiWorkspace(resolver, frontendOptions)
-        val currentWorkspace = currentRoundSymbols.currentValidRootTypes.toLsiWorkspace(
-            resolver,
-            frontendOptions,
-        )
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         if (inputDocumentKinds.isNotEmpty()) {
             val sourceFiles = currentRoundSymbols.sourceFiles
                 .map { file -> File(file.filePath) }
-            inputDocuments = inputDocumentScanner.scan(
+            inputDocumentSnapshots = inputDocumentScanner.scan(
                 startPaths = sourceFiles,
                 requestedKinds = inputDocumentKinds,
                 sourceSet = sourceFiles.compilerSourceSet(),
                 options = options,
             )
         }
+        val documentSeeds = inputDocumentSnapshots.flatMap { snapshot -> snapshot.typeSeeds }
+        workspace = currentRoundSymbols.allValidRootTypes.toLsiWorkspace(
+            resolver = resolver,
+            frontendOptions = frontendOptions,
+            additionalSeeds = documentSeeds,
+        )
+        val currentWorkspace = currentRoundSymbols.currentValidRootTypes.toLsiWorkspace(
+            resolver = resolver,
+            frontendOptions = frontendOptions,
+        )
+        val currentRootTypeIds = currentRoundSymbols.currentValidRootTypes.mapTo(sortedSetOf()) { type ->
+            LsiSymbolId.type(requireNotNull(type.qualifiedName?.asString()))
+        }
         val roundResult = session.execute(
             CompilerRound(
                 number = nextRoundNumber,
                 workspace = workspace,
                 currentWorkspace = currentWorkspace,
+                currentRootTypeIds = currentRootTypeIds,
                 platform = CompilerPlatform.KSP,
                 options = options,
                 inputResources = inputResources,
-                inputDocuments = inputDocuments,
+                inputDocumentSnapshots = inputDocumentSnapshots,
             ),
         )
         nextRoundNumber++
@@ -103,7 +112,7 @@ class KspLsiCompilerDriver(
                 currentRoundSourceFiles = currentRoundSymbols.sourceFiles,
             )
         }
-        return deferredSymbols(currentRoundSymbols, roundResult)
+        return deferredSymbols(currentRoundSymbols)
     }
 
     fun finish(): CompilerRoundResult {
@@ -113,11 +122,12 @@ class KspLsiCompilerDriver(
                 number = nextRoundNumber,
                 workspace = workspace,
                 currentWorkspace = LsiWorkspace.EMPTY,
+                currentRootTypeIds = emptySet(),
                 platform = CompilerPlatform.KSP,
                 isFinal = true,
                 options = options,
                 inputResources = inputResources,
-                inputDocuments = inputDocuments,
+                inputDocumentSnapshots = inputDocumentSnapshots,
             ),
         )
         nextRoundNumber++
@@ -137,19 +147,12 @@ class KspLsiCompilerDriver(
 
     private fun deferredSymbols(
         currentRoundSymbols: KspLsiRoundSymbols,
-        roundResult: CompilerRoundResult,
     ): List<KSAnnotated> {
         val seen = Collections.newSetFromMap(IdentityHashMap<KSAnnotated, Boolean>())
         return buildList {
             for (invalidRoot in currentRoundSymbols.invalidRootTypes) {
                 if (seen.add(invalidRoot)) {
                     add(invalidRoot)
-                }
-            }
-            for (symbolId in roundResult.unresolvedSymbols.sorted()) {
-                val symbol = currentRoundSymbols.annotatedById[symbolId] ?: continue
-                if (seen.add(symbol)) {
-                    add(symbol)
                 }
             }
         }

@@ -6,16 +6,19 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 
 internal class FileSystemCompilerInputDocumentScanner {
+
+    private val referenceFreezer = CompilerInputDocumentReferenceFreezer()
 
     fun scan(
         startPaths: Collection<File>,
         requestedKinds: Set<CompilerInputDocumentKind>,
         sourceSet: CompilerSourceSet,
         options: Map<String, String>,
-    ): List<CompilerInputDocument> {
+    ): List<CompilerInputDocumentSnapshot> {
         if (CompilerInputDocumentKind.DTO !in requestedKinds) {
             return emptyList()
         }
@@ -37,7 +40,7 @@ internal class FileSystemCompilerInputDocumentScanner {
                     .sorted()
                     .joinToString()
         }
-        return documents
+        return documents.map(referenceFreezer::freeze)
     }
 
     private fun findProject(
