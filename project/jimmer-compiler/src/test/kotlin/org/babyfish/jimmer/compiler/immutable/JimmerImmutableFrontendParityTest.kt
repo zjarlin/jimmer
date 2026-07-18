@@ -62,6 +62,32 @@ class JimmerImmutableFrontendParityTest {
         assertTrue(derived.props.any { prop ->
             prop.name == "createdBy" && prop.inherited
         })
+        val catalogBook = aptSchema.types.single { type -> type.qualifiedName == "demo.CatalogBook" }
+        val storeProp = catalogBook.props.single { prop -> prop.name == "store" }
+        val storeIdProp = catalogBook.props.single { prop -> prop.name == "storeId" }
+        assertEquals(
+            JimmerImmutableView.Id(
+                basePropId = storeProp.id,
+                targetIdPropId = LsiSymbolId.property(LsiSymbolId.type("demo.Store"), "id"),
+            ),
+            storeIdProp.view,
+        )
+        val authorsProp = catalogBook.props.single { prop -> prop.name == "authors" }
+        assertEquals(
+            JimmerImmutableView.ManyToMany(
+                basePropId = LsiSymbolId.property(catalogBook.id, "links"),
+                deeperPropId = LsiSymbolId.property(LsiSymbolId.type("demo.BookAuthor"), "author"),
+            ),
+            authorsProp.view,
+        )
+        val authorIdsProp = catalogBook.props.single { prop -> prop.name == "authorIds" }
+        assertEquals(
+            JimmerImmutableView.Id(
+                basePropId = authorsProp.id,
+                targetIdPropId = LsiSymbolId.property(LsiSymbolId.type("demo.Author"), "id"),
+            ),
+            authorIdsProp.view,
+        )
     }
 
     @Test
@@ -75,6 +101,52 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(
             "Immutable property 'type:demo.ModelBase/property:kind' decorated by " +
                 "@type:org.babyfish.jimmer.sql.Discriminator must be a scalar string or enum property",
+            apt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp frontends report identical invalid id view diagnostic`() {
+        val apt = compileApt(INVALID_VIEW_JAVA_SOURCE)
+        val ksp = compileKsp(INVALID_VIEW_KOTLIN_SOURCE)
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertEquals(
+            "Immutable view property 'type:demo.Book/property:storeId' list category does not match " +
+                "id-view base property 'store'",
+            apt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp frontends report identical primary mapping conflict`() {
+        val apt = compileApt(INVALID_PRIMARY_MAPPING_JAVA_SOURCE)
+        val ksp = compileKsp(INVALID_PRIMARY_MAPPING_KOTLIN_SOURCE)
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertEquals(
+            "Immutable property 'type:demo.Book/property:storeId' cannot declare multiple primary mapping " +
+                "annotations: @type:org.babyfish.jimmer.sql.IdView, " +
+                "@type:org.babyfish.jimmer.sql.Transient",
+            apt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp frontends report identical id view element nullability`() {
+        val apt = compileApt(INVALID_VIEW_ELEMENT_NULLABILITY_JAVA_SOURCE)
+        val ksp = compileKsp(INVALID_VIEW_ELEMENT_NULLABILITY_KOTLIN_SOURCE)
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertEquals(
+            "Immutable view property 'type:demo.Book/property:authorIds' type does not match id 'id' " +
+                "of association target 'demo.Author'",
             apt.diagnostic,
         )
     }
@@ -108,6 +180,10 @@ class JimmerImmutableFrontendParityTest {
             )
             task.setProcessors(listOf(ImmutableSnapshotAptProcessor(capture)))
             task.call()
+        }
+        check(capture.completed) {
+            "APT frontend did not freeze an LSI workspace:\n" +
+                diagnostics.diagnostics.joinToString("\n") { diagnostic -> diagnostic.getMessage(null) }
         }
         val frontendResult = capture.result()
         if (frontendResult.diagnostic == null) {
@@ -288,8 +364,13 @@ class JimmerImmutableFrontendParityTest {
             import org.babyfish.jimmer.sql.Id;
             import org.babyfish.jimmer.sql.Inheritance;
             import org.babyfish.jimmer.sql.InheritanceType;
+            import org.babyfish.jimmer.sql.IdView;
             import org.babyfish.jimmer.sql.JoinedTableDissociateAction;
             import org.babyfish.jimmer.sql.MappedSuperclass;
+            import org.babyfish.jimmer.sql.ManyToOne;
+            import org.babyfish.jimmer.sql.ManyToManyView;
+            import org.babyfish.jimmer.sql.OneToMany;
+            import java.util.List;
 
             @MappedSuperclass
             interface ModelBase<T> {
@@ -316,6 +397,51 @@ class JimmerImmutableFrontendParityTest {
             interface Book extends Asset {
                 String isbn();
             }
+
+            @Entity
+            interface Store {
+                @Id
+                long id();
+            }
+
+            @Entity
+            interface Author {
+                @Id
+                long id();
+            }
+
+            @Entity
+            interface BookAuthor {
+                @Id
+                long id();
+
+                @ManyToOne
+                Author author();
+
+                @ManyToOne
+                CatalogBook book();
+            }
+
+            @Entity
+            interface CatalogBook {
+                @Id
+                long id();
+
+                @ManyToOne
+                Store store();
+
+                @IdView
+                long storeId();
+
+                @OneToMany(mappedBy = "book")
+                List<BookAuthor> links();
+
+                @ManyToManyView(prop = "links")
+                List<Author> authors();
+
+                @IdView("authors")
+                List<Long> authorIds();
+            }
         """.trimIndent()
 
         val VALID_KOTLIN_SOURCE = """
@@ -327,8 +453,12 @@ class JimmerImmutableFrontendParityTest {
             import org.babyfish.jimmer.sql.Id
             import org.babyfish.jimmer.sql.Inheritance
             import org.babyfish.jimmer.sql.InheritanceType
+            import org.babyfish.jimmer.sql.IdView
             import org.babyfish.jimmer.sql.JoinedTableDissociateAction
             import org.babyfish.jimmer.sql.MappedSuperclass
+            import org.babyfish.jimmer.sql.ManyToOne
+            import org.babyfish.jimmer.sql.ManyToManyView
+            import org.babyfish.jimmer.sql.OneToMany
 
             @MappedSuperclass
             interface ModelBase<T : Any> {
@@ -355,6 +485,51 @@ class JimmerImmutableFrontendParityTest {
             interface Book : Asset {
                 val isbn: String
             }
+
+            @Entity
+            interface Store {
+                @Id
+                val id: Long
+            }
+
+            @Entity
+            interface Author {
+                @Id
+                val id: Long
+            }
+
+            @Entity
+            interface BookAuthor {
+                @Id
+                val id: Long
+
+                @ManyToOne
+                val author: Author
+
+                @ManyToOne
+                val book: CatalogBook
+            }
+
+            @Entity
+            interface CatalogBook {
+                @Id
+                val id: Long
+
+                @ManyToOne
+                val store: Store
+
+                @IdView
+                val storeId: Long
+
+                @OneToMany(mappedBy = "book")
+                val links: List<BookAuthor>
+
+                @ManyToManyView(prop = "links")
+                val authors: List<Author>
+
+                @IdView("authors")
+                val authorIds: List<Long>
+            }
         """.trimIndent()
 
         val INVALID_JAVA_SOURCE = VALID_JAVA_SOURCE
@@ -362,5 +537,163 @@ class JimmerImmutableFrontendParityTest {
 
         val INVALID_KOTLIN_SOURCE = VALID_KOTLIN_SOURCE
             .replace("val kind: String", "val kind: Int")
+
+        val INVALID_VIEW_JAVA_SOURCE = """
+            package demo;
+
+            import java.util.List;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.IdView;
+            import org.babyfish.jimmer.sql.ManyToOne;
+
+            @Entity
+            interface Store {
+                @Id
+                long id();
+            }
+
+            @Entity
+            interface Book {
+                @ManyToOne
+                Store store();
+
+                @IdView("store")
+                List<Long> storeId();
+            }
+        """.trimIndent()
+
+        val INVALID_VIEW_KOTLIN_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.IdView
+            import org.babyfish.jimmer.sql.ManyToOne
+
+            @Entity
+            interface Store {
+                @Id
+                val id: Long
+            }
+
+            @Entity
+            interface Book {
+                @ManyToOne
+                val store: Store
+
+                @IdView("store")
+                val storeId: List<Long>
+            }
+        """.trimIndent()
+
+        val INVALID_PRIMARY_MAPPING_JAVA_SOURCE = """
+            package demo;
+
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.IdView;
+            import org.babyfish.jimmer.sql.ManyToOne;
+            import org.babyfish.jimmer.sql.Transient;
+
+            @Entity
+            interface Store {
+                @Id
+                long id();
+            }
+
+            @Entity
+            interface Book {
+                @ManyToOne
+                Store store();
+
+                @IdView
+                @Transient
+                long storeId();
+            }
+        """.trimIndent()
+
+        val INVALID_PRIMARY_MAPPING_KOTLIN_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.IdView
+            import org.babyfish.jimmer.sql.ManyToOne
+            import org.babyfish.jimmer.sql.Transient
+
+            @Entity
+            interface Store {
+                @Id
+                val id: Long
+            }
+
+            @Entity
+            interface Book {
+                @ManyToOne
+                val store: Store
+
+                @Transient
+                @IdView
+                val storeId: Long
+            }
+        """.trimIndent()
+
+        val INVALID_VIEW_ELEMENT_NULLABILITY_JAVA_SOURCE = """
+            package demo;
+
+            import java.lang.annotation.ElementType;
+            import java.lang.annotation.Retention;
+            import java.lang.annotation.RetentionPolicy;
+            import java.lang.annotation.Target;
+            import java.util.List;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.IdView;
+            import org.babyfish.jimmer.sql.ManyToMany;
+
+            @Retention(RetentionPolicy.RUNTIME)
+            @Target(ElementType.TYPE_USE)
+            @interface Nullable {}
+
+            @Entity
+            interface Author {
+                @Id
+                long id();
+            }
+
+            @Entity
+            interface Book {
+                @ManyToMany
+                List<Author> authors();
+
+                @IdView("authors")
+                List<@Nullable Long> authorIds();
+            }
+        """.trimIndent()
+
+        val INVALID_VIEW_ELEMENT_NULLABILITY_KOTLIN_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.IdView
+            import org.babyfish.jimmer.sql.ManyToMany
+
+            @Entity
+            interface Author {
+                @Id
+                val id: Long
+            }
+
+            @Entity
+            interface Book {
+                @ManyToMany
+                val authors: List<Author>
+
+                @IdView("authors")
+                val authorIds: List<Long?>
+            }
+        """.trimIndent()
     }
 }

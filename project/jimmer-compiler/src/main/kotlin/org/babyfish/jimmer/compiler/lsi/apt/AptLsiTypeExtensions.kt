@@ -43,10 +43,13 @@ internal fun AptLsiContext.toLsiType(
 ): LsiTypeRef {
     return when (type) {
         is ErrorType -> toLsiErrorType(type, typeParameterIds)
-        is PrimitiveType -> LsiPrimitiveType(type.kind.toLsiPrimitiveKind())
+        is PrimitiveType -> LsiPrimitiveType(
+            kind = type.kind.toLsiPrimitiveKind(),
+            nullability = type.toLsiNullability(LsiNullability.NON_NULL),
+        )
         is ArrayType -> LsiArrayType(
             elementType = toLsiType(type.componentType, typeParameterIds),
-            nullability = LsiNullability.PLATFORM,
+            nullability = type.toLsiNullability(LsiNullability.PLATFORM),
         )
         is DeclaredType -> toLsiDeclaredType(type, typeParameterIds)
         is TypeVariable -> toLsiTypeParameterRef(type, typeParameterIds)
@@ -250,14 +253,21 @@ private fun AptLsiContext.isImplicitObjectBound(type: TypeMirror): Boolean {
 private fun AptLsiContext.toLsiDeclaredType(
     type: DeclaredType,
     typeParameterIds: Map<TypeParameterElement, LsiSymbolId>,
-): LsiDeclaredType {
+): LsiTypeRef {
     val typeElement = type.asElement() as TypeElement
+    val qualifiedName = typeElement.qualifiedName.toString()
+    APT_BOXED_PRIMITIVE_KINDS[qualifiedName]?.let { primitiveKind ->
+        return LsiPrimitiveType(
+            kind = primitiveKind,
+            nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+        )
+    }
     return LsiDeclaredType(
-        declarationId = LsiSymbolId.type(typeElement.qualifiedName.toString()),
+        declarationId = LsiSymbolId.type(qualifiedName),
         arguments = type.typeArguments.map { argument ->
             toLsiTypeArgument(argument, typeParameterIds)
         },
-        nullability = LsiNullability.PLATFORM,
+        nullability = type.toLsiNullability(LsiNullability.PLATFORM),
     )
 }
 
@@ -275,12 +285,18 @@ private fun AptLsiContext.toLsiErrorType(
     if (resolvedElement.asType().kind == TypeKind.ERROR) {
         return LsiUnresolvedType(type.toString())
     }
+    APT_BOXED_PRIMITIVE_KINDS[resolvedElement.qualifiedName.toString()]?.let { primitiveKind ->
+        return LsiPrimitiveType(
+            kind = primitiveKind,
+            nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+        )
+    }
     return LsiDeclaredType(
         declarationId = LsiSymbolId.type(resolvedElement.qualifiedName.toString()),
         arguments = type.typeArguments.map { argument ->
             toLsiTypeArgument(argument, typeParameterIds)
         },
-        nullability = LsiNullability.PLATFORM,
+        nullability = type.toLsiNullability(LsiNullability.PLATFORM),
     )
 }
 
@@ -294,7 +310,7 @@ private fun AptLsiContext.toLsiTypeParameterRef(
     return if (parameterId != null) {
         LsiTypeParameterRef(
             parameterId = parameterId,
-            nullability = LsiNullability.PLATFORM,
+            nullability = type.toLsiNullability(LsiNullability.PLATFORM),
         )
     } else {
         LsiUnresolvedType(type.toString())
@@ -343,6 +359,48 @@ private fun TypeMirror.isBooleanType(): Boolean {
     val element = declaredType.asElement() as? TypeElement ?: return false
     return element.qualifiedName.contentEquals("java.lang.Boolean")
 }
+
+private fun TypeMirror.toLsiNullability(default: LsiNullability): LsiNullability {
+    var nullable = false
+    var nonNull = false
+    annotationMirrors.forEach { annotation ->
+        val annotationType = annotation.annotationType.asElement() as? TypeElement ?: return@forEach
+        val annotationName = annotationType.qualifiedName.toString()
+        when (annotationName.annotationNullability()) {
+            true -> nullable = true
+            false -> nonNull = true
+            null -> Unit
+        }
+    }
+    return when {
+        nullable -> LsiNullability.NULLABLE
+        nonNull -> LsiNullability.NON_NULL
+        else -> default
+    }
+}
+
+private fun String.annotationNullability(): Boolean? {
+    if (this == "org.babyfish.jimmer.client.TNullable") {
+        return true
+    }
+    return when {
+        endsWith(".Null") || endsWith(".Nullable") -> true
+        endsWith(".NotNull") || endsWith(".NonNull") -> false
+        else -> null
+    }
+}
+
+private val APT_BOXED_PRIMITIVE_KINDS = mapOf(
+    "java.lang.Boolean" to LsiPrimitiveKind.BOOLEAN,
+    "java.lang.Byte" to LsiPrimitiveKind.BYTE,
+    "java.lang.Short" to LsiPrimitiveKind.SHORT,
+    "java.lang.Integer" to LsiPrimitiveKind.INT,
+    "java.lang.Long" to LsiPrimitiveKind.LONG,
+    "java.lang.Character" to LsiPrimitiveKind.CHAR,
+    "java.lang.Float" to LsiPrimitiveKind.FLOAT,
+    "java.lang.Double" to LsiPrimitiveKind.DOUBLE,
+    "java.lang.Void" to LsiPrimitiveKind.VOID,
+)
 
 private fun TypeMirror.toAptTypeArgumentSignature(): String {
     if (this !is WildcardType) {

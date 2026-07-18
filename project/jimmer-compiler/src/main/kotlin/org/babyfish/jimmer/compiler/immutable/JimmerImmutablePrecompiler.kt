@@ -7,6 +7,7 @@ import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiNullability
+import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiResolvedProperty
@@ -62,7 +63,7 @@ class JimmerImmutablePrecompiler {
             typeDeclarations.associateBy(LsiTypeDeclaration::id),
             kindByTypeId,
         )
-        val types = typeDeclarations
+        val preliminaryTypes = typeDeclarations
             .filter { type -> type.id in semanticTypeIds }
             .map { type ->
                 validateType(
@@ -81,7 +82,241 @@ class JimmerImmutablePrecompiler {
                 )
             }
             .sortedBy(JimmerImmutableType::id)
+        val types = resolveViews(preliminaryTypes)
         return JimmerImmutableSchema(types)
+    }
+
+    private fun resolveViews(
+        types: List<JimmerImmutableType>,
+    ): List<JimmerImmutableType> {
+        val preliminaryTypesById = types.associateBy(JimmerImmutableType::id)
+        val preliminaryPropsByTypeAndName = types.associate { type ->
+            type.id to type.props.associateBy(JimmerImmutableProp::name)
+        }
+        val typesWithManyToManyViews = types.map { type ->
+            type.copy(
+                props = type.props.map { prop ->
+                    val annotation = prop.annotations.annotation(MANY_TO_MANY_VIEW_ANNOTATION)
+                    if (annotation == null) {
+                        prop
+                    } else {
+                        prop.copy(
+                            view = resolveManyToManyView(
+                                ownerType = type,
+                                prop = prop,
+                                annotation = annotation,
+                                typesById = preliminaryTypesById,
+                                propsByTypeAndName = preliminaryPropsByTypeAndName,
+                            )
+                        )
+                    }
+                },
+            )
+        }
+        val typesById = typesWithManyToManyViews.associateBy(JimmerImmutableType::id)
+        val propsById = typesWithManyToManyViews
+            .flatMap(JimmerImmutableType::props)
+            .associateBy(JimmerImmutableProp::id)
+        val propsByTypeAndName = typesWithManyToManyViews.associate { type ->
+            type.id to type.props.associateBy(JimmerImmutableProp::name)
+        }
+        val resolvedTypes = typesWithManyToManyViews.map { type ->
+            type.copy(
+                props = type.props.map { prop ->
+                    val annotation = prop.annotations.annotation(ID_VIEW_ANNOTATION)
+                    val view = if (annotation == null) {
+                        prop.view
+                    } else {
+                        resolveIdView(
+                            ownerType = type,
+                            prop = prop,
+                            annotation = annotation,
+                            typesById = typesById,
+                            propsByTypeAndName = propsByTypeAndName,
+                        )
+                    }
+                    val converter = if (view is JimmerImmutableView.Id) {
+                        prop.converter ?: view.targetIdPropId
+                            ?.let(propsById::get)
+                            ?.converter
+                            ?.forIdView(prop)
+                    } else {
+                        prop.converter
+                    }
+                    prop.copy(view = view, converter = converter)
+                        .also(JimmerImmutableProp::validateConverterSource)
+                },
+            )
+        }
+        validateImplicitIdViewConflicts(resolvedTypes)
+        return resolvedTypes
+    }
+
+    private fun resolveIdView(
+        ownerType: JimmerImmutableType,
+        prop: JimmerImmutableProp,
+        annotation: LsiAnnotation,
+        typesById: Map<LsiSymbolId, JimmerImmutableType>,
+        propsByTypeAndName: Map<LsiSymbolId, Map<String, JimmerImmutableProp>>,
+    ): JimmerImmutableView.Id {
+        var basePropName = annotation.stringValue("value").orEmpty()
+        if (basePropName.isEmpty()) {
+            basePropName = prop.defaultIdViewBasePropName()
+                ?: throw invalidView(
+                    prop,
+                    "cannot determine the id-view base property automatically; specify @IdView value",
+                )
+        }
+        if (basePropName == prop.name) {
+            throw invalidView(prop, "cannot use itself as id-view base property")
+        }
+        val baseProp = propsByTypeAndName.getValue(ownerType.id)[basePropName]
+            ?: throw invalidView(prop, "cannot find id-view base property '$basePropName'")
+        val baseTargetType = baseProp.targetTypeId?.let(typesById::get)
+        val persistentAssociation =
+            baseProp.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION ||
+                baseProp.view is JimmerImmutableView.ManyToMany
+        if (!baseProp.association || !persistentAssociation ||
+            (!baseProp.genericTarget && baseTargetType?.kind != JimmerImmutableTypeKind.ENTITY)
+        ) {
+            throw invalidView(prop, "base property '${baseProp.name}' is not a persistent entity association")
+        }
+        if (prop.list != baseProp.list) {
+            throw invalidView(
+                prop,
+                "list category does not match id-view base property '${baseProp.name}'",
+            )
+        }
+        if (prop.nullable != baseProp.nullable) {
+            throw invalidView(
+                prop,
+                "nullability does not match id-view base property '${baseProp.name}'",
+            )
+        }
+        if (baseProp.genericTarget) {
+            if (ownerType.kind != JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
+                throw invalidView(
+                    prop,
+                    "base property '${baseProp.name}' has a generic target whose id cannot be resolved",
+                )
+            }
+            return JimmerImmutableView.Id(baseProp.id, null)
+        }
+        val targetType = requireNotNull(baseTargetType)
+        val targetIdProp = targetType.props.singleOrNull { candidate ->
+            candidate.primaryMapping == JimmerImmutablePrimaryMapping.ID
+        } ?: throw invalidView(
+            prop,
+            "base property '${baseProp.name}' targets '${targetType.qualifiedName}' without exactly one id property",
+        )
+        val ignoreValueNullability = !prop.list
+        if (
+            prop.valueType().boxedTypeSignature(ignoreValueNullability) !=
+            targetIdProp.valueType().boxedTypeSignature(ignoreValueNullability)
+        ) {
+            throw invalidView(
+                prop,
+                "type does not match id '${targetIdProp.name}' of association target '${targetType.qualifiedName}'",
+            )
+        }
+        return JimmerImmutableView.Id(baseProp.id, targetIdProp.id)
+    }
+
+    private fun resolveManyToManyView(
+        ownerType: JimmerImmutableType,
+        prop: JimmerImmutableProp,
+        annotation: LsiAnnotation,
+        typesById: Map<LsiSymbolId, JimmerImmutableType>,
+        propsByTypeAndName: Map<LsiSymbolId, Map<String, JimmerImmutableProp>>,
+    ): JimmerImmutableView.ManyToMany {
+        val targetType = prop.targetTypeId?.let(typesById::get)
+        if (!prop.list || targetType?.kind != JimmerImmutableTypeKind.ENTITY) {
+            throw invalidView(prop, "must be a list of entities")
+        }
+        val basePropName = annotation.stringValue("prop").orEmpty()
+        if (basePropName.isEmpty()) {
+            throw invalidView(prop, "must specify @ManyToManyView prop")
+        }
+        val baseProp = propsByTypeAndName.getValue(ownerType.id)[basePropName]
+            ?: throw invalidView(prop, "cannot find many-to-many view base property '$basePropName'")
+        if (baseProp.associationKind != JimmerAssociationKind.ONE_TO_MANY) {
+            throw invalidView(prop, "base property '${baseProp.name}' is not a one-to-many association")
+        }
+        val middleType = baseProp.targetTypeId?.let(typesById::get)
+            ?: throw invalidView(prop, "base property '${baseProp.name}' has no concrete middle entity type")
+        if (middleType.kind != JimmerImmutableTypeKind.ENTITY) {
+            throw invalidView(prop, "base property '${baseProp.name}' does not target a middle entity")
+        }
+        val deeperPropName = annotation.stringValue("deeperProp").orEmpty()
+        val deeperProp = if (deeperPropName.isNotEmpty()) {
+            propsByTypeAndName.getValue(middleType.id)[deeperPropName]
+                ?.takeIf { candidate ->
+                    candidate.associationKind == JimmerAssociationKind.MANY_TO_ONE &&
+                        candidate.targetTypeId == targetType.id
+                }
+                ?: throw invalidView(
+                    prop,
+                    "cannot find many-to-one deeper property '$deeperPropName' from " +
+                        "'${middleType.qualifiedName}' to '${targetType.qualifiedName}'",
+                )
+        } else {
+            val candidates = middleType.props.filter { candidate ->
+                candidate.associationKind == JimmerAssociationKind.MANY_TO_ONE &&
+                    candidate.targetTypeId == targetType.id
+            }
+            if (candidates.size != 1) {
+                throw invalidView(
+                    prop,
+                    "requires exactly one automatic many-to-one deeper property from " +
+                        "'${middleType.qualifiedName}' to '${targetType.qualifiedName}', found ${candidates.size}",
+                )
+            }
+            candidates.single()
+        }
+        return JimmerImmutableView.ManyToMany(baseProp.id, deeperProp.id)
+    }
+
+    private fun invalidView(
+        prop: JimmerImmutableProp,
+        message: String,
+    ): JimmerImmutablePrecompileException {
+        return JimmerImmutablePrecompileException(
+            declarationId = prop.declarationId,
+            message = "Immutable view property '${prop.id.value}' $message",
+        )
+    }
+
+    private fun validateImplicitIdViewConflicts(types: List<JimmerImmutableType>) {
+        types.forEach { type ->
+            val propsByName = type.props.associateBy(JimmerImmutableProp::name)
+            val idViewBasePropIds = type.props.mapNotNullTo(linkedSetOf()) { prop ->
+                (prop.view as? JimmerImmutableView.Id)?.basePropId
+            }
+            val ownerIdProp = type.props.singleOrNull { prop ->
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+            }
+            type.props.forEach { associationProp ->
+                if (
+                    associationProp.associationKind !in setOf(
+                        JimmerAssociationKind.ONE_TO_ONE,
+                        JimmerAssociationKind.MANY_TO_ONE,
+                    ) ||
+                    associationProp.isReverseAssociation() ||
+                    associationProp.id in idViewBasePropIds
+                ) {
+                    return@forEach
+                }
+                val expectedProp = propsByName["${associationProp.name}Id"] ?: return@forEach
+                if (associationProp.allowsMapsIdNameConflict(expectedProp, ownerIdProp)) {
+                    return@forEach
+                }
+                throw JimmerImmutablePrecompileException(
+                    declarationId = expectedProp.declarationId,
+                    message = "Immutable property '${expectedProp.id.value}' looks like an id view of association " +
+                        "'${associationProp.id.value}'; add @${ID_VIEW_ANNOTATION.value}",
+                )
+            }
+        }
     }
 
     fun unresolvedTargetTypeIds(
@@ -994,14 +1229,12 @@ private fun LsiResolvedProperty.toImmutableProp(
     val targetKind = targetTypeId?.let(kindByTypeId::get)
     val association = associationKind != JimmerAssociationKind.NONE ||
         targetKind == JimmerImmutableTypeKind.ENTITY
-    val nullable = type.isNullable(annotations)
-    val primaryAnnotation = annotations.firstOrNull { annotation ->
-        annotation.type in PRIMARY_PROP_ANNOTATIONS
-    }
+    val nullable = nullable()
+    val primaryAnnotation = primaryMappingAnnotation()
     val primaryMapping = primaryAnnotation?.type.toPrimaryMapping()
         ?: if (association) JimmerImmutablePrimaryMapping.ASSOCIATION
         else JimmerImmutablePrimaryMapping.SCALAR
-    val viewKind = viewKind()
+    val manyToManyView = annotations.hasAnnotation(MANY_TO_MANY_VIEW_ANNOTATION)
     val ownerMicroServiceMetadata = microServiceMetadataByTypeId.getValue(ownerTypeId)
     val targetMicroServiceMetadata = targetTypeId?.let(microServiceMetadataByTypeId::get)
     val remote = association &&
@@ -1020,7 +1253,7 @@ private fun LsiResolvedProperty.toImmutableProp(
     )
     val recursive = kindByTypeId[ownerTypeId] == JimmerImmutableTypeKind.ENTITY &&
         targetKind == JimmerImmutableTypeKind.ENTITY &&
-        viewKind != JimmerViewKind.MANY_TO_MANY &&
+        !manyToManyView &&
         !genericTarget &&
         !remote &&
         typeSystem.resolveSuperType(requireNotNull(targetTypeId), ownerTypeId) != null
@@ -1048,12 +1281,12 @@ private fun LsiResolvedProperty.toImmutableProp(
             associationKind
         },
         formulaKind = formulaKind(),
-        viewKind = viewKind,
+        view = null,
         genericTarget = genericTarget,
         remote = remote,
         recursive = recursive,
         validations = validations(workspace),
-        converter = converter(workspace, typeSystem, nullable),
+        converter = converter(workspace, typeSystem, nullable, association),
     )
 }
 
@@ -1123,10 +1356,28 @@ private fun LsiResolvedProperty.converter(
     workspace: LsiWorkspace,
     typeSystem: LsiTypeSystem,
     propertyNullable: Boolean,
+    association: Boolean,
 ): JimmerConverter? {
     val converterAnnotation = annotations.firstNotNullOfOrNull { annotation ->
-        annotation.findJsonConverter(workspace, linkedSetOf())
+        annotation.findAnnotation(JSON_CONVERTER_ANNOTATIONS, workspace, linkedSetOf())
     } ?: return null
+    if (association) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable association property '${declaration.id.value}' cannot declare @" +
+                JSON_CONVERTER_ANNOTATION.value,
+        )
+    }
+    val jsonFormatAnnotation = annotations.firstNotNullOfOrNull { annotation ->
+        annotation.findAnnotation(JSON_FORMAT_ANNOTATIONS, workspace, linkedSetOf())
+    }
+    if (jsonFormatAnnotation != null) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' cannot declare both @" +
+                "${converterAnnotation.type.value} and @${jsonFormatAnnotation.type.value}",
+        )
+    }
     val converterTypeId = converterAnnotation.classTypeId("value") ?: return null
     val converterType = typeSystem.resolveSuperType(converterTypeId, CONVERTER_TYPE_ID)
     val sourceType = converterType?.arguments?.getOrNull(0)?.type
@@ -1141,11 +1392,12 @@ private fun LsiResolvedProperty.converter(
     )
 }
 
-private fun LsiAnnotation.findJsonConverter(
+private fun LsiAnnotation.findAnnotation(
+    targetTypes: Set<LsiSymbolId>,
     workspace: LsiWorkspace,
     visited: MutableSet<LsiSymbolId>,
 ): LsiAnnotation? {
-    if (type == JSON_CONVERTER_ANNOTATION) {
+    if (type in targetTypes) {
         return this
     }
     if (!visited.add(type)) {
@@ -1153,7 +1405,7 @@ private fun LsiAnnotation.findJsonConverter(
     }
     val annotationType = workspace[type] as? LsiTypeDeclaration ?: return null
     return annotationType.annotations.firstNotNullOfOrNull { annotation ->
-        annotation.findJsonConverter(workspace, visited)
+        annotation.findAnnotation(targetTypes, workspace, visited)
     }
 }
 
@@ -1180,12 +1432,101 @@ private fun LsiResolvedProperty.formulaKind(): JimmerFormulaKind {
     }
 }
 
-private fun LsiResolvedProperty.viewKind(): JimmerViewKind {
-    return when {
-        annotations.hasAnnotation(ID_VIEW_ANNOTATION) -> JimmerViewKind.ID
-        annotations.hasAnnotation(MANY_TO_MANY_VIEW_ANNOTATION) -> JimmerViewKind.MANY_TO_MANY
-        else -> JimmerViewKind.NONE
+private fun JimmerImmutableProp.defaultIdViewBasePropName(): String? {
+    if (list || name.length <= 2 || !name.endsWith("Id")) {
+        return null
     }
+    if (name[name.length - 3].isUpperCase()) {
+        return null
+    }
+    return name.dropLast(2)
+}
+
+private fun JimmerImmutableProp.valueType(): LsiTypeRef {
+    if (!list) {
+        return type
+    }
+    return (type as? LsiDeclaredType)
+        ?.arguments
+        ?.singleOrNull()
+        ?.type
+        ?: type
+}
+
+private fun LsiTypeRef.boxedTypeSignature(ignoreRootNullability: Boolean): String {
+    val base = when (this) {
+        is LsiPrimitiveType -> "scalar:${kind.name}"
+        is LsiDeclaredType -> BOXED_PRIMITIVE_KINDS[declarationId]
+            ?.let { kind -> "scalar:${kind.name}" }
+            ?: buildString {
+                append(if (declarationId in LIST_TYPE_IDS) CONVERTER_LIST_TYPE.value else declarationId.value)
+                if (arguments.isNotEmpty()) {
+                    append('<')
+                    append(arguments.joinToString(",") { argument -> argument.boxedTypeSignature() })
+                    append('>')
+                }
+            }
+        is LsiArrayType -> "array:${elementType.boxedTypeSignature(ignoreRootNullability = false)}"
+        is LsiTypeParameterRef -> "parameter:${parameterId.value}"
+        is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
+    }
+    return if (ignoreRootNullability) base else base + nullability.signatureSuffix()
+}
+
+private fun LsiTypeArgument.boxedTypeSignature(): String {
+    return when (variance) {
+        site.addzero.lsi.model.LsiVariance.STAR -> "*"
+        site.addzero.lsi.model.LsiVariance.INVARIANT ->
+            requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false)
+        site.addzero.lsi.model.LsiVariance.IN ->
+            "in:${requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false)}"
+        site.addzero.lsi.model.LsiVariance.OUT ->
+            "out:${requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false)}"
+    }
+}
+
+private fun LsiNullability.signatureSuffix(): String =
+    if (this == LsiNullability.NULLABLE) "?" else "!"
+
+private fun JimmerImmutableProp.validateConverterSource() {
+    val converter = converter ?: return
+    val sourceType = converter.sourceType
+        ?: throw JimmerImmutablePrecompileException(
+            declarationId = declarationId,
+            message = "Converter '${converter.converterTypeId.value}' of immutable property '${id.value}' " +
+                "does not implement a concrete converter source type",
+        )
+    if (
+        sourceType.boxedTypeSignature(ignoreRootNullability = true) !=
+        type.boxedTypeSignature(ignoreRootNullability = true)
+    ) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declarationId,
+            message = "Converter '${converter.converterTypeId.value}' source type " +
+                "'${sourceType.normalizedTypeSignature()}' does not match immutable property '${id.value}' type " +
+                "'${type.normalizedTypeSignature()}'",
+        )
+    }
+}
+
+private fun JimmerConverter.forIdView(prop: JimmerImmutableProp): JimmerConverter {
+    if (!prop.list) {
+        return copy(propertyNullable = prop.nullable)
+    }
+    return copy(
+        sourceType = sourceType?.toConverterListType(),
+        targetType = targetType?.toConverterListType(),
+        sourceNullable = false,
+        targetNullable = false,
+        propertyNullable = prop.nullable,
+    )
+}
+
+private fun LsiTypeRef.toConverterListType(): LsiDeclaredType {
+    return LsiDeclaredType(
+        declarationId = CONVERTER_LIST_TYPE,
+        arguments = listOf(LsiTypeArgument.invariant(this)),
+    )
 }
 
 private fun LsiTypeRef.isListType(): Boolean {
@@ -1205,9 +1546,98 @@ private fun LsiTypeRef.targetType(list: Boolean): LsiTypeRef? {
     return declaredType?.arguments?.firstOrNull()?.type
 }
 
-private fun LsiTypeRef.isNullable(annotations: List<LsiAnnotation>): Boolean {
-    return nullability == LsiNullability.NULLABLE ||
-        annotations.any { annotation -> annotation.type in NULLABLE_ANNOTATIONS }
+private fun LsiResolvedProperty.nullable(): Boolean {
+    val propertyType = type
+    val explicitNullable = when (propertyType.nullability) {
+        LsiNullability.NULLABLE -> true
+        LsiNullability.NON_NULL -> false
+        LsiNullability.PLATFORM -> when (propertyType) {
+            is LsiPrimitiveType -> true
+            is LsiDeclaredType -> if (propertyType.declarationId in BOXED_PRIMITIVE_KINDS) true else null
+            else -> null
+        }
+        LsiNullability.UNKNOWN -> null
+    }
+    var annotationNullable: Boolean? = null
+    var nullityAnnotationType: LsiSymbolId? = null
+    annotations.forEach { annotation ->
+        val nullable = annotation.type.annotationNullability() ?: return@forEach
+        if (annotationNullable != null && annotationNullable != nullable) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable property '${declaration.id.value}' cannot be decorated by both " +
+                    "@${requireNotNull(nullityAnnotationType).value} and @${annotation.type.value}",
+            )
+        }
+        annotationNullable = nullable
+        nullityAnnotationType = annotation.type
+    }
+    if (
+        explicitNullable != null &&
+        annotationNullable != null &&
+        explicitNullable != annotationNullable
+    ) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' type is " +
+                (if (explicitNullable) "nullable" else "non-null") +
+                " but @${requireNotNull(nullityAnnotationType).value} requires it to be " +
+                (if (annotationNullable) "nullable" else "non-null"),
+        )
+    }
+    return explicitNullable ?: annotationNullable ?: false
+}
+
+private fun LsiSymbolId.annotationNullability(): Boolean? {
+    if (this == CLIENT_T_NULLABLE_ANNOTATION) {
+        return true
+    }
+    return when {
+        value.endsWith(".Null") || value.endsWith(".Nullable") -> true
+        value.endsWith(".NotNull") || value.endsWith(".NonNull") -> false
+        else -> null
+    }
+}
+
+private fun LsiResolvedProperty.primaryMappingAnnotation(): LsiAnnotation? {
+    val primaryAnnotations = annotations.filter { annotation ->
+        annotation.type in PRIMARY_PROP_ANNOTATIONS
+    }
+    primaryAnnotations.firstOrNull { annotation ->
+        annotation.type == DISCRIMINATOR_ANNOTATION
+    }?.let { discriminator ->
+        return discriminator
+    }
+    if (primaryAnnotations.size > 1) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' cannot declare multiple primary mapping " +
+                "annotations: " + primaryAnnotations
+                .map(LsiAnnotation::type)
+                .distinct()
+                .sorted()
+                .joinToString { annotationType -> "@${annotationType.value}" },
+        )
+    }
+    return primaryAnnotations.singleOrNull()
+}
+
+private fun JimmerImmutableProp.isReverseAssociation(): Boolean {
+    val mappingAnnotation = primaryAnnotationTypeId?.let(annotations::annotation) ?: return false
+    return mappingAnnotation.stringValue("mappedBy").orEmpty().isNotEmpty()
+}
+
+private fun JimmerImmutableProp.allowsMapsIdNameConflict(
+    expectedProp: JimmerImmutableProp,
+    ownerIdProp: JimmerImmutableProp?,
+): Boolean {
+    val mapsId = annotations.annotation(MAPS_ID_ANNOTATION) ?: return false
+    return mapsId.stringValue("value").orEmpty().isEmpty() &&
+        !isReverseAssociation() &&
+        primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+        ownerIdProp != null &&
+        expectedProp.primaryMapping == JimmerImmutablePrimaryMapping.ID &&
+        expectedProp.id == ownerIdProp.id
 }
 
 private fun LsiSymbolId?.toPrimaryMapping(): JimmerImmutablePrimaryMapping? {
@@ -1353,7 +1783,12 @@ private val FORMULA_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.Formula")
 private val TRANSIENT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")
 private val ID_VIEW_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.IdView")
 private val MANY_TO_MANY_VIEW_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToManyView")
+private val MAPS_ID_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.MapsId")
 private val JSON_CONVERTER_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.jackson.JsonConverter")
+private val JSON_CONVERTER_ANNOTATIONS = setOf(JSON_CONVERTER_ANNOTATION)
+private val JSON_FORMAT_ANNOTATIONS = setOf(
+    LsiSymbolId.type("com.fasterxml.jackson.annotation.JsonFormat"),
+)
 private val CONVERTER_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.jackson.Converter")
 
 private val CONSTRAINT_ANNOTATIONS = setOf(
@@ -1392,20 +1827,27 @@ private val LIST_TYPE_IDS = setOf(
     "kotlin.collections.MutableList",
 ).mapTo(linkedSetOf(), LsiSymbolId::type)
 
+private val CONVERTER_LIST_TYPE = LsiSymbolId.type("java.util.List")
+
+private val BOXED_PRIMITIVE_KINDS = mapOf(
+    LsiSymbolId.type("java.lang.Boolean") to LsiPrimitiveKind.BOOLEAN,
+    LsiSymbolId.type("java.lang.Byte") to LsiPrimitiveKind.BYTE,
+    LsiSymbolId.type("java.lang.Short") to LsiPrimitiveKind.SHORT,
+    LsiSymbolId.type("java.lang.Integer") to LsiPrimitiveKind.INT,
+    LsiSymbolId.type("java.lang.Long") to LsiPrimitiveKind.LONG,
+    LsiSymbolId.type("java.lang.Character") to LsiPrimitiveKind.CHAR,
+    LsiSymbolId.type("java.lang.Float") to LsiPrimitiveKind.FLOAT,
+    LsiSymbolId.type("java.lang.Double") to LsiPrimitiveKind.DOUBLE,
+    LsiSymbolId.type("java.lang.Void") to LsiPrimitiveKind.VOID,
+)
+
 private val STRING_TYPE_IDS = setOf(
     "java.lang.String",
     "kotlin.String",
 ).mapTo(linkedSetOf(), LsiSymbolId::type)
 
-private val NULLABLE_ANNOTATIONS = setOf(
-    "edu.umd.cs.findbugs.annotations.Nullable",
-    "jakarta.annotation.Nullable",
-    "javax.annotation.Nullable",
-    "org.babyfish.jimmer.client.TNullable",
-    "org.jetbrains.annotations.Nullable",
-    "org.jspecify.annotations.Nullable",
-    "org.springframework.lang.Nullable",
-).mapTo(linkedSetOf(), LsiSymbolId::type)
+private val CLIENT_T_NULLABLE_ANNOTATION =
+    LsiSymbolId.type("org.babyfish.jimmer.client.TNullable")
 
 private val NON_SEMANTIC_OVERRIDE_ANNOTATIONS = setOf(
     "java.lang.Override",

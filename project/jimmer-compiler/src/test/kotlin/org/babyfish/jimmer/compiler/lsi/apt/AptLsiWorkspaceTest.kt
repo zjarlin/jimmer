@@ -10,6 +10,7 @@ import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -38,6 +39,39 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class AptLsiWorkspaceTest {
+
+    @Test
+    fun `freezes nested type use nullability`() {
+        val compilation = compile(
+            "demo/NullableModel.java" to """
+                package demo;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+                import java.util.List;
+
+                @Retention(RetentionPolicy.RUNTIME)
+                @Target(ElementType.TYPE_USE)
+                @interface Nullable {}
+
+                interface NullableModel {
+                    List<@Nullable Long> values();
+                }
+            """.trimIndent(),
+        )
+
+        assertTrue(compilation.success, compilation.diagnostics)
+        val values = compilation.workspace.requireProperty(
+            LsiSymbolId.type("demo.NullableModel"),
+            "values",
+        )
+        val listType = assertIs<LsiDeclaredType>(values.type)
+        val elementType = assertIs<LsiPrimitiveType>(listType.arguments.single().type)
+        assertEquals(LsiPrimitiveKind.LONG, elementType.kind)
+        assertEquals(LsiNullability.NULLABLE, elementType.nullability)
+    }
 
     @Test
     fun `applies keep is prefix while freezing java boolean getters`() {
@@ -305,10 +339,9 @@ class AptLsiWorkspaceTest {
         assertEquals(parentId, childSuperType.declarationId)
         val childSuperArgument = childSuperType.arguments.single()
         assertEquals(LsiVariance.INVARIANT, childSuperArgument.variance)
-        assertEquals(
-            LsiSymbolId.type("java.lang.Integer"),
-            assertIs<LsiDeclaredType>(childSuperArgument.type).declarationId,
-        )
+        val childSuperArgumentType = assertIs<LsiPrimitiveType>(childSuperArgument.type)
+        assertEquals(LsiPrimitiveKind.INT, childSuperArgumentType.kind)
+        assertEquals(LsiNullability.PLATFORM, childSuperArgumentType.nullability)
 
         val parentDisplayName = workspace.requireProperty(parentId, "displayName")
         val childDisplayName = workspace.requireProperty(childId, "displayName")

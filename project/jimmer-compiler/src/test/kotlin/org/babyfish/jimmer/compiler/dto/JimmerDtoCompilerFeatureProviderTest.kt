@@ -25,9 +25,9 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableView
 import org.babyfish.jimmer.compiler.immutable.JimmerInheritanceStrategy
 import org.babyfish.jimmer.compiler.immutable.JimmerJoinedTableDissociateAction
-import org.babyfish.jimmer.compiler.immutable.JimmerViewKind
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -40,6 +40,7 @@ import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
@@ -91,6 +92,86 @@ class JimmerDtoCompilerFeatureProviderTest {
         assertEquals("BookView", dtoType.name)
         assertEquals(listOf("id", "name"), dtoType.props.map { prop -> prop.name })
         assertEquals(BOOK_ID, dtoType.baseType.id)
+    }
+
+    @Test
+    fun `dto base props consume typed immutable view links`() {
+        val storeId = LsiSymbolId.type("demo.Store")
+        val linkId = LsiSymbolId.type("demo.BookAuthor")
+        val authorId = LsiSymbolId.type("demo.Author")
+        val storeIdProp = prop(
+            storeId,
+            "id",
+            LONG_TYPE,
+            JimmerImmutablePrimaryMapping.ID,
+        )
+        val storeProp = prop(
+            ownerTypeId = BOOK_ID,
+            name = "store",
+            type = LsiDeclaredType(storeId),
+            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+            association = true,
+            associationKind = JimmerAssociationKind.MANY_TO_ONE,
+        )
+        val storeIdViewProp = prop(
+            ownerTypeId = BOOK_ID,
+            name = "storeId",
+            type = LONG_TYPE,
+            primaryMapping = JimmerImmutablePrimaryMapping.VIEW,
+            targetTypeId = null,
+            view = JimmerImmutableView.Id(storeProp.id, storeIdProp.id),
+        )
+        val linksProp = prop(
+            ownerTypeId = BOOK_ID,
+            name = "links",
+            type = LsiDeclaredType(
+                declarationId = LsiSymbolId.type("java.util.List"),
+                arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(linkId))),
+            ),
+            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+            list = true,
+            association = true,
+            targetTypeId = linkId,
+            associationKind = JimmerAssociationKind.ONE_TO_MANY,
+        )
+        val deeperProp = prop(
+            ownerTypeId = linkId,
+            name = "author",
+            type = LsiDeclaredType(authorId),
+            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+            association = true,
+            associationKind = JimmerAssociationKind.MANY_TO_ONE,
+        )
+        val authorsViewProp = prop(
+            ownerTypeId = BOOK_ID,
+            name = "authors",
+            type = LsiDeclaredType(
+                declarationId = LsiSymbolId.type("java.util.List"),
+                arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(authorId))),
+            ),
+            primaryMapping = JimmerImmutablePrimaryMapping.VIEW,
+            list = true,
+            association = true,
+            targetTypeId = authorId,
+            associationKind = JimmerAssociationKind.MANY_TO_MANY_VIEW,
+            view = JimmerImmutableView.ManyToMany(linksProp.id, deeperProp.id),
+        )
+        val schema = JimmerImmutableSchema(
+            listOf(
+                immutableType(storeId, props = listOf(storeIdProp)),
+                immutableType(authorId, props = emptyList()),
+                immutableType(linkId, props = listOf(deeperProp)),
+                immutableType(
+                    BOOK_ID,
+                    props = listOf(storeProp, storeIdViewProp, linksProp, authorsViewProp),
+                ),
+            )
+        )
+        val registry = LsiDtoTypeRegistry(schema, LsiWorkspace.EMPTY)
+        val book = requireNotNull(registry[BOOK_ID])
+
+        assertEquals(storeProp.id, book.props.getValue("storeId").idViewBaseProp?.id)
+        assertEquals(linksProp.id, book.props.getValue("authors").manyToManyViewBaseProp?.id)
     }
 
     @Test
@@ -731,6 +812,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         genericTarget: Boolean = false,
         remote: Boolean = false,
         recursive: Boolean = false,
+        view: JimmerImmutableView? = null,
     ): JimmerImmutableProp {
         val id = LsiSymbolId.property(ownerTypeId, name)
         return JimmerImmutableProp(
@@ -753,7 +835,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             primaryAnnotationTypeId = null,
             associationKind = associationKind,
             formulaKind = JimmerFormulaKind.NONE,
-            viewKind = JimmerViewKind.NONE,
+            view = view,
             genericTarget = genericTarget,
             remote = remote,
             recursive = recursive,

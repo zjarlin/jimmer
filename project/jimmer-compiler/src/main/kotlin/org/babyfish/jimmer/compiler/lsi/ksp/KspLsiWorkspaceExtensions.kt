@@ -239,7 +239,7 @@ class KspLsiWorkspaceBuilder(
         val typeId = LsiSymbolId.type(qualifiedName)
         val declaredProperties = typeDeclaration.getDeclaredProperties().toList()
         val kotlinProperties = declaredProperties
-            .filterNot(KSPropertyDeclaration::isLsiJavaField)
+            .filterNot { property -> property.origin == Origin.JAVA || property.origin == Origin.JAVA_LIB }
             .map { property -> property.toLsiProperty(typeDeclaration) }
         val fields = declaredProperties
             .filter(KSPropertyDeclaration::isLsiJavaField)

@@ -6,6 +6,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableView
 import org.babyfish.jimmer.compiler.immutable.normalizedTypeSignature
 import org.babyfish.jimmer.dto.compiler.DtoCompiler
 import org.babyfish.jimmer.dto.compiler.DtoFile
@@ -135,11 +136,15 @@ internal class LsiDtoBaseProp(
         immutableProp.primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT
 
     override val idViewBaseProp: LsiDtoBaseProp? by lazy {
-        viewBaseProp(ID_VIEW_ANNOTATION, "value")
+        (immutableProp.view as? JimmerImmutableView.Id)
+            ?.basePropId
+            ?.let(::ownerProp)
     }
 
     override val manyToManyViewBaseProp: LsiDtoBaseProp? by lazy {
-        viewBaseProp(MANY_TO_MANY_VIEW_ANNOTATION, "prop")
+        (immutableProp.view as? JimmerImmutableView.ManyToMany)
+            ?.basePropId
+            ?.let(::ownerProp)
     }
 
     override val isId: Boolean = immutableProp.primaryMapping == JimmerImmutablePrimaryMapping.ID
@@ -176,27 +181,8 @@ internal class LsiDtoBaseProp(
         ) || resolverRef.isNotEmpty()
     }
 
-    private fun viewBaseProp(
-        annotationType: LsiSymbolId,
-        argumentName: String,
-    ): LsiDtoBaseProp? {
-        val annotation = immutableProp.annotations.annotation(annotationType) ?: return null
-        var basePropName = annotation.stringValue(argumentName).orEmpty()
-        if (basePropName.isEmpty() && annotationType == ID_VIEW_ANNOTATION) {
-            basePropName = defaultIdViewBasePropName()
-                ?: return null
-        }
-        return ownerType.props[basePropName]
-    }
-
-    private fun defaultIdViewBasePropName(): String? {
-        if (isList || name.length <= 2 || !name.endsWith("Id")) {
-            return null
-        }
-        if (name[name.length - 3].isUpperCase()) {
-            return null
-        }
-        return name.dropLast(2)
+    private fun ownerProp(propId: LsiSymbolId): LsiDtoBaseProp? {
+        return ownerType.props.values.firstOrNull { candidate -> candidate.id == propId }
     }
 
     override fun toString(): String = "${ownerType.qualifiedName}.$name"
@@ -363,8 +349,6 @@ private val STANDARD_GENERIC_TYPE_COUNTS = mapOf(
     "kotlin.collections.Map" to 2,
 )
 
-private val ID_VIEW_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.IdView")
-private val MANY_TO_MANY_VIEW_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToManyView")
 private val KEY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Key")
 private val TRANSIENT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")
 private val GENERATED_VALUE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.GeneratedValue")

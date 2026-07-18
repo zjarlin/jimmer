@@ -7,7 +7,10 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiOverride
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 
 class LsiDeclarationMergeTest {
@@ -43,6 +46,34 @@ class LsiDeclarationMergeTest {
         assertEquals("students", merged.getterName)
         assertEquals(listOf(annotationA, annotationB), merged.annotations)
         assertEquals(listOf(LsiOverride(overriddenId)), merged.overrides)
+    }
+
+    @Test
+    fun `prefers primitive boolean is getter over boxed bean getter`() {
+        val ownerId = LsiSymbolId.type("demo.Options")
+        val propertyId = LsiSymbolId.property(ownerId, "lenient")
+        val getGetter = LsiProperty(
+            id = propertyId,
+            name = "lenient",
+            ownerId = ownerId,
+            getterName = "getLenient",
+            type = LsiDeclaredType(
+                LsiSymbolId.type("java.lang.Boolean"),
+                nullability = LsiNullability.PLATFORM,
+            ),
+            origin = ORIGIN,
+        )
+        val isGetter = getGetter.copy(
+            getterName = "isLenient",
+            type = LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN),
+        )
+
+        val merged = listOf(getGetter, isGetter)
+            .mergeDeclarationsById()
+            .single() as LsiProperty
+
+        assertEquals("isLenient", merged.getterName)
+        assertEquals(LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN), merged.type)
     }
 
     private companion object {

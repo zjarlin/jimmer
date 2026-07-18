@@ -55,7 +55,12 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.primaryAnnotationTypeId?.value.orEmpty(),
                     prop.associationKind.name,
                     prop.formulaKind.name,
-                    prop.viewKind.name,
+                    when (prop.view) {
+                        null -> ""
+                        is JimmerImmutableView.Id -> "ID"
+                        is JimmerImmutableView.ManyToMany -> "MANY_TO_MANY"
+                    },
+                    prop.view?.dependencyPropIds?.joinToString(",") { propId -> propId.value }.orEmpty(),
                     prop.genericTarget.toString(),
                     prop.remote.toString(),
                     prop.recursive.toString(),

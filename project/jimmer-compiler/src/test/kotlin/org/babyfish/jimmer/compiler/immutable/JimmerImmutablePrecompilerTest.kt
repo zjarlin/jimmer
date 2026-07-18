@@ -688,7 +688,20 @@ class JimmerImmutablePrecompilerTest {
         val authorId = LsiSymbolId.type("demo.Author")
         val addressId = LsiSymbolId.type("demo.Address")
         val payloadId = LsiSymbolId.type("demo.Payload")
+        val bookAuthorId = LsiSymbolId.type("demo.BookAuthor")
         val bookId = LsiSymbolId.type("demo.Book")
+        val authorIdProp = property(
+            authorId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val bookAuthorAuthorProp = property(
+            bookAuthorId,
+            "author",
+            LsiDeclaredType(authorId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
         val properties = listOf(
             property(bookId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(annotation(ID))),
             property(bookId, "version", LsiPrimitiveType(LsiPrimitiveKind.INT), listOf(annotation(VERSION))),
@@ -710,14 +723,23 @@ class JimmerImmutablePrecompilerTest {
             property(bookId, "authorId", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(annotation(ID_VIEW))),
             property(
                 bookId,
-                "authors",
-                listType(authorId),
+                "authorLinks",
+                listType(bookAuthorId),
+                listOf(annotation(ONE_TO_MANY)),
             ),
             property(
                 bookId,
                 "authorView",
                 listType(authorId),
-                listOf(annotation(MANY_TO_MANY_VIEW)),
+                listOf(
+                    annotation(
+                        MANY_TO_MANY_VIEW,
+                        mapOf(
+                            "prop" to LsiAnnotationValue.StringValue("authorLinks"),
+                            "deeperProp" to LsiAnnotationValue.StringValue("author"),
+                        ),
+                    )
+                ),
             ),
             property(
                 bookId,
@@ -729,11 +751,12 @@ class JimmerImmutablePrecompilerTest {
         )
         val workspace = LsiWorkspace(
             declarations = listOf(
-                type("demo.Author", ENTITY, emptyList()),
+                type("demo.Author", ENTITY, listOf(authorIdProp.id)),
+                type("demo.BookAuthor", ENTITY, listOf(bookAuthorAuthorProp.id)),
                 type("demo.Address", EMBEDDABLE, emptyList()),
                 type("demo.Payload", IMMUTABLE, emptyList()),
                 type("demo.Book", ENTITY, properties.map(LsiProperty::id)),
-            ) + properties,
+            ) + properties + authorIdProp + bookAuthorAuthorProp,
         )
 
         val book = JimmerImmutablePrecompiler().compile(workspace)
@@ -752,18 +775,669 @@ class JimmerImmutablePrecompilerTest {
         assertEquals(JimmerFormulaKind.SQL, props.getValue("displayName").formulaKind)
         assertEquals(JimmerImmutablePrimaryMapping.TRANSIENT, props.getValue("temporary").primaryMapping)
         assertEquals(JimmerImmutablePrimaryMapping.VIEW, props.getValue("authorId").primaryMapping)
-        assertEquals(JimmerViewKind.ID, props.getValue("authorId").viewKind)
-        assertEquals(JimmerAssociationKind.IMPLICIT, props.getValue("authors").associationKind)
-        assertTrue(props.getValue("authors").list)
-        assertTrue(props.getValue("authors").association)
+        assertEquals(
+            JimmerImmutableView.Id(
+                basePropId = LsiSymbolId.property(bookId, "author"),
+                targetIdPropId = LsiSymbolId.property(authorId, "id"),
+            ),
+            props.getValue("authorId").view,
+        )
+        assertEquals(JimmerAssociationKind.ONE_TO_MANY, props.getValue("authorLinks").associationKind)
+        assertTrue(props.getValue("authorLinks").list)
+        assertTrue(props.getValue("authorLinks").association)
         assertEquals(JimmerImmutablePrimaryMapping.VIEW, props.getValue("authorView").primaryMapping)
-        assertEquals(JimmerViewKind.MANY_TO_MANY, props.getValue("authorView").viewKind)
+        assertEquals(
+            JimmerImmutableView.ManyToMany(
+                basePropId = LsiSymbolId.property(bookId, "authorLinks"),
+                deeperPropId = LsiSymbolId.property(bookAuthorId, "author"),
+            ),
+            props.getValue("authorView").view,
+        )
         assertTrue(props.getValue("description").nullable)
         assertEquals(JimmerImmutablePrimaryMapping.SCALAR, props.getValue("description").primaryMapping)
         assertFalse(props.getValue("address").association)
         assertTrue(props.getValue("address").embedded)
         assertFalse(props.getValue("payload").association)
         assertFalse(props.getValue("payload").embedded)
+    }
+
+    @Test
+    fun `resolves scalar and list id views with stable dependency indexes`() {
+        val storeId = LsiSymbolId.type("demo.Store")
+        val authorId = LsiSymbolId.type("demo.Author")
+        val bookId = LsiSymbolId.type("demo.Book")
+        val storeIdProp = property(
+            storeId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val authorIdProp = property(
+            authorId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val storeProp = property(
+            bookId,
+            "store",
+            LsiDeclaredType(storeId, nullability = LsiNullability.NULLABLE),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val storeIdViewProp = property(
+            bookId,
+            "storeId",
+            LsiDeclaredType(
+                LsiSymbolId.type("java.lang.Long"),
+                nullability = LsiNullability.PLATFORM,
+            ),
+            listOf(annotation(ID_VIEW)),
+        )
+        val authorsProp = property(
+            bookId,
+            "authors",
+            listType(authorId),
+            listOf(annotation(MANY_TO_MANY)),
+        )
+        val authorIdsProp = property(
+            bookId,
+            "authorIds",
+            LsiDeclaredType(
+                declarationId = LsiSymbolId.type("java.util.List"),
+                arguments = listOf(
+                    LsiTypeArgument.invariant(LsiDeclaredType(LsiSymbolId.type("java.lang.Long")))
+                ),
+            ),
+            listOf(
+                annotation(
+                    ID_VIEW,
+                    mapOf("value" to LsiAnnotationValue.StringValue("authors")),
+                )
+            ),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.Store", ENTITY, listOf(storeIdProp.id)),
+                    type("demo.Author", ENTITY, listOf(authorIdProp.id)),
+                    type(
+                        "demo.Book",
+                        ENTITY,
+                        listOf(storeProp.id, storeIdViewProp.id, authorsProp.id, authorIdsProp.id),
+                    ),
+                    storeIdProp,
+                    authorIdProp,
+                    storeProp,
+                    storeIdViewProp,
+                    authorsProp,
+                    authorIdsProp,
+                ),
+            )
+        )
+        val props = schema.types.single { type -> type.id == bookId }
+            .props
+            .associateBy(JimmerImmutableProp::name)
+
+        assertTrue(props.getValue("storeId").nullable)
+        assertEquals(
+            JimmerImmutableView.Id(storeProp.id, storeIdProp.id),
+            props.getValue("storeId").view,
+        )
+        assertEquals(
+            JimmerImmutableView.Id(authorsProp.id, authorIdProp.id),
+            props.getValue("authorIds").view,
+        )
+        assertEquals(listOf(storeIdViewProp.id), schema.idViewPropIdsByBasePropId[storeProp.id])
+        assertEquals(listOf(authorIdsProp.id), schema.idViewPropIdsByBasePropId[authorsProp.id])
+        assertEquals(
+            listOf(storeProp.id, storeIdProp.id),
+            schema.viewDependencyPathByPropId[storeIdViewProp.id],
+        )
+        assertEquals(
+            listOf(authorsProp.id, authorIdProp.id),
+            schema.viewDependencyPathByPropId[authorIdsProp.id],
+        )
+    }
+
+    @Test
+    fun `resolves generic mapped superclass id view and relinks overridden annotation`() {
+        val authorId = LsiSymbolId.type("demo.Author")
+        val baseId = LsiSymbolId.type("demo.BaseBook")
+        val bookId = LsiSymbolId.type("demo.Book")
+        val targetParameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val authorIdProp = property(
+            authorId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val targetProp = property(
+            baseId,
+            "target",
+            LsiTypeParameterRef(targetParameterId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val alternateProp = property(
+            baseId,
+            "alternate",
+            LsiTypeParameterRef(targetParameterId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val selectedIdProp = property(
+            baseId,
+            "selectedId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(
+                annotation(
+                    ID_VIEW,
+                    mapOf("value" to LsiAnnotationValue.StringValue("target")),
+                )
+            ),
+        )
+        val overriddenSelectedIdProp = property(
+            bookId,
+            "selectedId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(
+                annotation(
+                    ID_VIEW,
+                    mapOf("value" to LsiAnnotationValue.StringValue("alternate")),
+                )
+            ),
+            overrides = listOf(LsiOverride(selectedIdProp.id)),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.Author", ENTITY, listOf(authorIdProp.id)),
+                    type(
+                        qualifiedName = "demo.BaseBook",
+                        marker = MAPPED_SUPERCLASS,
+                        memberIds = listOf(targetProp.id, alternateProp.id, selectedIdProp.id),
+                        typeParameters = listOf(
+                            LsiTypeParameter(targetParameterId, "T")
+                        ),
+                    ),
+                    type(
+                        qualifiedName = "demo.Book",
+                        marker = ENTITY,
+                        memberIds = listOf(overriddenSelectedIdProp.id),
+                        superTypes = listOf(
+                            LsiDeclaredType(
+                                declarationId = baseId,
+                                arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(authorId))),
+                            )
+                        ),
+                    ),
+                    authorIdProp,
+                    targetProp,
+                    alternateProp,
+                    selectedIdProp,
+                    overriddenSelectedIdProp,
+                ),
+            )
+        )
+        val baseView = schema.types.single { type -> type.id == baseId }
+            .props.single { prop -> prop.name == "selectedId" }
+        val bookView = schema.types.single { type -> type.id == bookId }
+            .props.single { prop -> prop.name == "selectedId" }
+
+        assertEquals(
+            JimmerImmutableView.Id(targetProp.id, null),
+            baseView.view,
+        )
+        assertEquals(
+            JimmerImmutableView.Id(
+                LsiSymbolId.property(bookId, "alternate"),
+                authorIdProp.id,
+            ),
+            bookView.view,
+        )
+        assertTrue(bookView.overridden)
+    }
+
+    @Test
+    fun `resolves many to many view with automatic deeper property`() {
+        val bookId = LsiSymbolId.type("demo.Book")
+        val linkId = LsiSymbolId.type("demo.BookAuthor")
+        val authorId = LsiSymbolId.type("demo.Author")
+        val authorIdProp = property(
+            authorId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val linksProp = property(
+            bookId,
+            "links",
+            listType(linkId),
+            listOf(annotation(ONE_TO_MANY)),
+        )
+        val authorViewProp = property(
+            bookId,
+            "authors",
+            listType(authorId),
+            listOf(
+                annotation(
+                    MANY_TO_MANY_VIEW,
+                    mapOf("prop" to LsiAnnotationValue.StringValue("links")),
+                )
+            ),
+        )
+        val deeperProp = property(
+            linkId,
+            "author",
+            LsiDeclaredType(authorId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val authorIdsProp = property(
+            bookId,
+            "authorIds",
+            LsiDeclaredType(
+                declarationId = LsiSymbolId.type("java.util.List"),
+                arguments = listOf(
+                    LsiTypeArgument.invariant(LsiPrimitiveType(LsiPrimitiveKind.LONG))
+                ),
+            ),
+            listOf(
+                annotation(
+                    ID_VIEW,
+                    mapOf("value" to LsiAnnotationValue.StringValue("authors")),
+                )
+            ),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.Book", ENTITY, listOf(linksProp.id, authorViewProp.id, authorIdsProp.id)),
+                    type("demo.BookAuthor", ENTITY, listOf(deeperProp.id)),
+                    type("demo.Author", ENTITY, listOf(authorIdProp.id)),
+                    linksProp,
+                    authorViewProp,
+                    deeperProp,
+                    authorIdProp,
+                    authorIdsProp,
+                ),
+            )
+        )
+        val props = schema.types.single { type -> type.id == bookId }
+            .props.associateBy(JimmerImmutableProp::name)
+        val view = props.getValue("authors")
+
+        assertEquals(
+            JimmerImmutableView.ManyToMany(linksProp.id, deeperProp.id),
+            view.view,
+        )
+        assertEquals(
+            listOf(linksProp.id, deeperProp.id),
+            schema.viewDependencyPathByPropId[view.id],
+        )
+        assertEquals(
+            JimmerImmutableView.Id(view.id, authorIdProp.id),
+            props.getValue("authorIds").view,
+        )
+    }
+
+    @Test
+    fun `rejects invalid id view links`() {
+        val storeId = LsiSymbolId.type("demo.Store")
+        val bookId = LsiSymbolId.type("demo.Book")
+
+        fun failure(
+            viewName: String = "storeId",
+            annotationValue: String? = "store",
+            includeBase: Boolean = true,
+            baseType: LsiTypeRef = LsiDeclaredType(storeId),
+            baseAnnotations: List<LsiAnnotation> = listOf(annotation(MANY_TO_ONE)),
+            viewType: LsiTypeRef = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+        ): String {
+            val storeIdProp = property(
+                storeId,
+                "id",
+                LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                listOf(annotation(ID)),
+            )
+            val baseProp = property(bookId, "store", baseType, baseAnnotations)
+            val viewProp = property(
+                bookId,
+                viewName,
+                viewType,
+                listOf(
+                    annotation(
+                        ID_VIEW,
+                        annotationValue
+                            ?.let { value ->
+                                mapOf("value" to LsiAnnotationValue.StringValue(value))
+                            }
+                            .orEmpty(),
+                    )
+                ),
+            )
+            val bookMemberIds = buildList {
+                if (includeBase) {
+                    add(baseProp.id)
+                }
+                add(viewProp.id)
+            }
+            val declarations = buildList {
+                add(type("demo.Store", ENTITY, listOf(storeIdProp.id)))
+                add(type("demo.Book", ENTITY, bookMemberIds))
+                add(storeIdProp)
+                if (includeBase) {
+                    add(baseProp)
+                }
+                add(viewProp)
+            }
+            return assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(LsiWorkspace(declarations = declarations))
+            }.message.orEmpty()
+        }
+
+        assertTrue("determine" in failure(viewName = "URLId", annotationValue = null))
+        assertTrue(
+            "itself" in failure(
+                viewName = "store",
+                annotationValue = "store",
+                includeBase = false,
+            )
+        )
+        assertTrue("cannot find" in failure(annotationValue = "missing"))
+        assertTrue(
+            "not a persistent entity association" in failure(
+                baseType = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                baseAnnotations = emptyList(),
+            )
+        )
+        assertTrue(
+            "not a persistent entity association" in failure(
+                baseAnnotations = listOf(annotation(TRANSIENT)),
+            )
+        )
+        assertTrue(
+            "list category" in failure(
+                viewType = LsiDeclaredType(
+                    declarationId = LsiSymbolId.type("java.util.List"),
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiPrimitiveType(LsiPrimitiveKind.LONG))
+                    ),
+                ),
+            )
+        )
+        assertTrue(
+            "nullability" in failure(
+                baseType = LsiDeclaredType(storeId, nullability = LsiNullability.NULLABLE),
+            )
+        )
+        assertTrue(
+            "type does not match" in failure(
+                viewType = LsiDeclaredType(STRING_TYPE),
+            )
+        )
+        assertTrue(
+            "type does not match" in failure(
+                baseType = listType(storeId),
+                baseAnnotations = listOf(annotation(MANY_TO_MANY)),
+                viewType = LsiDeclaredType(
+                    declarationId = LsiSymbolId.type("java.util.List"),
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(
+                            LsiPrimitiveType(
+                                LsiPrimitiveKind.LONG,
+                                nullability = LsiNullability.NULLABLE,
+                            )
+                        )
+                    ),
+                ),
+            )
+        )
+    }
+
+    @Test
+    fun `rejects conflicting primary mapping annotations independent of order`() {
+        val storeId = LsiSymbolId.type("demo.Store")
+        val bookId = LsiSymbolId.type("demo.Book")
+        val storeIdProp = property(
+            storeId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val storeProp = property(
+            bookId,
+            "store",
+            LsiDeclaredType(storeId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+
+        listOf(
+            listOf(annotation(ID_VIEW), annotation(TRANSIENT)),
+            listOf(annotation(TRANSIENT), annotation(ID_VIEW)),
+            listOf(annotation(FORMULA), annotation(ID_VIEW)),
+        ).forEach { annotations ->
+            val storeIdViewProp = property(
+                bookId,
+                "storeId",
+                LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                annotations,
+            )
+            val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(
+                    LsiWorkspace(
+                        declarations = listOf(
+                            type("demo.Store", ENTITY, listOf(storeIdProp.id)),
+                            type("demo.Book", ENTITY, listOf(storeProp.id, storeIdViewProp.id)),
+                            storeIdProp,
+                            storeProp,
+                            storeIdViewProp,
+                        )
+                    )
+                )
+            }
+            assertTrue("multiple primary mapping annotations" in exception.message.orEmpty())
+        }
+    }
+
+    @Test
+    fun `rejects implicit id view name conflict except maps id`() {
+        val storeId = LsiSymbolId.type("demo.Store")
+        val bookId = LsiSymbolId.type("demo.Book")
+        val storeIdProp = property(
+            storeId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val bookIdProp = property(
+            bookId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val storeProp = property(
+            bookId,
+            "store",
+            LsiDeclaredType(storeId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val conflictingStoreIdProp = property(
+            bookId,
+            "storeId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+        )
+        val conflict = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.Store", ENTITY, listOf(storeIdProp.id)),
+                        type(
+                            "demo.Book",
+                            ENTITY,
+                            listOf(bookIdProp.id, storeProp.id, conflictingStoreIdProp.id),
+                        ),
+                        storeIdProp,
+                        bookIdProp,
+                        storeProp,
+                        conflictingStoreIdProp,
+                    )
+                )
+            )
+        }
+        assertTrue("looks like an id view" in conflict.message.orEmpty())
+
+        val orderId = LsiSymbolId.type("demo.Order")
+        val lineId = LsiSymbolId.type("demo.OrderLine")
+        val orderIdProp = property(
+            orderId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val lineOrderIdProp = property(
+            lineId,
+            "orderId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val lineOrderProp = property(
+            lineId,
+            "order",
+            LsiDeclaredType(orderId),
+            listOf(annotation(MANY_TO_ONE), annotation(MAPS_ID)),
+        )
+
+        JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.Order", ENTITY, listOf(orderIdProp.id)),
+                    type("demo.OrderLine", ENTITY, listOf(lineOrderIdProp.id, lineOrderProp.id)),
+                    orderIdProp,
+                    lineOrderIdProp,
+                    lineOrderProp,
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `rejects invalid many to many view links`() {
+        val bookId = LsiSymbolId.type("demo.Book")
+        val linkId = LsiSymbolId.type("demo.BookAuthor")
+        val authorId = LsiSymbolId.type("demo.Author")
+        val otherId = LsiSymbolId.type("demo.Other")
+
+        fun failure(
+            viewType: LsiTypeRef = listType(authorId),
+            basePropName: String = "links",
+            baseAnnotation: LsiSymbolId = ONE_TO_MANY,
+            deeperPropName: String = "",
+            deeperTargets: List<LsiSymbolId> = listOf(authorId),
+        ): String {
+            val linksProp = property(
+                bookId,
+                "links",
+                listType(linkId),
+                listOf(annotation(baseAnnotation)),
+            )
+            val viewArguments = linkedMapOf<String, LsiAnnotationValue>(
+                "prop" to LsiAnnotationValue.StringValue(basePropName)
+            )
+            if (deeperPropName.isNotEmpty()) {
+                viewArguments["deeperProp"] = LsiAnnotationValue.StringValue(deeperPropName)
+            }
+            val viewProp = property(
+                bookId,
+                "authors",
+                viewType,
+                listOf(annotation(MANY_TO_MANY_VIEW, viewArguments)),
+            )
+            val deeperProps = deeperTargets.mapIndexed { index, targetId ->
+                property(
+                    linkId,
+                    "author${index + 1}",
+                    LsiDeclaredType(targetId),
+                    listOf(annotation(MANY_TO_ONE)),
+                )
+            }
+            val declarations = buildList {
+                add(type("demo.Book", ENTITY, listOf(linksProp.id, viewProp.id)))
+                add(type("demo.BookAuthor", ENTITY, deeperProps.map(LsiProperty::id)))
+                add(type("demo.Author", ENTITY, emptyList()))
+                add(type("demo.Other", ENTITY, emptyList()))
+                add(linksProp)
+                add(viewProp)
+                addAll(deeperProps)
+            }
+            return assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(LsiWorkspace(declarations = declarations))
+            }.message.orEmpty()
+        }
+
+        assertTrue("list of entities" in failure(viewType = LsiDeclaredType(authorId)))
+        assertTrue("cannot find" in failure(basePropName = "missing"))
+        assertTrue("not a one-to-many" in failure(baseAnnotation = MANY_TO_MANY))
+        assertTrue("found 0" in failure(deeperTargets = emptyList()))
+        assertTrue("found 2" in failure(deeperTargets = listOf(authorId, authorId)))
+        assertTrue(
+            "cannot find many-to-one deeper" in failure(
+                deeperPropName = "author1",
+                deeperTargets = listOf(otherId),
+            )
+        )
+        assertTrue(
+            "cannot find many-to-one deeper" in failure(
+                deeperPropName = "missing",
+            )
+        )
+    }
+
+    @Test
+    fun `resolves validation nullity annotation families`() {
+        val entityId = LsiSymbolId.type("demo.NullityModel")
+        val nullableProp = property(
+            entityId,
+            "nullableValue",
+            LsiDeclaredType(STRING_TYPE, nullability = LsiNullability.PLATFORM),
+            listOf(annotation(LsiSymbolId.type("javax.validation.constraints.Null"))),
+        )
+        val nonNullProp = property(
+            entityId,
+            "nonNullValue",
+            LsiDeclaredType(STRING_TYPE, nullability = LsiNullability.PLATFORM),
+            listOf(annotation(LsiSymbolId.type("org.jetbrains.annotations.NotNull"))),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.NullityModel", IMMUTABLE, listOf(nullableProp.id, nonNullProp.id)),
+                    nullableProp,
+                    nonNullProp,
+                )
+            )
+        )
+        val props = schema.types.single().props.associateBy(JimmerImmutableProp::name)
+        assertTrue(props.getValue("nullableValue").nullable)
+        assertFalse(props.getValue("nonNullValue").nullable)
+
+        val conflictingProp = property(
+            entityId,
+            "conflictingValue",
+            LsiDeclaredType(STRING_TYPE, nullability = LsiNullability.PLATFORM),
+            listOf(
+                annotation(LsiSymbolId.type("javax.validation.constraints.Null")),
+                annotation(LsiSymbolId.type("org.jetbrains.annotations.NotNull")),
+            ),
+        )
+        val failure = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.NullityModel", IMMUTABLE, listOf(conflictingProp.id)),
+                        conflictingProp,
+                    )
+                )
+            )
+        }
+        assertTrue("cannot be decorated by both" in failure.message.orEmpty())
     }
 
     @Test
@@ -854,6 +1528,246 @@ class JimmerImmutablePrecompilerTest {
         assertTrue(converter.propertyNullable)
         assertTrue(schema.normalizedSnapshot().contains("validation"))
         assertTrue(schema.normalizedSnapshot().contains("converter"))
+    }
+
+    @Test
+    fun `inherits and lifts target id converter for list id view`() {
+        val storeId = LsiSymbolId.type("demo.Store")
+        val bookId = LsiSymbolId.type("demo.Book")
+        val idProp = property(
+            storeId,
+            "id",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(ID), annotation(CODE_FORMAT)),
+        )
+        val storesProp = property(
+            bookId,
+            "stores",
+            listType(storeId),
+            listOf(annotation(MANY_TO_MANY)),
+        )
+        val storeIdsProp = property(
+            bookId,
+            "storeIds",
+            LsiDeclaredType(
+                declarationId = LsiSymbolId.type("java.util.List"),
+                arguments = listOf(
+                    LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE))
+                ),
+            ),
+            listOf(
+                annotation(
+                    ID_VIEW,
+                    mapOf("value" to LsiAnnotationValue.StringValue("stores")),
+                )
+            ),
+        )
+        val codeFormatType = declaration(
+            qualifiedName = "demo.CodeFormat",
+            kind = LsiTypeDeclarationKind.ANNOTATION,
+            annotations = listOf(
+                annotation(
+                    JSON_CONVERTER,
+                    mapOf(
+                        "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(CODE_CONVERTER))
+                    ),
+                )
+            ),
+        )
+        val converterType = declaration(
+            qualifiedName = "demo.CodeConverter",
+            kind = LsiTypeDeclarationKind.CLASS,
+            superTypes = listOf(
+                LsiDeclaredType(
+                    declarationId = CONVERTER,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE)),
+                        LsiTypeArgument.invariant(
+                            LsiPrimitiveType(
+                                LsiPrimitiveKind.LONG,
+                                nullability = LsiNullability.NULLABLE,
+                            )
+                        ),
+                    ),
+                )
+            ),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.Store", ENTITY, listOf(idProp.id)),
+                    type("demo.Book", ENTITY, listOf(storesProp.id, storeIdsProp.id)),
+                    idProp,
+                    storesProp,
+                    storeIdsProp,
+                    codeFormatType,
+                    converterType,
+                ),
+            )
+        )
+        val viewProp = schema.types.single { type -> type.id == bookId }
+            .props.single { prop -> prop.name == "storeIds" }
+        val converter = requireNotNull(viewProp.converter)
+        val sourceList = assertIs<LsiDeclaredType>(converter.sourceType)
+        val targetList = assertIs<LsiDeclaredType>(converter.targetType)
+
+        assertEquals(LsiSymbolId.type("java.util.List"), sourceList.declarationId)
+        assertEquals(STRING_TYPE, assertIs<LsiDeclaredType>(sourceList.arguments.single().type).declarationId)
+        assertEquals(LsiSymbolId.type("java.util.List"), targetList.declarationId)
+        assertEquals(
+            LsiPrimitiveKind.LONG,
+            assertIs<LsiPrimitiveType>(targetList.arguments.single().type).kind,
+        )
+        assertFalse(converter.sourceNullable)
+        assertFalse(converter.targetNullable)
+        assertFalse(converter.propertyNullable)
+    }
+
+    @Test
+    fun `prefers explicit id view converter and validates source type`() {
+        val storeId = LsiSymbolId.type("demo.Store")
+        val bookId = LsiSymbolId.type("demo.Book")
+        val idProp = property(
+            storeId,
+            "id",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(ID), annotation(CODE_FORMAT)),
+        )
+        val storeProp = property(
+            bookId,
+            "store",
+            LsiDeclaredType(storeId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        fun idViewProp(converterTypeId: LsiSymbolId): LsiProperty {
+            return property(
+                bookId,
+                "storeId",
+                LsiDeclaredType(STRING_TYPE),
+                listOf(
+                    annotation(ID_VIEW),
+                    annotation(
+                        JSON_CONVERTER,
+                        mapOf(
+                            "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(converterTypeId))
+                        ),
+                    ),
+                ),
+            )
+        }
+        val codeFormatType = declaration(
+            qualifiedName = "demo.CodeFormat",
+            kind = LsiTypeDeclarationKind.ANNOTATION,
+            annotations = listOf(
+                annotation(
+                    JSON_CONVERTER,
+                    mapOf(
+                        "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(CODE_CONVERTER))
+                    ),
+                )
+            ),
+        )
+        val targetConverterType = declaration(
+            qualifiedName = "demo.CodeConverter",
+            kind = LsiTypeDeclarationKind.CLASS,
+            superTypes = listOf(
+                LsiDeclaredType(
+                    CONVERTER,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE)),
+                        LsiTypeArgument.invariant(LsiPrimitiveType(LsiPrimitiveKind.LONG)),
+                    ),
+                )
+            ),
+        )
+        val explicitConverterType = declaration(
+            qualifiedName = "demo.ExplicitCodeConverter",
+            kind = LsiTypeDeclarationKind.CLASS,
+            superTypes = listOf(
+                LsiDeclaredType(
+                    CONVERTER,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE)),
+                        LsiTypeArgument.invariant(LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN)),
+                    ),
+                )
+            ),
+        )
+        val invalidConverterType = declaration(
+            qualifiedName = "demo.InvalidCodeConverter",
+            kind = LsiTypeDeclarationKind.CLASS,
+            superTypes = listOf(
+                LsiDeclaredType(
+                    CONVERTER,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiPrimitiveType(LsiPrimitiveKind.INT)),
+                        LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE)),
+                    ),
+                )
+            ),
+        )
+        fun workspace(viewProp: LsiProperty): LsiWorkspace {
+            return LsiWorkspace(
+                declarations = listOf(
+                    type("demo.Store", ENTITY, listOf(idProp.id)),
+                    type("demo.Book", ENTITY, listOf(storeProp.id, viewProp.id)),
+                    idProp,
+                    storeProp,
+                    viewProp,
+                    codeFormatType,
+                    targetConverterType,
+                    explicitConverterType,
+                    invalidConverterType,
+                )
+            )
+        }
+
+        val schema = JimmerImmutablePrecompiler().compile(workspace(idViewProp(EXPLICIT_CODE_CONVERTER)))
+        val converter = requireNotNull(
+            schema.types.single { type -> type.id == bookId }
+                .props.single { prop -> prop.name == "storeId" }
+                .converter
+        )
+        assertEquals(EXPLICIT_CODE_CONVERTER, converter.converterTypeId)
+        assertEquals(LsiPrimitiveKind.BOOLEAN, assertIs<LsiPrimitiveType>(converter.targetType).kind)
+
+        val failure = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(workspace(idViewProp(INVALID_CODE_CONVERTER)))
+        }
+        assertTrue("source type" in failure.message.orEmpty())
+
+        val convertedAssociation = storeProp.copy(
+            annotations = storeProp.annotations + annotation(
+                JSON_CONVERTER,
+                mapOf(
+                    "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(EXPLICIT_CODE_CONVERTER))
+                ),
+            )
+        )
+        val associationFailure = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.Store", ENTITY, listOf(idProp.id)),
+                        type("demo.Book", ENTITY, listOf(convertedAssociation.id)),
+                        idProp,
+                        convertedAssociation,
+                        codeFormatType,
+                        targetConverterType,
+                        explicitConverterType,
+                    )
+                )
+            )
+        }
+        assertTrue("association property" in associationFailure.message.orEmpty())
+
+        val formattedViewProp = idViewProp(EXPLICIT_CODE_CONVERTER).copy(
+            annotations = idViewProp(EXPLICIT_CODE_CONVERTER).annotations + annotation(JSON_FORMAT)
+        )
+        val formatFailure = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(workspace(formattedViewProp))
+        }
+        assertTrue("cannot declare both" in formatFailure.message.orEmpty())
     }
 
     @Test
@@ -1556,11 +2470,14 @@ class JimmerImmutablePrecompilerTest {
         private val LOGICAL_DELETED = LsiSymbolId.type("org.babyfish.jimmer.sql.LogicalDeleted")
         private val ONE_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToOne")
         private val MANY_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
+        private val ONE_TO_MANY = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToMany")
+        private val MANY_TO_MANY = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToMany")
         private val JOIN_SQL = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
         private val FORMULA = LsiSymbolId.type("org.babyfish.jimmer.Formula")
         private val TRANSIENT = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")
         private val ID_VIEW = LsiSymbolId.type("org.babyfish.jimmer.sql.IdView")
         private val MANY_TO_MANY_VIEW = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToManyView")
+        private val MAPS_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.MapsId")
         private val DEFAULT = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
         private val COLUMN = LsiSymbolId.type("org.babyfish.jimmer.sql.Column")
         private val JAVA_OVERRIDE = LsiSymbolId.type("java.lang.Override")
@@ -1573,8 +2490,11 @@ class JimmerImmutablePrecompilerTest {
         private val CODE_FORMAT = LsiSymbolId.type("demo.CodeFormat")
         private val CODE_VALIDATOR = LsiSymbolId.type("demo.CodeValidator")
         private val CODE_CONVERTER = LsiSymbolId.type("demo.CodeConverter")
+        private val EXPLICIT_CODE_CONVERTER = LsiSymbolId.type("demo.ExplicitCodeConverter")
+        private val INVALID_CODE_CONVERTER = LsiSymbolId.type("demo.InvalidCodeConverter")
         private val JAKARTA_CONSTRAINT = LsiSymbolId.type("jakarta.validation.Constraint")
         private val JSON_CONVERTER = LsiSymbolId.type("org.babyfish.jimmer.jackson.JsonConverter")
+        private val JSON_FORMAT = LsiSymbolId.type("com.fasterxml.jackson.annotation.JsonFormat")
         private val CONVERTER = LsiSymbolId.type("org.babyfish.jimmer.jackson.Converter")
 
         private val SYNTHETIC_ORIGIN = LsiOrigin(LsiOriginKind.SYNTHETIC)
