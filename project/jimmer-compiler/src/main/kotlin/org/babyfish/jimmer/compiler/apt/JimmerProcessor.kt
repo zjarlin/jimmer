@@ -69,15 +69,11 @@ class JimmerProcessor : AbstractProcessor() {
 
     private var ignoreJdkWarning = false
 
-    private var clientExplicitApi: Boolean? = null
-
-    private var modelGenerated = false
+    private var clientExplicitApi = false
 
     private var dtoGenerated = false
 
-    private var toolGenerated = false
-
-    private var delayedClientTypeNames: List<String>? = null
+    private val delayedClientTypeNames = linkedSetOf<String>()
 
     private lateinit var dtoFieldModifier: Modifier
 
@@ -160,50 +156,55 @@ class JimmerProcessor : AbstractProcessor() {
         try {
             val lsiRoundResult = lsiDriver.process(roundEnv)
             ddlFeature.onRound(roundEnv)
-            if (clientExplicitApi == null) {
-                clientExplicitApi = roundEnv.rootElements.any {
+            val currentClientTypeNames = if (roundEnv.processingOver()) {
+                emptyList()
+            } else {
+                roundEnv.rootElements
+                    .filterIsInstance<TypeElement>()
+                    .map { it.qualifiedName.toString() }
+            }
+            if (!roundEnv.processingOver()) {
+                clientExplicitApi = clientExplicitApi || roundEnv.rootElements.any {
                     it is TypeElement &&
                         context.include(it) &&
                         it.getAnnotation(EnableImplicitApi::class.java) != null
                 }
             }
-            var generated = false
-            if (!modelGenerated) {
-                modelGenerated = true
+            var generated = lsiRoundResult.generatedSources
+            if (!roundEnv.processingOver()) {
                 val immutableTypeElements = ImmutableProcessor(context, messager).process(roundEnv).keys
                 ExportDocProcessor(context).process(roundEnv)
-                generated = immutableTypeElements.isNotEmpty() || lsiRoundResult.generatedSources
+                generated = generated || immutableTypeElements.isNotEmpty()
             }
-            var dtoGeneratedThisRound = false
-            if (!roundEnv.processingOver() && !dtoGenerated && lsiRoundResult.dtoGenerationReady()) {
+            if (
+                !roundEnv.processingOver() &&
+                !generated &&
+                !dtoGenerated &&
+                lsiRoundResult.dtoGenerationReady()
+            ) {
                 dtoGenerated = true
-                dtoGeneratedThisRound = DtoProcessor(
+                generated = DtoProcessor(
                     context,
                     elements,
                     if (isTest()) dtoTestDirs else dtoDirs,
                     dtoBundleEnabled,
                     defaultNullableInputModifier,
                 ).process()
-                generated = generated || dtoGeneratedThisRound
             }
             if (generated) {
-                delayedClientTypeNames = roundEnv
-                    .rootElements
-                    .filterIsInstance<TypeElement>()
-                    .map { it.qualifiedName.toString() }
+                delayedClientTypeNames += currentClientTypeNames
                 return true
             }
             if (
-                !toolGenerated &&
+                !roundEnv.processingOver() &&
                 !context.isBuddyIgnoreResourceGeneration &&
                 lsiRoundResult.dtoGenerationTerminal() &&
                 lsiRoundResult.unresolvedSymbols.isEmpty()
             ) {
-                toolGenerated = true
-                val explicitApi = clientExplicitApi
-                    ?: throw IllegalStateException("Internal bug: clientExplicitApi not resolved")
-                ClientProcessor(context, explicitApi, delayedClientTypeNames).process(roundEnv)
-                delayedClientTypeNames = null
+                ClientProcessor(context, clientExplicitApi, delayedClientTypeNames).process(roundEnv)
+                delayedClientTypeNames.clear()
+            } else {
+                delayedClientTypeNames += currentClientTypeNames
             }
         } catch (ex: MetaException) {
             messager.printMessage(

@@ -2,6 +2,7 @@ package org.babyfish.jimmer.ksp.immutable
 
 import com.google.devtools.ksp.isPrivate
 import com.google.devtools.ksp.isProtected
+import com.google.devtools.ksp.validate
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFile
@@ -31,6 +32,9 @@ class ImmutableProcessor(
         val modelMap = mutableMapOf<KSFile, MutableList<KSClassDeclaration>>()
         for (file in ctx.resolver.getNewFiles()) {
             for (classDeclaration in file.declarations.filterIsInstance<KSClassDeclaration>()) {
+                if (!classDeclaration.validate()) {
+                    continue
+                }
                 if (ctx.include(classDeclaration)) {
                     val annotation = ctx.typeAnnotationOf(classDeclaration)
                     if (classDeclaration.qualifiedName !== null && annotation != null) {

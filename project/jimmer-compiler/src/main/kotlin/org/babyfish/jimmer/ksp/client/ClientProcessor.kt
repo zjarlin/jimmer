@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.ksp.client
 
 import com.google.devtools.ksp.*
-import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.symbol.*
 import com.squareup.kotlinpoet.ksp.toTypeName
 import org.babyfish.jimmer.ClientException
@@ -19,13 +18,11 @@ import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
-import java.io.OutputStreamWriter
-import java.nio.charset.StandardCharsets
+import java.io.StringWriter
 
 class ClientProcessor(
     private val ctx: Context,
     private val explicitClientApi: Boolean,
-    private val delayedClientTypeNames: Collection<String>?
 ) {
     private val clientExceptionContext = ClientExceptionContext()
 
@@ -54,27 +51,16 @@ class ClientProcessor(
 
     private val jsonValueTypeNameStack = mutableSetOf<TypeName>()
 
-    fun process() {
+    fun render(): String {
         for (file in ctx.resolver.getAllFiles()) {
             for (declaration in file.declarations) {
                 builder.handleService(declaration)
             }
         }
-        if (delayedClientTypeNames != null) {
-            for (delayedClientTypeName in delayedClientTypeNames) {
-                builder.handleService(ctx.resolver.getClassDeclarationByName(delayedClientTypeName)!!)
-            }
-        }
         val schema = builder.build()
-
-        ctx.environment.codeGenerator.createNewFile(
-            Dependencies(false, *ctx.resolver.getAllFiles().toList().toTypedArray()),
-            "META-INF.jimmer",
-            "client",
-            ""
-        ).use {
-            Schemas.writeTo(schema, OutputStreamWriter(it, StandardCharsets.UTF_8))
-        }
+        val writer = StringWriter()
+        Schemas.writeTo(schema, writer)
+        return writer.toString()
     }
 
     private fun SchemaBuilder<KSDeclaration>.handleService(declaration: KSDeclaration) {

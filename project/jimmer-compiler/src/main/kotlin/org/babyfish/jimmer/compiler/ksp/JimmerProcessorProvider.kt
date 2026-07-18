@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.ksp
 
+import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
@@ -23,7 +24,6 @@ import org.babyfish.jimmer.ksp.client.ClientProcessor
 import org.babyfish.jimmer.ksp.client.ExportDocProcessor
 import org.babyfish.jimmer.ksp.dto.DtoProcessor
 import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
-import org.babyfish.jimmer.ksp.fullName
 import java.util.regex.Pattern
 
 class JimmerProcessorProvider : SymbolProcessorProvider {
@@ -70,57 +70,84 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                     ?.let { SEPARATOR.split(it).toList() }
                     ?: emptyList()
 
-            private var serverGenerated = false
-
             private var dtoGenerated = false
 
-            private var explicitClientApi: Boolean? = null
+            private var explicitClientApi = false
 
-            private var clientGenerated = false
+            private var exportDocContent: String? = null
 
-            private var delayedClientTypeNames: Collection<String>? = null
+            private var clientContent: String? = null
+
+            private var clientReadyInLatestRound = false
 
             override fun process(resolver: Resolver): List<KSAnnotated> {
                 val deferred = linkedSetOf<KSAnnotated>()
-                deferred += lsiDriver.process(resolver)
+                val lsiDeferred = lsiDriver.process(resolver)
+                deferred += lsiDeferred
                 val lsiRoundResult = requireNotNull(lsiDriver.lastRoundResult) {
                     "LSI driver must expose the current KSP round result"
                 }
-                deferred += ddlFeature.process(resolver)
-                deferred += processJimmer(resolver, lsiRoundResult)
+                val ddlDeferred = ddlFeature.process(resolver)
+                deferred += ddlDeferred
+                processJimmer(
+                    resolver = resolver,
+                    lsiRoundResult = lsiRoundResult,
+                    hasInvalidDeferred = lsiDeferred.isNotEmpty() || ddlDeferred.isNotEmpty(),
+                )
                 return deferred.toList()
             }
 
             override fun finish() {
                 lsiDriver.finish()
                 ddlFeature.finish()
+                exportDocContent?.let { content ->
+                    environment.codeGenerator.createNewFile(
+                        dependencies = Dependencies.ALL_FILES,
+                        packageName = "META-INF.jimmer",
+                        fileName = "doc",
+                        extensionName = "properties",
+                    ).bufferedWriter().use { writer ->
+                        writer.write(content)
+                    }
+                }
+                if (clientReadyInLatestRound) {
+                    clientContent?.let { content ->
+                        environment.codeGenerator.createNewFile(
+                            dependencies = Dependencies.ALL_FILES,
+                            packageName = "META-INF.jimmer",
+                            fileName = "client",
+                            extensionName = "",
+                        ).bufferedWriter().use { writer ->
+                            writer.write(content)
+                        }
+                    }
+                }
             }
 
             private fun processJimmer(
                 resolver: Resolver,
                 lsiRoundResult: org.babyfish.jimmer.compiler.CompilerRoundResult,
-            ): List<KSAnnotated> {
-                return try {
+                hasInvalidDeferred: Boolean,
+            ) {
+                clientReadyInLatestRound = false
+                exportDocContent = null
+                clientContent = null
+                try {
                     val context = Context(resolver, environment)
-                    if (explicitClientApi == null) {
-                        explicitClientApi = resolver.getAllFiles().any { file ->
-                            file.declarations.any {
-                                it is KSClassDeclaration &&
-                                    context.include(it) &&
-                                    it.annotation(EnableImplicitApi::class) != null
-                            }
+                    explicitClientApi = explicitClientApi || resolver.getAllFiles().any { file ->
+                        file.declarations.any {
+                            it is KSClassDeclaration &&
+                                context.include(it) &&
+                                it.annotation(EnableImplicitApi::class) != null
                         }
                     }
-                    val processedDeclarations = mutableListOf<KSClassDeclaration>()
-                    var generated = lsiRoundResult.generatedSources
-                    if (!serverGenerated) {
-                        processedDeclarations += ImmutableProcessor(
-                            context,
-                            excludedUserAnnotationPrefixes,
-                        ).process()
-                        ExportDocProcessor(context).process()
-                        serverGenerated = true
-                        generated = generated || processedDeclarations.isNotEmpty()
+                    val processedDeclarations = ImmutableProcessor(
+                        context,
+                        excludedUserAnnotationPrefixes,
+                    ).process()
+                    var generated = lsiRoundResult.generatedSources || processedDeclarations.isNotEmpty()
+                    if (generated) {
+                        return
                     }
                     if (!dtoGenerated && lsiRoundResult.dtoGenerationReady()) {
                         dtoGenerated = true
@@ -141,32 +168,27 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                         generated = generated || generatedDto
                     }
                     if (generated) {
-                        delayedClientTypeNames = resolver.getAllFiles().flatMap { file ->
-                            file.declarations.filterIsInstance<KSClassDeclaration>().map { it.fullName }
-                        }.toList()
-                        return processedDeclarations
+                        return
                     }
                     if (
-                        !clientGenerated &&
-                        !context.isBuddyIgnoreResourceGeneration &&
-                        lsiRoundResult.dtoGenerationTerminal() &&
-                        lsiRoundResult.unresolvedSymbols.isEmpty()
+                        hasInvalidDeferred ||
+                        !lsiRoundResult.dtoGenerationTerminal() ||
+                        lsiRoundResult.unresolvedSymbols.isNotEmpty()
                     ) {
-                        clientGenerated = true
-                        ClientProcessor(
-                            context,
-                            explicitClientApi ?: error("Internal bug: explicitClientApi not resolved"),
-                            delayedClientTypeNames,
-                        ).process()
-                        delayedClientTypeNames = null
+                        return
                     }
-                    processedDeclarations
+                    exportDocContent = ExportDocProcessor(context).render()
+                    if (!context.isBuddyIgnoreResourceGeneration) {
+                        clientContent = ClientProcessor(
+                            context,
+                            explicitClientApi,
+                        ).render()
+                    }
+                    clientReadyInLatestRound = !context.isBuddyIgnoreResourceGeneration
                 } catch (ex: MetaException) {
                     environment.logger.error(ex.message ?: ex.javaClass.name, ex.declaration)
-                    emptyList()
                 } catch (ex: DtoAstException) {
                     environment.logger.error(ex.message ?: ex.javaClass.name)
-                    emptyList()
                 }
             }
 

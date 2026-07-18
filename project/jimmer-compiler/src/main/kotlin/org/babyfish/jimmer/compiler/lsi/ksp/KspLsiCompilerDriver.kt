@@ -29,9 +29,6 @@ class KspLsiCompilerDriver(
     providers: Iterable<JimmerCompilerFeatureProvider> = JimmerCompilerFeatureProviders.load(),
     sessionId: String = "ksp",
 ) {
-    var lastRoundGeneratedSources: Boolean = false
-        private set
-
     var lastRoundResult: CompilerRoundResult? = null
         private set
 
@@ -115,7 +112,6 @@ class KspLsiCompilerDriver(
         )
         lastRoundResult = roundResult
         nextRoundNumber++
-        lastRoundGeneratedSources = roundResult.generatedSources
         roundResult.diagnostics.forEach { diagnostic ->
             emitDiagnostic(diagnostic, currentRoundSymbols.annotatedById)
         }
@@ -147,7 +143,6 @@ class KspLsiCompilerDriver(
         )
         lastRoundResult = roundResult
         nextRoundNumber++
-        lastRoundGeneratedSources = roundResult.generatedSources
         roundResult.diagnostics.forEach { diagnostic ->
             emitDiagnostic(diagnostic, emptyMap())
         }

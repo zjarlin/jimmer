@@ -1,8 +1,6 @@
 package org.babyfish.jimmer.ksp.client
 
 import com.google.devtools.ksp.getDeclaredProperties
-import com.google.devtools.ksp.isPublic
-import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
@@ -11,9 +9,8 @@ import org.babyfish.jimmer.client.ExportDoc
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.get
-import java.io.OutputStreamWriter
+import java.io.StringWriter
 import java.io.Writer
-import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.regex.Pattern
 
@@ -21,7 +18,7 @@ class ExportDocProcessor(
     private val ctx: Context
 ) {
 
-    fun process() {
+    fun render(): String? {
         val pkg = pkg()
         val declarations = mutableListOf<KSClassDeclaration>()
         for (file in ctx.resolver.getAllFiles()) {
@@ -30,18 +27,11 @@ class ExportDocProcessor(
             }
         }
         if (declarations.isEmpty()) {
-            return
+            return null
         }
-        ctx.environment.codeGenerator.createNewFile(
-            Dependencies(false, *ctx.resolver.getAllFiles().toList().toTypedArray()),
-            "META-INF.jimmer",
-            "doc",
-            "properties"
-        ).use {
-            val writer = OutputStreamWriter(it, StandardCharsets.UTF_8)
-            writeDoc(declarations, writer)
-            writer.flush()
-        }
+        val writer = StringWriter()
+        writeDoc(declarations, writer)
+        return writer.toString()
     }
 
     private fun collectDeclaration(
