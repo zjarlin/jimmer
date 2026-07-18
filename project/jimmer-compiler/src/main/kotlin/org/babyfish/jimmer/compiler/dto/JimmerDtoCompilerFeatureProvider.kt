@@ -8,6 +8,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
@@ -397,7 +398,27 @@ private fun StringBuilder.appendEffectiveKspMutableByRootTypeId(
     }
 }
 
-private const val DTO_FEATURE_ID = "dto"
+internal const val DTO_FEATURE_ID = "dto"
 private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val DEFAULT_NULLABLE_INPUT_MODIFIER_OPTION = "jimmer.dto.defaultNullableInputModifier"
 internal val JACKSON_3_OBJECT_MAPPER_TYPE_ID = LsiSymbolId.type("tools.jackson.databind.ObjectMapper")
+
+internal fun CompilerRoundResult.dtoStateOrNull(): JimmerDtoCompilerFeatureState? {
+    return featureResults[DTO_FEATURE_ID]?.state as? JimmerDtoCompilerFeatureState
+}
+
+internal fun CompilerRoundResult.dtoGenerationReady(): Boolean {
+    return dtoStateOrNull()?.status?.let { status ->
+        status == JimmerDtoCompilerFeatureStatus.RESOLVED
+    } ?: true
+}
+
+internal fun CompilerRoundResult.dtoGenerationTerminal(): Boolean {
+    return dtoStateOrNull()?.status?.let { status ->
+        status !in setOf(
+            JimmerDtoCompilerFeatureStatus.DEFERRED,
+            JimmerDtoCompilerFeatureStatus.PENDING,
+            JimmerDtoCompilerFeatureStatus.DEPENDENCY_DEFERRED,
+        )
+    } ?: true
+}

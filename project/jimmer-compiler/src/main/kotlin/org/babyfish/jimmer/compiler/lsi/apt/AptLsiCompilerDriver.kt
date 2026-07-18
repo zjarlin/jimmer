@@ -30,6 +30,9 @@ class AptLsiCompilerDriver(
     providers: Iterable<JimmerCompilerFeatureProvider> = JimmerCompilerFeatureProviders.load(),
     sessionId: String = "apt",
 ) {
+    var lastRoundResult: CompilerRoundResult? = null
+        private set
+
     private val options = processingEnvironment.options.toSortedMap()
 
     private val frontendOptions = LsiFrontendOptions.from(options)
@@ -133,6 +136,7 @@ class AptLsiCompilerDriver(
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),
         )
+        lastRoundResult = roundResult
         nextRoundNumber++
         pendingTypeIds = roundResult.unresolvedSymbols
             .mapNotNullTo(linkedSetOf()) { symbolId -> symbolId.rootTypeIdOrNull() }

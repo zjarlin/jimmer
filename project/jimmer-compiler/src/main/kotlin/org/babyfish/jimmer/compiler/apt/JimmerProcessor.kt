@@ -11,6 +11,8 @@ import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
 import org.babyfish.jimmer.client.EnableImplicitApi
 import org.babyfish.jimmer.client.FetchBy
 import org.babyfish.jimmer.compiler.ddl.apt.JimmerDdlCompilerAptFeature
+import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
+import org.babyfish.jimmer.compiler.dto.dtoGenerationTerminal
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
@@ -70,6 +72,8 @@ class JimmerProcessor : AbstractProcessor() {
     private var clientExplicitApi: Boolean? = null
 
     private var modelGenerated = false
+
+    private var dtoGenerated = false
 
     private var toolGenerated = false
 
@@ -163,26 +167,38 @@ class JimmerProcessor : AbstractProcessor() {
                         it.getAnnotation(EnableImplicitApi::class.java) != null
                 }
             }
+            var generated = false
             if (!modelGenerated) {
                 modelGenerated = true
                 val immutableTypeElements = ImmutableProcessor(context, messager).process(roundEnv).keys
-                val dtoGenerated = DtoProcessor(
+                ExportDocProcessor(context).process(roundEnv)
+                generated = immutableTypeElements.isNotEmpty() || lsiRoundResult.generatedSources
+            }
+            var dtoGeneratedThisRound = false
+            if (!roundEnv.processingOver() && !dtoGenerated && lsiRoundResult.dtoGenerationReady()) {
+                dtoGenerated = true
+                dtoGeneratedThisRound = DtoProcessor(
                     context,
                     elements,
                     if (isTest()) dtoTestDirs else dtoDirs,
                     dtoBundleEnabled,
                     defaultNullableInputModifier,
                 ).process()
-                ExportDocProcessor(context).process(roundEnv)
-                if (immutableTypeElements.isNotEmpty() || lsiRoundResult.generatedSources || dtoGenerated) {
-                    delayedClientTypeNames = roundEnv
-                        .rootElements
-                        .filterIsInstance<TypeElement>()
-                        .map { it.qualifiedName.toString() }
-                    return true
-                }
+                generated = generated || dtoGeneratedThisRound
             }
-            if (!toolGenerated && !context.isBuddyIgnoreResourceGeneration) {
+            if (generated) {
+                delayedClientTypeNames = roundEnv
+                    .rootElements
+                    .filterIsInstance<TypeElement>()
+                    .map { it.qualifiedName.toString() }
+                return true
+            }
+            if (
+                !toolGenerated &&
+                !context.isBuddyIgnoreResourceGeneration &&
+                lsiRoundResult.dtoGenerationTerminal() &&
+                lsiRoundResult.unresolvedSymbols.isEmpty()
+            ) {
                 toolGenerated = true
                 val explicitApi = clientExplicitApi
                     ?: throw IllegalStateException("Internal bug: clientExplicitApi not resolved")

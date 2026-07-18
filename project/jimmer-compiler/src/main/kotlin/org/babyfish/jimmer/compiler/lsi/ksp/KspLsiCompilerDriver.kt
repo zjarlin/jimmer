@@ -32,6 +32,9 @@ class KspLsiCompilerDriver(
     var lastRoundGeneratedSources: Boolean = false
         private set
 
+    var lastRoundResult: CompilerRoundResult? = null
+        private set
+
     private val options = environment.options.toSortedMap()
 
     private val frontendOptions = LsiFrontendOptions.from(options)
@@ -110,6 +113,7 @@ class KspLsiCompilerDriver(
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),
         )
+        lastRoundResult = roundResult
         nextRoundNumber++
         lastRoundGeneratedSources = roundResult.generatedSources
         roundResult.diagnostics.forEach { diagnostic ->
@@ -141,6 +145,7 @@ class KspLsiCompilerDriver(
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),
         )
+        lastRoundResult = roundResult
         nextRoundNumber++
         lastRoundGeneratedSources = roundResult.generatedSources
         roundResult.diagnostics.forEach { diagnostic ->

@@ -8,6 +8,8 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.client.EnableImplicitApi
 import org.babyfish.jimmer.compiler.ddl.ksp.JimmerDdlCompilerKspFeature
+import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
+import org.babyfish.jimmer.compiler.dto.dtoGenerationTerminal
 import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
@@ -70,6 +72,8 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
 
             private var serverGenerated = false
 
+            private var dtoGenerated = false
+
             private var explicitClientApi: Boolean? = null
 
             private var clientGenerated = false
@@ -79,8 +83,11 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
             override fun process(resolver: Resolver): List<KSAnnotated> {
                 val deferred = linkedSetOf<KSAnnotated>()
                 deferred += lsiDriver.process(resolver)
+                val lsiRoundResult = requireNotNull(lsiDriver.lastRoundResult) {
+                    "LSI driver must expose the current KSP round result"
+                }
                 deferred += ddlFeature.process(resolver)
-                deferred += processJimmer(resolver, lsiDriver.lastRoundGeneratedSources)
+                deferred += processJimmer(resolver, lsiRoundResult)
                 return deferred.toList()
             }
 
@@ -91,7 +98,7 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
 
             private fun processJimmer(
                 resolver: Resolver,
-                lsiGeneratedSources: Boolean,
+                lsiRoundResult: org.babyfish.jimmer.compiler.CompilerRoundResult,
             ): List<KSAnnotated> {
                 return try {
                     val context = Context(resolver, environment)
@@ -105,12 +112,19 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                         }
                     }
                     val processedDeclarations = mutableListOf<KSClassDeclaration>()
+                    var generated = lsiRoundResult.generatedSources
                     if (!serverGenerated) {
                         processedDeclarations += ImmutableProcessor(
                             context,
                             excludedUserAnnotationPrefixes,
                         ).process()
-                        val dtoGenerated = DtoProcessor(
+                        ExportDocProcessor(context).process()
+                        serverGenerated = true
+                        generated = generated || processedDeclarations.isNotEmpty()
+                    }
+                    if (!dtoGenerated && lsiRoundResult.dtoGenerationReady()) {
+                        dtoGenerated = true
+                        val generatedDto = DtoProcessor(
                             context,
                             dtoMutable,
                             if (
@@ -124,16 +138,20 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                             dtoBundleEnabled,
                             defaultNullableInputModifier,
                         ).process()
-                        ExportDocProcessor(context).process()
-                        serverGenerated = true
-                        if (processedDeclarations.isNotEmpty() || lsiGeneratedSources || dtoGenerated) {
-                            delayedClientTypeNames = resolver.getAllFiles().flatMap { file ->
-                                file.declarations.filterIsInstance<KSClassDeclaration>().map { it.fullName }
-                            }.toList()
-                            return processedDeclarations
-                        }
+                        generated = generated || generatedDto
                     }
-                    if (!clientGenerated && !context.isBuddyIgnoreResourceGeneration) {
+                    if (generated) {
+                        delayedClientTypeNames = resolver.getAllFiles().flatMap { file ->
+                            file.declarations.filterIsInstance<KSClassDeclaration>().map { it.fullName }
+                        }.toList()
+                        return processedDeclarations
+                    }
+                    if (
+                        !clientGenerated &&
+                        !context.isBuddyIgnoreResourceGeneration &&
+                        lsiRoundResult.dtoGenerationTerminal() &&
+                        lsiRoundResult.unresolvedSymbols.isEmpty()
+                    ) {
                         clientGenerated = true
                         ClientProcessor(
                             context,
