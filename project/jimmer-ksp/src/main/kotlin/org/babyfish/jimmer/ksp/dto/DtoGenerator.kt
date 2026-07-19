@@ -279,6 +279,9 @@ class DtoGenerator private constructor(
     }
 
     private fun TypeSpec.Builder.addTypeAnnotations() {
+        if (ctx.isDtoKotlinxSerialization && !hasTypeAnnotation(dtoType, KOTLINX_SERIALIZABLE_CLASS_NAME)) {
+            addAnnotation(KOTLINX_SERIALIZABLE_CLASS_NAME)
+        }
         for (anno in dtoType.baseType.classDeclaration.annotations) {
             if (isCopyableAnnotation(anno, dtoType.annotations)) {
                 addAnnotation(anno.toAnnotationSpec())
@@ -1088,6 +1091,11 @@ class DtoGenerator private constructor(
                 PropertySpec
                     .builder(it, BOOLEAN)
                     .addAnnotation(ApiIgnore::class)
+                    .apply {
+                        if (ctx.isDtoKotlinxSerialization) {
+                            addAnnotation(KOTLINX_TRANSIENT_CLASS_NAME)
+                        }
+                    }
                     .addAnnotation(
                         AnnotationSpec
                             .builder(ctx.jacksonTypes.jsonIgnore)

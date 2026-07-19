@@ -1,6 +1,6 @@
 package org.babyfish.jimmer;
 
-import org.babyfish.jimmer.jackson.codec.JsonCodec;
+import org.babyfish.jimmer.json.codec.JsonCodec;
 import org.babyfish.jimmer.meta.*;
 import org.babyfish.jimmer.runtime.DraftSpi;
 import org.babyfish.jimmer.runtime.ImmutableSpi;
@@ -10,7 +10,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-import static org.babyfish.jimmer.jackson.codec.JsonCodec.jsonCodec;
+import static org.babyfish.jimmer.json.codec.JsonCodec.defaultCodec;
 
 public class ImmutableObjects {
     private ImmutableObjects() {
@@ -379,7 +379,7 @@ public class ImmutableObjects {
      */
     public static String toString(Object immutable) {
         try {
-            return jsonCodec().writer().writeAsString(immutable);
+            return defaultCodec().writer().writeAsString(immutable);
         } catch (Exception e) {
             throw new IllegalArgumentException("Can't serialize object", e);
         }
@@ -393,7 +393,7 @@ public class ImmutableObjects {
      * @param jsonCodec JSON codec
      * @return JSON string
      */
-    public static String toString(Object immutable, @NotNull JsonCodec<?> jsonCodec) {
+    public static String toString(Object immutable, @NotNull JsonCodec jsonCodec) {
         try {
             return jsonCodec.writer().writeAsString(immutable);
         } catch (Exception e) {
@@ -409,13 +409,13 @@ public class ImmutableObjects {
      */
     public static <I> I fromString(Class<I> type, String json) {
         try {
-            return jsonCodec().readerFor(type).read(json);
+            return defaultCodec().readerFor(type).read(json);
         } catch (Exception e) {
             throw new IllegalArgumentException("Can't deserialize object ", e);
         }
     }
 
-    public static <I> I fromString(Class<I> type, String json, @NotNull JsonCodec<?> jsonCodec) {
+    public static <I> I fromString(Class<I> type, String json, @NotNull JsonCodec jsonCodec) {
         try {
             return jsonCodec.readerFor(type).read(json);
         } catch (Exception e) {
