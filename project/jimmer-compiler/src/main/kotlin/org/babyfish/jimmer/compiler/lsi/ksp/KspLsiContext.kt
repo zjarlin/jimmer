@@ -140,15 +140,27 @@ internal class KspLsiContext(
                 val memberName = when (member) {
                     is KSPropertyDeclaration -> member.simpleName.asString()
                     is KSFunctionDeclaration -> {
-                        if (!member.isLsiJavaPropertyGetter()) {
-                            return@firstNotNullOfOrNull null
-                        }
-                        member.toLsiJavaPropertyName(frontendOptions)
+                        member.generatedImmutableDocumentationPropertyName()
+                            ?: return@firstNotNullOfOrNull null
                     }
                     else -> return@firstNotNullOfOrNull null
                 }
                 member.description().takeIf { memberName == propertyName }
             }
+    }
+
+    private fun KSFunctionDeclaration.generatedImmutableDocumentationPropertyName(): String? {
+        val resolvedReturnType = returnType?.resolve() ?: return null
+        if (
+            parameters.isNotEmpty() ||
+            typeParameters.isNotEmpty() ||
+            Modifier.JAVA_STATIC in modifiers ||
+            Modifier.PRIVATE in modifiers ||
+            resolvedReturnType.declaration.qualifiedName?.asString() == "kotlin.Unit"
+        ) {
+            return null
+        }
+        return toLsiJavaPropertyName(frontendOptions)
     }
 
     private fun KSAnnotation.isDescription(): Boolean {

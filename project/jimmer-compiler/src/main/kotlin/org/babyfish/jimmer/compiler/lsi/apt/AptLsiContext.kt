@@ -11,12 +11,16 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiVisibility
+import java.lang.reflect.Method
 import javax.annotation.processing.ProcessingEnvironment
 import javax.lang.model.element.Element
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
 import javax.lang.model.type.TypeKind
+import javax.lang.model.util.Elements
+import javax.tools.FileObject
+import javax.tools.JavaFileObject
 
 internal class AptLsiContext(
     val processingEnvironment: ProcessingEnvironment,
@@ -33,6 +37,14 @@ internal class AptLsiContext(
         null
     }
 
+    /*
+     * Elements.getFileObjectOf 晚于 Java 8 引入。这里通过反射调用，既保持制品可在
+     * Java 8 加载，也能在 APT 包装器隐藏 javac Trees 实现时定位源码。
+     */
+    private val fileObjectOf: Method? = runCatching {
+        Elements::class.java.getMethod("getFileObjectOf", Element::class.java)
+    }.getOrNull()
+
     fun sourceDocumentation(element: Element): String? {
         return elements.getDocComment(element)
             ?.trim()
@@ -46,8 +58,16 @@ internal class AptLsiContext(
     }
 
     fun source(element: Element): LsiSource? {
-        val compilationUnit = trees?.getPath(element)?.compilationUnit ?: return null
-        val sourceFile = compilationUnit.sourceFile ?: return null
+        val sourceFile = fileObjectOf
+            ?.let { method ->
+                runCatching { method.invoke(elements, element) as? FileObject }
+                    .getOrNull()
+            }
+            ?.takeIf { fileObject ->
+                (fileObject as? JavaFileObject)?.kind == JavaFileObject.Kind.SOURCE
+            }
+            ?: trees?.getPath(element)?.compilationUnit?.sourceFile
+            ?: return null
         val path = sourceFile.toUri().path
             ?.takeIf(String::isNotBlank)
             ?: sourceFile.name.takeIf(String::isNotBlank)
@@ -147,13 +167,24 @@ internal class AptLsiContext(
         return impl.enclosedElements
             .filterIsInstance<ExecutableElement>()
             .firstOrNull { candidate ->
-                candidate.returnType.kind != TypeKind.VOID &&
-                    candidate.parameters.isEmpty() &&
-                    candidate.typeParameters.isEmpty() &&
-                    candidate.isLsiPropertyGetter() &&
-                    candidate.toLsiPropertyName(frontendOptions) == propertyName
+                candidate.isGeneratedImmutableDocumentationAccessor(propertyName)
             }
             ?.description()
+    }
+
+    private fun ExecutableElement.isGeneratedImmutableDocumentationAccessor(
+        propertyName: String,
+    ): Boolean {
+        if (
+            returnType.kind == TypeKind.VOID ||
+            parameters.isNotEmpty() ||
+            typeParameters.isNotEmpty() ||
+            Modifier.STATIC in modifiers ||
+            Modifier.PRIVATE in modifiers
+        ) {
+            return false
+        }
+        return toLsiPropertyName(frontendOptions) == propertyName
     }
 
     private fun TypeElement.isImmutableType(): Boolean {

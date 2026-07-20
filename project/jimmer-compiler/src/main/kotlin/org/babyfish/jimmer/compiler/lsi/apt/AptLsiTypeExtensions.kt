@@ -2,6 +2,7 @@ package org.babyfish.jimmer.compiler.lsi.apt
 
 import site.addzero.lsi.core.LsiSymbolId
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
+import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
@@ -12,6 +13,7 @@ import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.model.mergeAnnotations
 import javax.annotation.processing.ProcessingEnvironment
 import javax.lang.model.element.ElementKind
 import javax.lang.model.element.ExecutableElement
@@ -46,16 +48,21 @@ internal fun AptLsiContext.toLsiType(
         is PrimitiveType -> LsiPrimitiveType(
             kind = type.kind.toLsiPrimitiveKind(),
             nullability = type.toLsiNullability(LsiNullability.NON_NULL),
+            annotations = toLsiTypeAnnotations(type),
         )
         is ArrayType -> LsiArrayType(
             elementType = toLsiType(type.componentType, typeParameterIds),
             nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+            annotations = toLsiTypeAnnotations(type),
         )
         is DeclaredType -> toLsiDeclaredType(type, typeParameterIds)
         is TypeVariable -> toLsiTypeParameterRef(type, typeParameterIds)
-        is NoType -> type.toLsiNoType()
+        is NoType -> toLsiNoType(type)
         is WildcardType -> toLsiWildcardFallback(type, typeParameterIds)
-        else -> LsiUnresolvedType(type.toString())
+        else -> LsiUnresolvedType(
+            displayName = type.toString(),
+            annotations = toLsiTypeAnnotations(type),
+        )
     }
 }
 
@@ -118,11 +125,50 @@ internal fun AptLsiContext.toLsiCallableId(method: ExecutableElement): LsiSymbol
 }
 
 internal fun ExecutableElement.isLsiPropertyGetter(): Boolean {
-    return parameters.isEmpty() &&
-        returnType.kind != TypeKind.VOID &&
-        typeParameters.isEmpty() &&
-        thrownTypes.isEmpty() &&
-        javax.lang.model.element.Modifier.STATIC !in modifiers
+    if (
+        parameters.isNotEmpty() ||
+        returnType.kind == TypeKind.VOID ||
+        typeParameters.isNotEmpty() ||
+        thrownTypes.isNotEmpty() ||
+        javax.lang.model.element.Modifier.STATIC in modifiers
+    ) {
+        return false
+    }
+    val owner = enclosingElement as? TypeElement ?: return false
+    val methodName = simpleName.toString()
+    if (
+        methodName.startsWith("get") &&
+        methodName.length > 3 &&
+        methodName[3].isUpperCase()
+    ) {
+        val booleanGetterName = "is" + methodName.substring(3)
+        if (owner.enclosedElements
+                .filterIsInstance<ExecutableElement>()
+                .any { method ->
+                    method.simpleName.contentEquals(booleanGetterName) &&
+                        method.parameters.isEmpty() &&
+                        method.typeParameters.isEmpty() &&
+                        method.returnType.isBooleanType()
+                }
+        ) {
+            return false
+        }
+        return true
+    }
+    if (
+        methodName.startsWith("is") &&
+        methodName.length > 2 &&
+        methodName[2].isUpperCase() &&
+        returnType.isBooleanType()
+    ) {
+        return true
+    }
+    if (javax.lang.model.element.Modifier.PRIVATE in modifiers) {
+        return false
+    }
+    return owner.kind == ElementKind.INTERFACE ||
+        owner.kind == ElementKind.ANNOTATION_TYPE ||
+        owner.kind == ElementKind.RECORD
 }
 
 internal fun ExecutableElement.toLsiPropertyName(
@@ -193,10 +239,18 @@ private fun TypeMirror.toAptErasedStableSignature(): String {
         is ArrayType -> "array:${componentType.toAptErasedStableSignature()}"
         is DeclaredType -> {
             val typeElement = asElement() as? TypeElement
-            "type:${typeElement?.qualifiedName ?: toString().substringBefore('<')}"
+            val qualifiedName = typeElement?.qualifiedName
+                ?.toString()
+                ?.takeIf(String::isNotBlank)
+                ?: toString().substringBefore('<').ifBlank { "java.lang.Object" }
+            "type:$qualifiedName"
         }
         is TypeVariable -> upperBound.toAptErasedStableSignature()
-        is IntersectionType -> bounds.firstOrNull()?.toAptErasedStableSignature() ?: "type:java.lang.Object"
+        is IntersectionType -> bounds
+            .firstOrNull()
+            ?.toAptErasedStableSignature()
+            ?.takeIf(String::isNotBlank)
+            ?: "type:java.lang.Object"
         is WildcardType -> {
             extendsBound?.toAptErasedStableSignature()
                 ?: superBound?.toAptErasedStableSignature()
@@ -214,13 +268,18 @@ private fun AptLsiContext.toLsiTypeArgument(
     if (type !is WildcardType) {
         return LsiTypeArgument.invariant(toLsiType(type, typeParameterIds))
     }
+    val annotations = toLsiTypeAnnotations(type)
     val superBound = type.superBound
     if (superBound != null) {
-        return LsiTypeArgument.input(toLsiType(superBound, typeParameterIds))
+        val boundType = toLsiType(superBound, typeParameterIds)
+            .withAdditionalAnnotations(annotations)
+        return LsiTypeArgument.input(boundType)
     }
     val extendsBound = type.extendsBound
     if (extendsBound != null) {
-        return LsiTypeArgument.output(toLsiType(extendsBound, typeParameterIds))
+        val boundType = toLsiType(extendsBound, typeParameterIds)
+            .withAdditionalAnnotations(annotations)
+        return LsiTypeArgument.output(boundType)
     }
     return LsiTypeArgument.STAR
 }
@@ -260,6 +319,8 @@ private fun AptLsiContext.toLsiDeclaredType(
         return LsiPrimitiveType(
             kind = primitiveKind,
             nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+            annotations = toLsiTypeAnnotations(type),
+            boxed = true,
         )
     }
     return LsiDeclaredType(
@@ -268,6 +329,7 @@ private fun AptLsiContext.toLsiDeclaredType(
             toLsiTypeArgument(argument, typeParameterIds)
         },
         nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+        annotations = toLsiTypeAnnotations(type),
     )
 }
 
@@ -276,19 +338,30 @@ private fun AptLsiContext.toLsiErrorType(
     typeParameterIds: Map<TypeParameterElement, LsiSymbolId>,
 ): LsiTypeRef {
     val errorElement = type.asElement() as? TypeElement
-        ?: return LsiUnresolvedType(type.toString())
+        ?: return LsiUnresolvedType(
+            displayName = type.toString(),
+            annotations = toLsiTypeAnnotations(type),
+        )
     val qualifiedName = errorElement.qualifiedName.toString()
     val resolvedElement = qualifiedName
         .takeIf(String::isNotBlank)
         ?.let(elements::getTypeElement)
-        ?: return LsiUnresolvedType(type.toString())
+        ?: return LsiUnresolvedType(
+            displayName = type.toString(),
+            annotations = toLsiTypeAnnotations(type),
+        )
     if (resolvedElement.asType().kind == TypeKind.ERROR) {
-        return LsiUnresolvedType(type.toString())
+        return LsiUnresolvedType(
+            displayName = type.toString(),
+            annotations = toLsiTypeAnnotations(type),
+        )
     }
     APT_BOXED_PRIMITIVE_KINDS[resolvedElement.qualifiedName.toString()]?.let { primitiveKind ->
         return LsiPrimitiveType(
             kind = primitiveKind,
             nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+            annotations = toLsiTypeAnnotations(type),
+            boxed = true,
         )
     }
     return LsiDeclaredType(
@@ -297,6 +370,7 @@ private fun AptLsiContext.toLsiErrorType(
             toLsiTypeArgument(argument, typeParameterIds)
         },
         nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+        annotations = toLsiTypeAnnotations(type),
     )
 }
 
@@ -305,23 +379,36 @@ private fun AptLsiContext.toLsiTypeParameterRef(
     typeParameterIds: Map<TypeParameterElement, LsiSymbolId>,
 ): LsiTypeRef {
     val parameter = type.asElement() as? TypeParameterElement
-        ?: return LsiUnresolvedType(type.toString())
+        ?: return LsiUnresolvedType(
+            displayName = type.toString(),
+            annotations = toLsiTypeAnnotations(type),
+        )
     val parameterId = typeParameterIds[parameter] ?: toLsiTypeParameterId(parameter)
     return if (parameterId != null) {
         LsiTypeParameterRef(
             parameterId = parameterId,
             nullability = type.toLsiNullability(LsiNullability.PLATFORM),
+            annotations = toLsiTypeAnnotations(type),
         )
     } else {
-        LsiUnresolvedType(type.toString())
+        LsiUnresolvedType(
+            displayName = type.toString(),
+            annotations = toLsiTypeAnnotations(type),
+        )
     }
 }
 
-private fun NoType.toLsiNoType(): LsiTypeRef {
-    return if (kind == TypeKind.VOID) {
-        LsiPrimitiveType(LsiPrimitiveKind.VOID)
+private fun AptLsiContext.toLsiNoType(type: NoType): LsiTypeRef {
+    return if (type.kind == TypeKind.VOID) {
+        LsiPrimitiveType(
+            kind = LsiPrimitiveKind.VOID,
+            annotations = toLsiTypeAnnotations(type),
+        )
     } else {
-        LsiUnresolvedType(toString().ifBlank { kind.name.lowercase() })
+        LsiUnresolvedType(
+            displayName = type.toString().ifBlank { type.kind.name.lowercase() },
+            annotations = toLsiTypeAnnotations(type),
+        )
     }
 }
 
@@ -330,10 +417,34 @@ private fun AptLsiContext.toLsiWildcardFallback(
     typeParameterIds: Map<TypeParameterElement, LsiSymbolId>,
 ): LsiTypeRef {
     val bound = type.superBound ?: type.extendsBound
+    val annotations = toLsiTypeAnnotations(type)
     return if (bound != null) {
-        toLsiType(bound, typeParameterIds)
+        toLsiType(bound, typeParameterIds).withAdditionalAnnotations(annotations)
     } else {
-        LsiUnresolvedType(type.toString())
+        LsiUnresolvedType(
+            displayName = type.toString(),
+            annotations = annotations,
+        )
+    }
+}
+
+private fun AptLsiContext.toLsiTypeAnnotations(type: TypeMirror): List<LsiAnnotation> {
+    return toLsiAnnotations(type.annotationMirrors, null)
+}
+
+private fun LsiTypeRef.withAdditionalAnnotations(
+    additionalAnnotations: List<LsiAnnotation>,
+): LsiTypeRef {
+    if (additionalAnnotations.isEmpty()) {
+        return this
+    }
+    val mergedAnnotations = mergeAnnotations(additionalAnnotations, annotations)
+    return when (this) {
+        is LsiDeclaredType -> copy(annotations = mergedAnnotations)
+        is LsiTypeParameterRef -> copy(annotations = mergedAnnotations)
+        is LsiPrimitiveType -> copy(annotations = mergedAnnotations)
+        is LsiArrayType -> copy(annotations = mergedAnnotations)
+        is LsiUnresolvedType -> copy(annotations = mergedAnnotations)
     }
 }
 
@@ -383,12 +494,20 @@ private fun String.annotationNullability(): Boolean? {
     if (this == "org.babyfish.jimmer.client.TNullable") {
         return true
     }
+    if (this in TYPE_NULLABILITY_IGNORED_ANNOTATIONS) {
+        return null
+    }
     return when {
         endsWith(".Null") || endsWith(".Nullable") -> true
         endsWith(".NotNull") || endsWith(".NonNull") -> false
         else -> null
     }
 }
+
+private val TYPE_NULLABILITY_IGNORED_ANNOTATIONS = setOf(
+    "jakarta.validation.constraints.NotNull",
+    "javax.validation.constraints.NotNull",
+)
 
 private val APT_BOXED_PRIMITIVE_KINDS = mapOf(
     "java.lang.Boolean" to LsiPrimitiveKind.BOOLEAN,

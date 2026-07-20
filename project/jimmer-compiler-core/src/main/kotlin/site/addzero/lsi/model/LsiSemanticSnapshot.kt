@@ -189,7 +189,13 @@ private fun LsiTypeRef.toSemanticSignature(options: LsiSemanticSnapshotOptions):
             } else {
                 kind
             }
-            "primitive:${normalizedKind.name.lowercase()}"
+            buildString {
+                append("primitive:")
+                append(normalizedKind.name.lowercase())
+                if (boxed) {
+                    append(":boxed")
+                }
+            }
         }
         is LsiArrayType -> "array:${elementType.toSemanticSignature(options)}"
         is LsiUnresolvedType -> "unresolved:$displayName"
@@ -198,7 +204,12 @@ private fun LsiTypeRef.toSemanticSignature(options: LsiSemanticSnapshotOptions):
         LsiNullability.PLATFORM -> options.platformNullability
         else -> nullability
     }
-    return "$base:${normalizedNullability.name.lowercase()}"
+    val annotationSnapshot = annotations.toSemanticSnapshot(options)
+    return if (annotationSnapshot.isEmpty()) {
+        "$base:${normalizedNullability.name.lowercase()}"
+    } else {
+        "$base:${normalizedNullability.name.lowercase()}@[$annotationSnapshot]"
+    }
 }
 
 private fun LsiTypeArgument.toSemanticSignature(options: LsiSemanticSnapshotOptions): String {

@@ -345,6 +345,51 @@ class KspLsiWorkspaceTest {
     }
 
     @Test
+    fun `ignores unresolved kotlin compiler type markers without dropping legal annotations`() {
+        val sourceFile = file("/workspace/src/main/kotlin/demo/Service.kt")
+        val stringType = classDeclaration(
+            qualifiedName = "kotlin.String",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val legalAnnotationType = classDeclaration(
+            qualifiedName = "demo.TypeUseTag",
+            classKind = ClassKind.ANNOTATION_CLASS,
+            file = sourceFile,
+        )
+        val compilerMarkerType = unresolvedAnnotationDeclaration("ExtensionFunctionType")
+        val compilerMarker = annotation(
+            type = compilerMarkerType,
+            arguments = emptyList(),
+            annotationType = typeReference(type(compilerMarkerType, error = true)),
+            origin = Origin.KOTLIN_LIB,
+        )
+        val legalAnnotation = annotation(
+            type = legalAnnotationType,
+            arguments = listOf(valueArgument("value", "DETAIL")),
+        )
+
+        val frozenType = typeReference(
+            type = type(stringType),
+            annotations = sequenceOf(compilerMarker, legalAnnotation),
+        ).toLsiType(
+            resolver(
+                classesByName = mapOf(
+                    "kotlin.String" to stringType,
+                    "demo.TypeUseTag" to legalAnnotationType,
+                ),
+            ),
+        )
+
+        assertEquals(listOf(LsiSymbolId.type("demo.TypeUseTag")), frozenType.annotations.map { it.type })
+        assertEquals(
+            LsiAnnotationValue.StringValue("DETAIL"),
+            frozenType.annotations.single().arguments.getValue("value").value,
+        )
+    }
+
+    @Test
     fun `normalizes java getters and keeps kotlin property semantics`() {
         val sourceFile = file("/workspace/src/main/java/demo/Switches.java")
         val booleanDeclaration = classDeclaration(
@@ -1536,6 +1581,28 @@ class KspLsiWorkspaceTest {
         return declaration
     }
 
+    private fun unresolvedAnnotationDeclaration(name: String): KSClassDeclaration {
+        return proxy("KSClassDeclaration(kotlin.$name)") { method, _ ->
+            when (method.name) {
+                "getSimpleName" -> name(name)
+                "getQualifiedName" -> null
+                "getPackageName" -> name("kotlin")
+                "getClassKind" -> ClassKind.ANNOTATION_CLASS
+                "getOrigin" -> Origin.KOTLIN_LIB
+                "getContainingFile", "getParentDeclaration", "getParent", "getDocString" -> null
+                "getTypeParameters" -> emptyList<KSTypeParameter>()
+                "getDeclarations" -> emptySequence<KSDeclaration>()
+                "getSuperTypes" -> emptySequence<KSTypeReference>()
+                "getAnnotations" -> emptySequence<KSAnnotation>()
+                "getModifiers" -> emptySet<Modifier>()
+                "getLocation" -> com.google.devtools.ksp.symbol.NonExistLocation
+                "accept" -> true
+                "isCompanionObject" -> false
+                else -> defaultValue(method.returnType)
+            }
+        }
+    }
+
     private fun property(
         name: String,
         parent: () -> KSClassDeclaration,
@@ -1663,6 +1730,7 @@ class KspLsiWorkspaceTest {
         declaration: KSDeclaration,
         arguments: List<KSTypeArgument> = emptyList(),
         nullability: Nullability = Nullability.NOT_NULL,
+        error: Boolean = false,
     ): KSType {
         lateinit var type: KSType
         type = proxy("KSType(${declaration.simpleName.asString()})") { method, methodArguments ->
@@ -1672,13 +1740,14 @@ class KspLsiWorkspaceTest {
                 "getNullability" -> nullability
                 "getAnnotations" -> emptySequence<KSAnnotation>()
                 "isMarkedNullable" -> nullability == Nullability.NULLABLE
-                "isError", "isFunctionType", "isSuspendFunctionType" -> false
-                "makeNullable" -> type(declaration, arguments, Nullability.NULLABLE)
-                "makeNotNullable" -> type(declaration, arguments, Nullability.NOT_NULL)
+                "isError" -> error
+                "isFunctionType", "isSuspendFunctionType" -> false
+                "makeNullable" -> type(declaration, arguments, Nullability.NULLABLE, error)
+                "makeNotNullable" -> type(declaration, arguments, Nullability.NOT_NULL, error)
                 "replace" -> {
                     @Suppress("UNCHECKED_CAST")
                     val replacementArguments = methodArguments[0] as List<KSTypeArgument>
-                    type(declaration, replacementArguments, nullability)
+                    type(declaration, replacementArguments, nullability, error)
                 }
                 "starProjection" -> type
                 else -> defaultValue(method.returnType)
@@ -1729,16 +1798,18 @@ class KspLsiWorkspaceTest {
         arguments: List<KSValueArgument>,
         defaultArguments: List<KSValueArgument> = emptyList(),
         useSiteTarget: AnnotationUseSiteTarget? = null,
+        annotationType: KSTypeReference? = null,
+        origin: Origin = Origin.KOTLIN,
     ): KSAnnotation {
-        val annotationType = typeReference(type(type))
+        val resolvedAnnotationType = annotationType ?: typeReference(type(type))
         return proxy("KSAnnotation(${type.qualifiedName?.asString()})") { method, _ ->
             when (method.name) {
-                "getAnnotationType" -> annotationType
+                "getAnnotationType" -> resolvedAnnotationType
                 "getArguments" -> arguments
                 "getDefaultArguments" -> defaultArguments
                 "getShortName" -> type.simpleName
                 "getUseSiteTarget" -> useSiteTarget
-                "getOrigin" -> Origin.KOTLIN
+                "getOrigin" -> origin
                 "getLocation" -> type.location
                 "getParent" -> type.parent
                 "accept" -> true

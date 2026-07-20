@@ -22,7 +22,10 @@ import site.addzero.lsi.model.LsiVariance
 
 internal fun LsiTypeRef.toJavaTypeName(): TypeName {
     return when (this) {
-        is LsiPrimitiveType -> kind.toJavaTypeName()
+        is LsiPrimitiveType -> {
+            val primitiveTypeName = kind.toJavaTypeName()
+            if (boxed) primitiveTypeName.box() else primitiveTypeName
+        }
         is LsiDeclaredType -> {
             val rawType = ClassName.bestGuess(declarationId.requireTypeQualifiedName())
             if (arguments.isEmpty()) {

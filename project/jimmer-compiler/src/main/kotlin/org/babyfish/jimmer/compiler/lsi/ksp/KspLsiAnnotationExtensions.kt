@@ -7,6 +7,8 @@ import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSValueArgument
+import com.google.devtools.ksp.symbol.NonExistLocation
+import com.google.devtools.ksp.symbol.Origin
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
@@ -23,15 +25,14 @@ fun KSAnnotation.toLsiAnnotation(
 
 internal class KspLsiAnnotationContext(
     resolver: Resolver,
+    private val typeContext: KspLsiTypeContext = KspLsiTypeContext(resolver),
 ) {
-
-    private val typeContext = KspLsiTypeContext(resolver)
 
     fun toLsiAnnotations(
         annotations: Sequence<KSAnnotation>,
-        useSiteTarget: LsiAnnotationUseSiteTarget,
+        useSiteTarget: LsiAnnotationUseSiteTarget?,
     ): List<LsiAnnotation> {
-        return annotations.map { annotation ->
+        return annotations.filterNot(KSAnnotation::isUnresolvedKotlinCompilerTypeAnnotation).map { annotation ->
             toLsiAnnotation(annotation, useSiteTarget)
         }.toList()
     }
@@ -40,9 +41,15 @@ internal class KspLsiAnnotationContext(
         annotation: KSAnnotation,
         useSiteTarget: LsiAnnotationUseSiteTarget?,
     ): LsiAnnotation {
-        val annotationType = annotation.annotationType.resolve().declaration
+        val resolvedAnnotationType = annotation.annotationType.resolve()
+        val annotationType = resolvedAnnotationType.declaration
         val qualifiedName = requireNotNull(annotationType.qualifiedName?.asString()) {
-            "KSP annotation type must have a qualified name"
+            "KSP annotation type must have a qualified name: " +
+                "shortName=${annotation.shortName.asString()}, " +
+                "resolvedType=$resolvedAnnotationType, " +
+                "declaration=${annotationType.simpleName.asString()}, " +
+                "origin=${annotation.origin}, " +
+                "location=${annotation.location}"
         }
         val defaultArguments = annotation.defaultArguments.associateBy(KSValueArgument::argumentName)
         val explicitArguments = annotation.arguments.associateBy(KSValueArgument::argumentName)
@@ -123,6 +130,14 @@ internal class KspLsiAnnotationContext(
     }
 }
 
+private fun KSAnnotation.isUnresolvedKotlinCompilerTypeAnnotation(): Boolean {
+    val type = annotationType.resolve()
+    return type.isError &&
+        origin == Origin.KOTLIN_LIB &&
+        location == NonExistLocation &&
+        shortName.asString() in UNRESOLVED_KOTLIN_COMPILER_TYPE_ANNOTATIONS
+}
+
 private fun KSValueArgument.argumentName(): String {
     return requireNotNull(name?.asString()) { "KSP annotation argument must have a name" }
 }
@@ -140,3 +155,7 @@ private fun AnnotationUseSiteTarget.toLsiUseSiteTarget(): LsiAnnotationUseSiteTa
         AnnotationUseSiteTarget.DELEGATE -> LsiAnnotationUseSiteTarget.DELEGATE
     }
 }
+
+private val UNRESOLVED_KOTLIN_COMPILER_TYPE_ANNOTATIONS = setOf(
+    "ExtensionFunctionType",
+)

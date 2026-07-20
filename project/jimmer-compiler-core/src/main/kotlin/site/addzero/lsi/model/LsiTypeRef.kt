@@ -18,6 +18,8 @@ enum class LsiVariance {
 
 sealed interface LsiTypeRef {
     val nullability: LsiNullability
+
+    val annotations: List<LsiAnnotation>
 }
 
 data class LsiTypeArgument(
@@ -47,12 +49,14 @@ data class LsiTypeArgument(
 data class LsiDeclaredType(
     val declarationId: LsiSymbolId,
     val arguments: List<LsiTypeArgument> = emptyList(),
-    override val nullability: LsiNullability = LsiNullability.NON_NULL
+    override val nullability: LsiNullability = LsiNullability.NON_NULL,
+    override val annotations: List<LsiAnnotation> = emptyList(),
 ) : LsiTypeRef
 
 data class LsiTypeParameterRef(
     val parameterId: LsiSymbolId,
-    override val nullability: LsiNullability = LsiNullability.UNKNOWN
+    override val nullability: LsiNullability = LsiNullability.UNKNOWN,
+    override val annotations: List<LsiAnnotation> = emptyList(),
 ) : LsiTypeRef
 
 enum class LsiPrimitiveKind {
@@ -70,12 +74,15 @@ enum class LsiPrimitiveKind {
 
 data class LsiPrimitiveType(
     val kind: LsiPrimitiveKind,
-    override val nullability: LsiNullability = LsiNullability.NON_NULL
+    override val nullability: LsiNullability = LsiNullability.NON_NULL,
+    override val annotations: List<LsiAnnotation> = emptyList(),
+    val boxed: Boolean = false,
 ) : LsiTypeRef
 
 data class LsiArrayType(
     val elementType: LsiTypeRef,
-    override val nullability: LsiNullability = LsiNullability.NON_NULL
+    override val nullability: LsiNullability = LsiNullability.NON_NULL,
+    override val annotations: List<LsiAnnotation> = emptyList(),
 ) : LsiTypeRef
 
 /**
@@ -83,7 +90,8 @@ data class LsiArrayType(
  */
 data class LsiUnresolvedType(
     val displayName: String,
-    override val nullability: LsiNullability = LsiNullability.UNKNOWN
+    override val nullability: LsiNullability = LsiNullability.UNKNOWN,
+    override val annotations: List<LsiAnnotation> = emptyList(),
 ) : LsiTypeRef {
 
     init {
@@ -126,7 +134,7 @@ fun LsiTypeRef.toAnnotationMemberType(): LsiTypeRef {
 }
 
 /**
- * 提供不依赖平台类型对象的确定性类型签名。
+ * 提供不依赖平台类型对象的确定性类型签名，类型使用注解不参与符号标识。
  */
 fun LsiTypeRef.stableSignature(): String {
     val base = when (this) {
@@ -139,7 +147,13 @@ fun LsiTypeRef.stableSignature(): String {
             }
         }
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
-        is LsiPrimitiveType -> "primitive:${kind.name.lowercase()}"
+        is LsiPrimitiveType -> buildString {
+            append("primitive:")
+            append(kind.name.lowercase())
+            if (boxed) {
+                append(":boxed")
+            }
+        }
         is LsiArrayType -> "array:${elementType.stableSignature()}"
         is LsiUnresolvedType -> "unresolved:$displayName"
     }

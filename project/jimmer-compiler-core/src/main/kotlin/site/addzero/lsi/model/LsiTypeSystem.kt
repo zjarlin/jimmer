@@ -48,7 +48,7 @@ class LsiTypeSystem(
             )
             is LsiTypeParameterRef -> {
                 val replacement = substitutions[type.parameterId]?.type ?: return type
-                replacement.withUseSiteNullability(type.nullability)
+                replacement.withUseSiteMetadata(type.nullability, type.annotations)
             }
             is LsiArrayType -> type.copy(
                 elementType = substitute(type.elementType, substitutions),
@@ -271,8 +271,9 @@ fun mergeAnnotations(
     return declared + inherited.filter { annotation -> annotation.type !in declaredTypes }
 }
 
-private fun LsiTypeRef.withUseSiteNullability(
+private fun LsiTypeRef.withUseSiteMetadata(
     useSiteNullability: LsiNullability,
+    useSiteAnnotations: List<LsiAnnotation>,
 ): LsiTypeRef {
     val resolvedNullability = when (useSiteNullability) {
         LsiNullability.NULLABLE -> LsiNullability.NULLABLE
@@ -281,11 +282,27 @@ private fun LsiTypeRef.withUseSiteNullability(
         LsiNullability.UNKNOWN,
         -> nullability
     }
+    val resolvedAnnotations = mergeAnnotations(useSiteAnnotations, annotations)
     return when (this) {
-        is LsiDeclaredType -> copy(nullability = resolvedNullability)
-        is LsiTypeParameterRef -> copy(nullability = resolvedNullability)
-        is LsiPrimitiveType -> copy(nullability = resolvedNullability)
-        is LsiArrayType -> copy(nullability = resolvedNullability)
-        is LsiUnresolvedType -> copy(nullability = resolvedNullability)
+        is LsiDeclaredType -> copy(
+            nullability = resolvedNullability,
+            annotations = resolvedAnnotations,
+        )
+        is LsiTypeParameterRef -> copy(
+            nullability = resolvedNullability,
+            annotations = resolvedAnnotations,
+        )
+        is LsiPrimitiveType -> copy(
+            nullability = resolvedNullability,
+            annotations = resolvedAnnotations,
+        )
+        is LsiArrayType -> copy(
+            nullability = resolvedNullability,
+            annotations = resolvedAnnotations,
+        )
+        is LsiUnresolvedType -> copy(
+            nullability = resolvedNullability,
+            annotations = resolvedAnnotations,
+        )
     }
 }

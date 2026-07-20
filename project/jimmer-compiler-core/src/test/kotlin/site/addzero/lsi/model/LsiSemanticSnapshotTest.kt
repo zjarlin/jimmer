@@ -61,6 +61,68 @@ class LsiSemanticSnapshotTest {
     }
 
     @Test
+    fun `snapshots type use annotations without changing stable signatures`() {
+        val ownerId = LsiSymbolId.type("sample.Service")
+        val propertyId = LsiSymbolId.property(ownerId, "books")
+        val markerType = LsiSymbolId.type("sample.TypeUseMarker")
+        val elementType = LsiDeclaredType(
+            declarationId = LsiSymbolId.type("sample.Book"),
+            annotations = listOf(annotation(markerType, null)),
+        )
+        val annotatedType = LsiDeclaredType(
+            declarationId = LsiSymbolId.type("java.util.List"),
+            arguments = listOf(LsiTypeArgument.invariant(elementType)),
+        )
+        val plainType = annotatedType.copy(
+            arguments = listOf(
+                LsiTypeArgument.invariant(elementType.copy(annotations = emptyList())),
+            ),
+        )
+        val declarationAnnotation = annotation(
+            type = LsiSymbolId.type("sample.PropertyMarker"),
+            target = LsiAnnotationUseSiteTarget.METHOD,
+        )
+        val annotatedWorkspace = workspace(
+            ownerId = ownerId,
+            property = property(propertyId, ownerId, "books", annotatedType, declarationAnnotation),
+        )
+        val plainWorkspace = workspace(
+            ownerId = ownerId,
+            property = property(propertyId, ownerId, "books", plainType, declarationAnnotation),
+        )
+
+        assertEquals(plainType.stableSignature(), annotatedType.stableSignature())
+        assertNotEquals(plainWorkspace.toSemanticSnapshot(), annotatedWorkspace.toSemanticSnapshot())
+        assertTrue(
+            annotatedWorkspace.toSemanticSnapshot().contains(
+                "type:sample.Book:non_null@[type:sample.TypeUseMarker(value=EXPLICIT:string:1)]",
+            ),
+        )
+    }
+
+    @Test
+    fun `boxed primitive representation contributes to stable and semantic signatures`() {
+        val ownerId = LsiSymbolId.type("sample.Service")
+        val propertyId = LsiSymbolId.property(ownerId, "count")
+        val rawType = LsiPrimitiveType(LsiPrimitiveKind.INT)
+        val boxedType = rawType.copy(boxed = true)
+
+        assertNotEquals(rawType.stableSignature(), boxedType.stableSignature())
+        assertTrue(
+            workspace(
+                ownerId = ownerId,
+                property = property(
+                    propertyId,
+                    ownerId,
+                    "count",
+                    boxedType,
+                    annotation(LsiSymbolId.type("sample.Marker"), null),
+                ),
+            ).toSemanticSnapshot().contains("primitive:int:boxed:non_null"),
+        )
+    }
+
+    @Test
     fun `resolves transitive originating sources`() {
         val generatedTypeId = LsiSymbolId.type("sample.Generated")
         val sourceTypeId = LsiSymbolId.type("sample.Source")
@@ -319,7 +381,7 @@ class LsiSemanticSnapshotTest {
 
     private fun annotation(
         type: LsiSymbolId,
-        target: LsiAnnotationUseSiteTarget,
+        target: LsiAnnotationUseSiteTarget?,
     ): LsiAnnotation {
         return LsiAnnotation(
             type = type,

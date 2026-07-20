@@ -241,10 +241,12 @@ internal class KspLsiWorkspaceBuilder(
                 parameters = declaration.typeParameters,
             )
             val directSuperTypes = declaration.superTypes
-                .map { type -> type.resolve() }
-                .filterNot(KSType::isError)
                 .mapNotNull { superType ->
-                    typeContext.toLsiType(superType, typeParameterIds) as? site.addzero.lsi.model.LsiDeclaredType
+                    if (superType.resolve().isError) {
+                        null
+                    } else {
+                        typeContext.toLsiType(superType, typeParameterIds) as? site.addzero.lsi.model.LsiDeclaredType
+                    }
                 }
                 .filterNot { superType -> superType.declarationId == typeId }
                 .distinct()
@@ -292,11 +294,14 @@ internal class KspLsiWorkspaceBuilder(
         }
         val typeId = LsiSymbolId.type(qualifiedName)
         val declaredProperties = typeDeclaration.getDeclaredProperties().toList()
-        val kotlinProperties = declaredProperties
-            .filterNot { property -> property.origin == Origin.JAVA || property.origin == Origin.JAVA_LIB }
-            .map { property -> property.toLsiProperty(typeDeclaration) }
+        val javaOwner = typeDeclaration.isLsiJavaDeclaration()
+        val kotlinProperties = if (javaOwner) {
+            emptyList()
+        } else {
+            declaredProperties.map { property -> property.toLsiProperty(typeDeclaration) }
+        }
         val fields = declaredProperties
-            .filter(KSPropertyDeclaration::isLsiJavaField)
+            .filter { field -> field.isLsiJavaField(javaOwner) }
             .map { field -> field.toLsiField(typeId) }
         val declaredFunctions = typeDeclaration.getDeclaredFunctions()
             .filterNot(KSFunctionDeclaration::isConstructor)
@@ -386,7 +391,7 @@ internal class KspLsiWorkspaceBuilder(
             modality = typeDeclaration.toLsiModality(),
             typeParameters = typeParameters,
             superTypes = typeDeclaration.superTypes
-                .map { type -> typeContext.toLsiType(type.resolve(), typeParameterIds) }
+                .map { type -> typeContext.toLsiType(type, typeParameterIds) }
                 .filterNot { superType ->
                     superType is site.addzero.lsi.model.LsiDeclaredType && superType.declarationId == typeId
                 }
@@ -425,7 +430,7 @@ internal class KspLsiWorkspaceBuilder(
             val parameters = constructor?.parameters.orEmpty()
             if (parameters.isNotEmpty()) {
                 return parameters.map { parameter ->
-                    val parameterType = typeContext.toLsiType(parameter.type.resolve(), typeParameterIds)
+                    val parameterType = typeContext.toLsiType(parameter.type, typeParameterIds)
                     LsiAnnotationMember(
                         name = parameter.name?.asString()?.takeIf(String::isNotBlank)
                             ?: error("Kotlin annotation member must have a name"),
@@ -446,7 +451,7 @@ internal class KspLsiWorkspaceBuilder(
             .map { member ->
                 LsiAnnotationMember(
                     name = member.simpleName.asString(),
-                    type = typeContext.toLsiType(member.type.resolve(), typeParameterIds).toAnnotationMemberType(),
+                    type = typeContext.toLsiType(member.type, typeParameterIds).toAnnotationMemberType(),
                 )
             }
             .toList()
@@ -459,7 +464,7 @@ internal class KspLsiWorkspaceBuilder(
                 val returnType = member.returnType ?: return@mapNotNull null
                 LsiAnnotationMember(
                     name = member.simpleName.asString(),
-                    type = typeContext.toLsiType(returnType.resolve(), typeParameterIds).toAnnotationMemberType(),
+                    type = typeContext.toLsiType(returnType, typeParameterIds).toAnnotationMemberType(),
                 )
             }
             .toList()
@@ -474,7 +479,7 @@ internal class KspLsiWorkspaceBuilder(
             id = LsiSymbolId.property(ownerId, propertyName),
             name = propertyName,
             ownerId = ownerId,
-            type = typeContext.toLsiType(type.resolve(), typeParameterIds),
+            type = typeContext.toLsiType(type, typeParameterIds),
             getterName = propertyName,
             mutable = isMutable,
             static = Modifier.JAVA_STATIC in modifiers,
@@ -503,7 +508,7 @@ internal class KspLsiWorkspaceBuilder(
             id = LsiSymbolId.field(ownerId, simpleName.asString()),
             name = simpleName.asString(),
             ownerId = ownerId,
-            type = typeContext.toLsiType(type.resolve(), typeParameterIds),
+            type = typeContext.toLsiType(type, typeParameterIds),
             mutable = isMutable,
             static = Modifier.JAVA_STATIC in modifiers,
             visibility = toLsiVisibility(),
@@ -519,12 +524,12 @@ internal class KspLsiWorkspaceBuilder(
         val ownerId = owner.toLsiTypeId()
         val propertyName = toLsiJavaPropertyName(frontendOptions)
         val typeParameterIds = typeContext.typeParameterIdsInScope(this)
-        val resolvedReturnType = requireNotNull(returnType).resolve()
+        val returnType = requireNotNull(returnType)
         return LsiProperty(
             id = LsiSymbolId.property(ownerId, propertyName),
             name = propertyName,
             ownerId = ownerId,
-            type = typeContext.toLsiType(resolvedReturnType, typeParameterIds),
+            type = typeContext.toLsiType(returnType, typeParameterIds),
             getterName = simpleName.asString(),
             static = false,
             modality = toLsiModality(),
@@ -554,11 +559,11 @@ internal class KspLsiWorkspaceBuilder(
             id = functionId,
             name = simpleName.asString(),
             ownerId = ownerId,
-            returnType = returnType?.resolve()?.let { returnType ->
+            returnType = returnType?.let { returnType ->
                 typeContext.toLsiType(returnType, typeParameterIds)
             } ?: LsiPrimitiveType(LsiPrimitiveKind.UNIT),
             parameters = lsiParameters,
-            receiverType = extensionReceiver?.resolve()?.let { receiverType ->
+            receiverType = extensionReceiver?.let { receiverType ->
                 typeContext.toLsiType(receiverType, typeParameterIds)
             },
             suspending = Modifier.SUSPEND in modifiers,
@@ -630,7 +635,7 @@ internal class KspLsiWorkspaceBuilder(
             name = parameterName,
             callableId = callableId,
             index = index,
-            type = typeContext.toLsiType(type.resolve(), typeParameterIds),
+            type = typeContext.toLsiType(type, typeParameterIds),
             vararg = isVararg,
             hasDefault = hasDefault,
             sourceDocumentation = context.sourceDocumentation(this),
@@ -782,8 +787,12 @@ private fun LsiTypeDeclaration.requiresFullExternalDeclaration(): Boolean {
         annotations.any { annotation -> annotation.type in JIMMER_MANAGED_TYPE_ANNOTATIONS }
 }
 
-private fun KSPropertyDeclaration.isLsiJavaField(): Boolean {
-    return origin in setOf(Origin.JAVA, Origin.JAVA_LIB) && getter == null
+private fun KSClassDeclaration.isLsiJavaDeclaration(): Boolean {
+    return origin == Origin.JAVA || origin == Origin.JAVA_LIB
+}
+
+private fun KSPropertyDeclaration.isLsiJavaField(javaOwner: Boolean): Boolean {
+    return javaOwner && getter == null
 }
 
 private val JIMMER_MANAGED_TYPE_ANNOTATIONS = setOf(

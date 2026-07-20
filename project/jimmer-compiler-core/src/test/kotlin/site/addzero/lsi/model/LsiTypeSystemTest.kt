@@ -51,6 +51,52 @@ class LsiTypeSystemTest {
     }
 
     @Test
+    fun `preserves type parameter use annotations during substitution`() {
+        val baseId = LsiSymbolId.type("sample.Base")
+        val entityId = LsiSymbolId.type("sample.Entity")
+        val parameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val valueId = LsiSymbolId.property(baseId, "value")
+        val useSiteMarker = annotation(LsiSymbolId.type("sample.UseSiteMarker"), "use")
+        val replacementMarker = annotation(LsiSymbolId.type("sample.ReplacementMarker"), "replacement")
+        val base = type(
+            id = baseId,
+            parameters = listOf(LsiTypeParameter(parameterId, "T")),
+            memberIds = listOf(valueId),
+        )
+        val value = property(
+            id = valueId,
+            ownerId = baseId,
+            type = LsiTypeParameterRef(
+                parameterId = parameterId,
+                annotations = listOf(useSiteMarker),
+            ),
+        )
+        val entity = type(
+            id = entityId,
+            superTypes = listOf(
+                LsiDeclaredType(
+                    declarationId = baseId,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(
+                            LsiDeclaredType(
+                                declarationId = LsiSymbolId.type("java.lang.String"),
+                                annotations = listOf(replacementMarker),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val typeSystem = LsiTypeSystem(LsiWorkspace(declarations = listOf(base, value, entity)))
+
+        val resolvedType = typeSystem.effectiveProperties(entityId).single().type
+        assertEquals(
+            listOf(useSiteMarker, replacementMarker),
+            resolvedType.annotations,
+        )
+    }
+
+    @Test
     fun `merges overridden annotations by qualified type id`() {
         val baseId = LsiSymbolId.type("sample.Base")
         val entityId = LsiSymbolId.type("sample.Entity")

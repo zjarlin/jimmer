@@ -26,7 +26,7 @@ fun AnnotationMirror.toLsiAnnotation(
 
 internal fun AptLsiContext.toLsiAnnotations(
     annotations: List<AnnotationMirror>,
-    useSiteTarget: LsiAnnotationUseSiteTarget,
+    useSiteTarget: LsiAnnotationUseSiteTarget?,
 ): List<LsiAnnotation> {
     return annotations.map { annotation ->
         toLsiAnnotation(annotation, useSiteTarget)

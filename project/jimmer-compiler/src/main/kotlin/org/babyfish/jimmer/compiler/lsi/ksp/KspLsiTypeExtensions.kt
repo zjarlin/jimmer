@@ -1,8 +1,11 @@
 package org.babyfish.jimmer.compiler.lsi.ksp
 
 import com.google.devtools.ksp.isConstructor
+import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSClassifierReference
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
@@ -16,6 +19,7 @@ import com.google.devtools.ksp.symbol.Origin
 import com.google.devtools.ksp.symbol.Variance
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
@@ -27,11 +31,12 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
+import site.addzero.lsi.model.mergeAnnotations
 
 fun KSTypeReference.toLsiType(
     resolver: Resolver,
 ): LsiTypeRef {
-    return KspLsiTypeContext(resolver).toLsiType(resolve())
+    return KspLsiTypeContext(resolver).toLsiType(this)
 }
 
 fun KSType.toLsiType(
@@ -44,24 +49,62 @@ internal class KspLsiTypeContext(
     val resolver: Resolver,
 ) {
 
+    private val annotationContext by lazy(LazyThreadSafetyMode.NONE) {
+        KspLsiAnnotationContext(resolver, this)
+    }
+
+    fun toLsiType(
+        reference: KSTypeReference,
+        typeParameterIds: Map<KSTypeParameter, LsiSymbolId> = emptyMap(),
+    ): LsiTypeRef {
+        val type = reference.resolve()
+        val annotations = mergeAnnotations(
+            declared = toLsiTypeAnnotations(reference.annotations),
+            inherited = toLsiTypeAnnotations(type.annotations),
+        )
+        return toLsiType(
+            type = type,
+            typeParameterIds = typeParameterIds,
+            annotations = annotations,
+            primitiveBoxed = reference.toLsiPrimitiveBoxedHint(),
+        )
+    }
+
     fun toLsiType(
         type: KSType,
         typeParameterIds: Map<KSTypeParameter, LsiSymbolId> = emptyMap(),
     ): LsiTypeRef {
+        return toLsiType(type, typeParameterIds, toLsiTypeAnnotations(type.annotations))
+    }
+
+    private fun toLsiType(
+        type: KSType,
+        typeParameterIds: Map<KSTypeParameter, LsiSymbolId>,
+        annotations: List<LsiAnnotation>,
+        primitiveBoxed: Boolean? = null,
+    ): LsiTypeRef {
         if (type.isError) {
-            return LsiUnresolvedType(type.toString().ifBlank { "<error>" })
+            return LsiUnresolvedType(
+                displayName = type.toString().ifBlank { "<error>" },
+                annotations = annotations,
+            )
         }
         val declaration = type.declaration
         if (declaration is KSTypeParameter) {
-            return toLsiTypeParameterRef(type, declaration, typeParameterIds)
+            return toLsiTypeParameterRef(type, declaration, typeParameterIds, annotations)
         }
         val qualifiedName = declaration.qualifiedName?.asString()
-            ?: return LsiUnresolvedType(type.toString().ifBlank { declaration.simpleName.asString() })
+            ?: return LsiUnresolvedType(
+                displayName = type.toString().ifBlank { declaration.simpleName.asString() },
+                annotations = annotations,
+            )
         val primitiveKind = qualifiedName.toLsiPrimitiveKind()
         if (primitiveKind != null) {
             return LsiPrimitiveType(
                 kind = primitiveKind,
                 nullability = type.nullability.toLsiNullability(),
+                annotations = annotations,
+                boxed = primitiveBoxed ?: (type.nullability != Nullability.NOT_NULL),
             )
         }
         val primitiveArrayKind = qualifiedName.toLsiPrimitiveArrayKind()
@@ -69,6 +112,7 @@ internal class KspLsiTypeContext(
             return LsiArrayType(
                 elementType = LsiPrimitiveType(primitiveArrayKind),
                 nullability = type.nullability.toLsiNullability(),
+                annotations = annotations,
             )
         }
         if (qualifiedName == "kotlin.Array") {
@@ -77,6 +121,7 @@ internal class KspLsiTypeContext(
             return LsiArrayType(
                 elementType = elementType,
                 nullability = type.nullability.toLsiNullability(),
+                annotations = annotations,
             )
         }
         return LsiDeclaredType(
@@ -85,6 +130,7 @@ internal class KspLsiTypeContext(
                 argument.toLsiTypeArgument(typeParameterIds)
             },
             nullability = type.nullability.toLsiNullability(),
+            annotations = annotations,
         )
     }
 
@@ -99,8 +145,7 @@ internal class KspLsiTypeContext(
         val allIds = inheritedIds + ownIds
         val lsiParameters = parameters.map { parameter ->
             val bounds = parameter.bounds
-                .map(KSTypeReference::resolve)
-                .filterNot(::isImplicitAnyBound)
+                .filterNot { bound -> isImplicitAnyBound(bound.resolve()) }
                 .map { bound -> toLsiType(bound, allIds) }
                 .toList()
             LsiTypeParameter(
@@ -209,7 +254,10 @@ internal class KspLsiTypeContext(
         if (variance == Variance.STAR || type == null) {
             return LsiTypeArgument.STAR
         }
-        val lsiType = toLsiType(requireNotNull(type).resolve(), typeParameterIds)
+        val reference = requireNotNull(type)
+        val argumentAnnotations = toLsiTypeAnnotations(annotations)
+        val lsiType = toLsiType(reference, typeParameterIds)
+            .withAdditionalAnnotations(argumentAnnotations)
         return when (variance) {
             Variance.INVARIANT -> LsiTypeArgument.invariant(lsiType)
             Variance.COVARIANT -> LsiTypeArgument.output(lsiType)
@@ -222,15 +270,20 @@ internal class KspLsiTypeContext(
         type: KSType,
         parameter: KSTypeParameter,
         typeParameterIds: Map<KSTypeParameter, LsiSymbolId>,
+        annotations: List<LsiAnnotation>,
     ): LsiTypeRef {
         val parameterId = typeParameterIds[parameter] ?: parameter.toLsiTypeParameterId()
         return if (parameterId != null) {
             LsiTypeParameterRef(
                 parameterId = parameterId,
                 nullability = type.nullability.toLsiNullability(),
+                annotations = annotations,
             )
         } else {
-            LsiUnresolvedType(type.toString().ifBlank { parameter.name.asString() })
+            LsiUnresolvedType(
+                displayName = type.toString().ifBlank { parameter.name.asString() },
+                annotations = annotations,
+            )
         }
     }
 
@@ -254,10 +307,48 @@ internal class KspLsiTypeContext(
     private fun isImplicitAnyBound(type: KSType): Boolean {
         return type.declaration.qualifiedName?.asString() in IMPLICIT_ANY_NAMES
     }
+
+    private fun toLsiTypeAnnotations(
+        annotations: Sequence<KSAnnotation>,
+    ): List<LsiAnnotation> {
+        return annotationContext.toLsiAnnotations(annotations, null)
+    }
+
+    private fun KSTypeReference.toLsiPrimitiveBoxedHint(): Boolean? {
+        if (origin != Origin.JAVA && origin != Origin.JAVA_LIB) {
+            return null
+        }
+        val referencedName = (element as? KSClassifierReference)
+            ?.referencedName()
+            ?.substringAfterLast('.')
+            ?: return null
+        return when (referencedName) {
+            "boolean", "byte", "short", "int", "long", "char", "float", "double", "void" -> false
+            "Boolean", "Byte", "Short", "Integer", "Long", "Character", "Float", "Double", "Void" -> true
+            else -> null
+        }
+    }
+}
+
+private fun LsiTypeRef.withAdditionalAnnotations(
+    additionalAnnotations: List<LsiAnnotation>,
+): LsiTypeRef {
+    if (additionalAnnotations.isEmpty()) {
+        return this
+    }
+    val mergedAnnotations = mergeAnnotations(additionalAnnotations, annotations)
+    return when (this) {
+        is LsiDeclaredType -> copy(annotations = mergedAnnotations)
+        is LsiTypeParameterRef -> copy(annotations = mergedAnnotations)
+        is LsiPrimitiveType -> copy(annotations = mergedAnnotations)
+        is LsiArrayType -> copy(annotations = mergedAnnotations)
+        is LsiUnresolvedType -> copy(annotations = mergedAnnotations)
+    }
 }
 
 internal fun KSFunctionDeclaration.isLsiJavaPropertyGetter(): Boolean {
-    if (origin != Origin.JAVA && origin != Origin.JAVA_LIB) {
+    val owner = parentDeclaration as? KSClassDeclaration ?: return false
+    if (owner.origin != Origin.JAVA && owner.origin != Origin.JAVA_LIB) {
         return false
     }
     if (
@@ -270,7 +361,51 @@ internal fun KSFunctionDeclaration.isLsiJavaPropertyGetter(): Boolean {
         return false
     }
     val resolvedReturnType = returnType?.resolve() ?: return false
-    return resolvedReturnType.declaration.qualifiedName?.asString() != "kotlin.Unit"
+    if (resolvedReturnType.declaration.qualifiedName?.asString() == "kotlin.Unit") {
+        return false
+    }
+    val methodName = simpleName.asString()
+    if (
+        methodName.startsWith("get") &&
+        methodName.length > 3 &&
+        methodName[3].isUpperCase()
+    ) {
+        val booleanGetterName = "is" + methodName.substring(3)
+        if (owner.getDeclaredFunctions().any { method ->
+                method.simpleName.asString() == booleanGetterName &&
+                    method.parameters.isEmpty() &&
+                    method.typeParameters.isEmpty() &&
+                    method.returnType?.resolve()?.let { returnType ->
+                        !returnType.isError && returnType.isLsiBooleanType()
+                    } == true
+            }
+        ) {
+            return false
+        }
+        return true
+    }
+    if (
+        methodName.startsWith("is") &&
+        methodName.length > 2 &&
+        methodName[2].isUpperCase() &&
+        resolvedReturnType.isLsiBooleanType()
+    ) {
+        return true
+    }
+    if (Modifier.PRIVATE in modifiers) {
+        return false
+    }
+    return owner.classKind == com.google.devtools.ksp.symbol.ClassKind.INTERFACE ||
+        owner.classKind == com.google.devtools.ksp.symbol.ClassKind.ANNOTATION_CLASS ||
+        owner.isLsiJavaRecord()
+}
+
+private fun KSClassDeclaration.isLsiJavaRecord(): Boolean {
+    return superTypes.any { superType ->
+        val resolvedType = superType.resolve()
+        !resolvedType.isError &&
+            resolvedType.declaration.qualifiedName?.asString() == "java.lang.Record"
+    }
 }
 
 internal fun KSFunctionDeclaration.toLsiJavaPropertyName(
