@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.lsi.ksp
 
 import com.google.devtools.ksp.getClassDeclarationByName
+import com.google.devtools.ksp.isAbstract
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.FileLocation
 import com.google.devtools.ksp.symbol.KSAnnotation
@@ -200,6 +201,8 @@ internal fun KSDeclaration.toLsiVisibility(): LsiVisibility {
 internal fun KSDeclaration.toLsiModality(): LsiModality {
     return when {
         Modifier.SEALED in modifiers -> LsiModality.SEALED
+        this is KSClassDeclaration && isAbstract() -> LsiModality.ABSTRACT
+        this is KSPropertyDeclaration && isAbstract() -> LsiModality.ABSTRACT
         Modifier.ABSTRACT in modifiers -> LsiModality.ABSTRACT
         Modifier.OPEN in modifiers -> LsiModality.OPEN
         Modifier.FINAL in modifiers || Modifier.PRIVATE in modifiers -> LsiModality.FINAL

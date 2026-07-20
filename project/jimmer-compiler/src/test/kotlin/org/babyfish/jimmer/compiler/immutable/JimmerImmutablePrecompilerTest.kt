@@ -230,6 +230,68 @@ class JimmerImmutablePrecompilerTest {
     }
 
     @Test
+    fun `generic mapped superclass formula dependencies use owner specific inherited property ids`() {
+        val baseId = LsiSymbolId.type("demo.GenericFormulaBase")
+        val childId = LsiSymbolId.type("demo.GenericFormulaChild")
+        val parameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val valueProp = property(
+            ownerId = baseId,
+            name = "value",
+            type = LsiTypeParameterRef(parameterId, LsiNullability.NON_NULL),
+        )
+        val displayProp = property(
+            ownerId = baseId,
+            name = "display",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(formula(dependencies = listOf("value"))),
+            modality = LsiModality.FINAL,
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        qualifiedName = baseId.requireTypeQualifiedName(),
+                        marker = MAPPED_SUPERCLASS,
+                        memberIds = listOf(valueProp.id, displayProp.id),
+                        typeParameters = listOf(LsiTypeParameter(parameterId, "T")),
+                    ),
+                    valueProp,
+                    displayProp,
+                    type(
+                        qualifiedName = childId.requireTypeQualifiedName(),
+                        marker = ENTITY,
+                        memberIds = emptyList(),
+                        superTypes = listOf(
+                            LsiDeclaredType(
+                                declarationId = baseId,
+                                arguments = listOf(
+                                    LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE))
+                                ),
+                            )
+                        ),
+                    ),
+                )
+            ),
+            setOf(childId),
+        )
+
+        val baseFormula = schema.typesById.getValue(baseId).props.single { prop -> prop.name == "display" }
+        val childFormula = schema.typesById.getValue(childId).props.single { prop -> prop.name == "display" }
+        assertEquals(
+            listOf(JimmerFormulaDependency(listOf(valueProp.id))),
+            baseFormula.formulaDependencies,
+        )
+        assertEquals(
+            listOf(
+                JimmerFormulaDependency(
+                    listOf(LsiSymbolId.property(childId, "value"))
+                )
+            ),
+            childFormula.formulaDependencies,
+        )
+    }
+
+    @Test
     fun `rejects named across-microservice mapped superclass`() {
         val workspace = LsiWorkspace(
             declarations = listOf(
@@ -2139,18 +2201,240 @@ class JimmerImmutablePrecompilerTest {
                     hierarchyTypes = hierarchyTypes,
                 )
             )
-            assertFalse(scalarSchema.types.single().props.single().list)
+            assertFalse(scalarSchema.types.single().props.single { prop -> prop.name == "values" }.list)
 
             val formulaSchema = JimmerImmutablePrecompiler().compile(
                 collectionPropertyWorkspace(
                     collectionType = collectionType,
-                    annotations = listOf(formula(dependencies = listOf("name"))),
+                    annotations = listOf(formula(dependencies = listOf("source"))),
                     modality = LsiModality.FINAL,
                     hierarchyTypes = hierarchyTypes,
                 )
             )
-            assertFalse(formulaSchema.types.single().props.single().list)
+            assertFalse(formulaSchema.types.single().props.single { prop -> prop.name == "values" }.list)
         }
+    }
+
+    @Test
+    fun `resolves stable formula dependency paths across associations and embedded properties`() {
+        val addressTypeId = LsiSymbolId.type("demo.Address")
+        val departmentTypeId = LsiSymbolId.type("demo.Department")
+        val employeeTypeId = LsiSymbolId.type("demo.Employee")
+        val cityProp = property(addressTypeId, "city", LsiDeclaredType(STRING_TYPE))
+        val departmentNameProp = property(departmentTypeId, "name", LsiDeclaredType(STRING_TYPE))
+        val addressProp = property(departmentTypeId, "address", LsiDeclaredType(addressTypeId))
+        val departmentProp = property(
+            employeeTypeId,
+            "department",
+            LsiDeclaredType(departmentTypeId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val displayNameProp = property(
+            employeeTypeId,
+            "displayName",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                formula(
+                    dependencies = listOf(
+                        "department.name",
+                        "department.address.city",
+                        "department.name",
+                    )
+                )
+            ),
+            modality = LsiModality.FINAL,
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.Address", EMBEDDABLE, listOf(cityProp.id)),
+                    cityProp,
+                    type(
+                        "demo.Department",
+                        ENTITY,
+                        listOf(departmentNameProp.id, addressProp.id),
+                    ),
+                    departmentNameProp,
+                    addressProp,
+                    type(
+                        "demo.Employee",
+                        ENTITY,
+                        listOf(departmentProp.id, displayNameProp.id),
+                    ),
+                    departmentProp,
+                    displayNameProp,
+                )
+            )
+        )
+
+        val formulaProp = schema.typesById.getValue(employeeTypeId)
+            .props
+            .single { prop -> prop.name == "displayName" }
+        assertEquals(
+            listOf(
+                JimmerFormulaDependency(
+                    listOf(
+                        departmentProp.id,
+                        departmentNameProp.id,
+                    )
+                ),
+                JimmerFormulaDependency(
+                    listOf(
+                        departmentProp.id,
+                        addressProp.id,
+                        cityProp.id,
+                    )
+                ),
+            ),
+            formulaProp.formulaDependencies,
+        )
+        assertEquals(
+            formulaProp.formulaDependencies.map(JimmerFormulaDependency::propIds),
+            schema.formulaDependencyPathsByPropId.getValue(formulaProp.id),
+        )
+        assertEquals(
+            listOf(formulaProp.id),
+            schema.dependentFormulaPropIdsByPropId.getValue(departmentProp.id),
+        )
+        assertEquals(
+            listOf(formulaProp.id),
+            schema.dependentFormulaPropIdsByPropId.getValue(cityProp.id),
+        )
+        assertTrue(schema.normalizedSnapshot().contains("formula-dependency"))
+    }
+
+    @Test
+    fun `rejects unresolved and scalar intermediate formula dependency segments`() {
+        val entityTypeId = LsiSymbolId.type("demo.FormulaEntity")
+        val nameProp = property(entityTypeId, "name", LsiDeclaredType(STRING_TYPE))
+
+        fun compile(dependency: String) {
+            val formulaProp = property(
+                entityTypeId,
+                "displayName",
+                LsiDeclaredType(STRING_TYPE),
+                listOf(formula(dependencies = listOf(dependency))),
+                modality = LsiModality.FINAL,
+            )
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.FormulaEntity", ENTITY, listOf(nameProp.id, formulaProp.id)),
+                        nameProp,
+                        formulaProp,
+                    )
+                )
+            )
+        }
+
+        val missing = assertFailsWith<JimmerImmutablePrecompileException> {
+            compile("missing")
+        }
+        assertTrue(missing.message.orEmpty().contains("there is no property 'missing'"))
+
+        val scalarIntermediate = assertFailsWith<JimmerImmutablePrecompileException> {
+            compile("name.length")
+        }
+        assertTrue(scalarIntermediate.message.orEmpty().contains("neither an association nor an embedded property"))
+    }
+
+    @Test
+    fun `formula dependency paths participate in immutable fingerprints`() {
+        fun schema(dependency: String): JimmerImmutableSchema {
+            val entityTypeId = LsiSymbolId.type("demo.FingerprintFormulaEntity")
+            val firstProp = property(entityTypeId, "first", LsiDeclaredType(STRING_TYPE))
+            val secondProp = property(entityTypeId, "second", LsiDeclaredType(STRING_TYPE))
+            val formulaProp = property(
+                entityTypeId,
+                "display",
+                LsiDeclaredType(STRING_TYPE),
+                listOf(formula(dependencies = listOf(dependency))),
+                modality = LsiModality.FINAL,
+            )
+            return JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type(
+                            "demo.FingerprintFormulaEntity",
+                            ENTITY,
+                            listOf(firstProp.id, secondProp.id, formulaProp.id),
+                        ),
+                        firstProp,
+                        secondProp,
+                        formulaProp,
+                    )
+                )
+            )
+        }
+
+        assertNotEquals(schema("first").fingerprint(), schema("second").fingerprint())
+    }
+
+    @Test
+    fun `validates language sql and embeddable formula contracts`() {
+        fun compile(
+            marker: LsiSymbolId = ENTITY,
+            modality: LsiModality,
+            sql: String = "",
+            dependencies: List<String> = emptyList(),
+        ) {
+            val typeId = LsiSymbolId.type("demo.FormulaContract")
+            val sourceProp = property(typeId, "source", LsiDeclaredType(STRING_TYPE))
+            val formulaProp = property(
+                typeId,
+                "result",
+                LsiDeclaredType(STRING_TYPE),
+                listOf(formula(sql = sql, dependencies = dependencies)),
+                modality = modality,
+            )
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.FormulaContract", marker, listOf(sourceProp.id, formulaProp.id)),
+                        sourceProp,
+                        formulaProp,
+                    )
+                )
+            )
+        }
+
+        assertTrue(
+            assertFailsWith<JimmerImmutablePrecompileException> {
+                compile(modality = LsiModality.ABSTRACT)
+            }.message.orEmpty().contains("must specify sql")
+        )
+        assertTrue(
+            assertFailsWith<JimmerImmutablePrecompileException> {
+                compile(
+                    modality = LsiModality.ABSTRACT,
+                    sql = "SOURCE",
+                    dependencies = listOf("source"),
+                )
+            }.message.orEmpty().contains("cannot specify dependencies")
+        )
+        assertTrue(
+            assertFailsWith<JimmerImmutablePrecompileException> {
+                compile(modality = LsiModality.FINAL)
+            }.message.orEmpty().contains("must specify dependencies")
+        )
+        assertTrue(
+            assertFailsWith<JimmerImmutablePrecompileException> {
+                compile(
+                    modality = LsiModality.FINAL,
+                    sql = "SOURCE",
+                    dependencies = listOf("source"),
+                )
+            }.message.orEmpty().contains("cannot specify sql")
+        )
+        assertTrue(
+            assertFailsWith<JimmerImmutablePrecompileException> {
+                compile(
+                    marker = EMBEDDABLE,
+                    modality = LsiModality.ABSTRACT,
+                    sql = "SOURCE",
+                )
+            }.message.orEmpty().contains("cannot be declared in embeddable type")
+        )
     }
 
     @Test
@@ -2216,6 +2500,11 @@ class JimmerImmutablePrecompilerTest {
         hierarchyTypes: List<LsiTypeDeclaration>,
     ): LsiWorkspace {
         val entityId = LsiSymbolId.type("demo.CollectionEntity")
+        val sourceProp = property(
+            ownerId = entityId,
+            name = "source",
+            type = LsiDeclaredType(STRING_TYPE),
+        )
         val collectionProp = property(
             ownerId = entityId,
             name = "values",
@@ -2231,8 +2520,9 @@ class JimmerImmutablePrecompilerTest {
                 type(
                     qualifiedName = entityId.requireTypeQualifiedName(),
                     marker = ENTITY,
-                    memberIds = listOf(collectionProp.id),
+                    memberIds = listOf(sourceProp.id, collectionProp.id),
                 ),
+                sourceProp,
                 collectionProp,
             ) + hierarchyTypes,
         )

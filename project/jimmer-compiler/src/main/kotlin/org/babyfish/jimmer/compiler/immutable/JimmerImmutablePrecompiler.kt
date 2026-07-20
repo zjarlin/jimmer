@@ -83,8 +83,105 @@ class JimmerImmutablePrecompiler {
                 )
             }
             .sortedBy(JimmerImmutableType::id)
-        val types = resolveViews(preliminaryTypes)
+        val types = resolveFormulaDependencies(resolveViews(preliminaryTypes))
         return JimmerImmutableSchema(types)
+    }
+
+    private fun resolveFormulaDependencies(
+        types: List<JimmerImmutableType>,
+    ): List<JimmerImmutableType> {
+        val typesById = types.associateBy(JimmerImmutableType::id)
+        val propsByTypeAndName = types.associate { type ->
+            type.id to type.props.associateBy(JimmerImmutableProp::name)
+        }
+        return types.map { type ->
+            type.copy(
+                props = type.props.map { prop ->
+                    prop.copy(
+                        formulaDependencies = resolveFormulaDependencies(
+                            ownerType = type,
+                            formulaProp = prop,
+                            typesById = typesById,
+                            propsByTypeAndName = propsByTypeAndName,
+                        )
+                    )
+                }
+            )
+        }
+    }
+
+    private fun resolveFormulaDependencies(
+        ownerType: JimmerImmutableType,
+        formulaProp: JimmerImmutableProp,
+        typesById: Map<LsiSymbolId, JimmerImmutableType>,
+        propsByTypeAndName: Map<LsiSymbolId, Map<String, JimmerImmutableProp>>,
+    ): List<JimmerFormulaDependency> {
+        val formula = formulaProp.annotations.annotation(FORMULA_ANNOTATION) ?: return emptyList()
+        return formula.stringValues("dependencies", formulaProp.declarationId)
+            .map { dependency ->
+                resolveFormulaDependency(
+                    ownerType = ownerType,
+                    formulaProp = formulaProp,
+                    dependency = dependency,
+                    typesById = typesById,
+                    propsByTypeAndName = propsByTypeAndName,
+                )
+            }
+            .distinct()
+    }
+
+    private fun resolveFormulaDependency(
+        ownerType: JimmerImmutableType,
+        formulaProp: JimmerImmutableProp,
+        dependency: String,
+        typesById: Map<LsiSymbolId, JimmerImmutableType>,
+        propsByTypeAndName: Map<LsiSymbolId, Map<String, JimmerImmutableProp>>,
+    ): JimmerFormulaDependency {
+        var declaringType = ownerType
+        val propNames = dependency.split('.')
+        val propIds = propNames.mapIndexed { index, propName ->
+            val prop = propsByTypeAndName.getValue(declaringType.id)[propName]
+                ?: throw invalidFormulaDependency(
+                    formulaProp = formulaProp,
+                    dependency = dependency,
+                    message = "there is no property '$propName' in '${declaringType.qualifiedName}'",
+                )
+            if (index + 1 < propNames.size) {
+                if (!prop.association && !prop.embedded) {
+                    throw invalidFormulaDependency(
+                        formulaProp = formulaProp,
+                        dependency = dependency,
+                        message = "property '${prop.id.value}' is not the last segment but is neither an " +
+                            "association nor an embedded property",
+                    )
+                }
+                val targetTypeId = prop.targetTypeId
+                    ?: throw invalidFormulaDependency(
+                        formulaProp = formulaProp,
+                        dependency = dependency,
+                        message = "property '${prop.id.value}' has no concrete target type",
+                    )
+                declaringType = typesById[targetTypeId]
+                    ?: throw invalidFormulaDependency(
+                        formulaProp = formulaProp,
+                        dependency = dependency,
+                        message = "target type '${targetTypeId.value}' of property '${prop.id.value}' is unavailable",
+                    )
+            }
+            prop.id
+        }
+        return JimmerFormulaDependency(propIds)
+    }
+
+    private fun invalidFormulaDependency(
+        formulaProp: JimmerImmutableProp,
+        dependency: String,
+        message: String,
+    ): JimmerImmutablePrecompileException {
+        return JimmerImmutablePrecompileException(
+            declarationId = formulaProp.declarationId,
+            message = "Formula dependency '$dependency' of immutable property '${formulaProp.id.value}' " + message,
+        )
     }
 
     private fun resolveViews(
@@ -1214,7 +1311,11 @@ private fun LsiResolvedProperty.toImmutableProp(
     typeSystem: LsiTypeSystem,
 ): JimmerImmutableProp {
     val ownerKind = kindByTypeId.getValue(ownerTypeId)
+    val primaryAnnotation = primaryMappingAnnotation()
     val formulaKind = formulaKind()
+    validateFormulaContract(
+        ownerKind = ownerKind,
+    )
     val explicitScalar = annotations.any { annotation ->
         annotation.findAnnotation(SCALAR_ANNOTATIONS, workspace, linkedSetOf()) != null
     }
@@ -1236,7 +1337,6 @@ private fun LsiResolvedProperty.toImmutableProp(
     val association = associationKind != JimmerAssociationKind.NONE ||
         targetKind == JimmerImmutableTypeKind.ENTITY
     val nullable = nullable()
-    val primaryAnnotation = primaryMappingAnnotation()
     val primaryMapping = primaryAnnotation?.type.toPrimaryMapping()
         ?: if (association) JimmerImmutablePrimaryMapping.ASSOCIATION
         else JimmerImmutablePrimaryMapping.SCALAR
@@ -1308,6 +1408,47 @@ private fun LsiResolvedProperty.toImmutableProp(
         validations = validations(workspace),
         converter = converter(workspace, typeSystem, nullable, association),
     )
+}
+
+private fun LsiResolvedProperty.validateFormulaContract(
+    ownerKind: JimmerImmutableTypeKind,
+) {
+    val formula = annotations.annotation(FORMULA_ANNOTATION) ?: return
+    val sql = formula.stringValue("sql").orEmpty()
+    val dependencies = formula.stringValues("dependencies", declaration.id)
+    if (ownerKind == JimmerImmutableTypeKind.EMBEDDABLE && sql.isNotEmpty()) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "The sql based formula property cannot be declared in embeddable type",
+        )
+    }
+    if (declaration.modality == LsiModality.ABSTRACT) {
+        if (sql.isEmpty()) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable abstract formula property '${declaration.id.value}' must specify sql",
+            )
+        }
+        if (dependencies.isNotEmpty()) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable abstract formula property '${declaration.id.value}' cannot specify dependencies",
+            )
+        }
+    } else {
+        if (sql.isNotEmpty()) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable non-abstract formula property '${declaration.id.value}' cannot specify sql",
+            )
+        }
+        if (dependencies.isEmpty()) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable non-abstract formula property '${declaration.id.value}' must specify dependencies",
+            )
+        }
+    }
 }
 
 private fun LsiResolvedProperty.validatePropertyCategory(
@@ -1825,6 +1966,26 @@ private fun List<LsiAnnotation>.hasAnnotation(type: LsiSymbolId): Boolean {
 
 private fun LsiAnnotation.stringValue(name: String): String? {
     return (arguments[name]?.value as? LsiAnnotationValue.StringValue)?.value
+}
+
+private fun LsiAnnotation.stringValues(
+    name: String,
+    sourceId: LsiSymbolId,
+): List<String> {
+    val argument = arguments[name] ?: return emptyList()
+    val arrayValue = argument.value as? LsiAnnotationValue.ArrayValue
+        ?: throw JimmerImmutablePrecompileException(
+            declarationId = sourceId,
+            message = "Annotation argument '${type.value}.$name' must be a typed string array",
+        )
+    val values = arrayValue.elements.map { element ->
+        element as? LsiAnnotationValue.StringValue
+            ?: throw JimmerImmutablePrecompileException(
+                declarationId = sourceId,
+                message = "Annotation argument '${type.value}.$name' must contain only typed string values",
+            )
+    }
+    return values.map(LsiAnnotationValue.StringValue::value)
 }
 
 private fun LsiAnnotation.booleanValue(name: String): Boolean? {

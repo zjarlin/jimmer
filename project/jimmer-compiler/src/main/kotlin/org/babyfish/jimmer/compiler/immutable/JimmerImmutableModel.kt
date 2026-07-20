@@ -28,6 +28,26 @@ data class JimmerImmutableSchema(
         .mapNotNull { prop -> prop.view?.let { view -> prop.id to view.dependencyPropIds } }
         .toMap()
 
+    val formulaDependencyPathsByPropId: Map<LsiSymbolId, List<List<LsiSymbolId>>> = types
+        .flatMap(JimmerImmutableType::props)
+        .filter { prop -> prop.formulaDependencies.isNotEmpty() }
+        .associate { prop ->
+            prop.id to prop.formulaDependencies.map(JimmerFormulaDependency::propIds)
+        }
+
+    val dependentFormulaPropIdsByPropId: Map<LsiSymbolId, List<LsiSymbolId>> = types
+        .flatMap(JimmerImmutableType::props)
+        .flatMap { formulaProp ->
+            formulaProp.formulaDependencies.flatMap { dependency ->
+                dependency.propIds.map { dependencyPropId -> dependencyPropId to formulaProp.id }
+            }
+        }
+        .groupBy(
+            keySelector = { (dependencyPropId, _) -> dependencyPropId },
+            valueTransform = { (_, formulaPropId) -> formulaPropId },
+        )
+        .mapValues { (_, formulaPropIds) -> formulaPropIds.distinct().sorted() }
+
     init {
         require(typesById.size == types.size) { "Immutable schema cannot contain duplicate type ids" }
         require(propsById.size == types.sumOf { type -> type.props.size }) {
@@ -37,7 +57,36 @@ data class JimmerImmutableSchema(
             require(type.props.all { prop -> prop.ownerTypeId == type.id }) {
                 "Immutable schema property owner must match containing type: ${type.id.value}"
             }
-            type.props.forEach { prop -> validateView(type, prop) }
+            type.props.forEach { prop ->
+                validateView(type, prop)
+                validateFormulaDependencies(type, prop)
+            }
+        }
+    }
+
+    private fun validateFormulaDependencies(
+        ownerType: JimmerImmutableType,
+        formulaProp: JimmerImmutableProp,
+    ) {
+        formulaProp.formulaDependencies.forEach { dependency ->
+            var expectedOwnerTypeId = ownerType.id
+            dependency.propIds.forEachIndexed { index, propId ->
+                val prop = requireNotNull(propsById[propId]) {
+                    "Immutable formula dependency property does not exist: ${propId.value}"
+                }
+                require(prop.ownerTypeId == expectedOwnerTypeId) {
+                    "Immutable formula dependency property belongs to an unexpected owner: ${propId.value}"
+                }
+                if (index + 1 < dependency.propIds.size) {
+                    require(prop.association || prop.embedded) {
+                        "Intermediate immutable formula dependency must be an association or embedded property: " +
+                            prop.id.value
+                    }
+                    expectedOwnerTypeId = requireNotNull(prop.targetTypeId) {
+                        "Intermediate immutable formula dependency must have a concrete target: ${prop.id.value}"
+                    }
+                }
+            }
         }
     }
 
@@ -226,6 +275,7 @@ data class JimmerImmutableProp(
     val recursive: Boolean,
     val validations: List<JimmerValidation>,
     val converter: JimmerConverter?,
+    val formulaDependencies: List<JimmerFormulaDependency> = emptyList(),
 ) {
 
     init {
@@ -266,6 +316,20 @@ data class JimmerImmutableProp(
         require(!recursive || view !is JimmerImmutableView.ManyToMany) {
             "Many-to-many view property cannot be recursive: ${id.value}"
         }
+        require(formulaKind != JimmerFormulaKind.NONE || formulaDependencies.isEmpty()) {
+            "Only immutable formula property can declare formula dependencies: ${id.value}"
+        }
+        require(formulaDependencies.distinct() == formulaDependencies) {
+            "Immutable formula property cannot contain duplicate dependency paths: ${id.value}"
+        }
+    }
+}
+
+data class JimmerFormulaDependency(
+    val propIds: List<LsiSymbolId>,
+) {
+    init {
+        require(propIds.isNotEmpty()) { "Immutable formula dependency path cannot be empty" }
     }
 }
 

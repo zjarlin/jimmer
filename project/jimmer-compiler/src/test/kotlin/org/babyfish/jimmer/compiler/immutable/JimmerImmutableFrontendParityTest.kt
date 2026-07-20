@@ -223,6 +223,103 @@ class JimmerImmutableFrontendParityTest {
     }
 
     @Test
+    fun `real apt and ksp frontends produce identical formula dependency paths`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.Formula;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.ManyToOne;
+
+                @Entity
+                interface Department {
+                    String name();
+                }
+
+                @Entity
+                interface Employee {
+                    String firstName();
+
+                    @ManyToOne
+                    Department department();
+
+                    @Formula(dependencies = {"firstName", "department.name"})
+                    default String displayName() {
+                        return firstName();
+                    }
+
+                    @Formula(sql = "FIRST_NAME")
+                    String storedDisplayName();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.Formula
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.ManyToOne
+
+                @Entity
+                interface Department {
+                    val name: String
+                }
+
+                @Entity
+                interface Employee {
+                    val firstName: String
+
+                    @ManyToOne
+                    val department: Department
+
+                    @Formula(dependencies = ["firstName", "department.name"])
+                    val displayName: String
+                        get() = firstName
+
+                    @Formula(sql = "FIRST_NAME")
+                    val storedDisplayName: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+
+        val employeeTypeId = LsiSymbolId.type("demo.Employee")
+        val departmentTypeId = LsiSymbolId.type("demo.Department")
+        val displayName = aptSchema.typesById.getValue(employeeTypeId)
+            .props
+            .single { prop -> prop.name == "displayName" }
+        assertEquals(
+            listOf(
+                JimmerFormulaDependency(
+                    listOf(LsiSymbolId.property(employeeTypeId, "firstName"))
+                ),
+                JimmerFormulaDependency(
+                    listOf(
+                        LsiSymbolId.property(employeeTypeId, "department"),
+                        LsiSymbolId.property(departmentTypeId, "name"),
+                    )
+                ),
+            ),
+            displayName.formulaDependencies,
+        )
+        assertEquals(
+            JimmerFormulaKind.SQL,
+            aptSchema.typesById.getValue(employeeTypeId)
+                .props
+                .single { prop -> prop.name == "storedDisplayName" }
+                .formulaKind,
+        )
+    }
+
+    @Test
     fun `real apt and ksp frontends reject non-embeddable immutable target`() {
         val apt = compileApt(INVALID_IMMUTABLE_TARGET_JAVA_SOURCE)
         val ksp = compileKsp(INVALID_IMMUTABLE_TARGET_KOTLIN_SOURCE)

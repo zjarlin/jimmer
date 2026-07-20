@@ -87,6 +87,13 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                         converter.propertyNullable.toString(),
                     )
                 }
+                prop.formulaDependencies.forEach { dependency ->
+                    appendRecord(
+                        "formula-dependency",
+                        prop.id.value,
+                        dependency.propIds.joinToString(",") { propId -> propId.value },
+                    )
+                }
             }
         }
     }
