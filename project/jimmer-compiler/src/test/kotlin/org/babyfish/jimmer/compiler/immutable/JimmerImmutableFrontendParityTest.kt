@@ -153,12 +153,33 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(LsiSymbolId.property(record.id, "id"), record.idPropId)
         assertEquals(LsiSymbolId.property(record.id, "version"), record.versionPropId)
         assertEquals(LsiSymbolId.property(record.id, "deleted"), record.logicalDeletedPropId)
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = null,
+                strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+            ),
+            record.props.single { prop -> prop.name == "deleted" }.defaultContract,
+        )
         val timed = aptSchema.types.single { type -> type.qualifiedName == "demo.TimedRecord" }
         assertEquals(LsiSymbolId.property(timed.id, "deletedAt"), timed.logicalDeletedPropId)
         assertTrue(timed.props.single { prop -> prop.name == "deletedAt" }.nullable)
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = null,
+                strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+            ),
+            timed.props.single { prop -> prop.name == "deletedAt" }.defaultContract,
+        )
         val stateful = aptSchema.types.single { type -> type.qualifiedName == "demo.StatefulRecord" }
         assertEquals(LsiSymbolId.property(stateful.id, "state"), stateful.logicalDeletedPropId)
         assertTrue(stateful.props.single { prop -> prop.name == "state" }.nullable)
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "ALIVE",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            stateful.props.single { prop -> prop.name == "state" }.defaultContract,
+        )
     }
 
     @Test
@@ -455,10 +476,264 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(aptStatus.type, kspStatus.type)
         assertTrue(aptStatus.overridden)
         assertEquals("1", aptStatus.annotationString(DEFAULT, "value"))
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "1",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            aptStatus.defaultContract,
+        )
         assertEquals("BASE_STATUS", aptStatus.annotationString(COLUMN, "name"))
         assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == DEFAULT })
         assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == COLUMN })
         assertFalse(aptStatus.annotations.any { annotation -> annotation.type == JAVA_OVERRIDE })
+    }
+
+    @Test
+    fun `real apt and ksp frontends freeze identical immutable defaults`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.time.Instant;
+                import org.babyfish.jimmer.sql.DatabaseDefault;
+                import org.babyfish.jimmer.sql.Default;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.Key;
+                import org.babyfish.jimmer.sql.Version;
+
+                @Entity
+                interface DefaultRecord {
+                    @Id
+                    long id();
+
+                    @Default("client-value")
+                    String applicationValue();
+
+                    @DatabaseDefault("CURRENT_TIMESTAMP")
+                    Instant databaseValue();
+
+                    @DatabaseDefault
+                    String emptyDatabaseValue();
+
+                    @Version
+                    int version();
+
+                    @Key
+                    @Default("key-value")
+                    String businessKey();
+                }
+
+                @Entity
+                interface ExplicitVersionRecord {
+                    @Id
+                    long id();
+
+                    @Version
+                    @Default("")
+                    int version();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import java.time.Instant
+                import org.babyfish.jimmer.sql.DatabaseDefault
+                import org.babyfish.jimmer.sql.Default
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.Key
+                import org.babyfish.jimmer.sql.Version
+
+                @Entity
+                interface DefaultRecord {
+                    @Id
+                    val id: Long
+
+                    @Default("client-value")
+                    val applicationValue: String
+
+                    @DatabaseDefault("CURRENT_TIMESTAMP")
+                    val databaseValue: Instant
+
+                    @DatabaseDefault
+                    val emptyDatabaseValue: String
+
+                    @Version
+                    val version: Int
+
+                    @Key
+                    @Default("key-value")
+                    val businessKey: String
+                }
+
+                @Entity
+                interface ExplicitVersionRecord {
+                    @Id
+                    val id: Long
+
+                    @Version
+                    @Default("")
+                    val version: Int
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        val defaults = aptSchema.types
+            .single { type -> type.qualifiedName == "demo.DefaultRecord" }
+            .props
+            .associate { prop -> prop.name to prop.defaultContract }
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "client-value",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            defaults.getValue("applicationValue"),
+        )
+        assertEquals(
+            JimmerImmutableDefault.Database("CURRENT_TIMESTAMP"),
+            defaults.getValue("databaseValue"),
+        )
+        assertEquals(JimmerImmutableDefault.Database(null), defaults.getValue("emptyDatabaseValue"))
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = null,
+                strategy = JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO,
+            ),
+            defaults.getValue("version"),
+        )
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            aptSchema.types
+                .single { type -> type.qualifiedName == "demo.ExplicitVersionRecord" }
+                .props
+                .single { prop -> prop.name == "version" }
+                .defaultContract,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject inherited default conflicts identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.DatabaseDefault;
+                import org.babyfish.jimmer.sql.Default;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface DefaultBase {
+                    @DatabaseDefault
+                    String status();
+                }
+
+                @Entity
+                interface DefaultEntity extends DefaultBase {
+                    @Id
+                    long id();
+
+                    @Override
+                    @Default("1")
+                    String status();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.DatabaseDefault
+                import org.babyfish.jimmer.sql.Default
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface DefaultBase {
+                    @DatabaseDefault
+                    val status: String
+                }
+
+                @Entity
+                interface DefaultEntity : DefaultBase {
+                    @Id
+                    val id: Long
+
+                    @Default("1")
+                    override val status: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(apt.diagnostic.orEmpty().contains("cannot be decorated by both"))
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject database defaults on repeatable keys identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.DatabaseDefault;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.Key;
+
+                @Entity
+                interface InvalidDatabaseKey {
+                    @Id
+                    long id();
+
+                    @Key(group = "first")
+                    @Key(group = "second")
+                    @DatabaseDefault
+                    String code();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.DatabaseDefault
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.Key
+
+                @Entity
+                interface InvalidDatabaseKey {
+                    @Id
+                    val id: Long
+
+                    @Key(group = "first")
+                    @Key(group = "second")
+                    @DatabaseDefault
+                    val code: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(apt.diagnostic.orEmpty().contains("cannot be id, key, version"))
     }
 
     @Test
@@ -1604,6 +1879,7 @@ class JimmerImmutableFrontendParityTest {
             package demo;
 
             import java.time.Instant;
+            import org.babyfish.jimmer.sql.Default;
             import org.babyfish.jimmer.sql.Entity;
             import org.babyfish.jimmer.sql.Id;
             import org.babyfish.jimmer.sql.LogicalDeleted;
@@ -1646,6 +1922,7 @@ class JimmerImmutableFrontendParityTest {
                 @Id
                 long id();
 
+                @Default("ALIVE")
                 @LogicalDeleted("DELETED")
                 @Nullable
                 DeleteState state();
@@ -1657,6 +1934,7 @@ class JimmerImmutableFrontendParityTest {
 
             import java.time.Instant
             import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Default
             import org.babyfish.jimmer.sql.Id
             import org.babyfish.jimmer.sql.LogicalDeleted
             import org.babyfish.jimmer.sql.MappedSuperclass
@@ -1696,6 +1974,7 @@ class JimmerImmutableFrontendParityTest {
                 @Id
                 val id: Long
 
+                @Default("ALIVE")
                 @LogicalDeleted("DELETED")
                 val state: DeleteState?
             }

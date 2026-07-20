@@ -1033,6 +1033,7 @@ class DtoConfigContractResolverTest {
                 targetTypeId = targetTypeId,
                 primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
                 primaryAnnotationTypeId = null,
+                defaultContract = null,
                 associationKind = JimmerAssociationKind.MANY_TO_MANY,
                 formulaKind = JimmerFormulaKind.NONE,
                 mappedBy = null,

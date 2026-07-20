@@ -1837,6 +1837,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             targetTypeId = targetTypeId,
             primaryMapping = primaryMapping,
             primaryAnnotationTypeId = null,
+            defaultContract = null,
             associationKind = associationKind,
             formulaKind = JimmerFormulaKind.NONE,
             mappedBy = null,

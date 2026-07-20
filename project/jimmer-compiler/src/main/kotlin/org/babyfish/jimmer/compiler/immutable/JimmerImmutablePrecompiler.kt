@@ -1790,6 +1790,14 @@ private fun LsiResolvedProperty.toImmutableProp(
     val primaryMapping = primaryAnnotation?.type.toPrimaryMapping()
         ?: if (association) JimmerImmutablePrimaryMapping.ASSOCIATION
         else JimmerImmutablePrimaryMapping.SCALAR
+    val embedded = targetKind == JimmerImmutableTypeKind.EMBEDDABLE
+    val immutableDefault = immutableDefault(
+        ownerKind = ownerKind,
+        primaryMapping = primaryMapping,
+        association = association,
+        embedded = embedded,
+        workspace = workspace,
+    )
     val mappedBy = mappedBy(associationKind)
     val associationStorage = associationStorage(
         associationKind = associationKind,
@@ -1850,10 +1858,11 @@ private fun LsiResolvedProperty.toImmutableProp(
         nullable = nullable,
         list = list,
         association = association,
-        embedded = targetKind == JimmerImmutableTypeKind.EMBEDDABLE,
+        embedded = embedded,
         targetTypeId = targetTypeId,
         primaryMapping = primaryMapping,
         primaryAnnotationTypeId = primaryAnnotation?.type,
+        defaultContract = immutableDefault,
         associationKind = if (associationKind == JimmerAssociationKind.NONE && association) {
             JimmerAssociationKind.IMPLICIT
         } else {
@@ -1870,6 +1879,121 @@ private fun LsiResolvedProperty.toImmutableProp(
         validations = validations(workspace),
         converter = converter(workspace, typeSystem, nullable, association),
     )
+}
+
+private fun LsiResolvedProperty.immutableDefault(
+    ownerKind: JimmerImmutableTypeKind,
+    primaryMapping: JimmerImmutablePrimaryMapping,
+    association: Boolean,
+    embedded: Boolean,
+    workspace: LsiWorkspace,
+): JimmerImmutableDefault? {
+    val application = annotations.annotation(DEFAULT_ANNOTATION)
+    val database = annotations.annotation(DATABASE_DEFAULT_ANNOTATION)
+    if (application != null && database != null) {
+        throw invalidDefault(
+            "cannot be decorated by both @${DEFAULT_ANNOTATION.requireTypeQualifiedName()} and " +
+                "@${DATABASE_DEFAULT_ANNOTATION.requireTypeQualifiedName()}",
+        )
+    }
+    if (application != null) {
+        if (
+            ownerKind !in setOf(JimmerImmutableTypeKind.ENTITY, JimmerImmutableTypeKind.MAPPED_SUPERCLASS) ||
+            primaryMapping !in setOf(
+                JimmerImmutablePrimaryMapping.VERSION,
+                JimmerImmutablePrimaryMapping.LOGICAL_DELETED,
+                JimmerImmutablePrimaryMapping.SCALAR,
+            ) ||
+            association ||
+            embedded
+        ) {
+            throw invalidDefault(
+                "decorated by @${DEFAULT_ANNOTATION.requireTypeQualifiedName()} must be a scalar column, " +
+                    "version or logical-deleted property of an entity or mapped superclass",
+            )
+        }
+        if (primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED &&
+            !type.acceptsLogicalDeletedDefault(workspace)
+        ) {
+            throw invalidDefault(
+                "cannot combine @${DEFAULT_ANNOTATION.requireTypeQualifiedName()} with " +
+                    "@${LOGICAL_DELETED_ANNOTATION.requireTypeQualifiedName()} unless its type is Int or enum",
+            )
+        }
+        val rawValue = application.stringValue("value")
+            ?: throw invalidDefault(
+                "@${DEFAULT_ANNOTATION.requireTypeQualifiedName()} must declare its typed string value",
+            )
+        return JimmerImmutableDefault.Application(
+            annotationValue = rawValue,
+            strategy = when {
+                rawValue.isNotEmpty() || primaryMapping == JimmerImmutablePrimaryMapping.VERSION -> {
+                    JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE
+                }
+                primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> {
+                    JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED
+                }
+                else -> null
+            },
+        )
+    }
+    if (database != null) {
+        if (
+            ownerKind !in setOf(JimmerImmutableTypeKind.ENTITY, JimmerImmutableTypeKind.MAPPED_SUPERCLASS) ||
+            primaryMapping != JimmerImmutablePrimaryMapping.SCALAR ||
+            association ||
+            embedded ||
+            annotations.hasAnnotation(KEY_ANNOTATION) ||
+            annotations.hasAnnotation(KEYS_ANNOTATION)
+        ) {
+            throw invalidDefault(
+                "decorated by @${DATABASE_DEFAULT_ANNOTATION.requireTypeQualifiedName()} must be a scalar column " +
+                    "property and cannot be id, key, version, logical deleted, association, embedded, formula, " +
+                    "transient or view",
+            )
+        }
+        return JimmerImmutableDefault.Database(
+            expression = database.databaseDefaultExpression(declaration.id),
+        )
+    }
+    return when (primaryMapping) {
+        JimmerImmutablePrimaryMapping.VERSION -> JimmerImmutableDefault.Application(
+            annotationValue = null,
+            strategy = JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO,
+        )
+        JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> JimmerImmutableDefault.Application(
+            annotationValue = null,
+            strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+        )
+        else -> null
+    }
+}
+
+private fun LsiTypeRef.acceptsLogicalDeletedDefault(workspace: LsiWorkspace): Boolean {
+    if (this is LsiPrimitiveType && kind == LsiPrimitiveKind.INT && !boxed) {
+        return true
+    }
+    val declaredType = this as? LsiDeclaredType ?: return false
+    return (workspace[declaredType.declarationId] as? LsiTypeDeclaration)?.kind == LsiTypeDeclarationKind.ENUM
+}
+
+private fun LsiResolvedProperty.invalidDefault(message: String): JimmerImmutablePrecompileException {
+    return JimmerImmutablePrecompileException(
+        declarationId = declaration.id,
+        message = "Immutable property '${declaration.id.value}' $message",
+    )
+}
+
+private fun LsiAnnotation.databaseDefaultExpression(propId: LsiSymbolId): String? {
+    val value = arguments["value"]?.value ?: return null
+    if (value !is LsiAnnotationValue.StringValue) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = propId,
+            message = "Immutable property '${propId.value}' decorated by " +
+                "@${DATABASE_DEFAULT_ANNOTATION.requireTypeQualifiedName()} must declare a typed string value",
+        )
+    }
+    return value.value.takeIf(String::isNotBlank)
 }
 
 private fun LsiResolvedProperty.mappedBy(
@@ -2761,6 +2885,10 @@ private val JOINED_TABLE_DISSOCIATE_ACTION_TYPE =
 private val ID_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
 private val VERSION_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Version")
 private val LOGICAL_DELETED_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.LogicalDeleted")
+private val DEFAULT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
+private val DATABASE_DEFAULT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.DatabaseDefault")
+private val KEY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Key")
+private val KEYS_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Keys")
 private val ONE_TO_ONE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToOne")
 private val MANY_TO_ONE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
 private val ONE_TO_MANY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToMany")

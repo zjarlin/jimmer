@@ -137,6 +137,13 @@ class JimmerImmutablePrecompilerTest {
         )
         assertEquals("1", status.annotationString(DEFAULT, "value"))
         assertEquals("STATUS", status.annotationString(COLUMN, "name"))
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "1",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            status.defaultContract,
+        )
         assertEquals("Base status documentation", status.documentation)
         assertNotEquals(
             schema.fingerprint(),
@@ -154,6 +161,272 @@ class JimmerImmutablePrecompilerTest {
                 }
             ).fingerprint(),
         )
+    }
+
+    @Test
+    fun `precompiles application database and implicit version defaults`() {
+        val ownerId = LsiSymbolId.type("demo.DefaultBase")
+        val applicationProp = property(
+            ownerId,
+            "applicationValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                annotation(
+                    DEFAULT,
+                    mapOf("value" to LsiAnnotationValue.StringValue("client-value")),
+                )
+            ),
+        )
+        val databaseProp = property(
+            ownerId,
+            "databaseValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                annotation(
+                    DATABASE_DEFAULT,
+                    mapOf("value" to LsiAnnotationValue.StringValue("CURRENT_TIMESTAMP")),
+                )
+            ),
+        )
+        val emptyDatabaseProp = property(
+            ownerId,
+            "emptyDatabaseValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(DATABASE_DEFAULT)),
+        )
+        val versionProp = property(
+            ownerId,
+            "version",
+            LsiPrimitiveType(LsiPrimitiveKind.INT),
+            listOf(annotation(VERSION)),
+        )
+        val keyProp = property(
+            ownerId,
+            "businessKey",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                annotation(KEY),
+                annotation(
+                    DEFAULT,
+                    mapOf("value" to LsiAnnotationValue.StringValue("key-value")),
+                ),
+            ),
+        )
+        val props = listOf(applicationProp, databaseProp, emptyDatabaseProp, versionProp, keyProp)
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.DefaultBase", MAPPED_SUPERCLASS, props.map(LsiProperty::id)),
+                ) + props,
+            )
+        )
+
+        val defaults = schema.types.single().props.associate { prop -> prop.name to prop.defaultContract }
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "client-value",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            defaults.getValue("applicationValue"),
+        )
+        assertEquals(
+            JimmerImmutableDefault.Database("CURRENT_TIMESTAMP"),
+            defaults.getValue("databaseValue"),
+        )
+        assertEquals(
+            JimmerImmutableDefault.Database(null),
+            defaults.getValue("emptyDatabaseValue"),
+        )
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = null,
+                strategy = JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO,
+            ),
+            defaults.getValue("version"),
+        )
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "key-value",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            defaults.getValue("businessKey"),
+        )
+
+        val explicitOwnerId = LsiSymbolId.type("demo.ExplicitVersionBase")
+        val explicitVersionProp = property(
+            explicitOwnerId,
+            "version",
+            LsiPrimitiveType(LsiPrimitiveKind.INT),
+            listOf(
+                annotation(VERSION),
+                annotation(DEFAULT, mapOf("value" to LsiAnnotationValue.StringValue(""))),
+            ),
+        )
+        val explicitVersion = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        "demo.ExplicitVersionBase",
+                        MAPPED_SUPERCLASS,
+                        listOf(explicitVersionProp.id),
+                    ),
+                    explicitVersionProp,
+                )
+            )
+        ).types.single().props.single().defaultContract
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "",
+                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+            ),
+            explicitVersion,
+        )
+
+        val logicalOwnerId = LsiSymbolId.type("demo.ExplicitLogicalDefaultBase")
+        val logicalProp = property(
+            logicalOwnerId,
+            "deleted",
+            LsiPrimitiveType(LsiPrimitiveKind.INT),
+            listOf(
+                annotation(LOGICAL_DELETED),
+                annotation(DEFAULT, mapOf("value" to LsiAnnotationValue.StringValue(""))),
+            ),
+        )
+        val explicitLogicalDefault = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        "demo.ExplicitLogicalDefaultBase",
+                        MAPPED_SUPERCLASS,
+                        listOf(logicalProp.id),
+                    ),
+                    logicalProp,
+                )
+            )
+        ).types.single().props.single().defaultContract
+        assertEquals(
+            JimmerImmutableDefault.Application(
+                annotationValue = "",
+                strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+            ),
+            explicitLogicalDefault,
+        )
+    }
+
+    @Test
+    fun `validates effective immutable default contracts`() {
+        fun failure(
+            typeName: String,
+            marker: LsiSymbolId = MAPPED_SUPERCLASS,
+            annotations: List<LsiAnnotation>,
+            propType: LsiTypeRef = LsiDeclaredType(STRING_TYPE),
+        ): JimmerImmutablePrecompileException {
+            val ownerId = LsiSymbolId.type("demo.$typeName")
+            val prop = property(ownerId, "value", propType, annotations)
+            return assertFailsWith {
+                JimmerImmutablePrecompiler().compile(
+                    LsiWorkspace(
+                        declarations = listOf(
+                            type("demo.$typeName", marker, listOf(prop.id)),
+                            prop,
+                        )
+                    )
+                )
+            }
+        }
+
+        val conflict = failure(
+            "ConflictingDefaults",
+            annotations = listOf(
+                annotation(DEFAULT, mapOf("value" to LsiAnnotationValue.StringValue("1"))),
+                annotation(DATABASE_DEFAULT),
+            ),
+        )
+        assertTrue(conflict.message.orEmpty().contains("cannot be decorated by both"))
+
+        val databaseKey = failure(
+            "DatabaseKeyDefault",
+            annotations = listOf(annotation(KEYS), annotation(DATABASE_DEFAULT)),
+        )
+        assertTrue(databaseKey.message.orEmpty().contains("cannot be id, key, version"))
+
+        val malformedDatabase = failure(
+            "MalformedDatabaseDefault",
+            annotations = listOf(
+                annotation(
+                    DATABASE_DEFAULT,
+                    mapOf("value" to LsiAnnotationValue.IntValue(1)),
+                )
+            ),
+        )
+        assertTrue(malformedDatabase.message.orEmpty().contains("must declare a typed string value"))
+
+        val logicalBoolean = failure(
+            "BooleanLogicalDefault",
+            annotations = listOf(
+                annotation(LOGICAL_DELETED),
+                annotation(DEFAULT, mapOf("value" to LsiAnnotationValue.StringValue("false"))),
+            ),
+            propType = LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN),
+        )
+        assertTrue(logicalBoolean.message.orEmpty().contains("unless its type is Int or enum"))
+
+        val immutableDefault = failure(
+            "PlainImmutableDefault",
+            marker = IMMUTABLE,
+            annotations = listOf(
+                annotation(DEFAULT, mapOf("value" to LsiAnnotationValue.StringValue("value"))),
+            ),
+        )
+        assertTrue(immutableDefault.message.orEmpty().contains("entity or mapped superclass"))
+    }
+
+    @Test
+    fun `rejects default and database-default inherited across annotation override`() {
+        val baseId = LsiSymbolId.type("demo.DatabaseDefaultBase")
+        val entityId = LsiSymbolId.type("demo.ApplicationDefaultEntity")
+        val baseProp = property(
+            baseId,
+            "status",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(DATABASE_DEFAULT)),
+        )
+        val entityIdProp = property(
+            entityId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val overridingProp = property(
+            entityId,
+            "status",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                annotation(DEFAULT, mapOf("value" to LsiAnnotationValue.StringValue("1"))),
+            ),
+            overrides = listOf(LsiOverride(baseProp.id)),
+        )
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.DatabaseDefaultBase", MAPPED_SUPERCLASS, listOf(baseProp.id)),
+                        baseProp,
+                        type(
+                            "demo.ApplicationDefaultEntity",
+                            ENTITY,
+                            listOf(entityIdProp.id, overridingProp.id),
+                            superTypes = listOf(LsiDeclaredType(baseId)),
+                        ),
+                        entityIdProp,
+                        overridingProp,
+                    )
+                )
+            )
+        }
+
+        assertEquals(overridingProp.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("cannot be decorated by both"))
     }
 
     @Test
@@ -2979,22 +3252,24 @@ class JimmerImmutablePrecompilerTest {
         val mappedException = assertFailsWith<JimmerImmutablePrecompileException> {
             compileFixture(mappedChild)
         }
-        assertTrue(mappedException.message.orEmpty().contains("mapped superclass of an entity"))
+        assertTrue(
+            mappedException.message.orEmpty().contains("mapped superclass of an entity"),
+            mappedException.message,
+        )
 
         val entityParent = overrideCategoryWorkspace(
             baseMarker = ENTITY,
             childMarker = ENTITY,
-            baseAnnotations = listOf(
-                default("0", LsiLanguage.KOTLIN),
-                annotation(DISCRIMINATOR),
-            ),
-            childAnnotations = listOf(default("1", LsiLanguage.KOTLIN)),
+            baseAnnotations = listOf(annotation(DISCRIMINATOR)),
             baseTypeAnnotations = listOf(annotation(INHERITANCE)),
         )
         val entityException = assertFailsWith<JimmerImmutablePrecompileException> {
             compileFixture(entityParent)
         }
-        assertTrue(entityException.message.orEmpty().contains("mapped superclass of an entity"))
+        assertTrue(
+            entityException.message.orEmpty().contains("mapped superclass of an entity"),
+            entityException.message,
+        )
     }
 
     @Test
@@ -4359,6 +4634,9 @@ class JimmerImmutablePrecompilerTest {
         private val MANY_TO_MANY_VIEW = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToManyView")
         private val MAPS_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.MapsId")
         private val DEFAULT = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
+        private val DATABASE_DEFAULT = LsiSymbolId.type("org.babyfish.jimmer.sql.DatabaseDefault")
+        private val KEY = LsiSymbolId.type("org.babyfish.jimmer.sql.Key")
+        private val KEYS = LsiSymbolId.type("org.babyfish.jimmer.sql.Keys")
         private val COLUMN = LsiSymbolId.type("org.babyfish.jimmer.sql.Column")
         private val JAVA_OVERRIDE = LsiSymbolId.type("java.lang.Override")
         private val KOTLIN_SUPPRESS = LsiSymbolId.type("kotlin.Suppress")

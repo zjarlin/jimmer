@@ -2,6 +2,7 @@ package org.babyfish.jimmer.compiler.immutable
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiTypeRef
 
 data class JimmerImmutableSchema(
@@ -391,6 +392,12 @@ data class JimmerImmutableType(
         require(kind != JimmerImmutableTypeKind.ENTITY || idPropId != null) {
             "Immutable entity must have an id property: ${id.value}"
         }
+        require(
+            kind in setOf(JimmerImmutableTypeKind.ENTITY, JimmerImmutableTypeKind.MAPPED_SUPERCLASS) ||
+                props.none { prop -> prop.defaultContract != null }
+        ) {
+            "Only immutable entity or mapped superclass can declare property defaults: ${id.value}"
+        }
         require(!acrossMicroServices || kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
             "Only immutable mapped superclass can be across microservices: ${id.value}"
         }
@@ -426,6 +433,7 @@ data class JimmerImmutableProp(
     val targetTypeId: LsiSymbolId?,
     val primaryMapping: JimmerImmutablePrimaryMapping,
     val primaryAnnotationTypeId: LsiSymbolId?,
+    val defaultContract: JimmerImmutableDefault?,
     val associationKind: JimmerAssociationKind,
     val formulaKind: JimmerFormulaKind,
     val mappedBy: JimmerMappedBy?,
@@ -446,6 +454,53 @@ data class JimmerImmutableProp(
     val reverse: Boolean = mappedBy != null
 
     init {
+        val applicationDefaultAnnotations = annotations.filter { annotation ->
+            annotation.type == DEFAULT_ANNOTATION
+        }
+        val databaseDefaultAnnotations = annotations.filter { annotation ->
+            annotation.type == DATABASE_DEFAULT_ANNOTATION
+        }
+        require(applicationDefaultAnnotations.size <= 1 && databaseDefaultAnnotations.size <= 1) {
+            "Immutable property cannot contain duplicate default annotations: ${id.value}"
+        }
+        require(applicationDefaultAnnotations.isEmpty() || databaseDefaultAnnotations.isEmpty()) {
+            "Immutable property cannot contain application and database defaults together: ${id.value}"
+        }
+        val expectedDefault = when {
+            applicationDefaultAnnotations.isNotEmpty() -> {
+                val annotationValue = requireNotNull(applicationDefaultAnnotations.single().stringValue("value")) {
+                    "Immutable application default must declare a typed string value: ${id.value}"
+                }
+                JimmerImmutableDefault.Application(
+                    annotationValue = annotationValue,
+                    strategy = when {
+                        annotationValue.isNotEmpty() ||
+                            primaryMapping == JimmerImmutablePrimaryMapping.VERSION -> {
+                            JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE
+                        }
+                        primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> {
+                            JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED
+                        }
+                        else -> null
+                    },
+                )
+            }
+            databaseDefaultAnnotations.isNotEmpty() -> JimmerImmutableDefault.Database(
+                expression = databaseDefaultAnnotations.single().databaseDefaultExpression(id),
+            )
+            primaryMapping == JimmerImmutablePrimaryMapping.VERSION -> JimmerImmutableDefault.Application(
+                annotationValue = null,
+                strategy = JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO,
+            )
+            primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> JimmerImmutableDefault.Application(
+                annotationValue = null,
+                strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+            )
+            else -> null
+        }
+        require(defaultContract == expectedDefault) {
+            "Immutable default metadata must match its effective annotations: ${id.value}"
+        }
         require(association == (associationKind != JimmerAssociationKind.NONE)) {
             "Immutable association flag and kind must be declared together: ${id.value}"
         }
@@ -467,6 +522,56 @@ data class JimmerImmutableProp(
         }
         require(!embedded || !association) {
             "Immutable property cannot be both embedded and association: ${id.value}"
+        }
+        when (val default = defaultContract) {
+            null -> Unit
+            is JimmerImmutableDefault.Application -> {
+                require(
+                    primaryMapping in setOf(
+                        JimmerImmutablePrimaryMapping.VERSION,
+                        JimmerImmutablePrimaryMapping.LOGICAL_DELETED,
+                        JimmerImmutablePrimaryMapping.SCALAR,
+                    ) && !association && !embedded
+                ) {
+                    "Application default must belong to a scalar, version or logical-deleted property: ${id.value}"
+                }
+                when (default.strategy) {
+                    null -> require(
+                        primaryMapping == JimmerImmutablePrimaryMapping.SCALAR &&
+                            default.annotationValue == ""
+                    ) {
+                        "Empty application default marker must belong to a scalar property: ${id.value}"
+                    }
+                    JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE -> require(
+                        default.annotationValue != null &&
+                            (default.annotationValue.isNotEmpty() ||
+                                primaryMapping == JimmerImmutablePrimaryMapping.VERSION)
+                    ) {
+                        "Declared application default must preserve its annotation value: ${id.value}"
+                    }
+                    JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO -> require(
+                        primaryMapping == JimmerImmutablePrimaryMapping.VERSION && default.annotationValue == null
+                    ) {
+                        "Implicit version default must belong to a version property: ${id.value}"
+                    }
+                    JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED -> require(
+                        primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED &&
+                            default.annotationValue?.isNotEmpty() != true
+                    ) {
+                        "Logical-deleted default must belong to a logical-deleted property: ${id.value}"
+                    }
+                }
+            }
+            is JimmerImmutableDefault.Database -> require(
+                primaryMapping == JimmerImmutablePrimaryMapping.SCALAR &&
+                    !association &&
+                    !embedded &&
+                    annotations.none { annotation ->
+                        annotation.type == KEY_ANNOTATION || annotation.type == KEYS_ANNOTATION
+                    }
+            ) {
+                "Database default must belong to a scalar column property: ${id.value}"
+            }
         }
         require(!remote || association && targetTypeId != null) {
             "Only immutable association with a concrete target can be remote: ${id.value}"
@@ -551,6 +656,30 @@ data class JimmerConverter(
     val propertyNullable: Boolean,
 )
 
+sealed interface JimmerImmutableDefault {
+
+    data class Application(
+        val annotationValue: String?,
+        val strategy: JimmerImmutableApplicationDefaultStrategy?,
+    ) : JimmerImmutableDefault {
+        init {
+            require(annotationValue != null || strategy != null) {
+                "Immutable application default must declare an annotation value or insert strategy"
+            }
+        }
+    }
+
+    data class Database(
+        val expression: String?,
+    ) : JimmerImmutableDefault
+}
+
+enum class JimmerImmutableApplicationDefaultStrategy {
+    DECLARED_VALUE,
+    VERSION_ZERO,
+    LOGICAL_DELETED,
+}
+
 enum class JimmerImmutableTypeKind {
     IMMUTABLE,
     ENTITY,
@@ -623,6 +752,26 @@ internal val LIST_ASSOCIATION_KINDS = setOf(
 )
 
 private val JOIN_SQL_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
+
+private val DEFAULT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
+
+private val DATABASE_DEFAULT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.DatabaseDefault")
+
+private val KEY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Key")
+
+private val KEYS_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Keys")
+
+private fun LsiAnnotation.stringValue(name: String): String? {
+    return (arguments[name]?.value as? LsiAnnotationValue.StringValue)?.value
+}
+
+private fun LsiAnnotation.databaseDefaultExpression(propId: LsiSymbolId): String? {
+    val value = arguments["value"]?.value ?: return null
+    require(value is LsiAnnotationValue.StringValue) {
+        "Immutable database default must declare a typed string value: ${propId.value}"
+    }
+    return value.value.takeIf(String::isNotBlank)
+}
 
 enum class JimmerFormulaKind {
     NONE,

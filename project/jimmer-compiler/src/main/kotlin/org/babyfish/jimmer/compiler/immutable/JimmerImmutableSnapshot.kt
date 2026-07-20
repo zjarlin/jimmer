@@ -58,6 +58,26 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.targetTypeId?.value.orEmpty(),
                     prop.primaryMapping.name,
                     prop.primaryAnnotationTypeId?.value.orEmpty(),
+                    when (prop.defaultContract) {
+                        null -> ""
+                        is JimmerImmutableDefault.Application -> "APPLICATION"
+                        is JimmerImmutableDefault.Database -> "DATABASE"
+                    },
+                    when (val default = prop.defaultContract) {
+                        null -> ""
+                        is JimmerImmutableDefault.Application -> (default.annotationValue != null).toString()
+                        is JimmerImmutableDefault.Database -> "true"
+                    },
+                    when (val default = prop.defaultContract) {
+                        null -> ""
+                        is JimmerImmutableDefault.Application -> default.annotationValue.orEmpty()
+                        is JimmerImmutableDefault.Database -> default.expression.orEmpty()
+                    },
+                    when (val default = prop.defaultContract) {
+                        null -> ""
+                        is JimmerImmutableDefault.Application -> default.strategy?.name.orEmpty()
+                        is JimmerImmutableDefault.Database -> "DATABASE"
+                    },
                     prop.associationKind.name,
                     prop.associationStorage.name,
                     prop.reverse.toString(),

@@ -490,6 +490,7 @@ class JimmerDtoReusableIntegrationTest {
                 },
                 primaryMapping = primaryMapping,
                 primaryAnnotationTypeId = null,
+                defaultContract = null,
                 associationKind = associationKind,
                 formulaKind = JimmerFormulaKind.NONE,
                 mappedBy = null,

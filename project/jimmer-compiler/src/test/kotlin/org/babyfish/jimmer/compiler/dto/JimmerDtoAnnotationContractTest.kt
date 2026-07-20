@@ -856,6 +856,7 @@ class JimmerDtoAnnotationContractTest {
             targetTypeId = null,
             primaryMapping = JimmerImmutablePrimaryMapping.SCALAR,
             primaryAnnotationTypeId = null,
+            defaultContract = null,
             associationKind = JimmerAssociationKind.NONE,
             formulaKind = JimmerFormulaKind.NONE,
             mappedBy = null,

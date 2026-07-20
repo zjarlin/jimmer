@@ -39,6 +39,7 @@ internal fun completeEntityProps(
         targetTypeId = null,
         primaryMapping = JimmerImmutablePrimaryMapping.ID,
         primaryAnnotationTypeId = ID_ANNOTATION_TYPE,
+        defaultContract = null,
         associationKind = JimmerAssociationKind.NONE,
         formulaKind = JimmerFormulaKind.NONE,
         mappedBy = null,
