@@ -9,7 +9,7 @@ import org.babyfish.jimmer.apt.dto.DtoProcessor
 import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
 import org.babyfish.jimmer.client.EnableImplicitApi
 import org.babyfish.jimmer.client.FetchBy
-import org.babyfish.jimmer.compiler.ddl.apt.JimmerDdlCompilerAptFeature
+import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
 import org.babyfish.jimmer.compiler.dto.dtoGenerationTerminal
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
@@ -48,8 +48,6 @@ class JimmerProcessor : AbstractProcessor() {
 
     private lateinit var lsiDriver: AptLsiCompilerDriver
 
-    private lateinit var ddlFeature: JimmerDdlCompilerAptFeature
-
     private lateinit var context: Context
 
     private lateinit var elements: Elements
@@ -80,7 +78,7 @@ class JimmerProcessor : AbstractProcessor() {
 
     override fun getSupportedOptions(): MutableSet<String> =
         buildSet {
-            addAll(JimmerDdlCompilerAptFeature.SUPPORTED_OPTIONS)
+            addAll(JimmerDdlCompilerFeatureProvider.SUPPORTED_OPTIONS)
             addAll(COMPILER_OPTIONS)
         }.toMutableSet()
 
@@ -88,7 +86,6 @@ class JimmerProcessor : AbstractProcessor() {
     override fun init(processingEnv: ProcessingEnvironment) {
         super.init(processingEnv)
         lsiDriver = AptLsiCompilerDriver(processingEnv)
-        ddlFeature = JimmerDdlCompilerAptFeature(processingEnv)
         messager = processingEnv.messager
         val includes = processingEnv.options["jimmer.source.includes"]
         val excludes = processingEnv.options["jimmer.source.excludes"]
@@ -154,7 +151,6 @@ class JimmerProcessor : AbstractProcessor() {
     ): Boolean {
         try {
             val lsiRoundResult = lsiDriver.process(roundEnv)
-            ddlFeature.onRound(roundEnv)
             val currentClientTypeNames = if (roundEnv.processingOver()) {
                 emptyList()
             } else {

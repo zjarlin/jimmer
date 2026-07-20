@@ -8,7 +8,6 @@ import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.client.EnableImplicitApi
-import org.babyfish.jimmer.compiler.ddl.ksp.JimmerDdlCompilerKspFeature
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
 import org.babyfish.jimmer.compiler.dto.dtoGenerationTerminal
 import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
@@ -29,7 +28,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
 
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
         val lsiDriver = KspLsiCompilerDriver(environment)
-        val ddlFeature = JimmerDdlCompilerKspFeature(environment)
         return object : SymbolProcessor {
 
             private val dtoDirs =
@@ -84,19 +82,16 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                 val lsiRoundResult = requireNotNull(lsiDriver.lastRoundResult) {
                     "LSI driver must expose the current KSP round result"
                 }
-                val ddlDeferred = ddlFeature.process(resolver)
-                deferred += ddlDeferred
                 processJimmer(
                     resolver = resolver,
                     lsiRoundResult = lsiRoundResult,
-                    hasInvalidDeferred = lsiDeferred.isNotEmpty() || ddlDeferred.isNotEmpty(),
+                    hasInvalidDeferred = lsiDeferred.isNotEmpty(),
                 )
                 return deferred.toList()
             }
 
             override fun finish() {
                 lsiDriver.finish()
-                ddlFeature.finish()
                 if (clientReadyInLatestRound) {
                     clientContent?.let { content ->
                         environment.codeGenerator.createNewFile(
