@@ -6,6 +6,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
@@ -202,7 +203,10 @@ class ClientExceptionMetadataPrecompilerTest {
         )
         val schema = ClientPrecompiler().compile(
             workspace = LsiWorkspace(declarations = exceptionTypes + service + operation),
-            errorSchema = ErrorPrecompiledSchema(emptyList()),
+            dependencies = ClientPrecompileDependencies(
+                immutableSchema = JimmerImmutableSchema(emptyList()),
+                errorSchema = ErrorPrecompiledSchema(emptyList()),
+            ),
         )
         return schema.services.single().operations.single()
     }

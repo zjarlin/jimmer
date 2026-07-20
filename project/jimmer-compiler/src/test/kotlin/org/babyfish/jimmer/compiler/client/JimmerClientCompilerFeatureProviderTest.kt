@@ -338,6 +338,27 @@ class JimmerClientCompilerFeatureProviderTest {
         assertEquals(state.targetServiceTypeIds, result.processedSymbols)
     }
 
+    @Test
+    fun `ksp excludes java services from mixed source aggregation`() {
+        val javaService = apiWorkspace("demo.JavaService", "javaCall", STRING_TYPE, FIRST_SOURCE)
+        val kotlinService = apiWorkspace("demo.KotlinService", "kotlinCall", STRING_TYPE, KOTLIN_SERVICE_SOURCE)
+        val workspace = javaService.merge(kotlinService)
+
+        val result = session("client-ksp-mixed-source").execute(
+            round(
+                number = 0,
+                workspace = workspace,
+                currentWorkspace = workspace,
+                platform = CompilerPlatform.KSP,
+            )
+        ).clientResult()
+        val state = result.state as JimmerClientCompilerFeatureState
+
+        assertEquals(setOf(LsiSymbolId.type("demo.KotlinService")), state.targetServiceTypeIds)
+        assertEquals(listOf("demo.KotlinService"), state.schema.services.map(ClientService::qualifiedName))
+        assertEquals(state.targetServiceTypeIds, result.processedSymbols)
+    }
+
     private fun session(id: String): CompilerSession {
         return CompilerSession(
             id = id,
@@ -545,6 +566,7 @@ class JimmerClientCompilerFeatureProviderTest {
         val FIRST_SOURCE = LsiSource.of("src/main/java/demo/First.java", LsiLanguage.JAVA)
         val SECOND_SOURCE = LsiSource.of("src/main/java/demo/Second.java", LsiLanguage.JAVA)
         val KOTLIN_SOURCE = LsiSource.of("src/main/kotlin/demo/Broken.kt", LsiLanguage.KOTLIN)
+        val KOTLIN_SERVICE_SOURCE = LsiSource.of("src/main/kotlin/demo/Service.kt", LsiLanguage.KOTLIN)
         val SECOND_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, SECOND_SOURCE)
         val STRING_TYPE = LsiPrimitiveType(LsiPrimitiveKind.INT)
         val NESTED_SERVICE_ID = LsiSymbolId.type("demo.Outer.NestedService")

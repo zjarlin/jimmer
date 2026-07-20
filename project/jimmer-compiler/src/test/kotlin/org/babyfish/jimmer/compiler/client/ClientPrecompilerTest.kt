@@ -8,7 +8,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.error.ErrorCodeModel
 import org.babyfish.jimmer.compiler.error.ErrorFamilyModel
+import org.babyfish.jimmer.compiler.error.ErrorFieldModel
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompiler
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -20,6 +23,8 @@ import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiEnumEntry
+import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiParameter
@@ -28,8 +33,10 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
+import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
@@ -41,6 +48,8 @@ class ClientPrecompilerTest {
         val bookId = LsiSymbolId.type("demo.Book")
         val exceptionId = LsiSymbolId.type("demo.BookException")
         val serviceId = LsiSymbolId.type("demo.BookService")
+        val fetcherOwnerId = LsiSymbolId.type("demo.BookFetchers")
+        val detailFetcher = fetcher(fetcherOwnerId, "DETAIL_FETCHER", bookId)
         val operation = function(
             ownerId = serviceId,
             name = "findBook",
@@ -68,6 +77,11 @@ class ClientPrecompilerTest {
                 ),
                 type(qualifiedName = "demo.BookException"),
                 type(
+                    qualifiedName = "demo.BookFetchers",
+                    memberIds = listOf(detailFetcher.id),
+                ),
+                detailFetcher,
+                type(
                     qualifiedName = "demo.BookService",
                     memberIds = listOf(operation.id),
                     annotations = listOf(
@@ -87,11 +101,11 @@ class ClientPrecompilerTest {
             ),
         )
 
-        val schema = ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA)
+        val schema = ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies())
 
         val service = schema.services.single()
         assertEquals(serviceId, service.id)
-        assertEquals(listOf("admin", "public"), service.groups)
+        assertEquals(listOf("public", "admin"), service.groups)
         assertEquals("图书服务。", service.doc)
         val compiledOperation = service.operations.single()
         assertEquals("findBook", compiledOperation.name)
@@ -113,6 +127,547 @@ class ClientPrecompilerTest {
         assertEquals(bookId, fetchBy.targetEntityTypeId)
         assertTrue(fetchBy.nullable)
         assertEquals(64, schema.fingerprint().length)
+    }
+
+    @Test
+    fun `precompiles reachable immutable enum and polymorphic definitions`() {
+        val bookId = LsiSymbolId.type("demo.Book")
+        val titleProp = property(bookId, "title")
+        val resultId = LsiSymbolId.type("demo.SearchResult")
+        val branchId = LsiSymbolId.type("demo.SearchResult.BookResult")
+        val branchBookProp = property(branchId, "book", type = LsiDeclaredType(bookId))
+        val categoryId = LsiSymbolId.type("demo.Category")
+        val categoryProp = property(bookId, "category", type = LsiDeclaredType(categoryId))
+        val serviceId = LsiSymbolId.type("demo.DefinitionService")
+        val operation = function(
+            ownerId = serviceId,
+            name = "search",
+            returnType = LsiDeclaredType(resultId),
+            annotations = listOf(api()),
+        )
+        val categoryEntry = LsiEnumEntry(
+            id = LsiSymbolId("${categoryId.value}#BOOK"),
+            name = "BOOK",
+            ownerId = categoryId,
+            documentation = "Book category.",
+            origin = SYNTHETIC_ORIGIN,
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.Book",
+                    annotations = listOf(annotation(IMMUTABLE)),
+                    memberIds = listOf(titleProp.id, categoryProp.id),
+                    documentation = "Book model.",
+                ),
+                titleProp,
+                categoryProp,
+                type(
+                    qualifiedName = "demo.SearchResult",
+                    documentation = "Search result.",
+                ),
+                type(
+                    qualifiedName = "demo.SearchResult.BookResult",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    enclosingTypeId = resultId,
+                    memberIds = listOf(branchBookProp.id),
+                    annotations = listOf(
+                        annotation(
+                            GENERATED_POLYMORPHIC_BRANCH,
+                            mapOf(
+                                "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(resultId))
+                            ),
+                        )
+                    ),
+                ),
+                branchBookProp,
+                type(
+                    qualifiedName = "demo.Category",
+                    kind = LsiTypeDeclarationKind.ENUM,
+                    enumEntries = listOf(categoryEntry),
+                ),
+                categoryEntry,
+                type(
+                    qualifiedName = "demo.DefinitionService",
+                    annotations = listOf(api()),
+                    memberIds = listOf(operation.id),
+                ),
+                operation,
+            ),
+        )
+        val immutableSchema = JimmerImmutablePrecompiler().compile(workspace, setOf(bookId))
+        val schema = ClientPrecompiler().compile(
+            workspace,
+            ClientPrecompileDependencies(
+                immutableSchema = immutableSchema,
+                errorSchema = EMPTY_ERROR_SCHEMA,
+            ),
+        )
+
+        val definitions = schema.definitions.associateBy(ClientTypeDefinition::id)
+        assertEquals(ClientDefinitionKind.IMMUTABLE, definitions.getValue(bookId).kind)
+        assertEquals(listOf("title", "category"), definitions.getValue(bookId).properties.map { it.name })
+        assertEquals(listOf(branchId), definitions.getValue(resultId).polymorphicBranches.map { it.typeId })
+        assertEquals(listOf("SearchResult", "BookResult"), definitions.getValue(branchId).typeName.simpleNames)
+        assertEquals(listOf("BOOK"), definitions.getValue(categoryId).enumConstants.map { it.name })
+        assertTrue(schema.normalizedSnapshot().contains("definition|type:demo.Book"))
+    }
+
+    @Test
+    fun `requests full declarations for the reachable client definition closure`() {
+        val serviceId = LsiSymbolId.type("demo.ExternalService")
+        val externalId = LsiSymbolId.type("external.Envelope")
+        val payloadId = LsiSymbolId.type("external.Payload")
+        val operation = function(
+            ownerId = serviceId,
+            name = "load",
+            returnType = LsiDeclaredType(externalId),
+            annotations = listOf(api()),
+        )
+        val envelopePayload = property(externalId, "payload", type = LsiDeclaredType(payloadId))
+        val initialWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.ExternalService",
+                    memberIds = listOf(operation.id),
+                    annotations = listOf(api()),
+                ),
+                operation,
+                type(qualifiedName = "external.Envelope", kind = LsiTypeDeclarationKind.CLASS),
+            ),
+        )
+        assertEquals(
+            listOf(externalId),
+            ClientPrecompiler().requestedTypeSeeds(initialWorkspace).map { seed -> seed.typeId },
+        )
+
+        val expandedWorkspace = LsiWorkspace(
+            declarations = initialWorkspace.declarations.filterNot { declaration ->
+                declaration.id == externalId
+            } + listOf(
+                type(
+                    qualifiedName = "external.Envelope",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    memberIds = listOf(envelopePayload.id),
+                ),
+                envelopePayload,
+                type(qualifiedName = "external.Payload", kind = LsiTypeDeclarationKind.CLASS),
+            ),
+        )
+        assertEquals(
+            listOf(externalId, payloadId),
+            ClientPrecompiler().requestedTypeSeeds(expandedWorkspace).map { seed -> seed.typeId },
+        )
+        assertTrue(
+            ClientPrecompiler().requestedTypeSeeds(expandedWorkspace).all { seed ->
+                seed.mode == LsiTypeSeedMode.FULL_DECLARATION
+            }
+        )
+    }
+
+    @Test
+    fun `immutable converter target contributes a full definition seed and closure`() {
+        val serviceId = LsiSymbolId.type("demo.ConverterService")
+        val bookId = LsiSymbolId.type("demo.ConvertedBook")
+        val converterId = LsiSymbolId.type("demo.ExternalPojoConverter")
+        val externalPojoId = LsiSymbolId.type("external.ExternalPojo")
+        val nestedId = LsiSymbolId.type("external.Nested")
+        val convertedProp = property(
+            ownerId = bookId,
+            name = "payload",
+            annotations = listOf(
+                annotation(
+                    JSON_CONVERTER,
+                    mapOf(
+                        "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(converterId))
+                    ),
+                )
+            ),
+        )
+        val operation = function(
+            ownerId = serviceId,
+            name = "find",
+            returnType = LsiDeclaredType(bookId),
+            annotations = listOf(api()),
+        )
+        val externalNested = property(
+            ownerId = externalPojoId,
+            name = "nested",
+            type = LsiDeclaredType(nestedId),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.ConvertedBook",
+                    annotations = listOf(annotation(IMMUTABLE)),
+                    memberIds = listOf(convertedProp.id),
+                ),
+                convertedProp,
+                type(
+                    qualifiedName = "demo.ExternalPojoConverter",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    superTypes = listOf(
+                        LsiDeclaredType(
+                            declarationId = CONVERTER,
+                            arguments = listOf(
+                                LsiTypeArgument.invariant(
+                                    LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+                                ),
+                                LsiTypeArgument.invariant(LsiDeclaredType(externalPojoId)),
+                            ),
+                        )
+                    ),
+                ),
+                type(
+                    qualifiedName = "demo.ConverterService",
+                    annotations = listOf(api()),
+                    memberIds = listOf(operation.id),
+                ),
+                operation,
+                type(
+                    qualifiedName = "external.ExternalPojo",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    memberIds = listOf(externalNested.id),
+                ),
+                externalNested,
+                type(qualifiedName = "external.Nested", kind = LsiTypeDeclarationKind.CLASS),
+            ),
+        )
+        val dependencies = ClientPrecompileDependencies(
+            immutableSchema = JimmerImmutablePrecompiler().compile(workspace, setOf(bookId)),
+            errorSchema = EMPTY_ERROR_SCHEMA,
+        )
+
+        val seeds = ClientPrecompiler().requestedTypeSeeds(workspace, dependencies = dependencies)
+
+        assertEquals(
+            LsiTypeSeedMode.FULL_DECLARATION,
+            seeds.single { seed -> seed.typeId == externalPojoId }.mode,
+        )
+        assertEquals(
+            LsiTypeSeedMode.FULL_DECLARATION,
+            seeds.single { seed -> seed.typeId == nestedId }.mode,
+        )
+        val definitions = ClientPrecompiler().compile(workspace, dependencies)
+            .definitions
+            .associateBy(ClientTypeDefinition::id)
+        val convertedType = assertIs<ClientDeclaredTypeRef>(
+            definitions.getValue(bookId).properties.single().type
+        )
+        assertEquals(externalPojoId, convertedType.typeId)
+        assertEquals(
+            listOf("nested"),
+            definitions.getValue(externalPojoId).properties.map(ClientDefinitionProperty::name),
+        )
+    }
+
+    @Test
+    fun `generated error field type contributes a full definition seed and closure`() {
+        val serviceId = LsiSymbolId.type("demo.GeneratedErrorService")
+        val familyId = LsiSymbolId.type("demo.GeneratedErrorCode")
+        val familyExceptionId = LsiSymbolId.type("demo.GeneratedErrorException")
+        val codeExceptionId = LsiSymbolId.type("demo.GeneratedErrorException.Invalid")
+        val externalPojoId = LsiSymbolId.type("external.ExternalPojo")
+        val externalName = property(externalPojoId, "name")
+        val operation = function(
+            ownerId = serviceId,
+            name = "execute",
+            annotations = listOf(api()),
+            thrownTypes = listOf(LsiDeclaredType(codeExceptionId)),
+        )
+        val field = ErrorFieldModel(
+            name = "detail",
+            type = LsiDeclaredType(externalPojoId),
+            list = false,
+            nullable = false,
+            documentation = "External error detail.",
+            declaredBy = familyId,
+        )
+        val dependencies = ClientPrecompileDependencies(
+            immutableSchema = JimmerImmutableSchema(emptyList()),
+            errorSchema = ErrorPrecompiledSchema(
+                families = listOf(
+                    ErrorFamilyModel(
+                        id = familyId,
+                        qualifiedName = "demo.GeneratedErrorCode",
+                        packageName = "demo",
+                        family = "GENERATED",
+                        exceptionTypeId = familyExceptionId,
+                        exceptionSimpleName = "GeneratedErrorException",
+                        checkedException = true,
+                        documentation = "Generated error family.",
+                        declaredFields = listOf(field),
+                        codes = listOf(
+                            ErrorCodeModel(
+                                id = LsiSymbolId("${familyId.value}#INVALID"),
+                                enumEntryName = "INVALID",
+                                code = "INVALID",
+                                creatorName = "invalid",
+                                exceptionTypeId = codeExceptionId,
+                                exceptionSimpleName = "Invalid",
+                                documentation = "Invalid error.",
+                                declaredFields = emptyList(),
+                                fields = listOf(field),
+                            )
+                        ),
+                    )
+                ),
+            ),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.GeneratedErrorService",
+                    annotations = listOf(api()),
+                    memberIds = listOf(operation.id),
+                ),
+                operation,
+                type(
+                    qualifiedName = "external.ExternalPojo",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    memberIds = listOf(externalName.id),
+                ),
+                externalName,
+            ),
+        )
+
+        val seeds = ClientPrecompiler().requestedTypeSeeds(workspace, dependencies = dependencies)
+
+        assertEquals(
+            LsiTypeSeedMode.FULL_DECLARATION,
+            seeds.single { seed -> seed.typeId == externalPojoId }.mode,
+        )
+        val definitions = ClientPrecompiler().compile(workspace, dependencies)
+            .definitions
+            .associateBy(ClientTypeDefinition::id)
+        val generatedError = definitions.getValue(codeExceptionId)
+        assertEquals("detail", generatedError.properties.single().name)
+        assertEquals(
+            externalPojoId,
+            assertIs<ClientDeclaredTypeRef>(generatedError.properties.single().type).typeId,
+        )
+        assertEquals(
+            listOf("name"),
+            definitions.getValue(externalPojoId).properties.map(ClientDefinitionProperty::name),
+        )
+    }
+
+    @Test
+    fun `json value return type contributes a full definition seed and closure`() {
+        val serviceId = LsiSymbolId.type("demo.JsonValueService")
+        val wrapperId = LsiSymbolId.type("external.JsonValueEnvelope")
+        val externalPojoId = LsiSymbolId.type("external.ExternalPojo")
+        val externalName = property(externalPojoId, "name")
+        val jsonValue = function(
+            ownerId = wrapperId,
+            name = "value",
+            returnType = LsiDeclaredType(externalPojoId),
+            annotations = listOf(annotation(JSON_VALUE)),
+        )
+        val operation = function(
+            ownerId = serviceId,
+            name = "load",
+            returnType = LsiDeclaredType(wrapperId),
+            annotations = listOf(api()),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "external.JsonValueEnvelope",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    memberIds = listOf(jsonValue.id),
+                ),
+                jsonValue,
+                type(
+                    qualifiedName = "external.ExternalPojo",
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    memberIds = listOf(externalName.id),
+                ),
+                externalName,
+                type(
+                    qualifiedName = "demo.JsonValueService",
+                    annotations = listOf(api()),
+                    memberIds = listOf(operation.id),
+                ),
+                operation,
+            ),
+        )
+
+        val seeds = ClientPrecompiler().requestedTypeSeeds(workspace)
+
+        assertEquals(
+            LsiTypeSeedMode.FULL_DECLARATION,
+            seeds.single { seed -> seed.typeId == wrapperId }.mode,
+        )
+        assertEquals(
+            LsiTypeSeedMode.FULL_DECLARATION,
+            seeds.single { seed -> seed.typeId == externalPojoId }.mode,
+        )
+        val schema = ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies())
+        assertEquals(
+            externalPojoId,
+            assertIs<ClientDeclaredTypeRef>(schema.services.single().operations.single().returnType).typeId,
+        )
+        val definitions = schema.definitions.associateBy(ClientTypeDefinition::id)
+        assertTrue(wrapperId !in definitions)
+        assertEquals(
+            listOf("name"),
+            definitions.getValue(externalPojoId).properties.map(ClientDefinitionProperty::name),
+        )
+    }
+
+    @Test
+    fun `java object definitions only expose bean getters and preserve boxed nullability`() {
+        val javaOrigin = sourceOrigin(LsiLanguage.JAVA)
+        val dtoId = LsiSymbolId.type("demo.JavaDto")
+        val serviceId = LsiSymbolId.type("demo.JavaDtoService")
+        val nameProp = property(
+            ownerId = dtoId,
+            name = "name",
+            getterName = "getName",
+            type = LsiPrimitiveType(
+                kind = LsiPrimitiveKind.INT,
+                nullability = LsiNullability.PLATFORM,
+                boxed = true,
+            ),
+            origin = javaOrigin,
+        )
+        val calculateProp = property(
+            ownerId = dtoId,
+            name = "calculate",
+            getterName = "calculate",
+            origin = javaOrigin,
+        )
+        val toStringProp = property(
+            ownerId = dtoId,
+            name = "toString",
+            getterName = "toString",
+            origin = javaOrigin,
+        )
+        val operation = function(
+            ownerId = serviceId,
+            name = "load",
+            returnType = LsiDeclaredType(dtoId),
+            annotations = listOf(api()),
+            origin = javaOrigin,
+        )
+        val schema = ClientPrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        qualifiedName = "demo.JavaDto",
+                        kind = LsiTypeDeclarationKind.CLASS,
+                        memberIds = listOf(nameProp.id, calculateProp.id, toStringProp.id),
+                        origin = javaOrigin,
+                    ),
+                    nameProp,
+                    calculateProp,
+                    toStringProp,
+                    type(
+                        qualifiedName = "demo.JavaDtoService",
+                        memberIds = listOf(operation.id),
+                        annotations = listOf(api()),
+                        origin = javaOrigin,
+                    ),
+                    operation,
+                ),
+            ),
+            EMPTY_ERROR_SCHEMA.clientDependencies(),
+        )
+
+        val property = schema.definitions.single().properties.single()
+        assertEquals("name", property.name)
+        val propertyType = assertIs<ClientPrimitiveTypeRef>(property.type)
+        assertEquals(LsiPrimitiveKind.INT, propertyType.kind)
+        assertTrue(propertyType.nullable)
+    }
+
+    @Test
+    fun `validates primitive nullability annotations without treating validation constraints as type nullability`() {
+        val nullable = annotation(LsiSymbolId.type("demo.Nullable"))
+        val nonNull = annotation(LsiSymbolId.type("demo.NonNull"))
+
+        val nullablePrimitive = assertFailsWith<ClientPrecompileException> {
+            compileSingleOperation(
+                LsiPrimitiveType(LsiPrimitiveKind.INT, annotations = listOf(nullable)),
+            )
+        }
+        assertTrue(nullablePrimitive.message.orEmpty().contains("cannot decorate primitive type"))
+
+        val nonNullBoxed = assertFailsWith<ClientPrecompileException> {
+            compileSingleOperation(
+                LsiPrimitiveType(
+                    LsiPrimitiveKind.INT,
+                    nullability = LsiNullability.NON_NULL,
+                    annotations = listOf(nonNull),
+                    boxed = true,
+                ),
+            )
+        }
+        assertTrue(nonNullBoxed.message.orEmpty().contains("cannot decorate boxed primitive type"))
+
+        val conflict = assertFailsWith<ClientPrecompileException> {
+            compileSingleOperation(
+                LsiDeclaredType(
+                    declarationId = LsiSymbolId.type("java.lang.String"),
+                    annotations = listOf(nullable, nonNull),
+                ),
+            )
+        }
+        assertTrue(conflict.message.orEmpty().contains("conflicting nullability annotations"))
+
+        val validationNotNull = annotation(
+            LsiSymbolId.type("jakarta.validation.constraints.NotNull")
+        )
+        val schema = compileSingleOperation(
+            LsiPrimitiveType(
+                LsiPrimitiveKind.INT,
+                nullability = LsiNullability.PLATFORM,
+                annotations = listOf(validationNotNull),
+                boxed = true,
+            ),
+        )
+        assertTrue(assertIs<ClientPrimitiveTypeRef>(schema.services.single().operations.single().returnType).nullable)
+    }
+
+    @Test
+    fun `json value types are replaced before definitions are collected`() {
+        val levelId = LsiSymbolId.type("demo.Level")
+        val serviceId = LsiSymbolId.type("demo.LevelService")
+        val jsonValue = function(
+            ownerId = levelId,
+            name = "value",
+            returnType = LsiPrimitiveType(LsiPrimitiveKind.INT),
+            annotations = listOf(annotation(JSON_VALUE)),
+        )
+        val operation = function(
+            ownerId = serviceId,
+            name = "level",
+            returnType = LsiDeclaredType(levelId),
+            annotations = listOf(api()),
+        )
+        val schema = ClientPrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        qualifiedName = "demo.Level",
+                        kind = LsiTypeDeclarationKind.ENUM,
+                        memberIds = listOf(jsonValue.id),
+                    ),
+                    jsonValue,
+                    type(
+                        qualifiedName = "demo.LevelService",
+                        memberIds = listOf(operation.id),
+                        annotations = listOf(api()),
+                    ),
+                    operation,
+                ),
+            ),
+            EMPTY_ERROR_SCHEMA.clientDependencies(),
+        )
+
+        assertIs<ClientPrimitiveTypeRef>(schema.services.single().operations.single().returnType)
+        assertTrue(schema.definitions.isEmpty())
     }
 
     @Test
@@ -142,9 +697,11 @@ class ClientPrecompilerTest {
             ),
         )
 
-        assertTrue(ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA).services.isEmpty())
+        assertTrue(
+            ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies()).services.isEmpty()
+        )
         val schema = ClientPrecompiler(ClientPrecompileOptions(explicitApi = true))
-            .compile(workspace, EMPTY_ERROR_SCHEMA)
+            .compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies())
 
         assertEquals(listOf("findAll"), schema.services.single().operations.map(ClientOperation::name))
     }
@@ -175,7 +732,7 @@ class ClientPrecompilerTest {
                 operation,
             ),
         )
-        val schema = ClientPrecompiler().compile(workspace, errorSchema())
+        val schema = ClientPrecompiler().compile(workspace, errorSchema().clientDependencies())
         val compiledOperation = schema.services.single().operations.single()
 
         assertEquals(
@@ -255,7 +812,7 @@ class ClientPrecompilerTest {
                     operation,
                 ),
             ),
-            errorSchema(),
+            errorSchema().clientDependencies(),
         )
 
         val compiledOperation = schema.services.single().operations.single()
@@ -274,7 +831,7 @@ class ClientPrecompilerTest {
         val nestedException = assertFailsWith<ClientPrecompileException> {
             ClientPrecompiler().compile(
                 LsiWorkspace(declarations = listOf(outer, nested)),
-                EMPTY_ERROR_SCHEMA,
+                EMPTY_ERROR_SCHEMA.clientDependencies(),
             )
         }
         assertTrue(nestedException.message.orEmpty().contains("top-level"))
@@ -290,7 +847,7 @@ class ClientPrecompilerTest {
         val genericException = assertFailsWith<ClientPrecompileException> {
             ClientPrecompiler().compile(
                 LsiWorkspace(declarations = listOf(generic)),
-                EMPTY_ERROR_SCHEMA,
+                EMPTY_ERROR_SCHEMA.clientDependencies(),
             )
         }
         assertTrue(genericException.message.orEmpty().contains("type parameters"))
@@ -340,11 +897,11 @@ class ClientPrecompilerTest {
     fun `java getter and kotlin function produce equivalent snapshots`() {
         val javaSchema = ClientPrecompiler().compile(
             languageWorkspace(LsiLanguage.JAVA, javaGetter = true),
-            EMPTY_ERROR_SCHEMA,
+            EMPTY_ERROR_SCHEMA.clientDependencies(),
         )
         val kotlinSchema = ClientPrecompiler().compile(
             languageWorkspace(LsiLanguage.KOTLIN, javaGetter = false),
-            EMPTY_ERROR_SCHEMA,
+            EMPTY_ERROR_SCHEMA.clientDependencies(),
         )
 
         assertEquals(javaSchema.normalizedSnapshot(), kotlinSchema.normalizedSnapshot())
@@ -365,7 +922,7 @@ class ClientPrecompilerTest {
         val exception = assertFailsWith<ClientPrecompileException> {
             ClientPrecompiler().compile(
                 LsiWorkspace(declarations = listOf(service, operation)),
-                EMPTY_ERROR_SCHEMA,
+                EMPTY_ERROR_SCHEMA.clientDependencies(),
             )
         }
         assertTrue(exception.message.orEmpty().contains(messagePart))
@@ -379,6 +936,12 @@ class ClientPrecompilerTest {
         val bookId = LsiSymbolId.type("demo.Book")
         val serviceId = LsiSymbolId.type("demo.LanguageService")
         val annotations = listOf(api(), fetchBy("BOOK_FETCHER"))
+        val bookFetcher = fetcher(
+            ownerId = serviceId,
+            name = "BOOK_FETCHER",
+            entityTypeId = bookId,
+            origin = origin,
+        )
         val operation = if (javaGetter) {
             property(
                 ownerId = serviceId,
@@ -410,11 +973,12 @@ class ClientPrecompilerTest {
                 type(
                     qualifiedName = "demo.LanguageService",
                     annotations = listOf(api()),
-                    memberIds = listOf(operation.id),
+                    memberIds = listOf(operation.id, bookFetcher.id),
                     documentation = "语言无关服务。",
                     origin = origin,
                 ),
                 operation,
+                bookFetcher,
             ),
         )
     }
@@ -424,6 +988,10 @@ class ClientPrecompilerTest {
         annotations: List<LsiAnnotation> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
         typeParameters: List<LsiTypeParameter> = emptyList(),
+        superTypes: List<LsiTypeRef> = emptyList(),
+        kind: LsiTypeDeclarationKind = LsiTypeDeclarationKind.INTERFACE,
+        enclosingTypeId: LsiSymbolId? = null,
+        enumEntries: List<LsiEnumEntry> = emptyList(),
         documentation: String? = null,
         origin: LsiOrigin = SYNTHETIC_ORIGIN,
     ): LsiTypeDeclaration {
@@ -431,12 +999,38 @@ class ClientPrecompilerTest {
             id = LsiSymbolId.type(qualifiedName),
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,
-            kind = LsiTypeDeclarationKind.INTERFACE,
+            kind = kind,
+            enclosingTypeId = enclosingTypeId,
             typeParameters = typeParameters,
+            superTypes = superTypes,
             memberIds = memberIds,
+            enumEntries = enumEntries,
             documentation = documentation,
             annotations = annotations,
             origin = origin,
+        )
+    }
+
+    private fun compileSingleOperation(returnType: LsiTypeRef): ClientPrecompiledSchema {
+        val serviceId = LsiSymbolId.type("demo.NullabilityService")
+        val operation = function(
+            ownerId = serviceId,
+            name = "value",
+            returnType = returnType,
+            annotations = listOf(api()),
+        )
+        return ClientPrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        qualifiedName = "demo.NullabilityService",
+                        annotations = listOf(api()),
+                        memberIds = listOf(operation.id),
+                    ),
+                    operation,
+                ),
+            ),
+            EMPTY_ERROR_SCHEMA.clientDependencies(),
         )
     }
 
@@ -510,6 +1104,27 @@ class ClientPrecompilerTest {
         )
     }
 
+    private fun fetcher(
+        ownerId: LsiSymbolId,
+        name: String,
+        entityTypeId: LsiSymbolId,
+        origin: LsiOrigin = SYNTHETIC_ORIGIN,
+    ): LsiField {
+        return LsiField(
+            id = LsiSymbolId.field(ownerId, name),
+            name = name,
+            ownerId = ownerId,
+            type = LsiDeclaredType(
+                declarationId = FETCHER,
+                arguments = listOf(
+                    LsiTypeArgument.invariant(LsiDeclaredType(entityTypeId)),
+                ),
+            ),
+            static = true,
+            origin = origin,
+        )
+    }
+
     private fun api(vararg groups: String): LsiAnnotation {
         return annotation(
             type = API,
@@ -571,13 +1186,27 @@ class ClientPrecompilerTest {
         private val DEFAULT_FETCHER_OWNER =
             LsiSymbolId.type("org.babyfish.jimmer.client.meta.DefaultFetcherOwner")
         private val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
+        private val IMMUTABLE = LsiSymbolId.type("org.babyfish.jimmer.Immutable")
+        private val GENERATED_POLYMORPHIC_BRANCH =
+            LsiSymbolId.type("org.babyfish.jimmer.internal.GeneratedPolymorphicDtoBranch")
         private val FETCH_BY = LsiSymbolId.type("org.babyfish.jimmer.client.FetchBy")
+        private val FETCHER = LsiSymbolId.type("org.babyfish.jimmer.sql.fetcher.Fetcher")
+        private val JSON_VALUE = LsiSymbolId.type("com.fasterxml.jackson.annotation.JsonValue")
+        private val JSON_CONVERTER = LsiSymbolId.type("org.babyfish.jimmer.jackson.JsonConverter")
+        private val CONVERTER = LsiSymbolId.type("org.babyfish.jimmer.jackson.Converter")
         private val GET_MAPPING =
             LsiSymbolId.type("org.springframework.web.bind.annotation.GetMapping")
         private val REST_CONTROLLER =
             LsiSymbolId.type("org.springframework.web.bind.annotation.RestController")
         private val SYNTHETIC_ORIGIN = LsiOrigin(LsiOriginKind.SYNTHETIC)
     }
+}
+
+private fun ErrorPrecompiledSchema.clientDependencies(): ClientPrecompileDependencies {
+    return ClientPrecompileDependencies(
+        immutableSchema = JimmerImmutableSchema(emptyList()),
+        errorSchema = this,
+    )
 }
 
 private fun errorSchema(): ErrorPrecompiledSchema {

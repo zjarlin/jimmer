@@ -1,15 +1,11 @@
 package org.babyfish.jimmer.compiler.ksp
 
-import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import org.babyfish.jimmer.client.EnableImplicitApi
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
-import org.babyfish.jimmer.compiler.dto.dtoGenerationTerminal
 import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
@@ -18,8 +14,6 @@ import org.babyfish.jimmer.dto.compiler.DtoUtils
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.GeneratorException
 import org.babyfish.jimmer.ksp.MetaException
-import org.babyfish.jimmer.ksp.annotation
-import org.babyfish.jimmer.ksp.client.ClientProcessor
 import org.babyfish.jimmer.ksp.dto.DtoProcessor
 import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
 import java.util.regex.Pattern
@@ -55,9 +49,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                         }
                     } ?: DtoModifier.STATIC
 
-            private val checkedException =
-                environment.options["jimmer.client.checkedException"]?.trim() == "true"
-
             private val dtoMutable =
                 environment.options["jimmer.dto.mutable"]?.trim() == "true"
 
@@ -69,12 +60,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
 
             private var dtoGenerated = false
 
-            private var explicitClientApi = false
-
-            private var clientContent: String? = null
-
-            private var clientReadyInLatestRound = false
-
             override fun process(resolver: Resolver): List<KSAnnotated> {
                 val deferred = linkedSetOf<KSAnnotated>()
                 val lsiDeferred = lsiDriver.process(resolver)
@@ -85,43 +70,20 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                 processJimmer(
                     resolver = resolver,
                     lsiRoundResult = lsiRoundResult,
-                    hasInvalidDeferred = lsiDeferred.isNotEmpty(),
                 )
                 return deferred.toList()
             }
 
             override fun finish() {
                 lsiDriver.finish()
-                if (clientReadyInLatestRound) {
-                    clientContent?.let { content ->
-                        environment.codeGenerator.createNewFile(
-                            dependencies = Dependencies.ALL_FILES,
-                            packageName = "META-INF.jimmer",
-                            fileName = "client",
-                            extensionName = "",
-                        ).bufferedWriter().use { writer ->
-                            writer.write(content)
-                        }
-                    }
-                }
             }
 
             private fun processJimmer(
                 resolver: Resolver,
                 lsiRoundResult: org.babyfish.jimmer.compiler.CompilerRoundResult,
-                hasInvalidDeferred: Boolean,
             ) {
-                clientReadyInLatestRound = false
-                clientContent = null
                 try {
                     val context = Context(resolver, environment)
-                    explicitClientApi = explicitClientApi || resolver.getAllFiles().any { file ->
-                        file.declarations.any {
-                            it is KSClassDeclaration &&
-                                context.include(it) &&
-                                it.annotation(EnableImplicitApi::class) != null
-                        }
-                    }
                     val processedDeclarations = ImmutableProcessor(
                         context,
                         excludedUserAnnotationPrefixes,
@@ -151,20 +113,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                     if (generated) {
                         return
                     }
-                    if (
-                        hasInvalidDeferred ||
-                        !lsiRoundResult.dtoGenerationTerminal() ||
-                        lsiRoundResult.unresolvedSymbols.isNotEmpty()
-                    ) {
-                        return
-                    }
-                    if (!context.isBuddyIgnoreResourceGeneration) {
-                        clientContent = ClientProcessor(
-                            context,
-                            explicitClientApi,
-                        ).render()
-                    }
-                    clientReadyInLatestRound = !context.isBuddyIgnoreResourceGeneration
                 } catch (ex: MetaException) {
                     environment.logger.error(ex.message ?: ex.javaClass.name, ex.declaration)
                 } catch (ex: DtoAstException) {

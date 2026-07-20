@@ -62,6 +62,55 @@ fun ClientPrecompiledSchema.normalizedSnapshot(): String {
                 }
             }
         }
+        definitions.sortedBy(ClientTypeDefinition::id).forEach { definition ->
+            appendRecord(
+                "definition",
+                definition.id.value,
+                definition.typeName.canonicalText(),
+                definition.kind.name,
+                definition.apiIgnore.toString(),
+                definition.doc.orEmpty(),
+                definition.error?.family.orEmpty(),
+                definition.error?.code.orEmpty(),
+            )
+            definition.properties
+                .sortedWith(compareBy(ClientDefinitionProperty::name, ClientDefinitionProperty::id))
+                .forEach { property ->
+                    appendRecord(
+                        "definition-property",
+                        definition.id.value,
+                        property.id.value,
+                        property.name,
+                        property.type.canonicalText(),
+                        property.doc.orEmpty(),
+                    )
+                }
+            definition.superTypes
+                .map(ClientTypeRef::canonicalText)
+                .sorted()
+                .forEach { superType ->
+                    appendRecord("definition-super", definition.id.value, superType)
+                }
+            definition.polymorphicBranches
+                .sortedBy(ClientDeclaredTypeRef::typeId)
+                .forEach { branch ->
+                    appendRecord(
+                        "definition-branch",
+                        definition.id.value,
+                        branch.typeId.value,
+                        branch.typeName.canonicalText(),
+                    )
+                }
+            definition.enumConstants.sortedBy(ClientEnumConstant::name).forEach { constant ->
+                appendRecord(
+                    "definition-enum",
+                    definition.id.value,
+                    constant.id.value,
+                    constant.name,
+                    constant.doc.orEmpty(),
+                )
+            }
+        }
     }
 }
 
@@ -102,6 +151,9 @@ private fun ClientTypeRef.canonicalText(): String {
     val typeText = when (this) {
         is ClientDeclaredTypeRef -> buildString {
             append(typeId.value)
+            append('[')
+            append(typeName.canonicalText())
+            append(']')
             if (arguments.isNotEmpty()) {
                 append('<')
                 append(arguments.joinToString(",") { argument -> argument.canonicalText() })
@@ -110,7 +162,15 @@ private fun ClientTypeRef.canonicalText(): String {
         }
         is ClientPrimitiveTypeRef -> "primitive:${kind.name.lowercase()}"
         is ClientArrayTypeRef -> "array:${elementType.canonicalText()}"
-        is ClientTypeParameterRef -> "parameter:${parameterId.value}"
+        is ClientTypeParameterRef -> buildString {
+            append("parameter:")
+            append(parameterId.value)
+            append('[')
+            append(ownerTypeName.canonicalText())
+            append("::")
+            append(name)
+            append(']')
+        }
         is ClientUnresolvedTypeRef -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
     }
     return buildString {
@@ -122,11 +182,23 @@ private fun ClientTypeRef.canonicalText(): String {
             append(',')
             append(fetchBy.ownerTypeId.value)
             append(',')
-            append(fetchBy.targetEntityTypeId?.value.orEmpty())
+            append(fetchBy.ownerTypeName.canonicalText())
+            append(',')
+            append(fetchBy.targetEntityTypeId.value)
             append(',')
             append(fetchBy.nullable)
+            append(',')
+            append(fetchBy.documentation.orEmpty().escapeSnapshotField())
             append(')')
         }
+    }
+}
+
+private fun ClientTypeName.canonicalText(): String {
+    return buildString {
+        append(packageName.orEmpty())
+        append('/')
+        append(simpleNames.joinToString("\$"))
     }
 }
 

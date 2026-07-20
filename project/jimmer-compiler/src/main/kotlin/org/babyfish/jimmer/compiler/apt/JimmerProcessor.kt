@@ -3,15 +3,10 @@ package org.babyfish.jimmer.compiler.apt
 import org.babyfish.jimmer.apt.Context
 import org.babyfish.jimmer.apt.GeneratorException
 import org.babyfish.jimmer.apt.MetaException
-import org.babyfish.jimmer.apt.client.ClientProcessor
-import org.babyfish.jimmer.apt.client.FetchByUnsupportedException
 import org.babyfish.jimmer.apt.dto.DtoProcessor
 import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
-import org.babyfish.jimmer.client.EnableImplicitApi
-import org.babyfish.jimmer.client.FetchBy
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
-import org.babyfish.jimmer.compiler.dto.dtoGenerationTerminal
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
@@ -38,7 +33,8 @@ import javax.tools.StandardLocation
     "org.babyfish.jimmer.sql.Embeddable",
     "org.babyfish.jimmer.sql.EnableDtoGeneration",
     "org.babyfish.jimmer.error.ErrorFamily",
-    "org.babyfish.jimmer.client.Api",
+    "org.babyfish.jimmer.client.EnableImplicitApi",
+    "org.babyfish.jimmer.client.meta.Api",
     "org.babyfish.jimmer.client.ExportDoc",
     "org.springframework.web.bind.annotation.RestController",
     "org.babyfish.jimmer.sql.transaction.Tx",
@@ -62,15 +58,7 @@ class JimmerProcessor : AbstractProcessor() {
 
     private var defaultNullableInputModifier = DtoModifier.STATIC
 
-    private var checkedException = false
-
-    private var ignoreJdkWarning = false
-
-    private var clientExplicitApi = false
-
     private var dtoGenerated = false
-
-    private val delayedClientTypeNames = linkedSetOf<String>()
 
     private lateinit var dtoFieldModifier: Modifier
 
@@ -116,8 +104,6 @@ class JimmerProcessor : AbstractProcessor() {
                     )
                 }
             } ?: DtoModifier.STATIC
-        checkedException = processingEnv.options["jimmer.client.checkedException"] == "true"
-        ignoreJdkWarning = processingEnv.options["jimmer.client.ignoreJdkWarning"] == "true"
         dtoFieldModifier = when (val visibility = processingEnv.options["jimmer.dto.fieldVisibility"]) {
             null, "private" -> Modifier.PRIVATE
             "protected" -> Modifier.PROTECTED
@@ -151,20 +137,6 @@ class JimmerProcessor : AbstractProcessor() {
     ): Boolean {
         try {
             val lsiRoundResult = lsiDriver.process(roundEnv)
-            val currentClientTypeNames = if (roundEnv.processingOver()) {
-                emptyList()
-            } else {
-                roundEnv.rootElements
-                    .filterIsInstance<TypeElement>()
-                    .map { it.qualifiedName.toString() }
-            }
-            if (!roundEnv.processingOver()) {
-                clientExplicitApi = clientExplicitApi || roundEnv.rootElements.any {
-                    it is TypeElement &&
-                        context.include(it) &&
-                        it.getAnnotation(EnableImplicitApi::class.java) != null
-                }
-            }
             var generated = lsiRoundResult.generatedSources
             if (!roundEnv.processingOver()) {
                 val immutableTypeElements = ImmutableProcessor(context, messager).process(roundEnv).keys
@@ -186,19 +158,7 @@ class JimmerProcessor : AbstractProcessor() {
                 ).process()
             }
             if (generated) {
-                delayedClientTypeNames += currentClientTypeNames
                 return true
-            }
-            if (
-                !roundEnv.processingOver() &&
-                !context.isBuddyIgnoreResourceGeneration &&
-                lsiRoundResult.dtoGenerationTerminal() &&
-                lsiRoundResult.unresolvedSymbols.isEmpty()
-            ) {
-                ClientProcessor(context, clientExplicitApi, delayedClientTypeNames).process(roundEnv)
-                delayedClientTypeNames.clear()
-            } else {
-                delayedClientTypeNames += currentClientTypeNames
             }
         } catch (ex: MetaException) {
             messager.printMessage(
@@ -217,25 +177,6 @@ class JimmerProcessor : AbstractProcessor() {
                 ex.message ?: ex.javaClass.name,
                 annotatedElements.first(),
             )
-        } catch (ex: FetchByUnsupportedException) {
-            val annotatedElements = roundEnv.getElementsAnnotatedWith(EnableImplicitApi::class.java)
-            var message =
-                "In order to parse the `@${FetchBy::class.java.name}` annotations that decorate generic type " +
-                    "parameters, please make sure the java compiler version is 11 or higher (`source.version` " +
-                    "and `target.version` can still remain `1.8`). However, once compilation is complete, " +
-                    "you can still use Java 8 to deploy and run the project"
-            if (ignoreJdkWarning) {
-                messager.printMessage(Diagnostic.Kind.WARNING, message)
-            } else {
-                message += ". If you want to suppress this error" +
-                    "(Note, this will lead to generating incorrect client code such as openapi and typescript), " +
-                    "please add the argument `-Ajimmer.client.ignoreJdkWarning=true` to java compiler by maven or gradle"
-                if (annotatedElements.isEmpty()) {
-                    messager.printMessage(Diagnostic.Kind.ERROR, message)
-                    throw ex
-                }
-                messager.printMessage(Diagnostic.Kind.ERROR, message, annotatedElements.first())
-            }
         }
         return true
     }
@@ -258,7 +199,6 @@ class JimmerProcessor : AbstractProcessor() {
         private val COMPILER_OPTIONS = setOf(
             "jimmer.buddy.ignoreResourceGeneration",
             "jimmer.client.checkedException",
-            "jimmer.client.ignoreJdkWarning",
             "jimmer.dto.defaultNullableInputModifier",
             DtoBundleLoader.ENABLED_OPTION,
             "jimmer.dto.dirs",

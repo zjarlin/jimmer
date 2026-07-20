@@ -1,0 +1,110 @@
+{
+  "services" : [ {
+    "typeName" : "audit.BookService",
+    "groups" : [ "audit" ],
+    "doc" : {
+      "value" : "Client service."
+    },
+    "operations" : [ {
+      "name" : "search",
+      "key" : "search:audit.SearchRequest:",
+      "doc" : {
+        "value" : "Search books."
+      },
+      "parameters" : [ {
+        "name" : "request",
+        "type" : {
+          "typeName" : "audit.SearchRequest"
+        },
+        "index" : 0
+      } ],
+      "returnType" : {
+        "typeName" : "java.util.List",
+        "arguments" : [ {
+          "typeName" : "audit.Book",
+          "fetchBy" : "BOOK_FETCHER",
+          "fetcherOwner" : "audit.BookService",
+          "fetcherDoc" : {
+            "value" : "Detailed book fetcher."
+          }
+        } ]
+      },
+      "exceptions" : [ "audit.NotFoundException" ]
+    } ]
+  } ],
+  "definitions" : [ {
+    "typeName" : "audit.Book",
+    "kind" : "IMMUTABLE",
+    "doc" : {
+      "value" : "A book."
+    },
+    "groups" : [ "audit" ],
+    "props" : [ {
+      "name" : "id",
+      "type" : {
+        "typeName" : "long"
+      }
+    }, {
+      "name" : "name",
+      "type" : {
+        "typeName" : "java.lang.String"
+      }
+    }, {
+      "name" : "edition",
+      "type" : {
+        "typeName" : "java.lang.String",
+        "nullable" : true
+      }
+    }, {
+      "name" : "genre",
+      "type" : {
+        "typeName" : "audit.Genre"
+      }
+    } ]
+  }, {
+    "typeName" : "audit.Genre",
+    "kind" : "ENUM",
+    "doc" : {
+      "value" : "Available genres."
+    },
+    "groups" : [ "audit" ],
+    "constants" : [ {
+      "name" : "SCIENCE",
+      "doc" : {
+        "value" : "Science."
+      }
+    }, {
+      "name" : "HISTORY",
+      "doc" : {
+        "value" : "History."
+      }
+    } ]
+  }, {
+    "typeName" : "audit.NotFoundException",
+    "error" : {
+      "family" : "AUDIT",
+      "code" : "NOT_FOUND"
+    },
+    "groups" : [ "audit" ],
+    "props" : [ {
+      "name" : "bookId",
+      "type" : {
+        "typeName" : "long"
+      }
+    } ]
+  }, {
+    "typeName" : "audit.SearchRequest",
+    "groups" : [ "audit" ],
+    "props" : [ {
+      "name" : "keyword",
+      "type" : {
+        "typeName" : "java.lang.String"
+      }
+    }, {
+      "name" : "page",
+      "type" : {
+        "typeName" : "int"
+      }
+    } ]
+  } ]
+}

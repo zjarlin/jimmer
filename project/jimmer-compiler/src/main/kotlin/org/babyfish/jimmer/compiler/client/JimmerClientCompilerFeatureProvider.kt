@@ -1,22 +1,37 @@
 package org.babyfish.jimmer.compiler.client
 
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
+import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
+import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
+import org.babyfish.jimmer.compiler.error.ErrorPrecompileOptions
+import org.babyfish.jimmer.compiler.error.ErrorPrecompileException
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import org.babyfish.jimmer.compiler.error.ErrorPrecompiler
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompileException
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompiler
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactKind
+import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
@@ -25,6 +40,31 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         id = CLIENT_FEATURE_ID,
         dependsOn = setOf(ERROR_FEATURE_ID, IMMUTABLE_FEATURE_ID),
     )
+
+    override fun requestTypeSeeds(context: JimmerCompilerTypeSeedContext): Collection<LsiTypeSeed> {
+        if (context.round.options[IGNORE_RESOURCE_GENERATION_OPTION] == "true") {
+            return emptyList()
+        }
+        val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
+        val explicitApi = context.round.workspace.hasImplicitApiMarker(
+            platform = context.round.platform,
+            sourceFilter = sourceFilter,
+        )
+        val precompiler = ClientPrecompiler(ClientPrecompileOptions(explicitApi))
+        val targets = precompiler.targets(context.round.workspace).compilationTargets(
+            workspace = context.round.workspace,
+            platform = context.round.platform,
+            sourceFilter = sourceFilter,
+        )
+        if (targets.rootTypeIds.isEmpty()) {
+            return emptyList()
+        }
+        return precompiler.requestedTypeSeeds(
+            workspace = context.round.workspace,
+            targets = targets,
+            dependencies = context.round.previewClientDependencies(),
+        )
+    }
 
     override fun precompile(
         context: JimmerCompilerPrecompileContext,
@@ -57,7 +97,10 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             workspace = context.round.workspace,
             targets = targets.without(initialUnresolvedTypeIds),
             initialUnresolvedTypeIds = initialUnresolvedTypeIds,
-            errorSchema = dependencies.errorSchema,
+            dependencies = ClientPrecompileDependencies(
+                immutableSchema = dependencies.immutableSchema,
+                errorSchema = dependencies.errorSchema,
+            ),
         )
         val deferred = outcome.unresolvedRootTypeIds.isNotEmpty() &&
             context.round.platform == CompilerPlatform.APT &&
@@ -87,6 +130,34 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             diagnostics = outcome.diagnostics(deferred),
             processedSymbols = currentTargets.rootTypeIds - unavailableRootTypeIds,
             unresolvedSymbols = if (deferred) outcome.unresolvedRootTypeIds else emptySet(),
+        )
+    }
+
+    override fun render(
+        context: JimmerCompilerRenderContext,
+    ): JimmerCompilerFeatureRenderResult {
+        val state = context.state as JimmerClientCompilerFeatureState
+        if (!context.round.isFinal || context.round.frontendDeferred || !state.renderable) {
+            return JimmerCompilerFeatureRenderResult()
+        }
+        val originatingSymbols = buildSet {
+            state.schema.services.mapTo(this, ClientService::id)
+            state.schema.definitions.mapTo(this, ClientTypeDefinition::id)
+        }
+        val originatingSources = originatingSymbols.mapNotNullTo(sortedSetOf()) { symbolId ->
+            context.round.workspace[symbolId]?.origin?.source
+        }
+        return JimmerCompilerFeatureRenderResult(
+            artifacts = listOf(
+                GeneratedArtifact.create(
+                    kind = ArtifactKind.RESOURCE,
+                    path = CLIENT_RESOURCE_PATH,
+                    content = ClientResourceRenderer().render(state.schema),
+                    aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                    originatingSymbols = originatingSymbols,
+                    originatingSources = originatingSources,
+                )
+            ),
         )
     }
 }
@@ -195,6 +266,7 @@ private data class ClientDependencies(
     val status: JimmerClientCompilerDependencyStatus,
     val immutableFingerprint: String,
     val errorFingerprint: String,
+    val immutableSchema: JimmerImmutableSchema,
     val errorSchema: ErrorPrecompiledSchema,
 )
 
@@ -247,7 +319,39 @@ private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependen
         status = status,
         immutableFingerprint = immutableState.fingerprint,
         errorFingerprint = errorState.fingerprint,
+        immutableSchema = immutableState.schema,
         errorSchema = errorState.schema,
+    )
+}
+
+private fun CompilerRound.previewClientDependencies(): ClientPrecompileDependencies {
+    val immutableTypeIds = workspace.declarationsOfType<LsiTypeDeclaration>()
+        .filter { type ->
+            type.annotations.any { annotation -> annotation.type in IMMUTABLE_TYPE_ANNOTATIONS }
+        }
+        .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
+    val immutablePrecompiler = JimmerImmutablePrecompiler()
+    val resolvedImmutableTypeIds = immutableTypeIds - immutablePrecompiler.unresolvedTargetTypeIds(
+        workspace = workspace,
+        targetTypeIds = immutableTypeIds,
+    )
+    val immutableSchema = try {
+        immutablePrecompiler.compile(workspace, resolvedImmutableTypeIds)
+    } catch (_: JimmerImmutablePrecompileException) {
+        JimmerImmutableSchema(emptyList())
+    }
+    val errorSchema = try {
+        ErrorPrecompiler(
+            ErrorPrecompileOptions(
+                checkedException = options["jimmer.client.checkedException"] == "true",
+            )
+        ).compile(workspace)
+    } catch (_: ErrorPrecompileException) {
+        ErrorPrecompiledSchema(emptyList())
+    }
+    return ClientPrecompileDependencies(
+        immutableSchema = immutableSchema,
+        errorSchema = errorSchema,
     )
 }
 
@@ -276,7 +380,7 @@ private fun precompileAvailableTargets(
     workspace: LsiWorkspace,
     targets: ClientPrecompileTargets,
     initialUnresolvedTypeIds: Set<LsiSymbolId>,
-    errorSchema: ErrorPrecompiledSchema,
+    dependencies: ClientPrecompileDependencies,
 ): ClientPrecompileOutcome {
     var availableTargets = targets
     val unresolvedTypeIds = initialUnresolvedTypeIds.toCollection(sortedSetOf())
@@ -284,12 +388,12 @@ private fun precompileAvailableTargets(
     while (availableTargets.rootTypeIds.isNotEmpty()) {
         try {
             return ClientPrecompileOutcome(
-                schema = precompiler.compile(workspace, availableTargets, errorSchema),
+                schema = precompiler.compile(workspace, availableTargets, dependencies),
                 unresolvedRootTypeIds = unresolvedTypeIds,
                 failures = failures,
             )
         } catch (exception: ClientPrecompileException) {
-            val affectedRootTypeId = exception.declarationId.rootTypeId()
+            val affectedRootTypeId = (exception.rootTypeId ?: exception.declarationId.rootTypeId())
                 .takeIf { typeId -> typeId in availableTargets.rootTypeIds }
                 ?: return ClientPrecompileOutcome(
                     schema = EMPTY_SCHEMA,
@@ -390,8 +494,12 @@ private fun LsiTypeDeclaration.isCompilationTarget(
     if (origin.kind !in COMPILATION_ORIGIN_KINDS || !sourceFilter.accepts(qualifiedName)) {
         return false
     }
-    return platform != CompilerPlatform.APT || annotations.none { annotation ->
-        annotation.type == KOTLIN_METADATA_ANNOTATION
+    return when (platform) {
+        CompilerPlatform.APT -> annotations.none { annotation ->
+            annotation.type == KOTLIN_METADATA_ANNOTATION
+        }
+        CompilerPlatform.KSP -> origin.language != LsiLanguage.JAVA
+        CompilerPlatform.UNKNOWN -> true
     }
 }
 
@@ -406,11 +514,18 @@ private const val CLIENT_FEATURE_ID = "client"
 private const val ERROR_FEATURE_ID = "error"
 private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val IGNORE_RESOURCE_GENERATION_OPTION = "jimmer.buddy.ignoreResourceGeneration"
+private const val CLIENT_RESOURCE_PATH = "META-INF/jimmer/client"
 
-private val EMPTY_SCHEMA = ClientPrecompiledSchema(emptyList())
+private val EMPTY_SCHEMA = ClientPrecompiledSchema(emptyList(), emptyList())
 private val ENABLE_IMPLICIT_API_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.client.EnableImplicitApi")
 private val KOTLIN_METADATA_ANNOTATION = LsiSymbolId.type("kotlin.Metadata")
+private val IMMUTABLE_TYPE_ANNOTATIONS = setOf(
+    LsiSymbolId.type("org.babyfish.jimmer.Immutable"),
+    LsiSymbolId.type("org.babyfish.jimmer.sql.Entity"),
+    LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass"),
+    LsiSymbolId.type("org.babyfish.jimmer.sql.Embeddable"),
+)
 private val COMPILATION_ORIGIN_KINDS = setOf(
     LsiOriginKind.SOURCE,
     LsiOriginKind.GENERATED,

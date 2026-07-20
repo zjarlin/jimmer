@@ -24,11 +24,19 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
 import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiWorkspace
+
+private fun emptyClientDependencies(): ClientPrecompileDependencies {
+    return ClientPrecompileDependencies(
+        immutableSchema = JimmerImmutableSchema(emptyList()),
+        errorSchema = ErrorPrecompiledSchema(emptyList()),
+    )
+}
 
 class ClientFrontendParityTest {
 
@@ -36,11 +44,11 @@ class ClientFrontendParityTest {
     fun `java throws and kotlin Throws produce identical client exception schema`() {
         val aptSchema = ClientPrecompiler().compile(
             compileJava(JAVA_SOURCES),
-            ErrorPrecompiledSchema(emptyList()),
+            emptyClientDependencies(),
         )
         val kspSchema = ClientPrecompiler().compile(
             compileKotlin(KOTLIN_SOURCES),
-            ErrorPrecompiledSchema(emptyList()),
+            emptyClientDependencies(),
         )
 
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())

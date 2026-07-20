@@ -10,7 +10,6 @@ import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoType
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.MetaException
-import org.babyfish.jimmer.ksp.client.ClientProcessor.Companion.realDeclaration
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.name

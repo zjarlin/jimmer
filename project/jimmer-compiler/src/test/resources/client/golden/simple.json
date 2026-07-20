@@ -1,0 +1,34 @@
+{
+  "services" : [ {
+    "typeName" : "audit.BookService",
+    "operations" : [ {
+      "name" : "find",
+      "key" : "find:long",
+      "parameters" : [ {
+        "name" : "id",
+        "type" : {
+          "typeName" : "long"
+        },
+        "index" : 0
+      } ],
+      "returnType" : {
+        "typeName" : "audit.Book"
+      }
+    } ]
+  } ],
+  "definitions" : [ {
+    "typeName" : "audit.Book",
+    "kind" : "IMMUTABLE",
+    "props" : [ {
+      "name" : "id",
+      "type" : {
+        "typeName" : "long"
+      }
+    }, {
+      "name" : "name",
+      "type" : {
+        "typeName" : "java.lang.String"
+      }
+    } ]
+  } ]
+}
