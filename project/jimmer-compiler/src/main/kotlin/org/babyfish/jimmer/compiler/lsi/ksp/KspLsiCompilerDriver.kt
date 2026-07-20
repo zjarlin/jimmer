@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
+import org.babyfish.jimmer.compiler.lsi.resolveLsiTypeSeedFixedPoint
 import org.babyfish.jimmer.compiler.input.FileSystemCompilerInputDocumentScanner
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
@@ -69,6 +70,8 @@ class KspLsiCompilerDriver(
 
     private var pendingFileScopeSourcePaths = emptySet<String>()
 
+    private var frontendDeferred = false
+
     fun process(resolver: Resolver): List<KSAnnotated> {
         availableTypeIds = classpathTypeIds.filterTo(sortedSetOf()) { typeId ->
             val name = resolver.getKSNameFromString(typeId.requireTypeQualifiedName())
@@ -78,6 +81,8 @@ class KspLsiCompilerDriver(
             frontendOptions = frontendOptions,
             pendingFileScopeSourcePaths = pendingFileScopeSourcePaths,
         )
+        frontendDeferred = currentRoundSymbols.invalidRootTypes.isNotEmpty() ||
+            currentRoundSymbols.invalidFileAnnotationScopes.isNotEmpty()
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         if (inputDocumentKinds.isNotEmpty()) {
             val sourceFiles = currentRoundSymbols.allSourceFiles
@@ -90,7 +95,7 @@ class KspLsiCompilerDriver(
             )
         }
         val documentSeeds = inputDocumentSnapshots.flatMap { snapshot -> snapshot.typeSeeds }
-        workspace = currentRoundSymbols.allValidRootTypes.toLsiWorkspace(
+        val initialWorkspace = currentRoundSymbols.allValidRootTypes.toLsiWorkspace(
             resolver = resolver,
             frontendOptions = frontendOptions,
             fileScopes = currentRoundSymbols.allValidFileScopes,
@@ -104,18 +109,32 @@ class KspLsiCompilerDriver(
         val currentRootTypeIds = currentRoundSymbols.currentValidRootTypes.mapTo(sortedSetOf()) { type ->
             LsiSymbolId.type(requireNotNull(type.qualifiedName?.asString()))
         }
+        workspace = resolveLsiTypeSeedFixedPoint(
+            initialWorkspace = initialWorkspace,
+            requestSeeds = { candidateWorkspace ->
+                session.requestedTypeSeeds(
+                    compilerRound(
+                        workspace = candidateWorkspace,
+                        currentWorkspace = currentWorkspace,
+                        currentRootTypeIds = currentRootTypeIds,
+                    )
+                )
+            },
+            freezeWorkspace = { requestedSeeds ->
+                currentRoundSymbols.allValidRootTypes.toLsiWorkspace(
+                    resolver = resolver,
+                    frontendOptions = frontendOptions,
+                    fileScopes = currentRoundSymbols.allValidFileScopes,
+                    additionalSeeds = documentSeeds + requestedSeeds,
+                )
+            },
+        ).workspace
         val roundResult = session.execute(
-            CompilerRound(
-                number = nextRoundNumber,
+            compilerRound(
                 workspace = workspace,
                 currentWorkspace = currentWorkspace,
                 currentRootTypeIds = currentRootTypeIds,
-                platform = CompilerPlatform.KSP,
-                options = options,
-                availableTypeIds = availableTypeIds,
-                inputResources = inputResources,
-                inputDocumentSnapshots = inputDocumentSnapshots,
-            ),
+            )
         )
         lastRoundResult = roundResult
         nextRoundNumber++
@@ -134,6 +153,25 @@ class KspLsiCompilerDriver(
         return deferredSymbols(currentRoundSymbols)
     }
 
+    private fun compilerRound(
+        workspace: LsiWorkspace,
+        currentWorkspace: LsiWorkspace,
+        currentRootTypeIds: Set<LsiSymbolId>,
+    ): CompilerRound {
+        return CompilerRound(
+            number = nextRoundNumber,
+            workspace = workspace,
+            currentWorkspace = currentWorkspace,
+            currentRootTypeIds = currentRootTypeIds,
+            platform = CompilerPlatform.KSP,
+            options = options,
+            availableTypeIds = availableTypeIds,
+            frontendDeferred = frontendDeferred,
+            inputResources = inputResources,
+            inputDocumentSnapshots = inputDocumentSnapshots,
+        )
+    }
+
     fun finish(): CompilerRoundResult {
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         val roundResult = session.execute(
@@ -146,6 +184,7 @@ class KspLsiCompilerDriver(
                 isFinal = true,
                 options = options,
                 availableTypeIds = availableTypeIds,
+                frontendDeferred = frontendDeferred,
                 inputResources = inputResources,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),

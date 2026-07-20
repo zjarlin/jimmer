@@ -10,9 +10,104 @@ import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.codegen.GeneratedArtifactConflictException
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiTypeSeed
+import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
 
 class CompilerSessionTest {
+
+    @Test
+    fun `类型声明请求按符号合并并由完整声明优先`() {
+        val alphaId = LsiSymbolId.type("example.Alpha")
+        val betaId = LsiSymbolId.type("example.Beta")
+        val first = object : JimmerCompilerFeatureProvider {
+            override val descriptor = JimmerCompilerFeatureDescriptor("first")
+
+            override fun requestTypeSeeds(
+                context: JimmerCompilerTypeSeedContext,
+            ): Collection<LsiTypeSeed> {
+                return listOf(
+                    LsiTypeSeed(betaId, LsiTypeSeedMode.HEADER),
+                    LsiTypeSeed(alphaId, LsiTypeSeedMode.HEADER),
+                )
+            }
+        }
+        val second = object : JimmerCompilerFeatureProvider {
+            override val descriptor = JimmerCompilerFeatureDescriptor("second")
+
+            override fun requestTypeSeeds(
+                context: JimmerCompilerTypeSeedContext,
+            ): Collection<LsiTypeSeed> {
+                return listOf(LsiTypeSeed(betaId, LsiTypeSeedMode.FULL_DECLARATION))
+            }
+        }
+        val session = CompilerSession("type-seeds", listOf(second, first))
+
+        assertEquals(
+            listOf(
+                LsiTypeSeed(alphaId, LsiTypeSeedMode.HEADER),
+                LsiTypeSeed(betaId, LsiTypeSeedMode.FULL_DECLARATION),
+            ),
+            session.requestedTypeSeeds(emptyRound(0)),
+        )
+    }
+
+    @Test
+    fun `类型声明请求不会执行功能或推进会话轮次`() {
+        var collects = 0
+        var precompiles = 0
+        var renders = 0
+        val provider = object : JimmerCompilerFeatureProvider {
+            override val descriptor = JimmerCompilerFeatureDescriptor("seed-only")
+
+            override fun requestTypeSeeds(
+                context: JimmerCompilerTypeSeedContext,
+            ): Collection<LsiTypeSeed> {
+                assertEquals(0, context.round.number)
+                assertTrue(context.session.rounds.isEmpty())
+                return listOf(
+                    LsiTypeSeed(LsiSymbolId.type("example.Payload"), LsiTypeSeedMode.FULL_DECLARATION)
+                )
+            }
+
+            override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+                collects++
+                return JimmerCompilerFeatureCollection()
+            }
+
+            override fun precompile(
+                context: JimmerCompilerPrecompileContext,
+            ): JimmerCompilerFeaturePrecompileResult {
+                precompiles++
+                return JimmerCompilerFeaturePrecompileResult(TextState("seed-only"))
+            }
+
+            override fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult {
+                renders++
+                return JimmerCompilerFeatureRenderResult()
+            }
+        }
+        val session = CompilerSession("seed-query", listOf(provider))
+
+        session.requestedTypeSeeds(emptyRound(0))
+        session.requestedTypeSeeds(emptyRound(0))
+
+        assertEquals(0, collects)
+        assertEquals(0, precompiles)
+        assertEquals(0, renders)
+        assertTrue(session.snapshot().rounds.isEmpty())
+    }
+
+    @Test
+    fun `最终轮禁止请求额外类型声明`() {
+        val session = CompilerSession("final-seed-query", emptyList())
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            session.requestedTypeSeeds(emptyRound(0, isFinal = true))
+        }
+
+        assertEquals("Final compiler round cannot request additional type declarations", exception.message)
+    }
 
     @Test
     fun `round exposes frozen input resources to features`() {

@@ -40,6 +40,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
@@ -48,8 +49,56 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiFileAnnotationScope
+import site.addzero.lsi.model.LsiTypeSeed
+import site.addzero.lsi.model.LsiTypeSeedMode
 
 class KspLsiCompilerDriverTest {
+
+    @Test
+    fun `freezes feature requested library declaration in current round`() {
+        lateinit var sourceFile: KSFile
+        val root = classDeclaration(
+            qualifiedName = "demo.Valid",
+            file = { sourceFile },
+            valid = true,
+        )
+        val nested = classDeclaration(
+            qualifiedName = "external.Payload.Nested",
+            file = { sourceFile },
+            valid = true,
+            origin = Origin.KOTLIN_LIB,
+        )
+        val payload = classDeclaration(
+            qualifiedName = EXTERNAL_PAYLOAD_ID.requireTypeQualifiedName(),
+            file = { sourceFile },
+            valid = true,
+            origin = Origin.KOTLIN_LIB,
+            declarations = { listOf(nested) },
+        )
+        sourceFile = file(listOf(root))
+        val provider = TypeSeedFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-type-seed-test",
+        )
+
+        driver.process(
+            resolver(
+                sourceFile,
+                knownTypes = mapOf(EXTERNAL_PAYLOAD_ID.requireTypeQualifiedName() to payload),
+            )
+        )
+
+        val workspace = provider.rounds.single().round.workspace
+        assertTrue(workspace.contains(EXTERNAL_PAYLOAD_ID))
+        assertTrue(workspace.contains(LsiSymbolId.type("external.Payload.Nested")))
+    }
 
     @Test
     fun `freezes dto documents from the current ksp project`() {
@@ -550,6 +599,25 @@ class KspLsiCompilerDriverTest {
         }
     }
 
+    private class TypeSeedFeatureProvider : JimmerCompilerFeatureProvider {
+        override val descriptor = JimmerCompilerFeatureDescriptor(id = "ksp-type-seed-test")
+
+        val rounds = mutableListOf<JimmerCompilerCollectContext>()
+
+        override fun requestTypeSeeds(
+            context: JimmerCompilerTypeSeedContext,
+        ): Collection<LsiTypeSeed> {
+            return listOf(
+                LsiTypeSeed(EXTERNAL_PAYLOAD_ID, LsiTypeSeedMode.FULL_DECLARATION)
+            )
+        }
+
+        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+            rounds += context
+            return JimmerCompilerFeatureCollection()
+        }
+    }
+
     private class InputDocumentFeatureProvider : JimmerCompilerFeatureProvider {
         override val descriptor = JimmerCompilerFeatureDescriptor(
             id = "ksp-input-document-test",
@@ -874,6 +942,8 @@ class KspLsiCompilerDriverTest {
         private val VALID_ID = LsiSymbolId.type("demo.Valid")
 
         private val MISSING_TYPE_ID = LsiSymbolId.type("missing.NotThere")
+
+        private val EXTERNAL_PAYLOAD_ID = LsiSymbolId.type("external.Payload")
 
         private val UNHANDLED = Any()
     }

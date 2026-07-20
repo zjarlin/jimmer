@@ -2,6 +2,7 @@ package org.babyfish.jimmer.compiler
 
 import java.util.ServiceLoader
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiTypeSeed
 
 data class JimmerCompilerFeatureDescriptor(
     val id: String,
@@ -25,6 +26,8 @@ data class JimmerCompilerFeatureDescriptor(
  */
 interface JimmerCompilerFeatureProvider {
     val descriptor: JimmerCompilerFeatureDescriptor
+
+    fun requestTypeSeeds(context: JimmerCompilerTypeSeedContext): Collection<LsiTypeSeed> = emptyList()
 
     fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection =
         JimmerCompilerFeatureCollection()

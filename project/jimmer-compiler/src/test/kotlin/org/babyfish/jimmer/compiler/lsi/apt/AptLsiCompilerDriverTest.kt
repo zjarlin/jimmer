@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.lsi.apt
 
+import java.io.File
 import java.nio.charset.StandardCharsets
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.RoundEnvironment
@@ -13,6 +14,7 @@ import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
@@ -23,6 +25,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
@@ -33,9 +36,87 @@ import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPackageAnnotationScope
 import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeSeed
+import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiUnresolvedType
 
 class AptLsiCompilerDriverTest {
+
+    @Test
+    fun `keeps javac error state through the final round`() {
+        val projectDir = createTempDirectory(prefix = "jimmer-lsi-apt-error-state").toFile()
+        val sourceDir = projectDir.resolve("src/main/java")
+        val classesDir = projectDir.resolve("build/classes").apply(File::mkdirs)
+        val generatedDir = projectDir.resolve("build/generated").apply(File::mkdirs)
+        val sourceFile = sourceDir.resolve("demo/Broken.java")
+        sourceFile.parentFile.mkdirs()
+        sourceFile.writeText("package demo; interface Broken { Missing value(); }")
+        val diagnostics = DiagnosticCollector<JavaFileObject>()
+        val provider = InputDocumentFeatureProvider("apt-error-state-test")
+        val compiler = ToolProvider.getSystemJavaCompiler()
+            ?: error("APT integration tests require a JDK compiler")
+        val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
+            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, listOf(classesDir))
+            fileManager.setLocation(StandardLocation.SOURCE_OUTPUT, listOf(generatedDir))
+            val task = compiler.getTask(
+                null,
+                fileManager,
+                diagnostics,
+                listOf("-proc:only", "-classpath", System.getProperty("java.class.path")),
+                null,
+                fileManager.getJavaFileObjects(sourceFile),
+            )
+            task.setProcessors(listOf(DriverProcessor(provider)))
+            task.call()
+        }
+
+        assertFalse(success)
+        assertTrue(provider.rounds.last().isFinal)
+        assertTrue(provider.rounds.last().frontendDeferred)
+    }
+
+    @Test
+    fun `freezes feature requested classpath declaration closure in current round`() {
+        val projectDir = createTempDirectory(prefix = "jimmer-lsi-apt-type-seeds").toFile()
+        val sourceDir = projectDir.resolve("src/main/java")
+        val classesDir = projectDir.resolve("build/classes")
+        val generatedDir = projectDir.resolve("build/generated")
+        val sourceFile = sourceDir.resolve("demo/Service.java")
+        sourceFile.parentFile.mkdirs()
+        sourceFile.writeText("package demo; interface Service { CharSequence value(); }")
+        classesDir.mkdirs()
+        generatedDir.mkdirs()
+
+        val diagnostics = DiagnosticCollector<JavaFileObject>()
+        val provider = TypeSeedFeatureProvider()
+        val compiler = ToolProvider.getSystemJavaCompiler()
+            ?: error("APT integration tests require a JDK compiler")
+        val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
+            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, listOf(classesDir))
+            fileManager.setLocation(StandardLocation.SOURCE_OUTPUT, listOf(generatedDir))
+            val task = compiler.getTask(
+                null,
+                fileManager,
+                diagnostics,
+                listOf("-proc:only", "-classpath", System.getProperty("java.class.path")),
+                null,
+                fileManager.getJavaFileObjects(sourceFile),
+            )
+            task.setProcessors(listOf(DriverProcessor(provider)))
+            task.call()
+        }
+
+        assertTrue(success, diagnostics.diagnostics.joinToString("\n"))
+        val firstRound = provider.rounds.first()
+        assertTrue(!firstRound.isFinal)
+        assertTrue(
+            assertIs<LsiTypeDeclaration>(firstRound.workspace[CHAR_SEQUENCE_ID]).memberIds.isNotEmpty(),
+        )
+        assertTrue(
+            assertIs<LsiTypeDeclaration>(firstRound.workspace[RUNNABLE_ID]).memberIds.isNotEmpty(),
+        )
+    }
 
     @Test
     fun `freezes real rounds anchors diagnostics and writes final resources`() {
@@ -256,6 +337,30 @@ class AptLsiCompilerDriverTest {
         }
     }
 
+    private class TypeSeedFeatureProvider : JimmerCompilerFeatureProvider {
+        override val descriptor = JimmerCompilerFeatureDescriptor(id = "apt-type-seed-test")
+
+        val rounds = mutableListOf<org.babyfish.jimmer.compiler.CompilerRound>()
+
+        override fun requestTypeSeeds(
+            context: JimmerCompilerTypeSeedContext,
+        ): Collection<LsiTypeSeed> {
+            val charSequence = context.round.workspace[CHAR_SEQUENCE_ID] as? LsiTypeDeclaration
+            return if (charSequence?.memberIds.isNullOrEmpty()) {
+                listOf(LsiTypeSeed(CHAR_SEQUENCE_ID, LsiTypeSeedMode.FULL_DECLARATION))
+            } else {
+                listOf(LsiTypeSeed(RUNNABLE_ID, LsiTypeSeedMode.FULL_DECLARATION))
+            }
+        }
+
+        override fun collect(
+            context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
+        ): JimmerCompilerFeatureCollection {
+            rounds += context.round
+            return JimmerCompilerFeatureCollection()
+        }
+    }
+
     private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
         override val descriptor = JimmerCompilerFeatureDescriptor(
             id = "apt-driver-test",
@@ -345,5 +450,7 @@ class AptLsiCompilerDriverTest {
         val ACTIVE_PROPERTY_ID = LsiSymbolId.property(MODEL_ID, "isActive")
         val JAVA_STRING_ID = LsiSymbolId.type("java.lang.String")
         val MISSING_TYPE_ID = LsiSymbolId.type("missing.NotThere")
+        val CHAR_SEQUENCE_ID = LsiSymbolId.type("java.lang.CharSequence")
+        val RUNNABLE_ID = LsiSymbolId.type("java.lang.Runnable")
     }
 }

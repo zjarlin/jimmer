@@ -5,7 +5,9 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.codegen.GeneratedArtifactSet
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
+import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.mergeLsiTypeSeeds
 
 data class CompilerRound(
     val number: Int,
@@ -16,6 +18,7 @@ data class CompilerRound(
     val isFinal: Boolean = false,
     val options: Map<String, String> = emptyMap(),
     val availableTypeIds: Set<LsiSymbolId> = emptySet(),
+    val frontendDeferred: Boolean = false,
     val inputResources: Map<String, String> = emptyMap(),
     val inputDocumentSnapshots: List<CompilerInputDocumentSnapshot>,
 ) {
@@ -135,6 +138,11 @@ data class JimmerCompilerCollectContext(
     val round: CompilerRound,
 )
 
+data class JimmerCompilerTypeSeedContext(
+    val session: CompilerSessionSnapshot,
+    val round: CompilerRound,
+)
+
 data class JimmerCompilerPrecompileContext(
     val session: CompilerSessionSnapshot,
     val round: CompilerRound,
@@ -230,6 +238,18 @@ class CompilerSession(
         roundResults += roundResult
         finalRoundCompleted = round.isFinal
         return roundResult
+    }
+
+    /**
+     * 在正式执行当前轮之前查询功能所需的额外类型声明，不推进会话状态。
+     */
+    fun requestedTypeSeeds(round: CompilerRound): List<LsiTypeSeed> {
+        validateRound(round)
+        require(!round.isFinal) { "Final compiler round cannot request additional type declarations" }
+        val context = JimmerCompilerTypeSeedContext(snapshot(), round)
+        return orderedProviders
+            .flatMap { provider -> provider.requestTypeSeeds(context) }
+            .mergeLsiTypeSeeds()
     }
 
     fun snapshot(): CompilerSessionSnapshot = CompilerSessionSnapshot(id, roundResults.toList())
