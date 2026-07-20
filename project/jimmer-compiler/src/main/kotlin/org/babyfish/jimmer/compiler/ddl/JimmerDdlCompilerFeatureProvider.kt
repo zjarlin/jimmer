@@ -37,7 +37,7 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             .filter { declaration ->
                 declaration.isEntity() && (
                     declaration.id in context.round.currentRootTypeIds ||
-                        declaration.origin.source?.path in currentSourcePaths
+                        declaration.origin.source?.path?.let(currentSourcePaths::contains) == true
                     )
             }
             .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
