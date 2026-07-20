@@ -1213,6 +1213,7 @@ private fun LsiResolvedProperty.toImmutableProp(
     workspace: LsiWorkspace,
     typeSystem: LsiTypeSystem,
 ): JimmerImmutableProp {
+    val ownerKind = kindByTypeId.getValue(ownerTypeId)
     val formulaKind = formulaKind()
     val explicitScalar = annotations.any { annotation ->
         annotation.findAnnotation(SCALAR_ANNOTATIONS, workspace, linkedSetOf()) != null
@@ -1239,6 +1240,16 @@ private fun LsiResolvedProperty.toImmutableProp(
     val primaryMapping = primaryAnnotation?.type.toPrimaryMapping()
         ?: if (association) JimmerImmutablePrimaryMapping.ASSOCIATION
         else JimmerImmutablePrimaryMapping.SCALAR
+    validatePropertyCategory(
+        ownerTypeId = ownerTypeId,
+        ownerKind = ownerKind,
+        list = list,
+        genericTarget = genericTarget,
+        targetTypeId = targetTypeId,
+        targetKind = targetKind,
+        associationKind = associationKind,
+        primaryMapping = primaryMapping,
+    )
     val manyToManyView = annotations.hasAnnotation(MANY_TO_MANY_VIEW_ANNOTATION)
     val ownerMicroServiceMetadata = microServiceMetadataByTypeId.getValue(ownerTypeId)
     val targetMicroServiceMetadata = targetTypeId?.let(microServiceMetadataByTypeId::get)
@@ -1256,7 +1267,7 @@ private fun LsiResolvedProperty.toImmutableProp(
         targetMicroServiceMetadata = targetMicroServiceMetadata,
         remote = remote,
     )
-    val recursive = kindByTypeId[ownerTypeId] == JimmerImmutableTypeKind.ENTITY &&
+    val recursive = ownerKind == JimmerImmutableTypeKind.ENTITY &&
         targetKind == JimmerImmutableTypeKind.ENTITY &&
         !manyToManyView &&
         !genericTarget &&
@@ -1297,6 +1308,106 @@ private fun LsiResolvedProperty.toImmutableProp(
         validations = validations(workspace),
         converter = converter(workspace, typeSystem, nullable, association),
     )
+}
+
+private fun LsiResolvedProperty.validatePropertyCategory(
+    ownerTypeId: LsiSymbolId,
+    ownerKind: JimmerImmutableTypeKind,
+    list: Boolean,
+    genericTarget: Boolean,
+    targetTypeId: LsiSymbolId?,
+    targetKind: JimmerImmutableTypeKind?,
+    associationKind: JimmerAssociationKind,
+    primaryMapping: JimmerImmutablePrimaryMapping,
+) {
+    if (targetKind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' cannot target mapped superclass " +
+                "'${requireNotNull(targetTypeId).value}'",
+        )
+    }
+    if (list && targetKind == JimmerImmutableTypeKind.EMBEDDABLE) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' cannot be a list of embeddable type " +
+                "'${requireNotNull(targetTypeId).value}'",
+        )
+    }
+    if (associationKind != JimmerAssociationKind.NONE) {
+        if (ownerKind !in ASSOCIATION_DECLARING_TYPE_KINDS) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable property '${declaration.id.value}' cannot declare " +
+                    "@${associationKind.annotationType().value} because '${ownerTypeId.value}' is not an entity " +
+                    "or mapped superclass",
+            )
+        }
+        when (associationKind) {
+            JimmerAssociationKind.ONE_TO_ONE,
+            JimmerAssociationKind.MANY_TO_ONE,
+            -> if (list) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = declaration.id,
+                    message = "Immutable list association property '${declaration.id.value}' must be decorated by " +
+                        "@${ONE_TO_MANY_ANNOTATION.value}, @${MANY_TO_MANY_ANNOTATION.value} or " +
+                        "@${MANY_TO_MANY_VIEW_ANNOTATION.value}",
+                )
+            }
+            JimmerAssociationKind.ONE_TO_MANY,
+            JimmerAssociationKind.MANY_TO_MANY,
+            JimmerAssociationKind.MANY_TO_MANY_VIEW,
+            -> if (!list) {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = declaration.id,
+                    message = "Immutable property '${declaration.id.value}' is not a list, so it cannot be " +
+                        "decorated by @${associationKind.annotationType().value}",
+                )
+            }
+            JimmerAssociationKind.NONE,
+            JimmerAssociationKind.IMPLICIT,
+            -> Unit
+        }
+        if (!genericTarget && targetKind != JimmerImmutableTypeKind.ENTITY) {
+            val targetType = type.targetType(list)
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable association property '${declaration.id.value}' target type " +
+                    "'${targetTypeId?.value ?: targetType?.normalizedTypeSignature() ?: "<unknown>"}' must be an entity",
+            )
+        }
+    }
+    if (
+        associationKind == JimmerAssociationKind.NONE &&
+        targetKind == JimmerImmutableTypeKind.ENTITY &&
+        ownerKind != JimmerImmutableTypeKind.IMMUTABLE &&
+        primaryMapping != JimmerImmutablePrimaryMapping.TRANSIENT
+    ) {
+        val requiredAnnotations = if (list) {
+            "@${ONE_TO_MANY_ANNOTATION.value}, @${MANY_TO_MANY_ANNOTATION.value} or " +
+                "@${MANY_TO_MANY_VIEW_ANNOTATION.value}"
+        } else {
+            "@${MANY_TO_ONE_ANNOTATION.value} or @${ONE_TO_ONE_ANNOTATION.value}"
+        }
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' targets entity " +
+                "'${requireNotNull(targetTypeId).value}' and must be decorated by $requiredAnnotations",
+        )
+    }
+    if (
+        associationKind == JimmerAssociationKind.NONE &&
+        targetKind == JimmerImmutableTypeKind.IMMUTABLE &&
+        ownerKind != JimmerImmutableTypeKind.IMMUTABLE &&
+        primaryMapping != JimmerImmutablePrimaryMapping.TRANSIENT &&
+        !list
+    ) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' target type " +
+                "'${requireNotNull(targetTypeId).value}' is immutable but not embeddable",
+        )
+    }
 }
 
 private fun LsiResolvedProperty.validateMicroServiceAssociation(
@@ -1426,6 +1537,19 @@ private fun LsiResolvedProperty.associationKind(): JimmerAssociationKind {
         annotations.hasAnnotation(MANY_TO_MANY_ANNOTATION) -> JimmerAssociationKind.MANY_TO_MANY
         annotations.hasAnnotation(MANY_TO_MANY_VIEW_ANNOTATION) -> JimmerAssociationKind.MANY_TO_MANY_VIEW
         else -> JimmerAssociationKind.NONE
+    }
+}
+
+private fun JimmerAssociationKind.annotationType(): LsiSymbolId {
+    return when (this) {
+        JimmerAssociationKind.ONE_TO_ONE -> ONE_TO_ONE_ANNOTATION
+        JimmerAssociationKind.MANY_TO_ONE -> MANY_TO_ONE_ANNOTATION
+        JimmerAssociationKind.ONE_TO_MANY -> ONE_TO_MANY_ANNOTATION
+        JimmerAssociationKind.MANY_TO_MANY -> MANY_TO_MANY_ANNOTATION
+        JimmerAssociationKind.MANY_TO_MANY_VIEW -> MANY_TO_MANY_VIEW_ANNOTATION
+        JimmerAssociationKind.NONE,
+        JimmerAssociationKind.IMPLICIT,
+        -> error("Association kind $this has no annotation type")
     }
 }
 
@@ -1832,6 +1956,11 @@ private val IMMUTABLE_TYPE_ANNOTATIONS = listOf(
 
 private val IMMUTABLE_TYPE_ANNOTATION_IDS = IMMUTABLE_TYPE_ANNOTATIONS
     .mapTo(linkedSetOf()) { (annotationType, _) -> annotationType }
+
+private val ASSOCIATION_DECLARING_TYPE_KINDS = setOf(
+    JimmerImmutableTypeKind.ENTITY,
+    JimmerImmutableTypeKind.MAPPED_SUPERCLASS,
+)
 
 private val PRIMARY_PROP_ANNOTATIONS = setOf(
     ID_ANNOTATION,

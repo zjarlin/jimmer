@@ -185,6 +185,59 @@ class JimmerImmutableFrontendParityTest {
     }
 
     @Test
+    fun `real apt and ksp frontends agree on association cardinality`() {
+        val apt = compileApt(ASSOCIATION_JAVA_SOURCE)
+        val ksp = compileKsp(ASSOCIATION_KOTLIN_SOURCE)
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        val ownerProps = aptSchema.types
+            .single { type -> type.qualifiedName == "demo.Owner" }
+            .props
+            .associateBy(JimmerImmutableProp::name)
+        assertEquals(JimmerAssociationKind.ONE_TO_MANY, ownerProps.getValue("targets").associationKind)
+        assertTrue(ownerProps.getValue("targets").list)
+        val targetOwner = aptSchema.types
+            .single { type -> type.qualifiedName == "demo.Target" }
+            .props
+            .single { prop -> prop.name == "owner" }
+        assertEquals(JimmerAssociationKind.MANY_TO_ONE, targetOwner.associationKind)
+        assertFalse(targetOwner.list)
+
+        val invalidApt = compileApt(INVALID_ASSOCIATION_JAVA_SOURCE)
+        val invalidKsp = compileKsp(INVALID_ASSOCIATION_KOTLIN_SOURCE)
+        assertNull(invalidApt.schema)
+        assertNull(invalidKsp.schema)
+        assertEquals(invalidApt.diagnostic, invalidKsp.diagnostic)
+        assertEquals(
+            "Immutable list association property 'type:demo.Owner/property:targets' must be decorated by " +
+                "@type:org.babyfish.jimmer.sql.OneToMany, " +
+                "@type:org.babyfish.jimmer.sql.ManyToMany or " +
+                "@type:org.babyfish.jimmer.sql.ManyToManyView",
+            invalidApt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject non-embeddable immutable target`() {
+        val apt = compileApt(INVALID_IMMUTABLE_TARGET_JAVA_SOURCE)
+        val ksp = compileKsp(INVALID_IMMUTABLE_TARGET_KOTLIN_SOURCE)
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertEquals(
+            "Immutable property 'type:demo.Owner/property:value' target type 'type:demo.Value' " +
+                "is immutable but not embeddable",
+            apt.diagnostic,
+        )
+    }
+
+    @Test
     fun `real apt and ksp frontends report identical invalid discriminator diagnostic`() {
         val apt = compileApt(INVALID_JAVA_SOURCE)
         val ksp = compileKsp(INVALID_KOTLIN_SOURCE)
@@ -844,6 +897,105 @@ class JimmerImmutableFrontendParityTest {
 
         val INVALID_COLLECTION_JAVA_SOURCE = SCALAR_COLLECTION_JAVA_SOURCE.replace("@Scalar\n", "")
         val INVALID_COLLECTION_KOTLIN_SOURCE = SCALAR_COLLECTION_KOTLIN_SOURCE.replace("@Scalar\n", "")
+
+        val ASSOCIATION_JAVA_SOURCE = """
+            package demo;
+
+            import java.util.List;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.ManyToOne;
+            import org.babyfish.jimmer.sql.OneToMany;
+
+            @Entity
+            interface Owner {
+                @Id
+                long id();
+
+                @OneToMany(mappedBy = "owner")
+                List<Target> targets();
+            }
+
+            @Entity
+            interface Target {
+                @Id
+                long id();
+
+                @ManyToOne
+                Owner owner();
+            }
+        """.trimIndent()
+
+        val ASSOCIATION_KOTLIN_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.ManyToOne
+            import org.babyfish.jimmer.sql.OneToMany
+
+            @Entity
+            interface Owner {
+                @Id
+                val id: Long
+
+                @OneToMany(mappedBy = "owner")
+                val targets: List<Target>
+            }
+
+            @Entity
+            interface Target {
+                @Id
+                val id: Long
+
+                @ManyToOne
+                val owner: Owner
+            }
+        """.trimIndent()
+
+        val INVALID_ASSOCIATION_JAVA_SOURCE = ASSOCIATION_JAVA_SOURCE
+            .replace("@OneToMany(mappedBy = \"owner\")", "@ManyToOne")
+
+        val INVALID_ASSOCIATION_KOTLIN_SOURCE = ASSOCIATION_KOTLIN_SOURCE
+            .replace("@OneToMany(mappedBy = \"owner\")", "@ManyToOne")
+
+        val INVALID_IMMUTABLE_TARGET_JAVA_SOURCE = """
+            package demo;
+
+            import org.babyfish.jimmer.Immutable;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+
+            @Immutable
+            interface Value {}
+
+            @Entity
+            interface Owner {
+                @Id
+                long id();
+
+                Value value();
+            }
+        """.trimIndent()
+
+        val INVALID_IMMUTABLE_TARGET_KOTLIN_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.Immutable
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+
+            @Immutable
+            interface Value
+
+            @Entity
+            interface Owner {
+                @Id
+                val id: Long
+
+                val value: Value
+            }
+        """.trimIndent()
 
         val INVALID_JAVA_SOURCE = VALID_JAVA_SOURCE
             .replace("String kind();", "int kind();")

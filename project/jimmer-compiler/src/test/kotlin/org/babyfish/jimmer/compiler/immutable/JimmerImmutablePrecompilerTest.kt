@@ -640,7 +640,8 @@ class JimmerImmutablePrecompilerTest {
                 )
             )
         }
-        assertTrue(associationException.message.orEmpty().contains("must be a scalar string or enum property"))
+        assertTrue(associationException.message.orEmpty().contains("must be decorated by"))
+        assertTrue(associationException.message.orEmpty().contains("ManyToOne"))
 
         val formulaException = assertFailsWith<JimmerImmutablePrecompileException> {
             JimmerImmutablePrecompiler().compile(
@@ -704,7 +705,6 @@ class JimmerImmutablePrecompilerTest {
     fun `classifies immutable property mapping categories`() {
         val authorId = LsiSymbolId.type("demo.Author")
         val addressId = LsiSymbolId.type("demo.Address")
-        val payloadId = LsiSymbolId.type("demo.Payload")
         val bookAuthorId = LsiSymbolId.type("demo.BookAuthor")
         val bookId = LsiSymbolId.type("demo.Book")
         val authorIdProp = property(
@@ -764,14 +764,12 @@ class JimmerImmutablePrecompilerTest {
                 LsiDeclaredType(STRING_TYPE, nullability = LsiNullability.NULLABLE),
             ),
             property(bookId, "address", LsiDeclaredType(addressId)),
-            property(bookId, "payload", LsiDeclaredType(payloadId)),
         )
         val workspace = LsiWorkspace(
             declarations = listOf(
                 type("demo.Author", ENTITY, listOf(authorIdProp.id)),
                 type("demo.BookAuthor", ENTITY, listOf(bookAuthorAuthorProp.id)),
                 type("demo.Address", EMBEDDABLE, emptyList()),
-                type("demo.Payload", IMMUTABLE, emptyList()),
                 type("demo.Book", ENTITY, properties.map(LsiProperty::id)),
             ) + properties + authorIdProp + bookAuthorAuthorProp,
         )
@@ -814,8 +812,134 @@ class JimmerImmutablePrecompilerTest {
         assertEquals(JimmerImmutablePrimaryMapping.SCALAR, props.getValue("description").primaryMapping)
         assertFalse(props.getValue("address").association)
         assertTrue(props.getValue("address").embedded)
-        assertFalse(props.getValue("payload").association)
-        assertFalse(props.getValue("payload").embedded)
+    }
+
+    @Test
+    fun `rejects invalid association cardinality and target kinds`() {
+        val ownerId = LsiSymbolId.type("demo.CategoryOwner")
+        val targetId = LsiSymbolId.type("demo.CategoryTarget")
+
+        fun failure(
+            propertyType: LsiTypeRef,
+            propertyAnnotations: List<LsiAnnotation>,
+            targetMarker: LsiSymbolId? = null,
+            ownerMarker: LsiSymbolId = ENTITY,
+        ): String {
+            val valueProp = property(ownerId, "value", propertyType, propertyAnnotations)
+            val ownerProps = mutableListOf(valueProp)
+            if (ownerMarker in setOf(ENTITY, MAPPED_SUPERCLASS)) {
+                ownerProps += property(
+                    ownerId,
+                    "id",
+                    LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                    listOf(annotation(ID)),
+                )
+            }
+            val declarations = mutableListOf<site.addzero.lsi.model.LsiDeclaration>()
+            declarations += type(
+                "demo.CategoryOwner",
+                ownerMarker,
+                ownerProps.map(LsiProperty::id),
+            )
+            declarations += ownerProps
+            if (targetMarker != null) {
+                val targetIdProp = property(
+                    targetId,
+                    "id",
+                    LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                    listOf(annotation(ID)),
+                )
+                val targetMemberIds = if (targetMarker == ENTITY) listOf(targetIdProp.id) else emptyList()
+                declarations += type(
+                    "demo.CategoryTarget",
+                    targetMarker,
+                    targetMemberIds,
+                )
+                if (targetMarker == ENTITY) {
+                    declarations += targetIdProp
+                }
+            }
+            return assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(LsiWorkspace(declarations = declarations))
+            }.message.orEmpty()
+        }
+
+        assertTrue(
+            "list association" in failure(
+                listType(targetId),
+                listOf(annotation(MANY_TO_ONE)),
+                ENTITY,
+            )
+        )
+        assertTrue(
+            "is not a list" in failure(
+                LsiDeclaredType(targetId),
+                listOf(annotation(ONE_TO_MANY)),
+                ENTITY,
+            )
+        )
+        assertTrue(
+            "must be an entity" in failure(
+                LsiDeclaredType(STRING_TYPE),
+                listOf(annotation(MANY_TO_ONE)),
+            )
+        )
+        val implicitAssociationFailure = failure(
+            LsiDeclaredType(targetId),
+            emptyList(),
+            ENTITY,
+        )
+        assertTrue("ManyToOne" in implicitAssociationFailure)
+        assertTrue("OneToOne" in implicitAssociationFailure)
+        assertTrue(
+            "cannot target mapped superclass" in failure(
+                LsiDeclaredType(targetId),
+                emptyList(),
+                MAPPED_SUPERCLASS,
+            )
+        )
+        val embeddableListFailure = failure(
+            listType(targetId),
+            emptyList(),
+            EMBEDDABLE,
+        )
+        assertTrue("embeddable" in embeddableListFailure)
+        assertTrue("cannot be a list" in embeddableListFailure)
+        assertTrue(
+            "immutable but not embeddable" in failure(
+                LsiDeclaredType(targetId),
+                emptyList(),
+                IMMUTABLE,
+            )
+        )
+        assertTrue(
+            "not an entity or mapped superclass" in failure(
+                LsiDeclaredType(targetId),
+                listOf(annotation(MANY_TO_ONE)),
+                ENTITY,
+                ownerMarker = EMBEDDABLE,
+            )
+        )
+
+        val immutableOwnerId = LsiSymbolId.type("demo.ImmutableOwner")
+        val immutableTargetId = LsiSymbolId.type("demo.ImmutableTarget")
+        val immutableValueProp = property(
+            immutableOwnerId,
+            "value",
+            LsiDeclaredType(immutableTargetId),
+        )
+        val immutableValue = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.ImmutableOwner", IMMUTABLE, listOf(immutableValueProp.id)),
+                    type("demo.ImmutableTarget", IMMUTABLE, emptyList()),
+                    immutableValueProp,
+                )
+            )
+        ).types.single { type -> type.id == immutableOwnerId }.props.single()
+        assertEquals(JimmerImmutablePrimaryMapping.SCALAR, immutableValue.primaryMapping)
+        assertFalse(immutableValue.association)
+        assertFalse(immutableValue.embedded)
     }
 
     @Test
@@ -1389,7 +1513,7 @@ class JimmerImmutablePrecompilerTest {
             }.message.orEmpty()
         }
 
-        assertTrue("list of entities" in failure(viewType = LsiDeclaredType(authorId)))
+        assertTrue("is not a list" in failure(viewType = LsiDeclaredType(authorId)))
         assertTrue("cannot find" in failure(basePropName = "missing"))
         assertTrue("not a one-to-many" in failure(baseAnnotation = MANY_TO_MANY))
         assertTrue("found 0" in failure(deeperTargets = emptyList()))

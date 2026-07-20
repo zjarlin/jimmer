@@ -229,6 +229,28 @@ data class JimmerImmutableProp(
 ) {
 
     init {
+        require(association == (associationKind != JimmerAssociationKind.NONE)) {
+            "Immutable association flag and kind must be declared together: ${id.value}"
+        }
+        when (associationKind) {
+            JimmerAssociationKind.ONE_TO_ONE,
+            JimmerAssociationKind.MANY_TO_ONE,
+            -> require(!list) {
+                "Immutable to-one association cannot be a list: ${id.value}"
+            }
+            JimmerAssociationKind.ONE_TO_MANY,
+            JimmerAssociationKind.MANY_TO_MANY,
+            JimmerAssociationKind.MANY_TO_MANY_VIEW,
+            -> require(list) {
+                "Immutable to-many association must be a list: ${id.value}"
+            }
+            JimmerAssociationKind.NONE,
+            JimmerAssociationKind.IMPLICIT,
+            -> Unit
+        }
+        require(!embedded || !association) {
+            "Immutable property cannot be both embedded and association: ${id.value}"
+        }
         require(!remote || association && targetTypeId != null) {
             "Only immutable association with a concrete target can be remote: ${id.value}"
         }
