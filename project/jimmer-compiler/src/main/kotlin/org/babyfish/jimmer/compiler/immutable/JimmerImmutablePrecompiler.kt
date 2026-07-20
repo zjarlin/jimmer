@@ -22,6 +22,7 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -1772,12 +1773,15 @@ private fun LsiResolvedProperty.toImmutableProp(
     val languageFormula = formulaKind == JimmerFormulaKind.LANGUAGE ||
         formulaKind == JimmerFormulaKind.ABSTRACT && declaration.origin.language == LsiLanguage.JAVA
     val collection = type.isCollectionType(typeSystem)
-    if (collection && !explicitScalar && !languageFormula && !type.isImmutableListType()) {
-        throw JimmerImmutablePrecompileException(
-            declarationId = declaration.id,
-            message = "Immutable collection property '${declaration.id.value}' must use java.util.List " +
-                "unless it has scalar or language-formula semantics",
-        )
+    if (collection && !explicitScalar && !languageFormula) {
+        if (!type.isImmutableListType()) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = declaration.id,
+                message = "Immutable collection property '${declaration.id.value}' must use java.util.List " +
+                    "unless it has scalar or language-formula semantics",
+            )
+        }
+        validateListShape()
     }
     val list = collection && !explicitScalar && !languageFormula
     val genericTarget = type.targetType(list) is LsiTypeParameterRef
@@ -1878,6 +1882,41 @@ private fun LsiResolvedProperty.toImmutableProp(
         recursive = recursive,
         validations = validations(workspace),
         converter = converter(workspace, typeSystem, nullable, association),
+    )
+}
+
+private fun LsiResolvedProperty.validateListShape() {
+    val listType = type as? LsiDeclaredType
+        ?: throw invalidListShape("must declare exactly one invariant, non-star element type")
+    val elementArgument = listType.arguments.singleOrNull()
+    if (
+        elementArgument == null ||
+        elementArgument.variance != LsiVariance.INVARIANT ||
+        elementArgument.type == null
+    ) {
+        throw invalidListShape("must declare exactly one invariant, non-star element type")
+    }
+    val elementType = requireNotNull(elementArgument.type)
+    val validElement = when (elementType) {
+        is LsiPrimitiveType,
+        is LsiTypeParameterRef,
+        -> true
+        is LsiDeclaredType -> elementType.arguments.isEmpty()
+        is LsiArrayType,
+        is LsiUnresolvedType,
+        -> false
+    }
+    if (!validElement) {
+        throw invalidListShape(
+            "element type must be primitive, a non-parameterized declared type or a direct type parameter",
+        )
+    }
+}
+
+private fun LsiResolvedProperty.invalidListShape(message: String): JimmerImmutablePrecompileException {
+    return JimmerImmutablePrecompileException(
+        declarationId = declaration.id,
+        message = "Immutable list property '${declaration.id.value}' $message",
     )
 }
 

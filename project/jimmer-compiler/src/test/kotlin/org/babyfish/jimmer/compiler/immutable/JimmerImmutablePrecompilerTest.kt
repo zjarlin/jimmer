@@ -18,6 +18,7 @@ import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModality
@@ -3432,6 +3433,73 @@ class JimmerImmutablePrecompilerTest {
             )
             assertFalse(formulaSchema.types.single().props.single { prop -> prop.name == "values" }.list)
         }
+    }
+
+    @Test
+    fun `validates immutable list argument and element shapes`() {
+        val entityId = LsiSymbolId.type("demo.ListShapeEntity")
+        val listTypeId = LsiSymbolId.type("java.util.List")
+
+        fun compile(
+            propertyType: LsiTypeRef,
+            annotations: List<LsiAnnotation> = emptyList(),
+        ): JimmerImmutableSchema {
+            val valuesProp = property(entityId, "values", propertyType, annotations)
+            return compileFixture(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.ListShapeEntity", ENTITY, listOf(valuesProp.id)),
+                        valuesProp,
+                    )
+                )
+            )
+        }
+
+        val invalidArgumentShapes = listOf(
+            LsiDeclaredType(listTypeId),
+            LsiDeclaredType(listTypeId, arguments = listOf(LsiTypeArgument.STAR)),
+            LsiDeclaredType(
+                listTypeId,
+                arguments = listOf(LsiTypeArgument.output(LsiDeclaredType(STRING_TYPE))),
+            ),
+        )
+        invalidArgumentShapes.forEach { propertyType ->
+            val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+                compile(propertyType)
+            }
+            assertTrue(
+                exception.message.orEmpty().contains("exactly one invariant, non-star element type"),
+                exception.message,
+            )
+        }
+
+        val nestedListType = LsiDeclaredType(
+            listTypeId,
+            arguments = listOf(LsiTypeArgument.invariant(listType(STRING_TYPE))),
+        )
+        val arrayElementType = LsiDeclaredType(
+            listTypeId,
+            arguments = listOf(
+                LsiTypeArgument.invariant(LsiArrayType(LsiDeclaredType(STRING_TYPE))),
+            ),
+        )
+        listOf(nestedListType, arrayElementType).forEach { propertyType ->
+            val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+                compile(propertyType)
+            }
+            assertTrue(
+                exception.message.orEmpty().contains("non-parameterized declared type"),
+                exception.message,
+            )
+        }
+
+        val scalarNested = compile(nestedListType, listOf(annotation(SCALAR)))
+            .types
+            .single { type -> type.id == entityId }
+            .props
+            .single { prop -> prop.name == "values" }
+        assertFalse(scalarNested.list)
+        assertEquals(JimmerImmutablePrimaryMapping.SCALAR, scalarNested.primaryMapping)
     }
 
     @Test

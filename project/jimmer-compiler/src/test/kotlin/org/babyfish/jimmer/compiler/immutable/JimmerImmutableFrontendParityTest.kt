@@ -757,6 +757,244 @@ class JimmerImmutableFrontendParityTest {
     }
 
     @Test
+    fun `real apt raw list and ksp star list fail with identical shape diagnostic`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface InvalidListShape {
+                    @Id
+                    long id();
+
+                    List values();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface InvalidListShape {
+                    @Id
+                    val id: Long
+
+                    val values: List<*>
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(
+            apt.diagnostic.orEmpty().contains("exactly one invariant, non-star element type"),
+            apt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp reject nested list elements identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface InvalidListElement {
+                    @Id
+                    long id();
+
+                    List<List<String>> values();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface InvalidListElement {
+                    @Id
+                    val id: Long
+
+                    val values: List<List<String>>
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(
+            apt.diagnostic.orEmpty().contains("non-parameterized declared type"),
+            apt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp reject projected list elements identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface InvalidListProjection {
+                    @Id
+                    long id();
+
+                    List<? extends String> values();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface InvalidListProjection {
+                    @Id
+                    val id: Long
+
+                    val values: List<out String>
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(
+            apt.diagnostic.orEmpty().contains("exactly one invariant, non-star element type"),
+            apt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp reject array list elements identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface InvalidArrayListElement {
+                    @Id
+                    long id();
+
+                    List<String[]> values();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface InvalidArrayListElement {
+                    @Id
+                    val id: Long
+
+                    val values: List<Array<String>>
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(
+            apt.diagnostic.orEmpty().contains("non-parameterized declared type"),
+            apt.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp language formulas bypass list shape validation`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.Collections;
+                import java.util.List;
+                import org.babyfish.jimmer.Formula;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface FormulaListEntity {
+                    @Id
+                    long id();
+
+                    String source();
+
+                    @Formula(dependencies = "source")
+                    default List<List<String>> values() {
+                        return Collections.emptyList();
+                    }
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.Formula
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface FormulaListEntity {
+                    @Id
+                    val id: Long
+
+                    val source: String
+
+                    @Formula(dependencies = ["source"])
+                    val values: List<List<String>>
+                        get() = emptyList()
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        val values = aptSchema.types.single().props.single { prop -> prop.name == "values" }
+        assertFalse(values.list)
+        assertEquals(JimmerFormulaKind.LANGUAGE, values.formulaKind)
+    }
+
+    @Test
     fun `real apt and ksp frontends agree on association cardinality`() {
         val apt = compileApt(ASSOCIATION_JAVA_SOURCE)
         val ksp = compileKsp(ASSOCIATION_KOTLIN_SOURCE)
@@ -2036,6 +2274,7 @@ class JimmerImmutableFrontendParityTest {
         val SCALAR_COLLECTION_JAVA_SOURCE = """
             package demo;
 
+            import java.util.List;
             import java.util.Set;
             import org.babyfish.jimmer.Scalar;
             import org.babyfish.jimmer.sql.Entity;
@@ -2048,6 +2287,9 @@ class JimmerImmutableFrontendParityTest {
 
                 @Scalar
                 Set<String> getValues();
+
+                @Scalar
+                List<List<String>> getNestedValues();
             }
         """.trimIndent()
 
@@ -2065,6 +2307,9 @@ class JimmerImmutableFrontendParityTest {
 
                 @Scalar
                 val values: Set<String>
+
+                @Scalar
+                val nestedValues: List<List<String>>
             }
         """.trimIndent()
 
