@@ -54,23 +54,27 @@ class CompilerInputDocumentTest {
     fun `binds stable type references to frozen document source`() {
         val document = document("book/Book.dto", "export Book")
         val annotation = CompilerInputDocumentReference(
-            typeId = LsiSymbolId.type("demo.Tag"),
+            typeSelector = selector("demo.Tag"),
             kind = CompilerInputDocumentReferenceKind.ANNOTATION_TYPE,
+            ownerTargetSelector = null,
             location = LsiLocation(document.source, LsiPosition(2, 1)),
         )
         val subject = CompilerInputDocumentReference(
-            typeId = LsiSymbolId.type("demo.Book"),
+            typeSelector = selector("demo.Book"),
             kind = CompilerInputDocumentReferenceKind.SUBJECT_TYPE,
+            ownerTargetSelector = selector("demo.Book"),
             location = LsiLocation(document.source, LsiPosition(1, 1)),
         )
         val usage = CompilerInputDocumentReference(
-            typeId = LsiSymbolId.type("demo.Payload"),
+            typeSelector = selector("demo.Payload"),
             kind = CompilerInputDocumentReferenceKind.TYPE_USAGE,
+            ownerTargetSelector = null,
             location = LsiLocation(document.source, LsiPosition(3, 1)),
         )
         val config = CompilerInputDocumentReference(
-            typeId = LsiSymbolId.type("demo.Filter"),
+            typeSelector = selector("demo.Filter"),
             kind = CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION,
+            ownerTargetSelector = null,
             location = LsiLocation(document.source, LsiPosition(4, 1)),
         )
 
@@ -117,8 +121,9 @@ class CompilerInputDocumentTest {
         val document = document("book/Book.dto", "export Book")
         val mutableReferences = mutableListOf(
             CompilerInputDocumentReference(
-                typeId = LsiSymbolId.type("demo.Book"),
+                typeSelector = selector("demo.Book"),
                 kind = CompilerInputDocumentReferenceKind.SUBJECT_TYPE,
+                ownerTargetSelector = selector("demo.Book"),
                 location = LsiLocation(document.source, LsiPosition(1, 1)),
             )
         )
@@ -134,6 +139,88 @@ class CompilerInputDocumentTest {
         )
     }
 
+    @Test
+    fun `uses full declaration seed for explicit dto target`() {
+        val document = document("shared/Shared.dto", "BookView for demo.Book {}")
+        val bookTypeId = LsiSymbolId.type("demo.Book")
+        val snapshot = CompilerInputDocumentSnapshot(
+            document,
+            listOf(
+                CompilerInputDocumentReference(
+                    typeSelector = CompilerInputDocumentTypeSelector("demo.Book", bookTypeId),
+                    kind = CompilerInputDocumentReferenceKind.TARGET_TYPE,
+                    ownerTargetSelector = CompilerInputDocumentTypeSelector("demo.Book", bookTypeId),
+                    location = LsiLocation(document.source, LsiPosition(1, 14)),
+                )
+            ),
+        )
+
+        assertEquals(
+            listOf(LsiTypeSeed(bookTypeId, LsiTypeSeedMode.FULL_DECLARATION)),
+            snapshot.typeSeeds,
+        )
+    }
+
+    @Test
+    fun `seeds every wildcard candidate and promotes owner targets`() {
+        val document = document(
+            "shared/Shared.dto",
+            "BookView for Book { payload: Payload, store -> StoreView }",
+        )
+        val ownerSelector = selector("shared.Book", "demo.Book", "other.Book")
+        assertEquals("Book", ownerSelector.sourceName)
+        val usage = CompilerInputDocumentReference(
+            typeSelector = selector("shared.Payload", "demo.Payload"),
+            kind = CompilerInputDocumentReferenceKind.TYPE_USAGE,
+            ownerTargetSelector = ownerSelector,
+            location = LsiLocation(document.source, LsiPosition(1, 26)),
+        )
+        val reusableDto = CompilerInputDocumentReference(
+            typeSelector = selector("shared.dto.StoreView", "demo.dto.StoreView"),
+            kind = CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE,
+            ownerTargetSelector = ownerSelector,
+            location = LsiLocation(document.source, LsiPosition(1, 44)),
+        )
+
+        val snapshot = CompilerInputDocumentSnapshot(document, listOf(usage, reusableDto))
+
+        assertEquals(
+            setOf(
+                LsiSymbolId.type("shared.Book"),
+                LsiSymbolId.type("demo.Book"),
+                LsiSymbolId.type("other.Book"),
+                LsiSymbolId.type("shared.Payload"),
+                LsiSymbolId.type("demo.Payload"),
+                LsiSymbolId.type("shared.dto.StoreView"),
+                LsiSymbolId.type("demo.dto.StoreView"),
+            ),
+            snapshot.referencedTypeIds,
+        )
+        assertEquals(
+            listOf(
+                LsiTypeSeed(LsiSymbolId.type("demo.Book"), LsiTypeSeedMode.FULL_DECLARATION),
+                LsiTypeSeed(LsiSymbolId.type("demo.Payload"), LsiTypeSeedMode.HEADER),
+                LsiTypeSeed(LsiSymbolId.type("demo.dto.StoreView"), LsiTypeSeedMode.FULL_DECLARATION),
+                LsiTypeSeed(LsiSymbolId.type("other.Book"), LsiTypeSeedMode.FULL_DECLARATION),
+                LsiTypeSeed(LsiSymbolId.type("shared.Book"), LsiTypeSeedMode.FULL_DECLARATION),
+                LsiTypeSeed(LsiSymbolId.type("shared.Payload"), LsiTypeSeedMode.HEADER),
+                LsiTypeSeed(LsiSymbolId.type("shared.dto.StoreView"), LsiTypeSeedMode.FULL_DECLARATION),
+            ),
+            snapshot.typeSeeds,
+        )
+        assertEquals(
+            LsiSymbolId.type("demo.Book"),
+            ownerSelector.select { typeId -> typeId == LsiSymbolId.type("demo.Book") }.selectedTypeId,
+        )
+        assertEquals(
+            listOf(LsiSymbolId.type("demo.Book"), LsiSymbolId.type("other.Book")),
+            ownerSelector.select { typeId ->
+                typeId != LsiSymbolId.type("shared.Book") && typeId.value.endsWith(".Book")
+            }
+                .conflictingTypeIds,
+        )
+    }
+
     private fun document(relativePath: String, content: String): CompilerInputDocument {
         return CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
@@ -142,6 +229,17 @@ class CompilerInputDocumentTest {
             sourceRoot = "src/main/dto",
             relativePath = relativePath,
             content = content,
+        )
+    }
+
+    private fun selector(
+        fallbackQualifiedName: String,
+        vararg wildcardQualifiedNames: String,
+    ): CompilerInputDocumentTypeSelector {
+        return CompilerInputDocumentTypeSelector(
+            sourceName = fallbackQualifiedName.substringAfterLast('.'),
+            fallbackTypeId = LsiSymbolId.type(fallbackQualifiedName),
+            wildcardTypeIds = wildcardQualifiedNames.map(LsiSymbolId::type),
         )
     }
 }

@@ -7,6 +7,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableView
+import org.babyfish.jimmer.compiler.immutable.hasImmutableMarker
 import org.babyfish.jimmer.compiler.immutable.normalizedTypeSignature
 import org.babyfish.jimmer.dto.compiler.DtoCompiler
 import org.babyfish.jimmer.dto.compiler.DtoFile
@@ -201,6 +202,11 @@ internal class LsiDtoCompiler(
 
     override fun getType(qualifiedName: String): LsiDtoBaseType? {
         return registry.type(qualifiedName)
+    }
+
+    override fun isImmutableType(qualifiedName: String): Boolean {
+        val typeId = LsiSymbolId.type(qualifiedName)
+        return (registry.workspace[typeId] as? LsiTypeDeclaration)?.hasImmutableMarker() == true
     }
 
     override fun getDirectSubTypes(baseType: LsiDtoBaseType): Collection<LsiDtoBaseType> {

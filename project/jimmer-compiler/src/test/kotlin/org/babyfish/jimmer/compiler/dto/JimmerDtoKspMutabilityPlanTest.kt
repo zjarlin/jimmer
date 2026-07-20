@@ -84,9 +84,7 @@ class JimmerDtoKspMutabilityPlanTest {
             listOf(
                 JimmerDtoPrecompiledDocument(
                     inputSnapshot = CompilerInputDocumentSnapshot(DOCUMENT, emptyList()),
-                    baseTypeId = BASE_TYPE_ID,
-                    sourceTypeName = "demo.Book",
-                    targetPackageName = "demo.dto",
+                    targetTypeIds = listOf(BASE_TYPE_ID),
                     renderGraph = graph,
                     annotationContract = JimmerDtoAnnotationContract(
                         declarations = emptyList(),

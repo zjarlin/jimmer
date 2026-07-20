@@ -156,7 +156,9 @@ class FileSystemCompilerInputDocumentScannerTest {
 
         assertEquals(
             listOf("demo.Book", "demo.api.Tag", "demo.api.Marker", "demo.api.Payload"),
-            snapshot.references.map { reference -> reference.typeId.requireTypeQualifiedName() },
+            snapshot.references.map { reference ->
+                reference.typeSelector.fallbackTypeId.requireTypeQualifiedName()
+            },
         )
         assertEquals(
             setOf("demo.Book", "demo.api.Tag", "demo.api.Marker", "demo.api.Payload"),

@@ -7,6 +7,7 @@ import org.babyfish.jimmer.client.meta.Doc
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.dto.compiler.AbstractProp
 import org.babyfish.jimmer.dto.compiler.Anno
+import org.babyfish.jimmer.dto.compiler.DtoFile
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranch
 import org.babyfish.jimmer.dto.compiler.DtoProp
@@ -19,6 +20,7 @@ import org.babyfish.jimmer.dto.compiler.TypeRef
 import org.babyfish.jimmer.dto.compiler.UserProp
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 
 internal class JimmerDtoRenderGraphFreezer(
@@ -42,7 +44,7 @@ internal class JimmerDtoRenderGraphFreezer(
             freezeType(
                 dtoType = dtoType,
                 path = "root:${index.stableIndex()}:${dtoType.name.orEmpty()}",
-                location = location(1, 0),
+                location = location(dtoType.dtoFile, 1, 0),
             )
         }
         return JimmerDtoRenderGraph(
@@ -92,8 +94,12 @@ internal class JimmerDtoRenderGraphFreezer(
             modifiers = dtoType.modifiers
                 .sortedWith(compareBy(DtoModifier::getOrder, DtoModifier::name))
                 .mapTo(linkedSetOf()) { modifier -> modifier.toRenderModifier() },
-            annotations = dtoType.annotations.map { annotation -> annotation.toRenderAnnotation() },
-            superInterfaces = dtoType.superInterfaces.map { typeRef -> typeRef.toRenderTypeRef() },
+            annotations = dtoType.annotations.map { annotation ->
+                annotation.toRenderAnnotation(dtoType.dtoFile)
+            },
+            superInterfaces = dtoType.superInterfaces.map { typeRef ->
+                typeRef.toRenderTypeRef(dtoType.dtoFile)
+            },
             documentation = dtoType.effectiveDocumentation(),
             location = location,
             focusedRecursion = dtoType.isFocusedRecursion,
@@ -144,11 +150,12 @@ internal class JimmerDtoRenderGraphFreezer(
         } else {
             freezeProp(tailProp, ownerType, ownerTypeId, "$path/tail:${tailProp.name}")
         }
-        val targetTypeId = prop.targetType?.let { targetType ->
+        val targetType = prop.targetType ?: prop.targetTypeRef?.sourceType
+        val targetTypeId = targetType?.let {
             freezeType(
-                dtoType = targetType,
-                path = "$path/target:${targetType.name.orEmpty()}",
-                location = location(prop.aliasLine, prop.aliasColumn),
+                dtoType = it,
+                path = "$path/target:${it.name.orEmpty()}",
+                location = location(it.dtoFile, prop.aliasLine, prop.aliasColumn),
             )
         }
         return JimmerDtoBaseProp(
@@ -157,10 +164,12 @@ internal class JimmerDtoRenderGraphFreezer(
             name = prop.name,
             alias = prop.alias,
             nullable = prop.isNullable,
-            annotations = prop.annotations.map { annotation -> annotation.toRenderAnnotation() },
+            annotations = prop.annotations.map { annotation ->
+                annotation.toRenderAnnotation(prop.declaringFile)
+            },
             documentation = ownerType.effectiveDocumentation(prop),
-            aliasLocation = location(prop.aliasLine, prop.aliasColumn),
-            baseLocation = location(prop.baseLine, prop.baseColumn),
+            aliasLocation = location(prop.declaringFile, prop.aliasLine, prop.aliasColumn),
+            baseLocation = location(prop.declaringFile, prop.baseLine, prop.baseColumn),
             baseProps = prop.basePropMap.entries.map { (name, baseProp) ->
                 JimmerDtoBasePropBinding(name, baseProp.id)
             },
@@ -174,7 +183,7 @@ internal class JimmerDtoRenderGraphFreezer(
             functionName = prop.funcName,
             targetTypeId = targetTypeId,
             enumType = prop.enumType?.toRenderEnumType(),
-            config = prop.config?.toRenderConfig(),
+            config = prop.config?.toRenderConfig(prop.declaringFile),
             recursive = prop.isRecursive,
             likeOptions = prop.likeOptions
                 .sortedBy(LikeOption::name)
@@ -194,10 +203,12 @@ internal class JimmerDtoRenderGraphFreezer(
             name = prop.name,
             alias = prop.alias,
             nullable = prop.isNullable,
-            annotations = prop.annotations.map { annotation -> annotation.toRenderAnnotation() },
+            annotations = prop.annotations.map { annotation ->
+                annotation.toRenderAnnotation(prop.declaringFile)
+            },
             documentation = ownerType.effectiveDocumentation(prop),
-            aliasLocation = location(prop.aliasLine, prop.aliasColumn),
-            type = prop.typeRef.toRenderTypeRef(),
+            aliasLocation = location(prop.declaringFile, prop.aliasLine, prop.aliasColumn),
+            type = prop.typeRef.toRenderTypeRef(prop.declaringFile),
             defaultValueText = prop.defaultValueText,
         )
     }
@@ -215,7 +226,7 @@ internal class JimmerDtoRenderGraphFreezer(
         val targetTypeId = freezeType(
             dtoType = prop.targetType,
             path = "$path/target:${prop.targetType.name.orEmpty()}",
-            location = location(prop.aliasLine, prop.aliasColumn),
+            location = location(prop.targetType.dtoFile, prop.aliasLine, prop.aliasColumn),
         )
         return JimmerDtoFoldProp(
             id = propId,
@@ -223,9 +234,11 @@ internal class JimmerDtoRenderGraphFreezer(
             name = prop.name,
             alias = prop.alias,
             nullable = prop.isNullable,
-            annotations = prop.annotations.map { annotation -> annotation.toRenderAnnotation() },
+            annotations = prop.annotations.map { annotation ->
+                annotation.toRenderAnnotation(prop.declaringFile)
+            },
             documentation = ownerType.effectiveDocumentation(prop),
-            aliasLocation = location(prop.aliasLine, prop.aliasColumn),
+            aliasLocation = location(prop.declaringFile, prop.aliasLine, prop.aliasColumn),
             nullGuardPropId = nullGuardPropId,
             targetTypeId = targetTypeId,
         )
@@ -260,7 +273,7 @@ internal class JimmerDtoRenderGraphFreezer(
     ): JimmerDtoPolymorphicBranch {
         val kind = branch.kind.toRenderBranchKind()
         val branchPath = "$rootPath/polymorphism:${kind.name.lowercase()}:${index.stableIndex()}:${branch.className}"
-        val branchLocation = location(branch.line, branch.col)
+        val branchLocation = location(branch.dtoType.dtoFile, branch.line, branch.col)
         val bodyTypeId = freezeType(
             dtoType = branch.dtoType,
             path = "$branchPath/body",
@@ -283,7 +296,7 @@ internal class JimmerDtoRenderGraphFreezer(
         )
     }
 
-    private fun TypeRef.toRenderTypeRef(): JimmerDtoTypeRef {
+    private fun TypeRef.toRenderTypeRef(declaringFile: DtoFile): JimmerDtoTypeRef {
         return JimmerDtoTypeRef(
             typeName = typeName,
             arguments = arguments.map { argument ->
@@ -295,34 +308,38 @@ internal class JimmerDtoRenderGraphFreezer(
                 }
                 JimmerDtoTypeArgument(
                     variance = variance,
-                    type = argument.typeRef?.toRenderTypeRef(),
+                    type = argument.typeRef?.toRenderTypeRef(declaringFile),
                 )
             },
             nullable = isNullable,
-            location = location(line, col),
+            location = location(declaringFile, line, col),
         )
     }
 
-    private fun Anno.toRenderAnnotation(): JimmerDtoAnnotation {
+    private fun Anno.toRenderAnnotation(declaringFile: DtoFile): JimmerDtoAnnotation {
         return JimmerDtoAnnotation(
             typeId = LsiSymbolId.type(qualifiedName),
             arguments = valueMap.entries.map { (name, value) ->
-                JimmerDtoAnnotationArgument(name, value.toRenderAnnotationValue())
+                JimmerDtoAnnotationArgument(name, value.toRenderAnnotationValue(declaringFile))
             },
         )
     }
 
-    private fun Anno.Value.toRenderAnnotationValue(): JimmerDtoAnnotationValue {
+    private fun Anno.Value.toRenderAnnotationValue(declaringFile: DtoFile): JimmerDtoAnnotationValue {
         return when (this) {
             is Anno.ArrayValue -> JimmerDtoAnnotationValue.ArrayValue(
-                elements.map { element -> element.toRenderAnnotationValue() }
+                elements.map { element -> element.toRenderAnnotationValue(declaringFile) }
             )
-            is Anno.AnnoValue -> JimmerDtoAnnotationValue.AnnotationValue(anno.toRenderAnnotation())
+            is Anno.AnnoValue -> JimmerDtoAnnotationValue.AnnotationValue(
+                anno.toRenderAnnotation(declaringFile)
+            )
             is Anno.EnumValue -> JimmerDtoAnnotationValue.EnumValue(
                 enumTypeId = LsiSymbolId.type(qualifiedName),
                 constant = constant,
             )
-            is Anno.TypeRefValue -> JimmerDtoAnnotationValue.TypeValue(typeRef.toRenderTypeRef())
+            is Anno.TypeRefValue -> JimmerDtoAnnotationValue.TypeValue(
+                typeRef.toRenderTypeRef(declaringFile)
+            )
             is Anno.LiteralValue -> JimmerDtoAnnotationValue.LiteralValue(value)
             else -> error("Unsupported DTO annotation value implementation: ${javaClass.name}")
         }
@@ -337,7 +354,9 @@ internal class JimmerDtoRenderGraphFreezer(
         )
     }
 
-    private fun PropConfig<LsiDtoBaseProp>.toRenderConfig(): JimmerDtoPropConfig {
+    private fun PropConfig<LsiDtoBaseProp>.toRenderConfig(
+        declaringFile: DtoFile,
+    ): JimmerDtoPropConfig {
         return JimmerDtoPropConfig(
             predicate = predicate?.toRenderPredicate(),
             orderItems = orderItems.map { orderItem ->
@@ -346,8 +365,8 @@ internal class JimmerDtoRenderGraphFreezer(
                     descending = orderItem.isDesc,
                 )
             },
-            filter = filterType?.toRenderConfigTypeRef(),
-            recursion = recursionType?.toRenderConfigTypeRef(),
+            filter = filterType?.toRenderConfigTypeRef(declaringFile),
+            recursion = recursionType?.toRenderConfigTypeRef(declaringFile),
             fetchType = JimmerDtoFetchType.valueOf(fetchType),
             limit = limit,
             offset = offset,
@@ -356,11 +375,13 @@ internal class JimmerDtoRenderGraphFreezer(
         )
     }
 
-    private fun org.babyfish.jimmer.dto.compiler.ConfigTypeRef.toRenderConfigTypeRef(): JimmerDtoConfigTypeRef {
+    private fun org.babyfish.jimmer.dto.compiler.ConfigTypeRef.toRenderConfigTypeRef(
+        declaringFile: DtoFile,
+    ): JimmerDtoConfigTypeRef {
         return JimmerDtoConfigTypeRef(
             typeId = LsiSymbolId.type(qualifiedName),
             location = LsiLocation(
-                source = inputSnapshot.document.source,
+                source = source(declaringFile),
                 start = LsiPosition(line, column),
             ),
         )
@@ -412,13 +433,26 @@ internal class JimmerDtoRenderGraphFreezer(
     private fun DtoPolymorphicBranch.Kind.toRenderBranchKind(): JimmerDtoPolymorphicBranchKind =
         JimmerDtoPolymorphicBranchKind.valueOf(name)
 
-    private fun location(line: Int, zeroBasedColumn: Int): LsiLocation {
+    private fun location(
+        declaringFile: DtoFile,
+        line: Int,
+        zeroBasedColumn: Int,
+    ): LsiLocation {
         require(line >= 1) { "DTO source line must be positive: $line" }
         require(zeroBasedColumn >= 0) { "DTO source column cannot be negative: $zeroBasedColumn" }
         return LsiLocation(
-            source = inputSnapshot.document.source,
+            source = source(declaringFile),
             start = LsiPosition(line, zeroBasedColumn + 1),
         )
+    }
+
+    private fun source(declaringFile: DtoFile): LsiSource {
+        val graphSource = inputSnapshot.document.source
+        return if (declaringFile.absolutePath == graphSource.path) {
+            graphSource
+        } else {
+            LsiSource.of(declaringFile.absolutePath)
+        }
     }
 }
 

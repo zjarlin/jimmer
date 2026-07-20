@@ -9,6 +9,9 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
+import org.babyfish.jimmer.compiler.input.selectOwnerTarget
+import org.babyfish.jimmer.compiler.input.selectType
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
@@ -260,10 +263,7 @@ private fun LsiWorkspace.immutableTargetTypeIds(
         .filter(LsiTypeDeclaration::hasImmutableMarker)
         .filter { type -> type.origin.kind in COMPILATION_ORIGIN_KINDS }
         .filter { type -> sourceFilter.accepts(type.qualifiedName) }
-        .filterNot { type ->
-            platform == CompilerPlatform.APT &&
-                type.annotations.any { annotation -> annotation.type == KOTLIN_METADATA }
-        }
+        .filter { type -> type.isCompilerTargetVisible(platform) }
         .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
 }
 
@@ -271,33 +271,66 @@ private fun CompilerRound.dtoSemanticRootTypeIds(
     sourceFilter: JimmerCompilerSourceFilter,
 ): Set<LsiSymbolId> {
     return buildSet {
-        inputDocumentSnapshots.forEach { snapshot ->
-            val subjectReference = snapshot.references.firstOrNull { reference ->
-                reference.kind == CompilerInputDocumentReferenceKind.SUBJECT_TYPE
-            } ?: return@forEach
-            if (!sourceFilter.accepts(subjectReference.typeId.requireTypeQualifiedName())) {
-                return@forEach
+        inputDocumentSnapshots.forEach snapshotLoop@{ snapshot ->
+            val activeTargetTypeIds = snapshot.references
+                .asSequence()
+                .filter { reference -> reference.kind.isDtoTarget() }
+                .mapNotNull { reference -> reference.selectType(workspace).selectedTypeId }
+                .filter { typeId -> sourceFilter.accepts(typeId.requireTypeQualifiedName()) }
+                .filter { typeId -> workspace.isCompilerTargetVisible(typeId, platform) }
+                .toSet()
+            if (activeTargetTypeIds.isEmpty()) {
+                return@snapshotLoop
             }
-            val subjectType = workspace[subjectReference.typeId] as? LsiTypeDeclaration
-            if (
-                platform == CompilerPlatform.APT &&
-                subjectType?.annotations?.any { annotation -> annotation.type == KOTLIN_METADATA } == true
-            ) {
-                return@forEach
-            }
-            snapshot.references.forEach referenceLoop@{ reference ->
-                if (
-                    reference.kind != CompilerInputDocumentReferenceKind.SUBJECT_TYPE &&
-                    reference.kind != CompilerInputDocumentReferenceKind.MODEL_TYPE
-                ) {
-                    return@referenceLoop
+            val semanticTypeIds = buildSet {
+                activeTargetTypeIds.forEach { typeId ->
+                    val declaration = workspace[typeId] as? LsiTypeDeclaration
+                    if (declaration == null || declaration.hasImmutableMarker()) {
+                        add(typeId)
+                    }
                 }
-                val type = workspace[reference.typeId] as? LsiTypeDeclaration ?: return@referenceLoop
+                snapshot.references
+                    .asSequence()
+                    .filter { reference -> reference.kind == CompilerInputDocumentReferenceKind.MODEL_TYPE }
+                    .filter { reference ->
+                        val ownerSelection = reference.selectOwnerTarget(workspace)
+                        ownerSelection == null ||
+                            !ownerSelection.isAmbiguous &&
+                            ownerSelection.selectedTypeId in activeTargetTypeIds
+                    }
+                    .mapNotNullTo(this) { reference -> reference.selectType(workspace).selectedTypeId }
+            }
+            semanticTypeIds.forEach referenceLoop@{ typeId ->
+                val type = workspace[typeId] as? LsiTypeDeclaration ?: return@referenceLoop
                 if (type.hasImmutableMarker()) {
                     add(type.id)
                 }
             }
         }
+    }
+}
+
+private fun CompilerInputDocumentReferenceKind.isDtoTarget(): Boolean {
+    return this == CompilerInputDocumentReferenceKind.SUBJECT_TYPE ||
+        this == CompilerInputDocumentReferenceKind.TARGET_TYPE
+}
+
+private fun LsiWorkspace.isCompilerTargetVisible(
+    typeId: LsiSymbolId,
+    platform: CompilerPlatform,
+): Boolean {
+    val type = this[typeId] as? LsiTypeDeclaration ?: return true
+    return type.isCompilerTargetVisible(platform)
+}
+
+private fun LsiTypeDeclaration.isCompilerTargetVisible(
+    platform: CompilerPlatform,
+): Boolean {
+    return when (platform) {
+        CompilerPlatform.APT ->
+            annotations.none { annotation -> annotation.type == KOTLIN_METADATA }
+        CompilerPlatform.KSP -> origin.language != LsiLanguage.JAVA
+        CompilerPlatform.UNKNOWN -> true
     }
 }
 

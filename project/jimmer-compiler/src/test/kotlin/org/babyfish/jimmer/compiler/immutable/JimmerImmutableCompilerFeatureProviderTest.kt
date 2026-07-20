@@ -105,7 +105,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
     @Test
     fun `ksp never defers a valid unresolved immutable declaration`() {
         val result = PROVIDER.precompile(
-            context(unresolvedWorkspace(), platform = CompilerPlatform.KSP)
+            context(unresolvedWorkspace(KOTLIN_ORIGIN), platform = CompilerPlatform.KSP)
         )
 
         assertTrue(result.unresolvedSymbols.isEmpty())
@@ -121,8 +121,8 @@ class JimmerImmutableCompilerFeatureProviderTest {
         val firstId = LsiSymbolId.type("demo.First")
         val secondId = LsiSymbolId.type("demo.Second")
         val firstWorkspace = LsiWorkspace(
-            sources = listOf(SOURCE),
-            declarations = listOf(immutableType(firstId, ENTITY)),
+            sources = listOf(KOTLIN_SOURCE),
+            declarations = listOf(immutableType(firstId, ENTITY, origin = KOTLIN_ORIGIN)),
         )
         val secondWorkspace = LsiWorkspace(
             sources = listOf(SECOND_SOURCE),
@@ -268,18 +268,18 @@ class JimmerImmutableCompilerFeatureProviderTest {
         )
     }
 
-    private fun unresolvedWorkspace(): LsiWorkspace {
+    private fun unresolvedWorkspace(origin: LsiOrigin = ORIGIN): LsiWorkspace {
         val propId = LsiSymbolId.property(BROKEN_ID, "value")
         return LsiWorkspace(
-            sources = listOf(SOURCE),
+            sources = listOf(requireNotNull(origin.source)),
             declarations = listOf(
-                immutableType(BROKEN_ID, ENTITY, listOf(propId)),
+                immutableType(BROKEN_ID, ENTITY, listOf(propId), origin = origin),
                 LsiProperty(
                     id = propId,
                     name = "value",
                     ownerId = BROKEN_ID,
                     type = LsiUnresolvedType("demo.GeneratedValue"),
-                    origin = ORIGIN,
+                    origin = origin,
                 ),
             ),
         )
@@ -345,8 +345,10 @@ class JimmerImmutableCompilerFeatureProviderTest {
 
     private companion object {
         val SOURCE = LsiSource.of("src/main/java/demo/Model.java", LsiLanguage.JAVA)
+        val KOTLIN_SOURCE = LsiSource.of("src/main/kotlin/demo/Model.kt", LsiLanguage.KOTLIN)
         val SECOND_SOURCE = LsiSource.of("build/generated/ksp/demo/Second.kt", LsiLanguage.KOTLIN)
         val ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, SOURCE)
+        val KOTLIN_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, KOTLIN_SOURCE)
         val SECOND_ORIGIN = LsiOrigin(LsiOriginKind.GENERATED, SECOND_SOURCE)
         val PROVIDER = JimmerImmutableCompilerFeatureProvider()
         val BROKEN_ID = LsiSymbolId.type("demo.Broken")

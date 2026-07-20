@@ -68,6 +68,7 @@ class FoldPropBuilder<T extends BaseType, P extends BaseProp> implements Abstrac
     @Override
     public FoldProp<T, P> build(DtoType<?, ?> type) {
         return new FoldProp<>(
+                targetTypeBuilder.ctx.getDtoFile(),
                 name,
                 line,
                 col,

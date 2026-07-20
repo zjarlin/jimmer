@@ -9,6 +9,8 @@ import java.util.stream.Collectors;
 
 class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, P> {
 
+    private final DtoFile declaringFile;
+
     private final Map<String, P> basePropMap;
 
     @Nullable
@@ -52,6 +54,7 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
     private final DtoProp<T, P> tail;
 
     DtoPropImpl(
+            DtoFile declaringFile,
             Map<String, P> basePropMap,
             int baseLine,
             int baseCol,
@@ -72,6 +75,7 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
         if (inputModifier == null || !inputModifier.isInputStrategy()) {
             throw new IllegalArgumentException("Illegal input strategy: " + inputModifier);
         }
+        this.declaringFile = Objects.requireNonNull(declaringFile, "declaringFile cannot be null");
         this.basePropMap = basePropMap;
         this.nextProp = null;
         this.baseLine = baseLine;
@@ -104,6 +108,7 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
     }
 
     DtoPropImpl(DtoProp<T, P> head, DtoProp<T, P> next, AliasPattern aliasPattern) {
+        this.declaringFile = next.getDeclaringFile();
         this.basePropMap = head.getBasePropMap();
         this.nextProp = next;
         this.baseLine = next.getBaseLine();
@@ -146,6 +151,7 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
     }
 
     DtoPropImpl(DtoProp<T, P> original, DtoType<T, P> targetType) {
+        this.declaringFile = original.getDeclaringFile();
         this.basePropMap = original.getBasePropMap();
         this.nextProp = null;
         this.baseLine = original.getBaseLine();
@@ -171,6 +177,7 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
         if (!original.isRecursive()) {
             throw new IllegalArgumentException("original property must be recursive");
         }
+        this.declaringFile = original.getDeclaringFile();
         this.basePropMap = original.getBasePropMap();
         this.nextProp = null;
         this.baseLine = original.getBaseLine();
@@ -194,6 +201,11 @@ class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, 
         this.basePath = getBaseProp().getName();
         this.likeOptions = original.getLikeOptions();
         this.tail = this;
+    }
+
+    @Override
+    public DtoFile getDeclaringFile() {
+        return declaringFile;
     }
 
     @Override

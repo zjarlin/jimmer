@@ -1,0 +1,42 @@
+package org.babyfish.jimmer.compiler.input
+
+import org.babyfish.jimmer.compiler.CompilerInputDocumentReference
+import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelection
+import org.babyfish.jimmer.compiler.immutable.hasImmutableMarker
+import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiWorkspace
+
+internal fun CompilerInputDocumentReference.selectType(
+    workspace: LsiWorkspace,
+    sourceDtoTypeIds: Set<LsiSymbolId> = emptySet(),
+): CompilerInputDocumentTypeSelection {
+    return typeSelector.select { typeId ->
+        when (kind) {
+            CompilerInputDocumentReferenceKind.SUBJECT_TYPE,
+            CompilerInputDocumentReferenceKind.TARGET_TYPE,
+            CompilerInputDocumentReferenceKind.MODEL_TYPE,
+            -> workspace.isImmutableType(typeId)
+
+            CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE ->
+                typeId in sourceDtoTypeIds || workspace[typeId] is LsiTypeDeclaration
+
+            CompilerInputDocumentReferenceKind.ANNOTATION_TYPE,
+            CompilerInputDocumentReferenceKind.SUPER_TYPE,
+            CompilerInputDocumentReferenceKind.TYPE_USAGE,
+            CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION,
+            -> workspace[typeId] is LsiTypeDeclaration
+        }
+    }
+}
+
+internal fun CompilerInputDocumentReference.selectOwnerTarget(
+    workspace: LsiWorkspace,
+): CompilerInputDocumentTypeSelection? {
+    return ownerTargetSelector?.select(workspace::isImmutableType)
+}
+
+private fun LsiWorkspace.isImmutableType(typeId: LsiSymbolId): Boolean {
+    return (this[typeId] as? LsiTypeDeclaration)?.hasImmutableMarker() == true
+}

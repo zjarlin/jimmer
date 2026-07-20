@@ -42,6 +42,29 @@ internal data class JimmerDtoRenderGraph(
 
     val propsById: Map<JimmerDtoPropId, JimmerDtoProp> = props.associateBy(JimmerDtoProp::id)
 
+    val originatingSources: Set<LsiSource> = buildSet {
+        add(source)
+        types.forEach { type ->
+            add(type.location.source)
+            type.annotations.forEach { annotation -> addAnnotationSources(annotation) }
+            type.superInterfaces.forEach { typeRef -> addTypeRefSources(typeRef) }
+            type.polymorphism?.branches.orEmpty().forEach { branch -> add(branch.location.source) }
+        }
+        props.forEach { prop ->
+            add(prop.aliasLocation.source)
+            prop.annotations.forEach { annotation -> addAnnotationSources(annotation) }
+            when (prop) {
+                is JimmerDtoBaseProp -> {
+                    add(prop.baseLocation.source)
+                    prop.config?.filter?.let { filter -> add(filter.location.source) }
+                    prop.config?.recursion?.let { recursion -> add(recursion.location.source) }
+                }
+                is JimmerDtoUserProp -> addTypeRefSources(prop.type)
+                is JimmerDtoFoldProp -> Unit
+            }
+        }
+    }.toSortedSet()
+
     init {
         require(rootTypeIds == rootTypeIds.distinct()) { "DTO render graph root type ids must be distinct" }
         require(types == types.sortedBy(JimmerDtoType::id)) { "DTO render graph types must use stable id order" }
@@ -49,11 +72,8 @@ internal data class JimmerDtoRenderGraph(
         require(typesById.size == types.size) { "DTO render graph cannot contain duplicate type ids" }
         require(propsById.size == props.size) { "DTO render graph cannot contain duplicate property ids" }
         require(rootTypeIds.all(typesById::containsKey)) { "DTO render graph root type must exist" }
-        require(types.all { type -> type.location.source == source }) {
-            "DTO render graph type location must use the graph source"
-        }
-        require(props.all { prop -> prop.aliasLocation.source == source }) {
-            "DTO render graph property location must use the graph source"
+        require(source in originatingSources) {
+            "DTO render graph source must be one of its originating sources"
         }
         types.forEach(::validateType)
         props.forEach(::validateProp)
@@ -77,9 +97,6 @@ internal data class JimmerDtoRenderGraph(
         validateAnnotations(type.annotations)
         type.superInterfaces.forEach(::validateTypeRef)
         type.polymorphism?.branches.orEmpty().forEach { branch ->
-            require(branch.location.source == source) {
-                "DTO polymorphic branch location must use the graph source: ${type.id.value}"
-            }
             require(typesById.containsKey(branch.bodyTypeId)) {
                 "DTO polymorphic branch body type must exist: ${branch.bodyTypeId.value}"
             }
@@ -96,9 +113,6 @@ internal data class JimmerDtoRenderGraph(
         validateAnnotations(prop.annotations)
         when (prop) {
             is JimmerDtoBaseProp -> {
-                require(prop.baseLocation.source == source) {
-                    "DTO base property location must use the graph source: ${prop.id.value}"
-                }
                 require(prop.nextPropId == null || propsById.containsKey(prop.nextPropId)) {
                     "DTO next property must exist: ${prop.id.value}"
                 }
@@ -113,16 +127,6 @@ internal data class JimmerDtoRenderGraph(
                 }
                 require(prop.targetTypeId == null || typesById.containsKey(prop.targetTypeId)) {
                     "DTO target type must exist: ${prop.id.value}"
-                }
-                prop.config?.filter?.let { filter ->
-                    require(filter.location.source == source) {
-                        "DTO filter config location must use the graph source: ${prop.id.value}"
-                    }
-                }
-                prop.config?.recursion?.let { recursion ->
-                    require(recursion.location.source == source) {
-                        "DTO recursion config location must use the graph source: ${prop.id.value}"
-                    }
                 }
             }
             is JimmerDtoFoldProp -> {
@@ -161,10 +165,31 @@ internal data class JimmerDtoRenderGraph(
     }
 
     private fun validateTypeRef(type: JimmerDtoTypeRef) {
-        require(type.location.source == source) {
-            "DTO type reference location must use the graph source: ${type.typeName}"
-        }
         type.arguments.mapNotNull(JimmerDtoTypeArgument::type).forEach(::validateTypeRef)
+    }
+
+    private fun MutableSet<LsiSource>.addAnnotationSources(annotation: JimmerDtoAnnotation) {
+        annotation.arguments.forEach { argument -> addAnnotationValueSources(argument.value) }
+    }
+
+    private fun MutableSet<LsiSource>.addAnnotationValueSources(value: JimmerDtoAnnotationValue) {
+        when (value) {
+            is JimmerDtoAnnotationValue.ArrayValue -> value.elements.forEach { element ->
+                addAnnotationValueSources(element)
+            }
+            is JimmerDtoAnnotationValue.AnnotationValue -> addAnnotationSources(value.annotation)
+            is JimmerDtoAnnotationValue.TypeValue -> addTypeRefSources(value.type)
+            is JimmerDtoAnnotationValue.EnumValue,
+            is JimmerDtoAnnotationValue.LiteralValue,
+            -> Unit
+        }
+    }
+
+    private fun MutableSet<LsiSource>.addTypeRefSources(type: JimmerDtoTypeRef) {
+        add(type.location.source)
+        type.arguments.mapNotNull(JimmerDtoTypeArgument::type).forEach { argumentType ->
+            addTypeRefSources(argumentType)
+        }
     }
 }
 

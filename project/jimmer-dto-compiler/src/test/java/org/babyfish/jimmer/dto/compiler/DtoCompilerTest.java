@@ -374,21 +374,38 @@ public class DtoCompilerTest {
 
     @Test
     public void testCrossFileFragment() {
-        MyDtoCompiler fragments = MyDtoCompiler.compiler(
+        MyDtoCompiler identifiers = MyDtoCompiler.compiler(
+                "IdentifiedFragments.dto",
+                "fragment Identified for Book { id }"
+        );
+        MyDtoCompiler summaries = MyDtoCompiler.compiler(
                 "BookFragments.dto",
-                "fragment Summary for Book { id name }"
+                "fragment Summary for Book { #include(Identified) name }"
         );
         MyDtoCompiler views = MyDtoCompiler.compiler(
                 "Book.dto",
                 "BookView { #include(Summary) edition }"
         );
         Map<MyDtoCompiler, BaseType> compilerMap = new LinkedHashMap<>();
-        compilerMap.put(fragments, null);
+        compilerMap.put(identifiers, null);
+        compilerMap.put(summaries, null);
         compilerMap.put(views, MyDtoCompiler.BOOK_TYPE);
         List<DtoType<BaseType, BaseProp>> dtoTypes = DtoCompiler.compileAll(compilerMap).get(views);
         assertContentEquals(
                 "BookView {--->id, --->name, --->edition}",
                 dtoTypes.get(0).toString()
+        );
+        Assertions.assertSame(
+                identifiers.getDtoFile(),
+                dtoTypes.get(0).getDtoProps().get(0).getDeclaringFile()
+        );
+        Assertions.assertSame(
+                summaries.getDtoFile(),
+                dtoTypes.get(0).getDtoProps().get(1).getDeclaringFile()
+        );
+        Assertions.assertSame(
+                views.getDtoFile(),
+                dtoTypes.get(0).getDtoProps().get(2).getDeclaringFile()
         );
     }
 

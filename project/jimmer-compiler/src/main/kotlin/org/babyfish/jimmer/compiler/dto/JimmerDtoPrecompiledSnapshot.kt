@@ -15,16 +15,15 @@ internal fun JimmerDtoPrecompiledSchema.normalizedSnapshot(): String {
                 inputDocument.source.path,
                 inputDocument.sourceSet.name,
                 inputDocument.fingerprint,
-                document.baseTypeId.value,
-                document.sourceTypeName,
-                document.targetPackageName.orEmpty(),
+                document.targetTypeIds.joinToString(",") { typeId -> typeId.value },
             )
             document.inputSnapshot.references.forEach { reference ->
                 appendRecord(
                     "reference",
                     inputDocument.source.path,
                     reference.kind.name,
-                    reference.typeId.value,
+                    reference.typeSelector.canonicalText(),
+                    reference.ownerTargetSelector?.canonicalText().orEmpty(),
                     reference.location.start.line.toString(),
                     reference.location.start.column.toString(),
                     reference.location.end.line.toString(),

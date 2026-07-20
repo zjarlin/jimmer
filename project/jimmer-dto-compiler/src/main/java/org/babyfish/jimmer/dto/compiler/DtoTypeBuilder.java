@@ -581,7 +581,14 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
                 }
             }
         }
-        UserProp userProp = new UserProp(prop.prop, typeRef, defaultValueText, annotations, Docs.parse(prop.doc));
+        UserProp userProp = new UserProp(
+                ctx.getDtoFile(),
+                prop.prop,
+                typeRef,
+                defaultValueText,
+                annotations,
+                Docs.parse(prop.doc)
+        );
         if (aliasPositivePropMap.put(userProp.getAlias(), userProp) != null) {
             throw ctx.exception(
                     prop.prop.getLine(),
@@ -1150,7 +1157,7 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
                 foldProp.getTargetType().getAnnotations(),
                 foldProp.getTargetType().getSuperInterfaces(),
                 null,
-                dtoType.getDtoFile(),
+                foldProp.getTargetType().getDtoFile(),
                 foldProp.getTargetType().getDoc()
         );
         targetType.setProps(Collections.unmodifiableList(props));

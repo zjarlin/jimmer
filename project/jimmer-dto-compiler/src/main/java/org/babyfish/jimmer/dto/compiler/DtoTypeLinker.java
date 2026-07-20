@@ -69,9 +69,19 @@ public final class DtoTypeLinker {
             DtoTypeRef<T, P> ref = prop.getTargetTypeRef();
             if (ref != null) {
                 DtoType<T, P> targetType = ctx.typeMap.get(ref.getQualifiedName());
-                DtoTypeInfo<T> typeInfo = targetType != null ?
-                        ctx.typeInfoMap.get(ref.getQualifiedName()) :
-                        ctx.resolveExternal(ref.getQualifiedName());
+                DtoTypeInfo<T> typeInfo;
+                try {
+                    typeInfo = targetType != null ?
+                            ctx.typeInfoMap.get(ref.getQualifiedName()) :
+                            ctx.resolveExternal(ref.getQualifiedName());
+                } catch (IllegalArgumentException ex) {
+                    throw exception(
+                            ownerType,
+                            ref,
+                            ex.getMessage() != null ? ex.getMessage() :
+                                    "Cannot resolve reusable DTO type \"" + ref.getQualifiedName() + "\""
+                    );
+                }
                 if (typeInfo == null) {
                     throw exception(
                             ownerType,

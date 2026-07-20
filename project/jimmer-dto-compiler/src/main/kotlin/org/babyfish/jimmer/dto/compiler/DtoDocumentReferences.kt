@@ -7,9 +7,11 @@ import org.antlr.v4.runtime.tree.ParseTreeWalker
 
 enum class DtoDocumentReferenceKind {
     SUBJECT_TYPE,
+    TARGET_TYPE,
     ANNOTATION_TYPE,
     SUPER_TYPE,
     MODEL_TYPE,
+    REUSABLE_DTO_TYPE,
     TYPE_USAGE,
     CONFIG_IMPLEMENTATION,
 }
@@ -18,14 +20,14 @@ enum class DtoDocumentReferenceKind {
  * DTO 文档中的纯语义类型引用，行列坐标均从一开始。
  */
 data class DtoDocumentReference(
-    val qualifiedName: String,
+    val typeSelector: DtoTypeNameSelector,
     val kind: DtoDocumentReferenceKind,
+    val ownerTargetSelector: DtoTypeNameSelector?,
     val line: Int,
     val column: Int,
 ) : Comparable<DtoDocumentReference> {
 
     init {
-        require(qualifiedName.isNotBlank()) { "DTO document reference name cannot be blank" }
         require(line >= 1) { "DTO document reference line must be positive: $line" }
         require(column >= 1) { "DTO document reference column must be positive: $column" }
     }
@@ -43,7 +45,11 @@ data class DtoDocumentReference(
         if (kindComparison != 0) {
             return kindComparison
         }
-        return qualifiedName.compareTo(other.qualifiedName)
+        val selectorComparison = typeSelector.compareTo(other.typeSelector)
+        if (selectorComparison != 0) {
+            return selectorComparison
+        }
+        return compareValues(ownerTargetSelector, other.ownerTargetSelector)
     }
 }
 
@@ -63,13 +69,16 @@ object DtoDocumentReferences {
         }
         val resolver = DtoDocumentNameResolver(dtoFile, ast)
         val references = mutableListOf<DtoDocumentReference>()
-        resolver.subjectType?.let { subjectType ->
-            references += DtoDocumentReference(
-                qualifiedName = subjectType,
-                kind = DtoDocumentReferenceKind.SUBJECT_TYPE,
-                line = ast.exportStatement()?.start?.line ?: 1,
-                column = (ast.exportStatement()?.start?.charPositionInLine ?: 0) + 1,
-            )
+        if (ast.hasImplicitTargetDeclaration()) {
+            resolver.subjectTypeSelector?.let { subjectTypeSelector ->
+                references += DtoDocumentReference(
+                    typeSelector = subjectTypeSelector,
+                    kind = DtoDocumentReferenceKind.SUBJECT_TYPE,
+                    ownerTargetSelector = subjectTypeSelector,
+                    line = ast.exportStatement()?.start?.line ?: 1,
+                    column = (ast.exportStatement()?.start?.charPositionInLine ?: 0) + 1,
+                )
+            }
         }
         ParseTreeWalker.DEFAULT.walk(
             DtoDocumentReferenceListener(resolver, references),
@@ -84,8 +93,29 @@ private class DtoDocumentReferenceListener(
     private val references: MutableList<DtoDocumentReference>,
 ) : DtoBaseListener() {
 
+    private var currentOwnerTargetSelector: DtoTypeNameSelector? = null
+
     override fun enterDtoType(context: DtoParser.DtoTypeContext) {
+        currentOwnerTargetSelector = resolveOwnerTarget(context.targetType)
+        context.targetType?.let { targetType ->
+            collect(targetType, DtoDocumentReferenceKind.TARGET_TYPE)
+        }
         context.superInterfaces.forEach { typeRef -> collectTypeRef(typeRef, DtoDocumentReferenceKind.SUPER_TYPE) }
+    }
+
+    override fun exitDtoType(context: DtoParser.DtoTypeContext) {
+        currentOwnerTargetSelector = null
+    }
+
+    override fun enterDtoFragment(context: DtoParser.DtoFragmentContext) {
+        currentOwnerTargetSelector = resolveOwnerTarget(context.targetType)
+        context.targetType?.let { targetType ->
+            collect(targetType, DtoDocumentReferenceKind.TARGET_TYPE)
+        }
+    }
+
+    override fun exitDtoFragment(context: DtoParser.DtoFragmentContext) {
+        currentOwnerTargetSelector = null
     }
 
     override fun enterDefaultBranch(context: DtoParser.DefaultBranchContext) {
@@ -106,6 +136,9 @@ private class DtoDocumentReferenceListener(
     }
 
     override fun enterPositiveProp(context: DtoParser.PositivePropContext) {
+        context.referencedType?.let { referencedType ->
+            collectDtoType(referencedType, DtoDocumentReferenceKind.REUSABLE_DTO_TYPE)
+        }
         context.bodySuperInterfaces.forEach { typeRef ->
             collectTypeRef(typeRef, DtoDocumentReferenceKind.SUPER_TYPE)
         }
@@ -119,12 +152,8 @@ private class DtoDocumentReferenceListener(
 
     override fun enterMacro(context: DtoParser.MacroContext) {
         context.args.forEach { argument ->
-            resolver.resolveMacroModelType(argument.parts)?.let { qualifiedName ->
-                collect(
-                    qualifiedName = qualifiedName,
-                    token = argument.parts.first(),
-                    kind = DtoDocumentReferenceKind.MODEL_TYPE,
-                )
+            resolver.resolveMacroModelType(argument.parts)?.let { selector ->
+                collect(selector, argument.parts.first(), DtoDocumentReferenceKind.MODEL_TYPE)
             }
         }
     }
@@ -191,31 +220,65 @@ private class DtoDocumentReferenceListener(
         parts: List<Token>,
         kind: DtoDocumentReferenceKind,
     ) {
-        val qualifiedName = resolver.resolve(parts) ?: return
-        collect(qualifiedName, parts.first(), kind)
+        val selector = resolver.resolve(parts) ?: return
+        collect(selector, parts.first(), kind)
     }
 
     private fun collect(
-        qualifiedName: String,
+        selector: DtoTypeNameSelector,
         token: Token,
         kind: DtoDocumentReferenceKind,
     ) {
         references += DtoDocumentReference(
-            qualifiedName = qualifiedName,
+            typeSelector = selector,
             kind = kind,
+            ownerTargetSelector = currentOwnerTargetSelector,
             line = token.line,
             column = token.charPositionInLine + 1,
         )
     }
+
+    private fun collectDtoType(
+        context: DtoParser.QualifiedNameContext,
+        kind: DtoDocumentReferenceKind,
+    ) {
+        val selector = resolver.resolveDtoType(context.parts) ?: return
+        collect(selector, context.parts.first(), kind)
+    }
+
+    private fun resolveOwnerTarget(
+        targetType: DtoParser.QualifiedNameContext?,
+    ): DtoTypeNameSelector? {
+        return if (targetType != null) {
+            resolver.resolve(targetType.parts)
+        } else {
+            resolver.subjectTypeSelector
+        }
+    }
+}
+
+private fun DtoParser.DtoContext.hasImplicitTargetDeclaration(): Boolean {
+    return dtoTypes.any { dtoType -> dtoType.targetType == null } ||
+        fragments.any { fragment -> fragment.targetType == null }
 }
 
 private class DtoDocumentNameResolver(
     private val dtoFile: DtoFile,
     ast: DtoParser.DtoContext,
 ) {
+    private val wildcardPackageNames = ast.importStatements
+        .asSequence()
+        .filter { statement -> statement.wildcard != null }
+        .mapNotNull { statement -> statement.parts.qualifiedNameOrNull() }
+        .distinct()
+        .toList()
+
     private val importedTypes = buildMap {
         for (statement in ast.importStatements) {
             val path = statement.parts.qualifiedNameOrNull() ?: continue
+            if (statement.wildcard != null) {
+                continue
+            }
             if (statement.alias != null) {
                 val alias = statement.alias.identifierOrNull() ?: continue
                 put(alias, path)
@@ -234,9 +297,18 @@ private class DtoDocumentNameResolver(
         }
     }
 
-    val subjectType: String? = resolveSubjectType(ast)
+    private val subjectType: String? = resolveSubjectType(ast)
+
+    val subjectTypeSelector: DtoTypeNameSelector? = subjectType?.let { qualifiedName ->
+        DtoTypeNameSelector.exact(
+            qualifiedName = qualifiedName,
+            sourceName = resolveSubjectSourceName(ast) ?: qualifiedName,
+        )
+    }
 
     private val subjectPackage = subjectType?.substringBeforeLast('.', "")
+
+    private val dtoPackageName = resolveDtoPackageName(ast)
 
     private fun resolveSubjectType(ast: DtoParser.DtoContext): String? {
         val export = ast.exportStatement()
@@ -253,23 +325,39 @@ private class DtoDocumentNameResolver(
         return qualify(dtoFile.packageName, modelName)
     }
 
-    fun resolve(parts: List<Token>): String? {
+    private fun resolveSubjectSourceName(ast: DtoParser.DtoContext): String? {
+        return ast.exportStatement()?.typeParts?.qualifiedNameOrNull()
+            ?: dtoFile.name.removeSuffix(".dto").takeIf(DTO_IDENTIFIER_PATTERN::matches)
+    }
+
+    fun resolve(parts: List<Token>): DtoTypeNameSelector? {
         val name = parts.qualifiedNameOrNull() ?: return null
         if (name == "this" || name in TypeRef.TNS_WITH_DEFAULT_VALUE) {
             return null
         }
-        val firstPart = parts.first().identifierOrNull() ?: return null
-        val importedType = importedTypes[firstPart]
-        if (importedType != null) {
-            return importedType + name.removePrefix(firstPart)
+        val defaultPackageName = subjectPackage
+        if (defaultPackageName == null && !name.canResolveWithoutDefaultPackage()) {
+            return null
         }
-        if (firstPart.first().isLowerCase()) {
-            return name
-        }
-        return qualify(subjectPackage ?: return null, name)
+        return DtoTypeNameSelector.plan(
+            name,
+            defaultPackageName.orEmpty(),
+            importedTypes,
+            wildcardPackageNames,
+        )
     }
 
-    fun resolveMacroModelType(parts: List<Token>): String? {
+    fun resolveDtoType(parts: List<Token>): DtoTypeNameSelector? {
+        val name = parts.qualifiedNameOrNull() ?: return null
+        return DtoTypeNameSelector.plan(
+            name,
+            dtoPackageName ?: return null,
+            importedTypes,
+            wildcardPackageNames,
+        )
+    }
+
+    fun resolveMacroModelType(parts: List<Token>): DtoTypeNameSelector? {
         val name = parts.qualifiedNameOrNull() ?: return null
         if (name == "this") {
             return null
@@ -279,6 +367,25 @@ private class DtoDocumentNameResolver(
             return null
         }
         return resolve(parts)
+    }
+
+    private fun String.canResolveWithoutDefaultPackage(): Boolean {
+        val separatorIndex = indexOf('.')
+        val firstPart = if (separatorIndex == -1) this else substring(0, separatorIndex)
+        return firstPart in importedTypes || Character.isLowerCase(first())
+    }
+
+    private fun resolveDtoPackageName(ast: DtoParser.DtoContext): String? {
+        val packageStatement = ast.packageStatement()
+        if (packageStatement != null) {
+            return packageStatement.packageParts.qualifiedNameOrNull()
+        }
+        val explicitPackage = ast.exportStatement()?.packageParts?.qualifiedNameOrNull()
+        if (explicitPackage != null) {
+            return explicitPackage
+        }
+        val basePackageName = subjectPackage ?: return null
+        return if (basePackageName.isEmpty()) "dto" else "$basePackageName.dto"
     }
 
     private fun qualify(packageName: String, name: String): String {

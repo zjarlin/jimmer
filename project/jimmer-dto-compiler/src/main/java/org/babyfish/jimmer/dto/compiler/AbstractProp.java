@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface AbstractProp {
 
+    DtoFile getDeclaringFile();
+
     String getName();
 
     String getAlias();

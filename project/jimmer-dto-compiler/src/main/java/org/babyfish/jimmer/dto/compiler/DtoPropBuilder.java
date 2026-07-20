@@ -12,6 +12,8 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
 
     private final DtoTypeBuilder<T, P> parent;
 
+    private final DtoFile declaringFile;
+
     private final AliasPattern aliasPattern;
 
     private final Map<String, P> basePropMap;
@@ -68,6 +70,7 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
             name = name + "Id";
         }
         this.parent = Objects.requireNonNull(parent, "parent cannot be null");
+        this.declaringFile = parent.ctx.getDtoFile();
         this.aliasPattern = aliasPattern;
         this.basePropMap = Collections.singletonMap(
                 Objects.requireNonNull(baseProp, "basePropMap cannot be null").getName(),
@@ -134,6 +137,7 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
             }
         }
         this.parent = Objects.requireNonNull(parent, "parent cannot be null");
+        this.declaringFile = parent.ctx.getDtoFile();
         this.aliasPattern = aliasPattern;
         this.baseLine = prop.props.get(0).getLine();
         this.baseCol = prop.props.get(0).getCharPositionInLine();
@@ -934,6 +938,11 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
         return doc;
     }
 
+    @Override
+    public DtoFile getDeclaringFile() {
+        return declaringFile;
+    }
+
     public DtoTypeBuilder<T, P> getTargetBuilder() {
         return targetTypeBuilder;
     }
@@ -1020,6 +1029,7 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
     @Override
     public DtoProp<T, P> build(DtoType<?, ?> type) {
         return new DtoPropImpl<>(
+                declaringFile,
                 basePropMap,
                 baseLine,
                 baseCol,

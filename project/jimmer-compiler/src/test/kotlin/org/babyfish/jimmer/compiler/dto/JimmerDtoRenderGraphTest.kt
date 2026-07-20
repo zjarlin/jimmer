@@ -808,9 +808,7 @@ class JimmerDtoRenderGraphTest {
             listOf(
                 JimmerDtoPrecompiledDocument(
                     inputSnapshot = CompilerInputDocumentSnapshot(document, emptyList()),
-                    baseTypeId = BOOK_TYPE_ID,
-                    sourceTypeName = "demo.Book",
-                    targetPackageName = "demo.dto",
+                    targetTypeIds = listOf(BOOK_TYPE_ID),
                     renderGraph = graph,
                     annotationContract = JimmerDtoAnnotationContract(
                         declarations = emptyList(),

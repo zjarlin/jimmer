@@ -22,24 +22,24 @@ internal data class JimmerDtoPrecompiledSchema(
 
 internal data class JimmerDtoPrecompiledDocument(
     val inputSnapshot: CompilerInputDocumentSnapshot,
-    val baseTypeId: LsiSymbolId,
-    val sourceTypeName: String,
-    val targetPackageName: String?,
+    val targetTypeIds: List<LsiSymbolId>,
     val renderGraph: JimmerDtoRenderGraph,
     val annotationContract: JimmerDtoAnnotationContract,
     val interfaceContractResolution: DtoInterfaceContractResolution,
     val configContractResolution: DtoConfigContractResolution,
 ) {
     init {
-        baseTypeId.requireTypeQualifiedName()
-        require(sourceTypeName.isNotBlank()) { "DTO source type name cannot be blank" }
+        targetTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
+        require(targetTypeIds == targetTypeIds.distinct().sorted()) {
+            "DTO target type ids must be distinct and sorted"
+        }
         require(renderGraph.source == inputSnapshot.document.source) {
             "DTO render graph source must match its input document"
         }
         require(renderGraph.rootTypeIds.all { typeId ->
-            renderGraph.typesById.getValue(typeId).baseTypeId == baseTypeId
+            renderGraph.typesById.getValue(typeId).baseTypeId in targetTypeIds
         }) {
-            "DTO types must reference the document base type: ${inputSnapshot.document.source.path}"
+            "DTO types must reference a document target type: ${inputSnapshot.document.source.path}"
         }
         require(annotationContract.typePlans.map(JimmerDtoTypeAnnotationPlan::typeId) == renderGraph.types.map(JimmerDtoType::id)) {
             "DTO annotation contract must cover every frozen DTO type: ${inputSnapshot.document.source.path}"
@@ -58,12 +58,15 @@ internal data class JimmerDtoPrecompiledDocument(
 
 internal data class JimmerDtoUnresolvedDocument(
     val inputSnapshot: CompilerInputDocumentSnapshot,
-    val baseTypeId: LsiSymbolId,
+    val targetTypeIds: List<LsiSymbolId>,
     val unresolvedTypeIds: List<LsiSymbolId>,
     val message: String,
 ) {
     init {
-        baseTypeId.requireTypeQualifiedName()
+        targetTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
+        require(targetTypeIds == targetTypeIds.distinct().sorted()) {
+            "Unresolved DTO target type ids must be distinct and sorted"
+        }
         unresolvedTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
         require(unresolvedTypeIds.isNotEmpty()) {
             "Unresolved DTO document must contain unresolved type ids"
@@ -77,7 +80,7 @@ internal data class JimmerDtoUnresolvedDocument(
 
 internal data class JimmerDtoCompilerFailure(
     val inputSnapshot: CompilerInputDocumentSnapshot,
-    val baseTypeId: LsiSymbolId?,
+    val targetTypeIds: List<LsiSymbolId>,
     val code: String,
     val severity: LsiDiagnosticSeverity,
     val symbolId: LsiSymbolId?,
@@ -86,7 +89,10 @@ internal data class JimmerDtoCompilerFailure(
     val details: Map<String, String>,
 ) {
     init {
-        baseTypeId?.requireTypeQualifiedName()
+        targetTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
+        require(targetTypeIds == targetTypeIds.distinct().sorted()) {
+            "Failed DTO target type ids must be distinct and sorted"
+        }
         require(code.isNotBlank()) { "DTO compiler failure code cannot be blank" }
         require(code.none(Char::isWhitespace)) {
             "DTO compiler failure code cannot contain whitespace: '$code'"
@@ -114,7 +120,7 @@ internal val JIMMER_DTO_COMPILER_FAILURE_COMPARATOR: Comparator<JimmerDtoCompile
                 "${name.length}:$name${value.length}:$value"
             }
         },
-        { failure -> failure.baseTypeId?.value.orEmpty() },
+        { failure -> failure.targetTypeIds.joinToString(",") { typeId -> typeId.value } },
     )
 
 internal data class JimmerDtoPrecompileOutcome(

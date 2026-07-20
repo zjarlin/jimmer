@@ -247,49 +247,24 @@ class Importing {
                             "\""
             );
         }
-        String imported;
-        int index = qualifiedName.indexOf('.');
-        if (index == -1) {
-            imported = typeMap.get(qualifiedName);
-        } else {
-            imported = typeMap.get(qualifiedName.substring(0, index));
-            if (imported != null) {
-                imported += qualifiedName.substring(index);
-            }
+        DtoTypeNameSelection selection = DtoTypeNameSelector
+                .plan(qualifiedName, defaultPackageName, typeMap, wildcardPackageNames)
+                .select(typeExists);
+        if (selection.isAmbiguous()) {
+            List<String> conflicts = selection.getConflictingQualifiedNames();
+            throw this.ctx.exception(
+                    qualifiedNameLine,
+                    qualifiedNameCol,
+                    "Ambiguous type name \"" +
+                            qualifiedName +
+                            "\", both \"" +
+                            conflicts.get(0) +
+                            "\" and \"" +
+                            conflicts.get(1) +
+                            "\" are matched by wildcard imports"
+            );
         }
-        if (imported != null) {
-            return imported;
-        }
-        if (Character.isLowerCase(qualifiedName.charAt(0))) {
-            return qualifiedName;
-        }
-        String defaultQualifiedName = defaultPackageName.isEmpty() ?
-                qualifiedName :
-                defaultPackageName + '.' + qualifiedName;
-        if (typeExists.test(defaultQualifiedName)) {
-            return defaultQualifiedName;
-        }
-        String wildcardQualifiedName = null;
-        for (String packageName : wildcardPackageNames) {
-            String candidate = packageName + '.' + qualifiedName;
-            if (typeExists.test(candidate)) {
-                if (wildcardQualifiedName != null) {
-                    throw this.ctx.exception(
-                            qualifiedNameLine,
-                            qualifiedNameCol,
-                            "Ambiguous type name \"" +
-                                    qualifiedName +
-                                    "\", both \"" +
-                                    wildcardQualifiedName +
-                                    "\" and \"" +
-                                    candidate +
-                                    "\" are matched by wildcard imports"
-                    );
-                }
-                wildcardQualifiedName = candidate;
-            }
-        }
-        return wildcardQualifiedName != null ? wildcardQualifiedName : defaultQualifiedName;
+        return selection.getSelectedQualifiedName();
     }
 
     static {

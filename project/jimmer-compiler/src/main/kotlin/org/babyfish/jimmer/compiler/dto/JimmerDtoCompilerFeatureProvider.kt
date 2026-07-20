@@ -73,14 +73,14 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             immutableDependencyFingerprint = immutableState.fingerprint,
         )
         val unavailableTypeIds = buildSet {
-            outcome.unresolvedDocuments.mapTo(this) { document -> document.baseTypeId }
-            outcome.failures.mapNotNullTo(this) { failure -> failure.baseTypeId }
+            outcome.unresolvedDocuments.flatMapTo(this) { document -> document.targetTypeIds }
+            outcome.failures.flatMapTo(this) { failure -> failure.targetTypeIds }
         }
         val processedTypeIds = if (context.round.isFinal) {
             emptySet()
         } else {
             outcome.schema.documents
-                .mapTo(sortedSetOf()) { document -> document.baseTypeId }
+                .flatMapTo(sortedSetOf()) { document -> document.targetTypeIds }
                 .minus(unavailableTypeIds)
         }
         return JimmerCompilerFeaturePrecompileResult(
@@ -141,7 +141,7 @@ internal data class JimmerDtoCompilerFeatureState(
             appendDtoDocumentState(
                 kind = "unresolved",
                 inputSnapshot = document.inputSnapshot,
-                baseTypeId = document.baseTypeId,
+                targetTypeIds = document.targetTypeIds,
                 unresolvedTypeIds = document.unresolvedTypeIds,
                 diagnosticCode = "jimmer.dto.unresolved",
                 diagnosticSeverity = LsiDiagnosticSeverity.ERROR,
@@ -157,7 +157,7 @@ internal data class JimmerDtoCompilerFeatureState(
             appendDtoDocumentState(
                 kind = "failure",
                 inputSnapshot = failure.inputSnapshot,
-                baseTypeId = failure.baseTypeId,
+                targetTypeIds = failure.targetTypeIds,
                 unresolvedTypeIds = emptyList(),
                 diagnosticCode = failure.code,
                 diagnosticSeverity = failure.severity,
@@ -288,7 +288,9 @@ private fun JimmerDtoPrecompileOutcome.diagnostics(
                         message = document.message,
                         symbolId = document.unresolvedTypeIds.first(),
                         location = document.inputSnapshot.references.firstOrNull { reference ->
-                            reference.typeId == document.unresolvedTypeIds.first()
+                            val unresolvedTypeId = document.unresolvedTypeIds.first()
+                            unresolvedTypeId in reference.typeSelector.candidateTypeIds ||
+                                unresolvedTypeId in reference.ownerTargetSelector?.candidateTypeIds.orEmpty()
                         }?.location,
                         details = mapOf("document" to document.inputSnapshot.document.source.path),
                     )
@@ -313,7 +315,7 @@ private fun JimmerDtoPrecompileOutcome.diagnostics(
 private fun StringBuilder.appendDtoDocumentState(
     kind: String,
     inputSnapshot: CompilerInputDocumentSnapshot,
-    baseTypeId: LsiSymbolId?,
+    targetTypeIds: List<LsiSymbolId>,
     unresolvedTypeIds: List<LsiSymbolId>,
     diagnosticCode: String,
     diagnosticSeverity: LsiDiagnosticSeverity,
@@ -333,8 +335,8 @@ private fun StringBuilder.appendDtoDocumentState(
     inputSnapshot.references.forEach { reference ->
         append(':')
         append(reference.kind.name)
-        append(':')
-        append(reference.typeId.value)
+        appendLengthPrefixed(reference.typeSelector.canonicalText())
+        appendLengthPrefixed(reference.ownerTargetSelector?.canonicalText().orEmpty())
         append(':')
         append(reference.location.start.line)
         append(':')
@@ -345,7 +347,7 @@ private fun StringBuilder.appendDtoDocumentState(
         append(reference.location.end.column)
     }
     append(':')
-    append(baseTypeId?.value.orEmpty())
+    append(targetTypeIds.joinToString(",") { typeId -> typeId.value })
     append(':')
     append(unresolvedTypeIds.joinToString(",") { typeId -> typeId.value })
     append(':')
@@ -382,6 +384,13 @@ private fun StringBuilder.appendDtoDocumentState(
         append(':')
         append(value)
     }
+}
+
+private fun StringBuilder.appendLengthPrefixed(value: String) {
+    append(':')
+    append(value.length)
+    append(':')
+    append(value)
 }
 
 private fun StringBuilder.appendEffectiveKspMutableByRootTypeId(

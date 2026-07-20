@@ -8,6 +8,8 @@ import java.util.Objects;
 
 public class UserProp implements AbstractProp, AbstractPropBuilder {
 
+    private final DtoFile declaringFile;
+
     private final String alias;
 
     private final int line;
@@ -25,12 +27,14 @@ public class UserProp implements AbstractProp, AbstractPropBuilder {
     private final String doc;
 
     public UserProp(
+            DtoFile declaringFile,
             Token alias,
             TypeRef typeRef,
             @Nullable String defaultValueText,
             List<Anno> annotations,
             @Nullable String doc
     ) {
+        this.declaringFile = Objects.requireNonNull(declaringFile, "declaringFile cannot be null");
         this.alias = alias.getText();
         this.line = alias.getLine();
         this.col = alias.getCharPositionInLine();
@@ -38,6 +42,11 @@ public class UserProp implements AbstractProp, AbstractPropBuilder {
         this.defaultValueText = defaultValueText;
         this.annotations = annotations;
         this.doc = doc;
+    }
+
+    @Override
+    public DtoFile getDeclaringFile() {
+        return declaringFile;
     }
 
     @Override

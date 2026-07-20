@@ -5,8 +5,11 @@ import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 
 public class FoldProp<T extends BaseType, P extends BaseProp> implements AbstractProp {
+
+    private final DtoFile declaringFile;
 
     private final String name;
 
@@ -27,6 +30,7 @@ public class FoldProp<T extends BaseType, P extends BaseProp> implements Abstrac
     private final DtoType<T, P> targetType;
 
     FoldProp(
+            DtoFile declaringFile,
             String name,
             int line,
             int col,
@@ -36,6 +40,7 @@ public class FoldProp<T extends BaseType, P extends BaseProp> implements Abstrac
             @Nullable DtoProp<T, P> nullGuardProp,
             DtoType<T, P> targetType
     ) {
+        this.declaringFile = Objects.requireNonNull(declaringFile, "declaringFile cannot be null");
         this.name = name;
         this.line = line;
         this.col = col;
@@ -53,6 +58,7 @@ public class FoldProp<T extends BaseType, P extends BaseProp> implements Abstrac
             @Nullable DtoProp<T, P> nullGuardProp,
             DtoType<T, P> targetType
     ) {
+        this.declaringFile = original.declaringFile;
         this.name = name;
         this.line = original.line;
         this.col = original.col;
@@ -61,6 +67,11 @@ public class FoldProp<T extends BaseType, P extends BaseProp> implements Abstrac
         this.doc = original.doc;
         this.nullGuardProp = nullGuardProp;
         this.targetType = targetType;
+    }
+
+    @Override
+    public DtoFile getDeclaringFile() {
+        return declaringFile;
     }
 
     @Override
