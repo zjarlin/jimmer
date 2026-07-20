@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
@@ -601,28 +602,18 @@ class JimmerImmutablePrecompiler {
         }
         val overriddenDeclaration = property.overrideChain[1]
         val inheritedOwnerId = overriddenDeclaration.ownerId
-        val declaredAnnotationTypes = property.declaration.annotations
-            .mapTo(linkedSetOf(), LsiAnnotation::type)
-        val shadowedAnnotationTypes = property.overrideChain
-            .drop(1)
-            .flatMap(LsiProperty::annotations)
-            .map(LsiAnnotation::type)
-            .filterTo(linkedSetOf()) { annotationType ->
-                annotationType in declaredAnnotationTypes && annotationType !in NON_SEMANTIC_OVERRIDE_ANNOTATIONS
-            }
         val directSuperTypeIds = ownerType.superTypes
             .filterIsInstance<LsiDeclaredType>()
             .mapTo(linkedSetOf(), LsiDeclaredType::declarationId)
-        val annotationOverrideAllowed = shadowedAnnotationTypes.isEmpty() ||
+        val overrideAllowed =
             ownerKind == JimmerImmutableTypeKind.ENTITY &&
             kindByTypeId[inheritedOwnerId] == JimmerImmutableTypeKind.MAPPED_SUPERCLASS &&
             inheritedOwnerId in directSuperTypeIds
-        if (!annotationOverrideAllowed) {
+        if (!overrideAllowed) {
             throw JimmerImmutablePrecompileException(
                 declarationId = property.declaration.id,
                 message = "Immutable property '${property.declaration.id.value}' can only override a property " +
-                    "annotation declared directly by a mapped superclass of an entity; shadowed annotations: " +
-                    shadowedAnnotationTypes.sorted().joinToString { annotationType -> annotationType.value },
+                    "declared directly by a mapped superclass of an entity",
             )
         }
         val inheritedOwner = workspace[inheritedOwnerId] as? LsiTypeDeclaration
@@ -1222,7 +1213,21 @@ private fun LsiResolvedProperty.toImmutableProp(
     workspace: LsiWorkspace,
     typeSystem: LsiTypeSystem,
 ): JimmerImmutableProp {
-    val list = type.isListType()
+    val formulaKind = formulaKind()
+    val explicitScalar = annotations.any { annotation ->
+        annotation.findAnnotation(SCALAR_ANNOTATIONS, workspace, linkedSetOf()) != null
+    }
+    val languageFormula = formulaKind == JimmerFormulaKind.LANGUAGE ||
+        formulaKind == JimmerFormulaKind.ABSTRACT && declaration.origin.language == LsiLanguage.JAVA
+    val collection = type.isCollectionType(typeSystem)
+    if (collection && !explicitScalar && !languageFormula && !type.isImmutableListType()) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable collection property '${declaration.id.value}' must use java.util.List " +
+                "unless it has scalar or language-formula semantics",
+        )
+    }
+    val list = collection && !explicitScalar && !languageFormula
     val genericTarget = type.targetType(list) is LsiTypeParameterRef
     val targetTypeId = type.targetTypeId(list)
     val associationKind = associationKind()
@@ -1266,7 +1271,9 @@ private fun LsiResolvedProperty.toImmutableProp(
         documentation = declaration.documentation
             ?: overrideChain.drop(1).firstNotNullOfOrNull(LsiProperty::documentation),
         type = type.withRootNullability(nullable),
-        annotations = annotations,
+        annotations = annotations.filterNot { annotation ->
+            annotation.type in NON_SEMANTIC_OVERRIDE_ANNOTATIONS
+        },
         overrideChain = overrideChain.map { property -> property.id },
         inherited = declaration.ownerId != ownerTypeId,
         overridden = declaration.ownerId == ownerTypeId && overrideChain.size > 1,
@@ -1282,7 +1289,7 @@ private fun LsiResolvedProperty.toImmutableProp(
         } else {
             associationKind
         },
-        formulaKind = formulaKind(),
+        formulaKind = formulaKind,
         view = null,
         genericTarget = genericTarget,
         remote = remote,
@@ -1531,7 +1538,14 @@ private fun LsiTypeRef.toConverterListType(): LsiDeclaredType {
     )
 }
 
-private fun LsiTypeRef.isListType(): Boolean {
+private fun LsiTypeRef.isCollectionType(typeSystem: LsiTypeSystem): Boolean {
+    val declaredType = this as? LsiDeclaredType ?: return false
+    return declaredType.declarationId == COLLECTION_TYPE_ID ||
+        declaredType.declarationId in LIST_TYPE_IDS ||
+        typeSystem.resolveSuperType(declaredType.declarationId, COLLECTION_TYPE_ID) != null
+}
+
+private fun LsiTypeRef.isImmutableListType(): Boolean {
     val declaredType = this as? LsiDeclaredType ?: return false
     return declaredType.declarationId in LIST_TYPE_IDS
 }
@@ -1840,6 +1854,8 @@ private val LIST_TYPE_IDS = setOf(
     "kotlin.collections.MutableList",
 ).mapTo(linkedSetOf(), LsiSymbolId::type)
 
+private val COLLECTION_TYPE_ID = LsiSymbolId.type("java.util.Collection")
+
 private val CONVERTER_LIST_TYPE = LsiSymbolId.type("java.util.List")
 
 private val BOXED_PRIMITIVE_KINDS = mapOf(
@@ -1858,6 +1874,10 @@ private val STRING_TYPE_IDS = setOf(
     "java.lang.String",
     "kotlin.String",
 ).mapTo(linkedSetOf(), LsiSymbolId::type)
+
+private val SCALAR_ANNOTATIONS = setOf(
+    LsiSymbolId.type("org.babyfish.jimmer.Scalar"),
+)
 
 private val CLIENT_T_NULLABLE_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.client.TNullable")

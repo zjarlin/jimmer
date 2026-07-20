@@ -529,9 +529,9 @@ class JimmerImmutablePrecompilerTest {
 
         val declaredDiscriminator = property(
             ownerId = childId,
-            name = "kind",
+            name = "adminKind",
             type = LsiDeclaredType(STRING_TYPE),
-            overrides = listOf(LsiOverride(rootDiscriminator.id)),
+            annotations = listOf(annotation(DISCRIMINATOR)),
         )
         val declaredWorkspace = LsiWorkspace(
             declarations = listOf(
@@ -1868,7 +1868,57 @@ class JimmerImmutablePrecompilerTest {
     }
 
     @Test
-    fun `ordinary property override does not require mapped superclass annotation override rules`() {
+    fun `mapped superclass cannot redeclare property without shadowing semantic annotation`() {
+        val workspace = overrideCategoryWorkspace(
+            baseMarker = MAPPED_SUPERCLASS,
+            childMarker = MAPPED_SUPERCLASS,
+        )
+
+        assertOverrideEligibilityRejected(workspace)
+    }
+
+    @Test
+    fun `entity cannot redeclare entity property without shadowing semantic annotation`() {
+        assertOverrideEligibilityRejected(entityOverrideWorkspace())
+    }
+
+    @Test
+    fun `entity cannot redeclare property from indirect mapped superclass without shadowing semantic annotation`() {
+        assertOverrideEligibilityRejected(indirectMappedSuperclassOverrideWorkspace())
+    }
+
+    @Test
+    fun `override and suppress annotations are omitted from immutable property annotations`() {
+        val workspace = overrideCategoryWorkspace(
+            baseMarker = MAPPED_SUPERCLASS,
+            childMarker = ENTITY,
+            baseAnnotations = listOf(
+                default("0", LsiLanguage.KOTLIN),
+                annotation(
+                    COLUMN,
+                    mapOf("name" to LsiAnnotationValue.StringValue("VALUE")),
+                ),
+            ),
+            childAnnotations = listOf(
+                default("1", LsiLanguage.KOTLIN),
+                annotation(JAVA_OVERRIDE),
+                annotation(KOTLIN_SUPPRESS),
+            ),
+        )
+
+        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val value = schema.types
+            .single { type -> type.id == LsiSymbolId.type("demo.Child") }
+            .props
+            .single()
+
+        assertEquals(listOf(DEFAULT, COLUMN), value.annotations.map(LsiAnnotation::type))
+        assertEquals("1", value.annotationString(DEFAULT, "value"))
+        assertEquals("VALUE", value.annotationString(COLUMN, "name"))
+    }
+
+    @Test
+    fun `mapped superclass property override is allowed without semantic annotation shadowing`() {
         val workspace = overrideCategoryWorkspace(
             baseMarker = MAPPED_SUPERCLASS,
             childMarker = ENTITY,
@@ -1904,6 +1954,79 @@ class JimmerImmutablePrecompilerTest {
             childType = listType(STRING_TYPE),
             expected = "list category",
         )
+        assertOverrideRejected(
+            baseType = listType(STRING_TYPE),
+            childType = listType(STRING_TYPE),
+            childAnnotations = listOf(annotation(SCALAR)),
+            expected = "list category",
+        )
+        val jsonScalar = LsiSymbolId.type("demo.JsonScalar")
+        assertOverrideRejected(
+            baseType = listType(STRING_TYPE),
+            childType = listType(STRING_TYPE),
+            childAnnotations = listOf(annotation(jsonScalar)),
+            expected = "list category",
+            extraTypes = listOf(
+                declaration(
+                    qualifiedName = jsonScalar.requireTypeQualifiedName(),
+                    kind = LsiTypeDeclarationKind.ANNOTATION,
+                    annotations = listOf(annotation(SCALAR)),
+                )
+            ),
+        )
+    }
+
+    @Test
+    fun `non-list collection types require scalar semantics`() {
+        val collectionTypes = listOf(COLLECTION_TYPE, SET_TYPE, CUSTOM_COLLECTION_TYPE)
+        val hierarchyTypes = listOf(
+            declaration(
+                qualifiedName = COLLECTION_TYPE.requireTypeQualifiedName(),
+                kind = LsiTypeDeclarationKind.INTERFACE,
+            ),
+            declaration(
+                qualifiedName = SET_TYPE.requireTypeQualifiedName(),
+                kind = LsiTypeDeclarationKind.INTERFACE,
+                superTypes = listOf(LsiDeclaredType(COLLECTION_TYPE)),
+            ),
+            declaration(
+                qualifiedName = CUSTOM_COLLECTION_TYPE.requireTypeQualifiedName(),
+                kind = LsiTypeDeclarationKind.INTERFACE,
+                superTypes = listOf(LsiDeclaredType(COLLECTION_TYPE)),
+            ),
+        )
+
+        for (collectionType in collectionTypes) {
+            val failure = assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(
+                    collectionPropertyWorkspace(
+                        collectionType = collectionType,
+                        annotations = emptyList(),
+                        hierarchyTypes = hierarchyTypes,
+                    )
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("must use java.util.List"))
+
+            val scalarSchema = JimmerImmutablePrecompiler().compile(
+                collectionPropertyWorkspace(
+                    collectionType = collectionType,
+                    annotations = listOf(annotation(SCALAR)),
+                    hierarchyTypes = hierarchyTypes,
+                )
+            )
+            assertFalse(scalarSchema.types.single().props.single().list)
+
+            val formulaSchema = JimmerImmutablePrecompiler().compile(
+                collectionPropertyWorkspace(
+                    collectionType = collectionType,
+                    annotations = listOf(formula(dependencies = listOf("name"))),
+                    modality = LsiModality.FINAL,
+                    hierarchyTypes = hierarchyTypes,
+                )
+            )
+            assertFalse(formulaSchema.types.single().props.single().list)
+        }
     }
 
     @Test
@@ -1925,6 +2048,13 @@ class JimmerImmutablePrecompilerTest {
             baseModality = LsiModality.ABSTRACT,
             childModality = LsiModality.FINAL,
             expected = "formula kind",
+        )
+        assertOverrideRejected(
+            baseType = listType(STRING_TYPE),
+            childType = listType(STRING_TYPE),
+            childAnnotations = listOf(formula(dependencies = listOf("name"))),
+            childModality = LsiModality.FINAL,
+            expected = "list category",
         )
     }
 
@@ -1953,6 +2083,124 @@ class JimmerImmutablePrecompilerTest {
             JimmerImmutablePrecompiler().compile(workspace)
         }
         assertTrue(exception.message.orEmpty().contains(expected))
+    }
+
+    private fun collectionPropertyWorkspace(
+        collectionType: LsiSymbolId,
+        annotations: List<LsiAnnotation>,
+        modality: LsiModality = LsiModality.ABSTRACT,
+        hierarchyTypes: List<LsiTypeDeclaration>,
+    ): LsiWorkspace {
+        val entityId = LsiSymbolId.type("demo.CollectionEntity")
+        val collectionProp = property(
+            ownerId = entityId,
+            name = "values",
+            type = LsiDeclaredType(
+                declarationId = collectionType,
+                arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE))),
+            ),
+            annotations = annotations,
+            modality = modality,
+        )
+        return LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = entityId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = listOf(collectionProp.id),
+                ),
+                collectionProp,
+            ) + hierarchyTypes,
+        )
+    }
+
+    private fun assertOverrideEligibilityRejected(workspace: LsiWorkspace) {
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(workspace)
+        }
+
+        assertTrue(exception.message.orEmpty().contains("mapped superclass of an entity"))
+    }
+
+    private fun entityOverrideWorkspace(): LsiWorkspace {
+        val baseId = LsiSymbolId.type("demo.EntityBase")
+        val childId = LsiSymbolId.type("demo.EntityChild")
+        val discriminatorProp = property(
+            ownerId = baseId,
+            name = "kind",
+            type = LsiDeclaredType(STRING_TYPE),
+            annotations = listOf(annotation(DISCRIMINATOR)),
+        )
+        val baseValueProp = property(
+            ownerId = baseId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+        )
+        val childValueProp = property(
+            ownerId = childId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+            overrides = listOf(LsiOverride(baseValueProp.id)),
+        )
+        return LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = baseId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = listOf(discriminatorProp.id, baseValueProp.id),
+                    typeAnnotations = listOf(annotation(INHERITANCE)),
+                ),
+                discriminatorProp,
+                baseValueProp,
+                type(
+                    qualifiedName = childId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = listOf(childValueProp.id),
+                    superTypes = listOf(LsiDeclaredType(baseId)),
+                ),
+                childValueProp,
+            ),
+        )
+    }
+
+    private fun indirectMappedSuperclassOverrideWorkspace(): LsiWorkspace {
+        val baseId = LsiSymbolId.type("demo.IndirectBase")
+        val middleId = LsiSymbolId.type("demo.IndirectMiddle")
+        val entityId = LsiSymbolId.type("demo.IndirectEntity")
+        val baseValueProp = property(
+            ownerId = baseId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+        )
+        val entityValueProp = property(
+            ownerId = entityId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+            overrides = listOf(LsiOverride(baseValueProp.id)),
+        )
+        return LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = baseId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(baseValueProp.id),
+                ),
+                baseValueProp,
+                type(
+                    qualifiedName = middleId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = emptyList(),
+                    superTypes = listOf(LsiDeclaredType(baseId)),
+                ),
+                type(
+                    qualifiedName = entityId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = listOf(entityValueProp.id),
+                    superTypes = listOf(LsiDeclaredType(middleId)),
+                ),
+                entityValueProp,
+            ),
+        )
     }
 
     private fun overrideWorkspace(language: LsiLanguage): LsiWorkspace {
@@ -2552,6 +2800,12 @@ class JimmerImmutablePrecompilerTest {
         private val DEFAULT = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
         private val COLUMN = LsiSymbolId.type("org.babyfish.jimmer.sql.Column")
         private val JAVA_OVERRIDE = LsiSymbolId.type("java.lang.Override")
+        private val KOTLIN_SUPPRESS = LsiSymbolId.type("kotlin.Suppress")
+        private val SCALAR = LsiSymbolId.type("org.babyfish.jimmer.Scalar")
+
+        private val COLLECTION_TYPE = LsiSymbolId.type("java.util.Collection")
+        private val SET_TYPE = LsiSymbolId.type("java.util.Set")
+        private val CUSTOM_COLLECTION_TYPE = LsiSymbolId.type("demo.CustomCollection")
 
         private val REMOTE_BASE_TYPE = LsiSymbolId.type("demo.RemoteBase")
         private val REMOTE_NODE_TYPE = LsiSymbolId.type("demo.RemoteNode")

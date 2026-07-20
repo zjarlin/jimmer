@@ -35,6 +35,7 @@ import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableFrontendParityTest {
@@ -132,6 +133,55 @@ class JimmerImmutableFrontendParityTest {
             ),
             authorIdsProp.view,
         )
+    }
+
+    @Test
+    fun `real apt and ksp frontends produce identical overridden property annotations`() {
+        val apt = compileApt(OVERRIDDEN_PROPERTY_JAVA_SOURCE)
+        val ksp = compileKsp(OVERRIDDEN_PROPERTY_KOTLIN_SOURCE)
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+
+        val aptStatus = aptSchema.types
+            .single { type -> type.qualifiedName == "demo.OverrideEntity" }
+            .props
+            .single { prop -> prop.name == "status" }
+        val kspStatus = kspSchema.types
+            .single { type -> type.qualifiedName == "demo.OverrideEntity" }
+            .props
+            .single { prop -> prop.name == "status" }
+        assertEquals(aptStatus.type, kspStatus.type)
+        assertTrue(aptStatus.overridden)
+        assertEquals("1", aptStatus.annotationString(DEFAULT, "value"))
+        assertEquals("BASE_STATUS", aptStatus.annotationString(COLUMN, "name"))
+        assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == DEFAULT })
+        assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == COLUMN })
+        assertFalse(aptStatus.annotations.any { annotation -> annotation.type == JAVA_OVERRIDE })
+    }
+
+    @Test
+    fun `real apt and ksp frontends agree on non-list collection scalar semantics`() {
+        val apt = compileApt(SCALAR_COLLECTION_JAVA_SOURCE)
+        val ksp = compileKsp(SCALAR_COLLECTION_KOTLIN_SOURCE)
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertFalse(aptSchema.types.single().props.single().list)
+
+        val invalidApt = compileApt(INVALID_COLLECTION_JAVA_SOURCE)
+        val invalidKsp = compileKsp(INVALID_COLLECTION_KOTLIN_SOURCE)
+        assertNull(invalidApt.schema)
+        assertNull(invalidKsp.schema)
+        assertEquals(invalidApt.diagnostic, invalidKsp.diagnostic)
+        assertTrue(invalidApt.diagnostic.orEmpty().contains("must use java.util.List"))
     }
 
     @Test
@@ -519,6 +569,14 @@ class JimmerImmutableFrontendParityTest {
         val diagnostic: String?,
     )
 
+    private fun JimmerImmutableProp.annotationString(
+        annotationType: LsiSymbolId,
+        argumentName: String,
+    ): String? {
+        val annotation = annotations.singleOrNull { item -> item.type == annotationType } ?: return null
+        return (annotation.arguments[argumentName]?.value as? LsiAnnotationValue.StringValue)?.value
+    }
+
     private companion object {
         fun runtimeClasspath(): List<File> {
             return System.getProperty("java.class.path")
@@ -704,6 +762,89 @@ class JimmerImmutableFrontendParityTest {
             }
         """.trimIndent()
 
+        val OVERRIDDEN_PROPERTY_JAVA_SOURCE = """
+            package demo;
+
+            import org.babyfish.jimmer.sql.Column;
+            import org.babyfish.jimmer.sql.Default;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.MappedSuperclass;
+
+            @MappedSuperclass
+            interface GenericStatusBase<T extends CharSequence> {
+                @Default("0")
+                @Column(name = "BASE_STATUS")
+                T getStatus();
+            }
+
+            @Entity
+            interface OverrideEntity extends GenericStatusBase<String> {
+                @Id
+                long getId();
+
+                @Override
+                @Default("1")
+                String getStatus();
+            }
+        """.trimIndent()
+
+        val OVERRIDDEN_PROPERTY_KOTLIN_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Column
+            import org.babyfish.jimmer.sql.Default
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.MappedSuperclass
+
+            @MappedSuperclass
+            interface GenericStatusBase<T : CharSequence> {
+                @Default("0")
+                @Column(name = "BASE_STATUS")
+                val status: T
+            }
+
+            @Entity
+            interface OverrideEntity : GenericStatusBase<String> {
+                @Id
+                val id: Long
+
+                @Default("1")
+                override val status: String
+            }
+        """.trimIndent()
+
+        val SCALAR_COLLECTION_JAVA_SOURCE = """
+            package demo;
+
+            import java.util.Set;
+            import org.babyfish.jimmer.Scalar;
+            import org.babyfish.jimmer.sql.Entity;
+
+            @Entity
+            interface ScalarCollectionEntity {
+                @Scalar
+                Set<String> getValues();
+            }
+        """.trimIndent()
+
+        val SCALAR_COLLECTION_KOTLIN_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.Scalar
+            import org.babyfish.jimmer.sql.Entity
+
+            @Entity
+            interface ScalarCollectionEntity {
+                @Scalar
+                val values: Set<String>
+            }
+        """.trimIndent()
+
+        val INVALID_COLLECTION_JAVA_SOURCE = SCALAR_COLLECTION_JAVA_SOURCE.replace("@Scalar\n", "")
+        val INVALID_COLLECTION_KOTLIN_SOURCE = SCALAR_COLLECTION_KOTLIN_SOURCE.replace("@Scalar\n", "")
+
         val INVALID_JAVA_SOURCE = VALID_JAVA_SOURCE
             .replace("String kind();", "int kind();")
 
@@ -867,5 +1008,9 @@ class JimmerImmutableFrontendParityTest {
                 val authorIds: List<Long?>
             }
         """.trimIndent()
+
+        val DEFAULT = LsiSymbolId.type("org.babyfish.jimmer.sql.Default")
+        val COLUMN = LsiSymbolId.type("org.babyfish.jimmer.sql.Column")
+        val JAVA_OVERRIDE = LsiSymbolId.type("java.lang.Override")
     }
 }
