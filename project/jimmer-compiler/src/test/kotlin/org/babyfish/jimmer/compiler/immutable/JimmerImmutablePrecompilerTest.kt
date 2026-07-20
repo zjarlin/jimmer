@@ -608,6 +608,100 @@ class JimmerImmutablePrecompilerTest {
     }
 
     @Test
+    fun `rejects incompatible immutable super type categories`() {
+        val cases = listOf(
+            Triple(MAPPED_SUPERCLASS, ENTITY, "only inherit a mapped superclass"),
+            Triple(ENTITY, IMMUTABLE, "only inherit an entity or mapped superclass"),
+            Triple(EMBEDDABLE, MAPPED_SUPERCLASS, "does not support inheritance"),
+            Triple(IMMUTABLE, ENTITY, "only inherit a simple immutable type"),
+        )
+
+        cases.forEachIndexed { index, (childMarker, superMarker, expectedMessage) ->
+            val superId = LsiSymbolId.type("demo.InvalidSuper$index")
+            val childId = LsiSymbolId.type("demo.InvalidChild$index")
+            val workspace = LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        qualifiedName = superId.requireTypeQualifiedName(),
+                        marker = superMarker,
+                        memberIds = emptyList(),
+                    ),
+                    type(
+                        qualifiedName = childId.requireTypeQualifiedName(),
+                        marker = childMarker,
+                        memberIds = emptyList(),
+                        superTypes = listOf(LsiDeclaredType(superId)),
+                    ),
+                ),
+            )
+
+            val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(workspace, setOf(childId))
+            }
+
+            assertEquals(childId, exception.declarationId)
+            assertTrue(exception.message.orEmpty().contains(expectedMessage), exception.message)
+        }
+    }
+
+    @Test
+    fun `allows multiple mapped superclasses but rejects multiple simple immutable parents`() {
+        val firstBaseId = LsiSymbolId.type("demo.FirstBase")
+        val secondBaseId = LsiSymbolId.type("demo.SecondBase")
+        val mappedId = LsiSymbolId.type("demo.CompositeBase")
+        val entityId = LsiSymbolId.type("demo.CompositeEntity")
+        val validWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(firstBaseId.requireTypeQualifiedName(), MAPPED_SUPERCLASS, emptyList()),
+                type(secondBaseId.requireTypeQualifiedName(), MAPPED_SUPERCLASS, emptyList()),
+                type(
+                    qualifiedName = mappedId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = emptyList(),
+                    superTypes = listOf(LsiDeclaredType(firstBaseId), LsiDeclaredType(secondBaseId)),
+                ),
+                type(
+                    qualifiedName = entityId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = emptyList(),
+                    superTypes = listOf(LsiDeclaredType(mappedId)),
+                ),
+            ),
+        )
+
+        val entity = JimmerImmutablePrecompiler()
+            .compile(validWorkspace, setOf(entityId))
+            .typesById
+            .getValue(entityId)
+        assertEquals(listOf(mappedId), entity.superTypeIds)
+
+        val firstSimpleId = LsiSymbolId.type("demo.FirstSimple")
+        val secondSimpleId = LsiSymbolId.type("demo.SecondSimple")
+        val invalidSimpleId = LsiSymbolId.type("demo.InvalidSimple")
+        val invalidWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(firstSimpleId.requireTypeQualifiedName(), IMMUTABLE, emptyList()),
+                type(secondSimpleId.requireTypeQualifiedName(), IMMUTABLE, emptyList()),
+                type(
+                    qualifiedName = invalidSimpleId.requireTypeQualifiedName(),
+                    marker = IMMUTABLE,
+                    memberIds = emptyList(),
+                    superTypes = listOf(
+                        LsiDeclaredType(firstSimpleId),
+                        LsiDeclaredType(secondSimpleId),
+                    ),
+                ),
+            ),
+        )
+
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(invalidWorkspace, setOf(invalidSimpleId))
+        }
+        assertEquals(invalidSimpleId, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("does not support multiple inheritance"))
+    }
+
+    @Test
     fun `rejects microservice mismatch with non-across superclass`() {
         val baseId = LsiSymbolId.type("demo.ServiceBase")
         val workspace = LsiWorkspace(

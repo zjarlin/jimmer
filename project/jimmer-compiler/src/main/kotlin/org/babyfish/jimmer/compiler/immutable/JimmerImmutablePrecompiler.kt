@@ -1026,6 +1026,7 @@ private class JimmerImmutableHierarchyResolver(
             .filterIsInstance<LsiDeclaredType>()
             .map(LsiDeclaredType::declarationId)
             .filter(kindByTypeId::containsKey)
+        validateSuperTypeKinds(type, kind, directSuperTypeIds)
         val primarySuperTypeIds = directSuperTypeIds.filter { superTypeId ->
             kindByTypeId.getValue(superTypeId) != JimmerImmutableTypeKind.MAPPED_SUPERCLASS
         }
@@ -1087,6 +1088,77 @@ private class JimmerImmutableHierarchyResolver(
             joinedTableDissociateAction = null,
             instantiable = determineInstantiable(type, null),
             discriminatorValue = null,
+        )
+    }
+
+    private fun validateSuperTypeKinds(
+        type: LsiTypeDeclaration,
+        kind: JimmerImmutableTypeKind,
+        directSuperTypeIds: List<LsiSymbolId>,
+    ) {
+        if (directSuperTypeIds.isEmpty()) {
+            return
+        }
+        when (kind) {
+            JimmerImmutableTypeKind.ENTITY -> {
+                val invalidSuperTypeId = directSuperTypeIds.firstOrNull { superTypeId ->
+                    kindByTypeId.getValue(superTypeId) !in setOf(
+                        JimmerImmutableTypeKind.ENTITY,
+                        JimmerImmutableTypeKind.MAPPED_SUPERCLASS,
+                    )
+                } ?: return
+                throw invalidSuperTypeKind(
+                    type = type,
+                    superTypeId = invalidSuperTypeId,
+                    expected = "an entity or mapped superclass",
+                )
+            }
+            JimmerImmutableTypeKind.MAPPED_SUPERCLASS -> {
+                val invalidSuperTypeId = directSuperTypeIds.firstOrNull { superTypeId ->
+                    kindByTypeId.getValue(superTypeId) != JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+                } ?: return
+                throw invalidSuperTypeKind(
+                    type = type,
+                    superTypeId = invalidSuperTypeId,
+                    expected = "a mapped superclass",
+                )
+            }
+            JimmerImmutableTypeKind.EMBEDDABLE -> {
+                throw JimmerImmutablePrecompileException(
+                    declarationId = type.id,
+                    message = "Embeddable immutable type '${type.qualifiedName}' does not support inheritance",
+                )
+            }
+            JimmerImmutableTypeKind.IMMUTABLE -> {
+                if (directSuperTypeIds.size > 1) {
+                    throw JimmerImmutablePrecompileException(
+                        declarationId = type.id,
+                        message = "Simple immutable type '${type.qualifiedName}' does not support multiple " +
+                            "inheritance",
+                    )
+                }
+                val superTypeId = directSuperTypeIds.single()
+                if (kindByTypeId.getValue(superTypeId) != JimmerImmutableTypeKind.IMMUTABLE) {
+                    throw invalidSuperTypeKind(
+                        type = type,
+                        superTypeId = superTypeId,
+                        expected = "a simple immutable type",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun invalidSuperTypeKind(
+        type: LsiTypeDeclaration,
+        superTypeId: LsiSymbolId,
+        expected: String,
+    ): JimmerImmutablePrecompileException {
+        val superKind = kindByTypeId.getValue(superTypeId)
+        return JimmerImmutablePrecompileException(
+            declarationId = type.id,
+            message = "Immutable type '${type.qualifiedName}' can only inherit $expected, but super type " +
+                "'${superTypeId.value}' is ${superKind.description()}",
         )
     }
 
@@ -2431,6 +2503,15 @@ private fun LsiTypeArgument.normalizedTypeSignature(): String {
         site.addzero.lsi.model.LsiVariance.INVARIANT -> requireNotNull(type).normalizedTypeSignature()
         site.addzero.lsi.model.LsiVariance.IN -> "in:${requireNotNull(type).normalizedTypeSignature()}"
         site.addzero.lsi.model.LsiVariance.OUT -> "out:${requireNotNull(type).normalizedTypeSignature()}"
+    }
+}
+
+private fun JimmerImmutableTypeKind.description(): String {
+    return when (this) {
+        JimmerImmutableTypeKind.IMMUTABLE -> "a simple immutable type"
+        JimmerImmutableTypeKind.ENTITY -> "an entity"
+        JimmerImmutableTypeKind.MAPPED_SUPERCLASS -> "a mapped superclass"
+        JimmerImmutableTypeKind.EMBEDDABLE -> "an embeddable"
     }
 }
 
