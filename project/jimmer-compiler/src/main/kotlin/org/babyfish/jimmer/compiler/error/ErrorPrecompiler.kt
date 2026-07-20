@@ -22,10 +22,14 @@ class ErrorPrecompileException(
 class ErrorPrecompiler(
     private val options: ErrorPrecompileOptions = ErrorPrecompileOptions(),
 ) {
-    fun compile(workspace: LsiWorkspace): ErrorPrecompiledSchema {
+    fun compile(
+        workspace: LsiWorkspace,
+        targetTypeIds: Set<LsiSymbolId>? = null,
+    ): ErrorPrecompiledSchema {
         val types = workspace.declarationsOfType<LsiTypeDeclaration>()
             .sortedBy(LsiTypeDeclaration::qualifiedName)
         val families = types
+            .filter { type -> targetTypeIds == null || type.id in targetTypeIds }
             .filter { type -> type.annotations.hasAnnotation(ERROR_FAMILY_ANNOTATION) }
             .map { type -> compileFamily(type, types) }
         return ErrorPrecompiledSchema(families)

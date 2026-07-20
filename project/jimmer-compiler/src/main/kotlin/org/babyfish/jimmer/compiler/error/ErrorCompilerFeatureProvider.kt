@@ -8,8 +8,13 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.error.apt.ErrorJavaRenderer
 import org.babyfish.jimmer.compiler.error.ksp.ErrorKotlinRenderer
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiOriginKind
+import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 
@@ -20,11 +25,22 @@ class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         context: JimmerCompilerPrecompileContext,
     ): JimmerCompilerFeaturePrecompileResult {
         return try {
+            val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
+            val targetTypeIds = context.round.workspace
+                .declarationsOfType<LsiTypeDeclaration>()
+                .asSequence()
+                .filter { type -> type.origin.kind in COMPILATION_ORIGIN_KINDS }
+                .filter { type -> sourceFilter.accepts(type.qualifiedName) }
+                .filter { type -> type.isVisibleOn(context.round.platform) }
+                .filter { type ->
+                    type.annotations.any { annotation -> annotation.type == ERROR_FAMILY_ANNOTATION }
+                }
+                .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
             val schema = ErrorPrecompiler(
                 ErrorPrecompileOptions(
                     checkedException = context.round.options["jimmer.client.checkedException"] == "true"
                 )
-            ).compile(context.round.workspace)
+            ).compile(context.round.workspace, targetTypeIds)
             val state = ErrorCompilerFeatureState(
                 status = ErrorCompilerFeatureStatus.RESOLVED,
                 schema = schema,
@@ -64,6 +80,23 @@ class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             CompilerPlatform.UNKNOWN -> emptyList()
         }
         return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+    }
+}
+
+private val COMPILATION_ORIGIN_KINDS = setOf(
+    LsiOriginKind.SOURCE,
+    LsiOriginKind.GENERATED,
+)
+
+private val ERROR_FAMILY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.error.ErrorFamily")
+
+private fun LsiTypeDeclaration.isVisibleOn(platform: CompilerPlatform): Boolean {
+    return when (platform) {
+        CompilerPlatform.APT -> annotations.none { annotation ->
+            annotation.type == LsiSymbolId.type("kotlin.Metadata")
+        }
+        CompilerPlatform.KSP -> origin.language != LsiLanguage.JAVA
+        CompilerPlatform.UNKNOWN -> true
     }
 }
 

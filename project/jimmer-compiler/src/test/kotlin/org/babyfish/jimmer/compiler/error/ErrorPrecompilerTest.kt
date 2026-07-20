@@ -55,6 +55,34 @@ class ErrorPrecompilerTest {
     }
 
     @Test
+    fun `target selection excludes classpath error families from generation`() {
+        val sourceWorkspace = errorWorkspace(LsiLanguage.JAVA, repeatableContainer = false)
+        val sourceFamily = sourceWorkspace.declarationsOfType<LsiTypeDeclaration>().single()
+        val binaryFamilyId = LsiSymbolId.type("external.ExternalErrorCode")
+        val binaryEntry = LsiEnumEntry(
+            id = LsiSymbolId("${binaryFamilyId.value}#FAILED"),
+            name = "FAILED",
+            ownerId = binaryFamilyId,
+            origin = BINARY_ORIGIN,
+        )
+        val binaryFamily = type(
+            qualifiedName = binaryFamilyId.requireTypeQualifiedName(),
+            kind = LsiTypeDeclarationKind.ENUM,
+            annotations = listOf(errorFamily("EXTERNAL")),
+            enumEntries = listOf(binaryEntry),
+            origin = BINARY_ORIGIN,
+        )
+        val workspace = LsiWorkspace(
+            sources = sourceWorkspace.sources,
+            declarations = sourceWorkspace.declarations + binaryFamily,
+        )
+
+        val schema = ErrorPrecompiler().compile(workspace, setOf(sourceFamily.id))
+
+        assertEquals(listOf(sourceFamily.id), schema.families.map(ErrorFamilyModel::id))
+    }
+
+    @Test
     fun `derives nested error exception name and package`() {
         val outer = type("demo.Outer", LsiTypeDeclarationKind.CLASS)
         val nestedFamilyId = LsiSymbolId.type("demo.Outer.SecurityErrorCode")
@@ -252,5 +280,6 @@ class ErrorPrecompilerTest {
         val STRING_TYPE = site.addzero.lsi.model.LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
         val DATE_TIME_TYPE = site.addzero.lsi.model.LsiDeclaredType(LsiSymbolId.type("java.time.LocalDateTime"))
         val SYNTHETIC_ORIGIN = LsiOrigin(LsiOriginKind.SYNTHETIC)
+        val BINARY_ORIGIN = LsiOrigin(LsiOriginKind.BINARY)
     }
 }
