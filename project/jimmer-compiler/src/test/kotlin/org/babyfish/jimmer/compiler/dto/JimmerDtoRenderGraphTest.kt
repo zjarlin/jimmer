@@ -734,6 +734,7 @@ class JimmerDtoRenderGraphTest {
             primaryAnnotationTypeId = null,
             associationKind = associationKind,
             formulaKind = JimmerFormulaKind.NONE,
+            transientResolver = null,
             view = null,
             genericTarget = false,
             remote = false,

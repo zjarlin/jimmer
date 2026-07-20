@@ -1313,6 +1313,7 @@ private fun LsiResolvedProperty.toImmutableProp(
     val ownerKind = kindByTypeId.getValue(ownerTypeId)
     val primaryAnnotation = primaryMappingAnnotation()
     val formulaKind = formulaKind()
+    val transientResolver = transientResolver()
     validateFormulaContract(
         ownerKind = ownerKind,
     )
@@ -1401,6 +1402,7 @@ private fun LsiResolvedProperty.toImmutableProp(
             associationKind
         },
         formulaKind = formulaKind,
+        transientResolver = transientResolver,
         view = null,
         genericTarget = genericTarget,
         remote = remote,
@@ -1408,6 +1410,24 @@ private fun LsiResolvedProperty.toImmutableProp(
         validations = validations(workspace),
         converter = converter(workspace, typeSystem, nullable, association),
     )
+}
+
+private fun LsiResolvedProperty.transientResolver(): JimmerTransientResolver? {
+    val transient = annotations.annotation(TRANSIENT_ANNOTATION) ?: return null
+    val resolverTypeId = transient.transientResolverTypeId("value", declaration.id)
+    val resolverRef = transient.typedStringValue("ref", declaration.id).orEmpty()
+    if (resolverTypeId != null && resolverRef.isNotEmpty()) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable transient property '${declaration.id.value}' cannot specify both " +
+                "resolver type and resolver reference",
+        )
+    }
+    return when {
+        resolverTypeId != null -> JimmerTransientResolver.Type(resolverTypeId)
+        resolverRef.isNotEmpty() -> JimmerTransientResolver.Reference(resolverRef)
+        else -> null
+    }
 }
 
 private fun LsiResolvedProperty.validateFormulaContract(
@@ -2017,6 +2037,52 @@ private fun LsiAnnotation.classTypeId(name: String): LsiSymbolId? {
     return (value.type as? LsiDeclaredType)?.declarationId
 }
 
+private fun LsiAnnotation.transientResolverTypeId(
+    name: String,
+    sourceId: LsiSymbolId,
+): LsiSymbolId? {
+    val argument = arguments[name] ?: return null
+    val classValue = argument.value as? LsiAnnotationValue.ClassValue
+        ?: throw JimmerImmutablePrecompileException(
+            declarationId = sourceId,
+            message = "Annotation argument '${type.value}.$name' must be a typed class value",
+        )
+    return when (val classType = classValue.type) {
+        is LsiDeclaredType -> classType.declarationId.takeUnless(NO_TRANSIENT_RESOLVER_TYPE_IDS::contains)
+        is LsiPrimitiveType -> if (
+            classType.kind == LsiPrimitiveKind.UNIT || classType.kind == LsiPrimitiveKind.VOID
+        ) {
+            null
+        } else {
+            throw JimmerImmutablePrecompileException(
+                declarationId = sourceId,
+                message = "Annotation argument '${type.value}.$name' must reference a resolver class",
+            )
+        }
+        is LsiUnresolvedType -> throw JimmerImmutablePrecompileException(
+            declarationId = sourceId,
+            recoverable = true,
+            message = "Cannot resolve transient resolver type '${classType.displayName}'",
+        )
+        else -> throw JimmerImmutablePrecompileException(
+            declarationId = sourceId,
+            message = "Annotation argument '${type.value}.$name' must reference a resolver class",
+        )
+    }
+}
+
+private fun LsiAnnotation.typedStringValue(
+    name: String,
+    sourceId: LsiSymbolId,
+): String? {
+    val argument = arguments[name] ?: return null
+    return (argument.value as? LsiAnnotationValue.StringValue)?.value
+        ?: throw JimmerImmutablePrecompileException(
+            declarationId = sourceId,
+            message = "Annotation argument '${type.value}.$name' must be a typed string value",
+        )
+}
+
 private fun LsiAnnotation.classTypeIds(name: String): List<LsiSymbolId> {
     return when (val value = arguments[name]?.value) {
         is LsiAnnotationValue.ClassValue -> listOfNotNull((value.type as? LsiDeclaredType)?.declarationId)
@@ -2093,6 +2159,11 @@ private val MANY_TO_MANY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.
 private val JOIN_SQL_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
 private val FORMULA_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.Formula")
 private val TRANSIENT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")
+
+private val NO_TRANSIENT_RESOLVER_TYPE_IDS = setOf(
+    LsiSymbolId.type("java.lang.Void"),
+    LsiSymbolId.type("kotlin.Unit"),
+)
 private val ID_VIEW_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.IdView")
 private val MANY_TO_MANY_VIEW_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToManyView")
 private val MAPS_ID_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.MapsId")

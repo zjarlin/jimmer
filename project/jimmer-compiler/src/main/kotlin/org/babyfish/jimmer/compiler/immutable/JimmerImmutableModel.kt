@@ -269,6 +269,7 @@ data class JimmerImmutableProp(
     val primaryAnnotationTypeId: LsiSymbolId?,
     val associationKind: JimmerAssociationKind,
     val formulaKind: JimmerFormulaKind,
+    val transientResolver: JimmerTransientResolver?,
     val view: JimmerImmutableView?,
     val genericTarget: Boolean,
     val remote: Boolean,
@@ -277,6 +278,9 @@ data class JimmerImmutableProp(
     val converter: JimmerConverter?,
     val formulaDependencies: List<JimmerFormulaDependency> = emptyList(),
 ) {
+
+    val fetchable: Boolean = primaryMapping != JimmerImmutablePrimaryMapping.ID &&
+        (primaryMapping != JimmerImmutablePrimaryMapping.TRANSIENT || transientResolver != null)
 
     init {
         require(association == (associationKind != JimmerAssociationKind.NONE)) {
@@ -322,6 +326,9 @@ data class JimmerImmutableProp(
         require(formulaDependencies.distinct() == formulaDependencies) {
             "Immutable formula property cannot contain duplicate dependency paths: ${id.value}"
         }
+        require(transientResolver == null || primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT) {
+            "Only immutable transient property can declare a transient resolver: ${id.value}"
+        }
     }
 }
 
@@ -330,6 +337,21 @@ data class JimmerFormulaDependency(
 ) {
     init {
         require(propIds.isNotEmpty()) { "Immutable formula dependency path cannot be empty" }
+    }
+}
+
+sealed interface JimmerTransientResolver {
+
+    data class Type(
+        val typeId: LsiSymbolId,
+    ) : JimmerTransientResolver
+
+    data class Reference(
+        val beanName: String,
+    ) : JimmerTransientResolver {
+        init {
+            require(beanName.isNotEmpty()) { "Immutable transient resolver bean name cannot be empty" }
+        }
     }
 }
 

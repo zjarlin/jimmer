@@ -6,6 +6,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -2368,6 +2369,193 @@ class JimmerImmutablePrecompilerTest {
         }
 
         assertNotEquals(schema("first").fingerprint(), schema("second").fingerprint())
+    }
+
+    @Test
+    fun `precompiles transient resolvers and fetchability`() {
+        val typeId = LsiSymbolId.type("demo.TransientEntity")
+        val resolverTypeId = LsiSymbolId.type("demo.TransientResolver")
+
+        fun transient(
+            value: LsiTypeRef? = null,
+            ref: String? = null,
+        ): LsiAnnotation {
+            return annotation(
+                type = TRANSIENT,
+                arguments = buildMap {
+                    value?.let { type ->
+                        put("value", LsiAnnotationValue.ClassValue(type))
+                    }
+                    ref?.let { name ->
+                        put("ref", LsiAnnotationValue.StringValue(name))
+                    }
+                },
+            )
+        }
+
+        val idProp = property(
+            typeId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val plainProp = property(typeId, "name", LsiDeclaredType(STRING_TYPE))
+        val voidProp = property(
+            typeId,
+            "voidValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(transient(value = LsiPrimitiveType(LsiPrimitiveKind.VOID))),
+        )
+        val unitProp = property(
+            typeId,
+            "unitValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(transient(value = LsiDeclaredType(LsiSymbolId.type("kotlin.Unit")))),
+        )
+        val typeResolverProp = property(
+            typeId,
+            "typeValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(transient(value = LsiDeclaredType(resolverTypeId))),
+        )
+        val referenceResolverProp = property(
+            typeId,
+            "referenceValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(transient(ref = "transientResolver")),
+        )
+        val props = listOf(
+            idProp,
+            plainProp,
+            voidProp,
+            unitProp,
+            typeResolverProp,
+            referenceResolverProp,
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.TransientEntity", ENTITY, props.map(LsiProperty::id)),
+                ) + props,
+            )
+        )
+        val propsByName = schema.typesById.getValue(typeId).props.associateBy(JimmerImmutableProp::name)
+
+        assertFalse(propsByName.getValue("id").fetchable)
+        assertTrue(propsByName.getValue("name").fetchable)
+        assertFalse(propsByName.getValue("voidValue").fetchable)
+        assertNull(propsByName.getValue("voidValue").transientResolver)
+        assertFalse(propsByName.getValue("unitValue").fetchable)
+        assertNull(propsByName.getValue("unitValue").transientResolver)
+        assertTrue(propsByName.getValue("typeValue").fetchable)
+        assertEquals(
+            JimmerTransientResolver.Type(resolverTypeId),
+            propsByName.getValue("typeValue").transientResolver,
+        )
+        assertTrue(propsByName.getValue("referenceValue").fetchable)
+        assertEquals(
+            JimmerTransientResolver.Reference("transientResolver"),
+            propsByName.getValue("referenceValue").transientResolver,
+        )
+        val snapshot = schema.normalizedSnapshot()
+        assertTrue("transient-resolver|${typeResolverProp.id.value}|TYPE|${resolverTypeId.value}" in snapshot)
+        assertTrue(
+            "transient-resolver|${referenceResolverProp.id.value}|REFERENCE|transientResolver" in snapshot
+        )
+
+        val invalidProp = property(
+            typeId,
+            "invalidValue",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                transient(
+                    value = LsiDeclaredType(resolverTypeId),
+                    ref = "transientResolver",
+                )
+            ),
+        )
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.TransientEntity", ENTITY, listOf(invalidProp.id)),
+                        invalidProp,
+                    )
+                )
+            )
+        }
+        assertTrue(exception.message.orEmpty().contains("cannot specify both resolver type and resolver reference"))
+    }
+
+    @Test
+    fun `mapped superclass transient resolver is replaced by entity override annotation`() {
+        val baseId = LsiSymbolId.type("demo.TransientBase")
+        val refChildId = LsiSymbolId.type("demo.RefTransientChild")
+        val plainChildId = LsiSymbolId.type("demo.PlainTransientChild")
+        val resolverTypeId = LsiSymbolId.type("demo.BaseResolver")
+        val baseProp = property(
+            baseId,
+            "value",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                annotation(
+                    TRANSIENT,
+                    mapOf(
+                        "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(resolverTypeId))
+                    ),
+                )
+            ),
+        )
+        val refChildProp = property(
+            refChildId,
+            "value",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(
+                annotation(
+                    TRANSIENT,
+                    mapOf("ref" to LsiAnnotationValue.StringValue("childResolver")),
+                )
+            ),
+            overrides = listOf(LsiOverride(baseProp.id)),
+        )
+        val plainChildProp = property(
+            plainChildId,
+            "value",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(TRANSIENT)),
+            overrides = listOf(LsiOverride(baseProp.id)),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.TransientBase", MAPPED_SUPERCLASS, listOf(baseProp.id)),
+                    baseProp,
+                    type(
+                        "demo.RefTransientChild",
+                        ENTITY,
+                        listOf(refChildProp.id),
+                        superTypes = listOf(LsiDeclaredType(baseId)),
+                    ),
+                    refChildProp,
+                    type(
+                        "demo.PlainTransientChild",
+                        ENTITY,
+                        listOf(plainChildProp.id),
+                        superTypes = listOf(LsiDeclaredType(baseId)),
+                    ),
+                    plainChildProp,
+                )
+            )
+        )
+
+        val base = schema.typesById.getValue(baseId).props.single()
+        val refChild = schema.typesById.getValue(refChildId).props.single()
+        val plainChild = schema.typesById.getValue(plainChildId).props.single()
+        assertEquals(JimmerTransientResolver.Type(resolverTypeId), base.transientResolver)
+        assertEquals(JimmerTransientResolver.Reference("childResolver"), refChild.transientResolver)
+        assertTrue(refChild.fetchable)
+        assertNull(plainChild.transientResolver)
+        assertFalse(plainChild.fetchable)
     }
 
     @Test

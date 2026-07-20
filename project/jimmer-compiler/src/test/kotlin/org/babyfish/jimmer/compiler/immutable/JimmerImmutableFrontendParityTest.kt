@@ -320,6 +320,136 @@ class JimmerImmutableFrontendParityTest {
     }
 
     @Test
+    fun `real apt and ksp frontends produce identical transient resolver metadata`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.Transient;
+
+                class EmployeeResolver {}
+
+                @Entity
+                interface Employee {
+                    @Id
+                    long id();
+
+                    String name();
+
+                    @Transient
+                    String scratch();
+
+                    @Transient(EmployeeResolver.class)
+                    String typeValue();
+
+                    @Transient(ref = "employeeResolver")
+                    String referenceValue();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.Transient
+
+                class EmployeeResolver
+
+                @Entity
+                interface Employee {
+                    @Id
+                    val id: Long
+
+                    val name: String
+
+                    @Transient
+                    val scratch: String
+
+                    @Transient(EmployeeResolver::class)
+                    val typeValue: String
+
+                    @Transient(ref = "employeeResolver")
+                    val referenceValue: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+
+        val props = aptSchema.types.single { type -> type.qualifiedName == "demo.Employee" }
+            .props
+            .associateBy(JimmerImmutableProp::name)
+        assertFalse(props.getValue("id").fetchable)
+        assertTrue(props.getValue("name").fetchable)
+        assertFalse(props.getValue("scratch").fetchable)
+        assertNull(props.getValue("scratch").transientResolver)
+        assertEquals(
+            JimmerTransientResolver.Type(LsiSymbolId.type("demo.EmployeeResolver")),
+            props.getValue("typeValue").transientResolver,
+        )
+        assertTrue(props.getValue("typeValue").fetchable)
+        assertEquals(
+            JimmerTransientResolver.Reference("employeeResolver"),
+            props.getValue("referenceValue").transientResolver,
+        )
+        assertTrue(props.getValue("referenceValue").fetchable)
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject conflicting transient resolvers`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Transient;
+
+                class EmployeeResolver {}
+
+                @Entity
+                interface Employee {
+                    @Transient(value = EmployeeResolver.class, ref = "employeeResolver")
+                    String value();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Transient
+
+                class EmployeeResolver
+
+                @Entity
+                interface Employee {
+                    @Transient(value = EmployeeResolver::class, ref = "employeeResolver")
+                    val value: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertEquals(
+            "Immutable transient property 'type:demo.Employee/property:value' cannot specify both " +
+                "resolver type and resolver reference",
+            apt.diagnostic,
+        )
+    }
+
+    @Test
     fun `real apt and ksp frontends reject non-embeddable immutable target`() {
         val apt = compileApt(INVALID_IMMUTABLE_TARGET_JAVA_SOURCE)
         val ksp = compileKsp(INVALID_IMMUTABLE_TARGET_KOTLIN_SOURCE)

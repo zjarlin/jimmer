@@ -844,6 +844,7 @@ class JimmerDtoAnnotationContractTest {
             primaryAnnotationTypeId = null,
             associationKind = JimmerAssociationKind.NONE,
             formulaKind = JimmerFormulaKind.NONE,
+            transientResolver = null,
             view = null,
             genericTarget = false,
             remote = false,

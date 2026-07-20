@@ -18,7 +18,6 @@ import org.babyfish.jimmer.dto.compiler.spi.BaseProp
 import org.babyfish.jimmer.dto.compiler.spi.BaseType
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -174,12 +173,7 @@ internal class LsiDtoBaseProp(
     }
 
     override fun hasTransientResolver(): Boolean {
-        val transient = immutableProp.annotations.annotation(TRANSIENT_ANNOTATION) ?: return false
-        val resolverTypeId = transient.classTypeId("value")
-        val resolverRef = transient.stringValue("ref").orEmpty()
-        return (
-            resolverTypeId != null && resolverTypeId !in NO_TRANSIENT_RESOLVER_TYPE_IDS
-        ) || resolverRef.isNotEmpty()
+        return immutableProp.transientResolver != null
     }
 
     private fun ownerProp(propId: LsiSymbolId): LsiDtoBaseProp? {
@@ -302,21 +296,8 @@ private fun LsiTypeRef.toSimplePropType(): SimplePropType {
     }
 }
 
-private fun List<LsiAnnotation>.annotation(type: LsiSymbolId): LsiAnnotation? {
-    return firstOrNull { annotation -> annotation.type == type }
-}
-
 private fun List<LsiAnnotation>.hasAnnotation(type: LsiSymbolId): Boolean {
     return any { annotation -> annotation.type == type }
-}
-
-private fun LsiAnnotation.stringValue(name: String): String? {
-    return (arguments[name]?.value as? LsiAnnotationValue.StringValue)?.value
-}
-
-private fun LsiAnnotation.classTypeId(name: String): LsiSymbolId? {
-    val value = arguments[name]?.value as? LsiAnnotationValue.ClassValue ?: return null
-    return (value.type as? LsiDeclaredType)?.declarationId
 }
 
 private val SIMPLE_DECLARED_PROP_TYPES = mapOf(
@@ -356,12 +337,6 @@ private val STANDARD_GENERIC_TYPE_COUNTS = mapOf(
 )
 
 private val KEY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Key")
-private val TRANSIENT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")
 private val GENERATED_VALUE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.GeneratedValue")
 private val EXCLUDE_FROM_ALL_SCALARS_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.sql.ExcludeFromAllScalars")
-
-private val NO_TRANSIENT_RESOLVER_TYPE_IDS = setOf(
-    LsiSymbolId.type("java.lang.Void"),
-    LsiSymbolId.type("kotlin.Unit"),
-)

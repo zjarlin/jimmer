@@ -6,6 +6,7 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
@@ -56,6 +57,7 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.primaryAnnotationTypeId?.value.orEmpty(),
                     prop.associationKind.name,
                     prop.formulaKind.name,
+                    prop.fetchable.toString(),
                     when (prop.view) {
                         null -> ""
                         is JimmerImmutableView.Id -> "ID"
@@ -85,6 +87,20 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                         converter.sourceNullable.toString(),
                         converter.targetNullable.toString(),
                         converter.propertyNullable.toString(),
+                    )
+                }
+                prop.transientResolver?.let { resolver ->
+                    appendRecord(
+                        "transient-resolver",
+                        prop.id.value,
+                        when (resolver) {
+                            is JimmerTransientResolver.Type -> "TYPE"
+                            is JimmerTransientResolver.Reference -> "REFERENCE"
+                        },
+                        when (resolver) {
+                            is JimmerTransientResolver.Type -> resolver.typeId.value
+                            is JimmerTransientResolver.Reference -> resolver.beanName
+                        },
                     )
                 }
                 prop.formulaDependencies.forEach { dependency ->
@@ -186,7 +202,14 @@ private fun LsiTypeRef.canonicalTypeText(): String {
                 append('>')
             }
         }
-        is LsiPrimitiveType -> "primitive:${kind.name.lowercase()}"
+        is LsiPrimitiveType -> {
+            val semanticKind = if (kind == LsiPrimitiveKind.UNIT) {
+                LsiPrimitiveKind.VOID
+            } else {
+                kind
+            }
+            "primitive:${semanticKind.name.lowercase()}"
+        }
         is LsiArrayType -> "array:${elementType.canonicalTypeText()}"
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"

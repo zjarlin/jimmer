@@ -1023,6 +1023,7 @@ class DtoConfigContractResolverTest {
                 primaryAnnotationTypeId = null,
                 associationKind = JimmerAssociationKind.MANY_TO_MANY,
                 formulaKind = JimmerFormulaKind.NONE,
+                transientResolver = null,
                 view = null,
                 genericTarget = false,
                 remote = false,

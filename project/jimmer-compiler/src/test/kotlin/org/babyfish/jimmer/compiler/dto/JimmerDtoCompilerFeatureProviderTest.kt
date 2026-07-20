@@ -1827,6 +1827,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             primaryAnnotationTypeId = null,
             associationKind = associationKind,
             formulaKind = JimmerFormulaKind.NONE,
+            transientResolver = null,
             view = view,
             genericTarget = genericTarget,
             remote = remote,
