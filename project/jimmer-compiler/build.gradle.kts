@@ -31,4 +31,6 @@ dependencies {
 
 tasks.test {
     useJUnit()
+    forkEvery = 1
+    maxParallelForks = 1
 }
