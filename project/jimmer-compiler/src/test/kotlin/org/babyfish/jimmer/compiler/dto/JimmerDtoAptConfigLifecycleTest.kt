@@ -90,7 +90,7 @@ class JimmerDtoAptConfigLifecycleTest {
 
         val secondRound = capture.round(1)
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, secondRound.status)
-        assertEquals(setOf(AUTHOR_TABLE_ID), secondRound.currentRootTypeIds)
+        assertEquals(setOf(FILTER_ID, AUTHOR_TABLE_ID), secondRound.currentRootTypeIds)
         assertTrue(secondRound.unresolvedSymbols.isEmpty())
         assertTrue(secondRound.diagnosticCodes.isEmpty())
         assertEquals(FILTER_ID, secondRound.contract?.implementationTypeId)

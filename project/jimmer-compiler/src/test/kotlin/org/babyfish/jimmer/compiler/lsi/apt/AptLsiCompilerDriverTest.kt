@@ -118,7 +118,7 @@ class AptLsiCompilerDriverTest {
         )
         val refreshedRound = provider.rounds.single { round -> round.number == 1 }
         assertTrue(refreshedRound.currentWorkspace.contains(MODEL_ID))
-        assertEquals(setOf(GENERATED_ID), refreshedRound.currentRootTypeIds)
+        assertEquals(setOf(MODEL_ID, GENERATED_ID), refreshedRound.currentRootTypeIds)
         assertEquals(
             GENERATED_ID,
             assertIs<LsiDeclaredType>(

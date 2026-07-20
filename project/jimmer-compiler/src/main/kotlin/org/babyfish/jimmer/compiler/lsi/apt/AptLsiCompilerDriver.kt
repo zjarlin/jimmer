@@ -4,7 +4,6 @@ import java.io.File
 import java.io.IOException
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
-import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 import javax.tools.StandardLocation
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
@@ -117,13 +116,8 @@ class AptLsiCompilerDriver(
         }
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         workspace = workspace.merge(roundWorkspace)
-        val currentRootTypeIds = if (isFinal) {
-            emptySet()
-        } else {
-            roundEnvironment.rootElements
-                .filterIsInstance<TypeElement>()
-                .mapTo(sortedSetOf()) { type -> LsiSymbolId.type(type.qualifiedName.toString()) }
-        }
+        val currentRootTypeIds = currentRoundSymbols.rootTypes
+            .mapTo(sortedSetOf()) { type -> LsiSymbolId.type(type.qualifiedName.toString()) }
         val roundResult = session.execute(
             CompilerRound(
                 number = nextRoundNumber,
