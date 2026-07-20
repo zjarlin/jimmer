@@ -16,6 +16,7 @@ import javax.annotation.processing.ProcessingEnvironment
 import javax.lang.model.element.Element
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
+import javax.lang.model.element.PackageElement
 import javax.lang.model.element.TypeElement
 import javax.lang.model.type.TypeKind
 import javax.lang.model.util.Elements
@@ -25,6 +26,10 @@ import javax.tools.JavaFileObject
 internal class AptLsiContext(
     val processingEnvironment: ProcessingEnvironment,
     val frontendOptions: LsiFrontendOptions,
+    private val sourceRootTypeNames: Set<String> = emptySet(),
+    private val sourceRootPackageNames: Set<String> = emptySet(),
+    private val knownSourceRootTypes: Map<String, LsiSource> = emptyMap(),
+    private val fallbackSourceKind: LsiSourceKind = LsiSourceKind.SOURCE,
 ) {
 
     val elements = processingEnvironment.elementUtils
@@ -38,8 +43,8 @@ internal class AptLsiContext(
     }
 
     /*
-     * Elements.getFileObjectOf 晚于 Java 8 引入。这里通过反射调用，既保持制品可在
-     * Java 8 加载，也能在 APT 包装器隐藏 javac Trees 实现时定位源码。
+     * Elements.getFileObjectOf 晚于 Java 8 引入。反射路径用于获取精确文件名；旧 JDK
+     * 或 APT 包装器不可用时，改用当前轮显式传入的源码根生成稳定逻辑路径。
      */
     private val fileObjectOf: Method? = runCatching {
         Elements::class.java.getMethod("getFileObjectOf", Element::class.java)
@@ -67,7 +72,9 @@ internal class AptLsiContext(
                 (fileObject as? JavaFileObject)?.kind == JavaFileObject.Kind.SOURCE
             }
             ?: trees?.getPath(element)?.compilationUnit?.sourceFile
-            ?: return null
+        if (sourceFile == null) {
+            return fallbackSource(element)
+        }
         val path = sourceFile.toUri().path
             ?.takeIf(String::isNotBlank)
             ?: sourceFile.name.takeIf(String::isNotBlank)
@@ -77,6 +84,45 @@ internal class AptLsiContext(
             language = LsiLanguage.JAVA,
             kind = path.toLsiSourceKind(),
         )
+    }
+
+    private fun fallbackSource(element: Element): LsiSource? {
+        val path = when (element) {
+            is PackageElement -> {
+                val packageName = element.qualifiedName.toString()
+                if (packageName !in sourceRootPackageNames) {
+                    return null
+                }
+                if (packageName.isEmpty()) "package-info.java" else packageName.replace('.', '/') + "/package-info.java"
+            }
+            else -> {
+                val topLevelType = element.topLevelEnclosingType() ?: return null
+                val qualifiedName = topLevelType.qualifiedName.toString()
+                knownSourceRootTypes[qualifiedName]?.let { source -> return source }
+                if (qualifiedName !in sourceRootTypeNames) {
+                    return null
+                }
+                qualifiedName.replace('.', '/') + ".java"
+            }
+        }
+        return LsiSource.of(
+            path = path,
+            language = LsiLanguage.JAVA,
+            kind = fallbackSourceKind,
+        )
+    }
+
+    private fun Element.topLevelEnclosingType(): TypeElement? {
+        var type = when (this) {
+            is TypeElement -> this
+            else -> generateSequence(enclosingElement) { enclosing -> enclosing.enclosingElement }
+                .filterIsInstance<TypeElement>()
+                .firstOrNull()
+        } ?: return null
+        while (type.enclosingElement is TypeElement) {
+            type = type.enclosingElement as TypeElement
+        }
+        return type
     }
 
     fun location(element: Element): LsiLocation? {

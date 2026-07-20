@@ -193,11 +193,13 @@ class AptLsiCompilerDriverTest {
             provider.rounds.first().workspace.annotationScope(LsiSymbolId.packageScope("demo")),
         )
         assertIs<LsiUnresolvedType>(firstRoundProperty.type)
+        assertTrue(provider.rounds.first().frontendDeferred)
         assertEquals(
             "isActive",
             assertIs<LsiProperty>(provider.rounds.first().workspace[ACTIVE_PROPERTY_ID]).name,
         )
         val refreshedRound = provider.rounds.single { round -> round.number == 1 }
+        assertFalse(refreshedRound.frontendDeferred)
         assertTrue(refreshedRound.currentWorkspace.contains(MODEL_ID))
         assertEquals(setOf(MODEL_ID, GENERATED_ID), refreshedRound.currentRootTypeIds)
         assertEquals(
@@ -207,6 +209,7 @@ class AptLsiCompilerDriverTest {
             ).declarationId,
         )
         assertTrue(provider.rounds.last().isFinal)
+        assertFalse(provider.rounds.last().frontendDeferred)
         assertTrue(provider.rounds.last().workspace.contains(MODEL_ID))
         assertTrue(provider.rounds.last().currentWorkspace.declarations.isEmpty())
         assertTrue(provider.rounds.last().currentRootTypeIds.isEmpty())

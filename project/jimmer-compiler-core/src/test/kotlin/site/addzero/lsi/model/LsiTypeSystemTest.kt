@@ -3,6 +3,8 @@ package site.addzero.lsi.model
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
@@ -94,6 +96,45 @@ class LsiTypeSystemTest {
             listOf(useSiteMarker, replacementMarker),
             resolvedType.annotations,
         )
+    }
+
+    @Test
+    fun `boxes primitive replacements for nullable type parameter uses`() {
+        val baseId = LsiSymbolId.type("sample.Base")
+        val entityId = LsiSymbolId.type("sample.Entity")
+        val parameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val valueId = LsiSymbolId.property(baseId, "value")
+        val base = type(
+            id = baseId,
+            parameters = listOf(LsiTypeParameter(parameterId, "T")),
+            memberIds = listOf(valueId),
+        )
+        val value = property(
+            id = valueId,
+            ownerId = baseId,
+            type = LsiTypeParameterRef(
+                parameterId = parameterId,
+                nullability = LsiNullability.NULLABLE,
+            ),
+        )
+        val entity = type(
+            id = entityId,
+            superTypes = listOf(
+                LsiDeclaredType(
+                    declarationId = baseId,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiPrimitiveType(LsiPrimitiveKind.INT)),
+                    ),
+                ),
+            ),
+        )
+        val typeSystem = LsiTypeSystem(LsiWorkspace(declarations = listOf(base, value, entity)))
+
+        val resolvedType = assertIs<LsiPrimitiveType>(
+            typeSystem.effectiveProperties(entityId).single().type,
+        )
+        assertEquals(LsiNullability.NULLABLE, resolvedType.nullability)
+        assertTrue(resolvedType.boxed)
     }
 
     @Test

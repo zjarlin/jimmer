@@ -20,6 +20,8 @@ import org.babyfish.jimmer.compiler.input.FileSystemCompilerInputDocumentScanner
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.core.LsiSourceKind
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaration
@@ -81,11 +83,13 @@ class AptLsiCompilerDriver(
 
     private var inputDocumentSnapshots = emptyList<CompilerInputDocumentSnapshot>()
 
-    private var frontendErrorRaised = false
+    private var javacErrorRaised = false
+
+    private var latestActiveRoundDeferred = false
 
     fun process(roundEnvironment: RoundEnvironment): CompilerRoundResult {
         val isFinal = roundEnvironment.processingOver()
-        frontendErrorRaised = frontendErrorRaised || roundEnvironment.errorRaised()
+        javacErrorRaised = javacErrorRaised || roundEnvironment.errorRaised()
         if (!isFinal) {
             availableTypeIds = classpathTypeIds.filterTo(sortedSetOf()) { typeId ->
                 processingEnvironment.elementUtils.getTypeElement(typeId.requireTypeQualifiedName()) != null
@@ -113,6 +117,8 @@ class AptLsiCompilerDriver(
             )
         }
         val documentSeeds = inputDocumentSnapshots.flatMap { snapshot -> snapshot.typeSeeds }
+        val previousWorkspace = workspace
+        val knownSourceRootTypes = previousWorkspace.knownSourceRootTypes()
         val roundWorkspace = if (isFinal) {
             LsiWorkspace.EMPTY
         } else {
@@ -121,6 +127,10 @@ class AptLsiCompilerDriver(
                 frontendOptions = frontendOptions,
                 packageElements = currentRoundSymbols.packageElements,
                 additionalSeeds = documentSeeds,
+                sourceRootTypes = currentRoundSymbols.sourceRootTypes,
+                sourcePackageElements = currentRoundSymbols.sourcePackageElements,
+                knownSourceRootTypes = knownSourceRootTypes,
+                fallbackSourceKind = currentRoundFallbackSourceKind(),
             )
         }
         val currentWorkspace = if (isFinal) {
@@ -130,15 +140,20 @@ class AptLsiCompilerDriver(
                 processingEnvironment = processingEnvironment,
                 frontendOptions = frontendOptions,
                 packageElements = currentRoundSymbols.packageElements,
+                sourceRootTypes = currentRoundSymbols.sourceRootTypes,
+                sourcePackageElements = currentRoundSymbols.sourcePackageElements,
+                knownSourceRootTypes = knownSourceRootTypes,
+                fallbackSourceKind = currentRoundFallbackSourceKind(),
             )
         }
-        if (!isFinal && currentWorkspace.containsUnresolvedTypes()) {
-            frontendErrorRaised = true
+        var currentFrontendDeferred = if (isFinal) {
+            javacErrorRaised || latestActiveRoundDeferred
+        } else {
+            javacErrorRaised || currentWorkspace.containsUnresolvedTypes()
         }
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         val currentRootTypeIds = currentRoundSymbols.rootTypes
             .mapTo(sortedSetOf()) { type -> LsiSymbolId.type(type.qualifiedName.toString()) }
-        val previousWorkspace = workspace
         workspace = previousWorkspace.merge(roundWorkspace)
         if (!isFinal) {
             workspace = resolveLsiTypeSeedFixedPoint(
@@ -149,6 +164,7 @@ class AptLsiCompilerDriver(
                             workspace = candidateWorkspace,
                             currentWorkspace = currentWorkspace,
                             currentRootTypeIds = currentRootTypeIds,
+                            frontendDeferred = currentFrontendDeferred,
                         )
                     )
                 },
@@ -159,10 +175,16 @@ class AptLsiCompilerDriver(
                             frontendOptions = frontendOptions,
                             packageElements = currentRoundSymbols.packageElements,
                             additionalSeeds = documentSeeds + requestedSeeds,
+                            sourceRootTypes = currentRoundSymbols.sourceRootTypes,
+                            sourcePackageElements = currentRoundSymbols.sourcePackageElements,
+                            knownSourceRootTypes = knownSourceRootTypes,
+                            fallbackSourceKind = currentRoundFallbackSourceKind(),
                         )
                     )
                 },
             ).workspace
+            currentFrontendDeferred = javacErrorRaised || workspace.containsUnresolvedTypes()
+            latestActiveRoundDeferred = currentFrontendDeferred
         }
         val roundResult = session.execute(
             compilerRound(
@@ -170,6 +192,7 @@ class AptLsiCompilerDriver(
                 currentWorkspace = currentWorkspace,
                 currentRootTypeIds = currentRootTypeIds,
                 isFinal = isFinal,
+                frontendDeferred = currentFrontendDeferred,
             )
         )
         lastRoundResult = roundResult
@@ -202,6 +225,7 @@ class AptLsiCompilerDriver(
         currentWorkspace: LsiWorkspace,
         currentRootTypeIds: Set<LsiSymbolId>,
         isFinal: Boolean = false,
+        frontendDeferred: Boolean = javacErrorRaised,
     ): CompilerRound {
         return CompilerRound(
             number = nextRoundNumber,
@@ -212,10 +236,18 @@ class AptLsiCompilerDriver(
             isFinal = isFinal,
             options = options,
             availableTypeIds = availableTypeIds,
-            frontendDeferred = frontendErrorRaised,
+            frontendDeferred = frontendDeferred,
             inputResources = inputResources,
             inputDocumentSnapshots = inputDocumentSnapshots,
         )
+    }
+
+    private fun currentRoundFallbackSourceKind(): LsiSourceKind {
+        return if (nextRoundNumber == 0) {
+            LsiSourceKind.SOURCE
+        } else {
+            LsiSourceKind.GENERATED
+        }
     }
 
     private fun classOutputMarker(): File {
@@ -266,6 +298,14 @@ private fun File.compilerSourceSet(): CompilerSourceSet {
     } else {
         CompilerSourceSet.MAIN
     }
+}
+
+private fun LsiWorkspace.knownSourceRootTypes(): Map<String, LsiSource> {
+    return declarationsOfType<LsiTypeDeclaration>()
+        .asSequence()
+        .filter { type -> type.enclosingTypeId == null }
+        .mapNotNull { type -> type.origin.source?.let { source -> type.qualifiedName to source } }
+        .toMap()
 }
 
 private fun LsiWorkspace.containsUnresolvedTypes(): Boolean {

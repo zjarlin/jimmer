@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.apt
 
 import java.nio.charset.StandardCharsets
+import java.lang.reflect.Proxy
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.Completion
 import javax.annotation.processing.ProcessingEnvironment
@@ -11,6 +12,7 @@ import javax.lang.model.element.AnnotationMirror
 import javax.lang.model.element.Element
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.TypeElement
+import javax.lang.model.util.Elements
 import javax.tools.Diagnostic
 import javax.tools.DiagnosticCollector
 import javax.tools.JavaFileObject
@@ -40,6 +42,7 @@ class JimmerProcessorAptModuleLifecycleTest {
             file.writeText(BOOK_SOURCE)
         }
         val probe = RoundProbe()
+        val processor = WrappedJimmerProcessor()
         val diagnostics = DiagnosticCollector<JavaFileObject>()
         val compiler = ToolProvider.getSystemJavaCompiler()
             ?: error("APT integration tests require a JDK compiler")
@@ -59,10 +62,9 @@ class JimmerProcessorAptModuleLifecycleTest {
                 null,
                 fileManager.getJavaFileObjects(sourceFile),
             )
-            task.setProcessors(listOf(WrappedJimmerProcessor(), probe))
+            task.setProcessors(listOf(processor, probe))
             task.call()
         }
-
         assertTrue(success, diagnostics.errorMessage())
         assertTrue(
             diagnostics.diagnostics.none { diagnostic -> diagnostic.kind == Diagnostic.Kind.ERROR },
@@ -114,7 +116,21 @@ class JimmerProcessorAptModuleLifecycleTest {
         override fun getSupportedSourceVersion(): SourceVersion = delegate.supportedSourceVersion
 
         override fun init(processingEnvironment: ProcessingEnvironment) {
-            delegate.init(object : ProcessingEnvironment by processingEnvironment {})
+            val wrappedElements = Proxy.newProxyInstance(
+                Elements::class.java.classLoader,
+                arrayOf(Elements::class.java),
+            ) { _, method, arguments ->
+                if (method.name == "getFileObjectOf") {
+                    null
+                } else {
+                    method.invoke(processingEnvironment.elementUtils, *(arguments ?: emptyArray()))
+                }
+            } as Elements
+            delegate.init(
+                object : ProcessingEnvironment by processingEnvironment {
+                    override fun getElementUtils(): Elements = wrappedElements
+                }
+            )
         }
 
         override fun process(
@@ -128,6 +144,7 @@ class JimmerProcessorAptModuleLifecycleTest {
             member: ExecutableElement,
             userText: String,
         ): MutableIterable<Completion> = delegate.getCompletions(element, annotation, member, userText)
+
     }
 
     private data class RoundSnapshot(

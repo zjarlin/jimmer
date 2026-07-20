@@ -27,6 +27,8 @@ import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.mergeLsiTypeSeeds
 import site.addzero.lsi.model.toAnnotationMemberType
+import site.addzero.lsi.core.LsiSourceKind
+import site.addzero.lsi.core.LsiSource
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.element.Element
@@ -48,6 +50,8 @@ fun RoundEnvironment.toLsiWorkspace(
         processingEnvironment = processingEnvironment,
         frontendOptions = frontendOptions,
         packageElements = roundSymbols.packageElements,
+        sourceRootTypes = roundSymbols.sourceRootTypes,
+        sourcePackageElements = roundSymbols.sourcePackageElements,
     )
 }
 
@@ -56,8 +60,23 @@ fun Collection<TypeElement>.toLsiWorkspace(
     frontendOptions: LsiFrontendOptions,
     packageElements: Collection<PackageElement>,
     additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
+    sourceRootTypes: Collection<TypeElement> = this,
+    sourcePackageElements: Collection<PackageElement> = packageElements,
+    knownSourceRootTypes: Map<String, LsiSource> = emptyMap(),
+    fallbackSourceKind: LsiSourceKind = LsiSourceKind.SOURCE,
 ): LsiWorkspace {
-    return AptLsiWorkspaceBuilder(processingEnvironment, frontendOptions).build(
+    return AptLsiWorkspaceBuilder(
+        processingEnvironment = processingEnvironment,
+        frontendOptions = frontendOptions,
+        sourceRootTypeNames = sourceRootTypes.mapTo(sortedSetOf()) { type ->
+            type.topLevelEnclosingTypeName()
+        },
+        sourceRootPackageNames = sourcePackageElements.mapTo(sortedSetOf()) { packageElement ->
+            packageElement.qualifiedName.toString()
+        },
+        knownSourceRootTypes = knownSourceRootTypes,
+        fallbackSourceKind = fallbackSourceKind,
+    ).build(
         rootTypes = this,
         packageElements = packageElements,
         additionalSeeds = additionalSeeds,
@@ -82,9 +101,20 @@ fun TypeElement.toLsiTypeDeclaration(
 class AptLsiWorkspaceBuilder(
     processingEnvironment: ProcessingEnvironment,
     frontendOptions: LsiFrontendOptions,
+    sourceRootTypeNames: Set<String> = emptySet(),
+    sourceRootPackageNames: Set<String> = emptySet(),
+    knownSourceRootTypes: Map<String, LsiSource> = emptyMap(),
+    fallbackSourceKind: LsiSourceKind = LsiSourceKind.SOURCE,
 ) {
 
-    private val context = AptLsiContext(processingEnvironment, frontendOptions)
+    private val context = AptLsiContext(
+        processingEnvironment = processingEnvironment,
+        frontendOptions = frontendOptions,
+        sourceRootTypeNames = sourceRootTypeNames,
+        sourceRootPackageNames = sourceRootPackageNames,
+        knownSourceRootTypes = knownSourceRootTypes,
+        fallbackSourceKind = fallbackSourceKind,
+    )
 
     fun build(
         rootTypes: Collection<TypeElement>,
@@ -611,6 +641,14 @@ class AptLsiWorkspaceBuilder(
         }
         return result
     }
+}
+
+private fun TypeElement.topLevelEnclosingTypeName(): String {
+    var topLevelType = this
+    while (topLevelType.enclosingElement is TypeElement) {
+        topLevelType = topLevelType.enclosingElement as TypeElement
+    }
+    return topLevelType.qualifiedName.toString()
 }
 
 private data class KotlinAnnotationMetadata(

@@ -295,6 +295,8 @@ private fun LsiTypeRef.withUseSiteMetadata(
         is LsiPrimitiveType -> copy(
             nullability = resolvedNullability,
             annotations = resolvedAnnotations,
+            boxed = boxed || resolvedNullability == LsiNullability.NULLABLE ||
+                resolvedNullability == LsiNullability.PLATFORM,
         )
         is LsiArrayType -> copy(
             nullability = resolvedNullability,
