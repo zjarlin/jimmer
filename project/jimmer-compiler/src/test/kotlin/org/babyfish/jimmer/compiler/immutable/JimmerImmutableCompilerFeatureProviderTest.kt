@@ -74,7 +74,9 @@ class JimmerImmutableCompilerFeatureProviderTest {
         assertEquals(setOf(childId), state.targetTypeIds)
         assertEquals(setOf(childId), result.processedSymbols)
         assertEquals(setOf(baseId, childId), state.schema.types.mapTo(sortedSetOf()) { type -> type.id })
-        val status = state.schema.types.single { type -> type.id == childId }.props.single()
+        val status = state.schema.types.single { type -> type.id == childId }
+            .props
+            .single { prop -> prop.declarationId == childPropId }
         assertEquals("1", status.annotationString(DEFAULT, "value"))
     }
 
@@ -250,12 +252,14 @@ class JimmerImmutableCompilerFeatureProviderTest {
         options: Map<String, String> = emptyMap(),
         inputDocumentSnapshots: List<CompilerInputDocumentSnapshot> = emptyList(),
     ): JimmerCompilerPrecompileContext {
+        val completeWorkspace = workspace.completeEntityIdentities()
+        val completeCurrentWorkspace = currentWorkspace.completeEntityIdentities()
         return JimmerCompilerPrecompileContext(
             session = CompilerSessionSnapshot("immutable-feature-test", emptyList()),
             round = CompilerRound(
                 number = 0,
-                workspace = workspace,
-                currentWorkspace = currentWorkspace,
+                workspace = completeWorkspace,
+                currentWorkspace = completeCurrentWorkspace,
                 currentRootTypeIds = currentRootTypeIds,
                 platform = platform,
                 isFinal = isFinal,

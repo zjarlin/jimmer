@@ -10,6 +10,7 @@ import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiSymbolId
 
@@ -321,15 +322,21 @@ class JimmerModulePrecompilerTest {
     ): JimmerImmutableSchema {
         return JimmerImmutableSchema(
             types = types.map { (qualifiedName, kind) ->
+                val typeId = LsiSymbolId.type(qualifiedName)
+                val props = if (kind == JimmerImmutableTypeKind.ENTITY) {
+                    completeEntityProps(typeId)
+                } else {
+                    emptyList()
+                }
                 JimmerImmutableType(
-                    id = LsiSymbolId.type(qualifiedName),
+                    id = typeId,
                     qualifiedName = qualifiedName,
                     kind = kind,
                     documentation = null,
                     annotations = emptyList(),
                     typeParameterIds = emptyList(),
                     superTypeIds = emptyList(),
-                    props = emptyList(),
+                    props = props,
                     primarySuperTypeId = null,
                     inheritanceRootTypeId = null,
                     inheritanceStrategy = null,
@@ -337,6 +344,9 @@ class JimmerModulePrecompilerTest {
                     instantiable = kind == JimmerImmutableTypeKind.ENTITY,
                     discriminatorValue = null,
                     discriminatorPropId = null,
+                    idPropId = props.singleOrNull()?.id,
+                    versionPropId = null,
+                    logicalDeletedPropId = null,
                     acrossMicroServices = false,
                     microServiceName = "",
                 )

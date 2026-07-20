@@ -108,7 +108,9 @@ internal class LsiDtoBaseType(
     }
 
     internal val idProp: LsiDtoBaseProp?
-        get() = props.values.firstOrNull { prop -> prop.isId }
+        get() = immutableType.idPropId?.let { idPropId ->
+            props.values.single { prop -> prop.id == idPropId }
+        }
 
     override fun toString(): String = qualifiedName
 }

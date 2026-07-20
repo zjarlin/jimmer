@@ -14,6 +14,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProv
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -242,6 +243,7 @@ class JimmerDtoSelectorStagingTest {
 
     private fun immutableSchema(typeIds: Collection<LsiSymbolId>): JimmerImmutableSchema {
         return JimmerImmutableSchema(typeIds.sorted().map { typeId ->
+            val props = completeEntityProps(typeId)
             JimmerImmutableType(
                 id = typeId,
                 qualifiedName = typeId.requireTypeQualifiedName(),
@@ -250,7 +252,7 @@ class JimmerDtoSelectorStagingTest {
                 annotations = emptyList(),
                 typeParameterIds = emptyList(),
                 superTypeIds = emptyList(),
-                props = emptyList(),
+                props = props,
                 primarySuperTypeId = null,
                 inheritanceRootTypeId = null,
                 inheritanceStrategy = null,
@@ -258,6 +260,9 @@ class JimmerDtoSelectorStagingTest {
                 instantiable = true,
                 discriminatorValue = null,
                 discriminatorPropId = null,
+                idPropId = props.single().id,
+                versionPropId = null,
+                logicalDeletedPropId = null,
                 acrossMicroServices = false,
                 microServiceName = "",
             )

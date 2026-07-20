@@ -37,10 +37,10 @@ class JimmerImmutablePrecompilerTest {
 
     @Test
     fun `entity overrides mapped superclass default annotation after generic substitution`() {
-        val schema = JimmerImmutablePrecompiler().compile(overrideWorkspace(LsiLanguage.KOTLIN))
+        val schema = compileFixture(overrideWorkspace(LsiLanguage.KOTLIN))
 
         val entity = schema.types.single { type -> type.kind == JimmerImmutableTypeKind.ENTITY }
-        val status = entity.props.single()
+        val status = entity.props.single { prop -> prop.name == "status" }
         val statusType = assertIs<LsiDeclaredType>(status.type)
         assertEquals(STRING_TYPE, statusType.declarationId)
         assertTrue(status.overridden)
@@ -76,8 +76,8 @@ class JimmerImmutablePrecompilerTest {
 
     @Test
     fun `apt and ksp equivalent workspaces have identical immutable snapshots`() {
-        val aptSchema = JimmerImmutablePrecompiler().compile(overrideWorkspace(LsiLanguage.JAVA))
-        val kspSchema = JimmerImmutablePrecompiler().compile(overrideWorkspace(LsiLanguage.KOTLIN))
+        val aptSchema = compileFixture(overrideWorkspace(LsiLanguage.JAVA))
+        val kspSchema = compileFixture(overrideWorkspace(LsiLanguage.KOTLIN))
 
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
@@ -86,8 +86,8 @@ class JimmerImmutablePrecompilerTest {
 
     @Test
     fun `apt and ksp preserve microservice remote and generic recursive semantics`() {
-        val aptSchema = JimmerImmutablePrecompiler().compile(microServiceWorkspace(LsiLanguage.JAVA))
-        val kspSchema = JimmerImmutablePrecompiler().compile(microServiceWorkspace(LsiLanguage.KOTLIN))
+        val aptSchema = compileFixture(microServiceWorkspace(LsiLanguage.JAVA))
+        val kspSchema = compileFixture(microServiceWorkspace(LsiLanguage.KOTLIN))
         val base = aptSchema.types.single { type -> type.id == REMOTE_BASE_TYPE }
         val node = aptSchema.types.single { type -> type.id == REMOTE_NODE_TYPE }
         val product = aptSchema.types.single { type -> type.id == REMOTE_PRODUCT_TYPE }
@@ -169,10 +169,13 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
 
-        val schema = JimmerImmutablePrecompiler().compile(workspace, setOf(ownerId))
+        val schema = compileFixture(workspace, setOf(ownerId))
 
         assertEquals(listOf(ownerId, targetId), schema.types.map(JimmerImmutableType::id))
-        assertEquals(targetId, schema.types.first().props.single().targetTypeId)
+        assertEquals(
+            targetId,
+            schema.types.first().props.single { prop -> prop.name == "author" }.targetTypeId,
+        )
     }
 
     @Test
@@ -218,7 +221,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
 
-        val schema = JimmerImmutablePrecompiler().compile(workspace, setOf(childId))
+        val schema = compileFixture(workspace, setOf(childId))
         val child = schema.types.single { type -> type.id == childId }
         val effectiveTarget = child.props.single { prop -> prop.name == "target" }
 
@@ -322,7 +325,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
 
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val schema = compileFixture(workspace)
         val owner = schema.typesById.getValue(ownerId).props.associateBy(JimmerImmutableProp::name)
         val target = schema.typesById.getValue(targetId).props.associateBy(JimmerImmutableProp::name)
         val left = schema.typesById.getValue(leftId).props.associateBy(JimmerImmutableProp::name)
@@ -376,7 +379,7 @@ class JimmerImmutablePrecompilerTest {
                 ),
             )
             return assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(workspace)
+                compileFixture(workspace)
             }.message.orEmpty()
         }
 
@@ -539,7 +542,7 @@ class JimmerImmutablePrecompilerTest {
             annotations = listOf(formula(dependencies = listOf("value"))),
             modality = LsiModality.FINAL,
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type(
@@ -601,7 +604,7 @@ class JimmerImmutablePrecompilerTest {
         )
 
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace)
+            compileFixture(workspace)
         }
 
         assertTrue(exception.message.orEmpty().contains("cannot specify microServiceName"))
@@ -636,7 +639,7 @@ class JimmerImmutablePrecompilerTest {
             )
 
             val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(workspace, setOf(childId))
+                compileFixture(workspace, setOf(childId))
             }
 
             assertEquals(childId, exception.declarationId)
@@ -669,8 +672,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
 
-        val entity = JimmerImmutablePrecompiler()
-            .compile(validWorkspace, setOf(entityId))
+        val entity = compileFixture(validWorkspace, setOf(entityId))
             .typesById
             .getValue(entityId)
         assertEquals(listOf(mappedId), entity.superTypeIds)
@@ -695,7 +697,7 @@ class JimmerImmutablePrecompilerTest {
         )
 
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(invalidWorkspace, setOf(invalidSimpleId))
+            compileFixture(invalidWorkspace, setOf(invalidSimpleId))
         }
         assertEquals(invalidSimpleId, exception.declarationId)
         assertTrue(exception.message.orEmpty().contains("does not support multiple inheritance"))
@@ -727,7 +729,7 @@ class JimmerImmutablePrecompilerTest {
         )
 
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace)
+            compileFixture(workspace)
         }
 
         assertTrue(exception.message.orEmpty().contains("has micro service name 'entity-service'"))
@@ -767,7 +769,7 @@ class JimmerImmutablePrecompilerTest {
         )
 
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace)
+            compileFixture(workspace)
         }
 
         assertEquals(association.id, exception.declarationId)
@@ -800,7 +802,7 @@ class JimmerImmutablePrecompilerTest {
             )
         )
         val unnamedException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(unnamedWorkspace)
+            compileFixture(unnamedWorkspace)
         }
         assertTrue(unnamedException.message.orEmpty().contains("requires non-empty micro service names"))
 
@@ -819,7 +821,7 @@ class JimmerImmutablePrecompilerTest {
             )
         )
         val nonNullException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(nonNullWorkspace)
+            compileFixture(nonNullWorkspace)
         }
         assertTrue(nonNullException.message.orEmpty().contains("must be nullable"))
 
@@ -844,15 +846,15 @@ class JimmerImmutablePrecompilerTest {
             )
         )
         val joinSqlException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(joinSqlWorkspace)
+            compileFixture(joinSqlWorkspace)
         }
         assertTrue(joinSqlException.message.orEmpty().contains("cannot be decorated by @${JOIN_SQL.value}"))
     }
 
     @Test
     fun `apt and ksp inheritance fixtures preserve equivalent type metadata`() {
-        val aptSchema = JimmerImmutablePrecompiler().compile(inheritanceWorkspace(LsiLanguage.JAVA))
-        val kspSchema = JimmerImmutablePrecompiler().compile(inheritanceWorkspace(LsiLanguage.KOTLIN))
+        val aptSchema = compileFixture(inheritanceWorkspace(LsiLanguage.JAVA))
+        val kspSchema = compileFixture(inheritanceWorkspace(LsiLanguage.KOTLIN))
         val rootId = LsiSymbolId.type("demo.Account")
         val childId = LsiSymbolId.type("demo.AdminAccount")
         val aptRoot = aptSchema.types.single { type -> type.id == rootId }
@@ -869,7 +871,10 @@ class JimmerImmutablePrecompilerTest {
         assertEquals(JimmerJoinedTableDissociateAction.DELETE, aptRoot.joinedTableDissociateAction)
         assertEquals("ACCOUNT", aptRoot.discriminatorValue)
         assertEquals(LsiSymbolId.property(rootId, "kind"), aptRoot.discriminatorPropId)
-        assertEquals(JimmerImmutablePrimaryMapping.DISCRIMINATOR, aptRoot.props.single().primaryMapping)
+        assertEquals(
+            JimmerImmutablePrimaryMapping.DISCRIMINATOR,
+            aptRoot.props.single { prop -> prop.name == "kind" }.primaryMapping,
+        )
 
         assertEquals(rootId, aptChild.primarySuperTypeId)
         assertEquals(rootId, aptChild.inheritanceRootTypeId)
@@ -898,7 +903,7 @@ class JimmerImmutablePrecompilerTest {
 
     @Test
     fun `inheritance defaults preserve legacy instantiability and discriminator values`() {
-        val schema = JimmerImmutablePrecompiler().compile(defaultInheritanceWorkspace())
+        val schema = compileFixture(defaultInheritanceWorkspace())
         val rootId = LsiSymbolId.type("demo.AbstractAccount")
         val childId = LsiSymbolId.type("demo.ConcreteAccount")
         val root = schema.types.single { type -> type.id == rootId }
@@ -921,7 +926,7 @@ class JimmerImmutablePrecompilerTest {
 
     @Test
     fun `joined inheritance preserves lax dissociate action and single table rejects it`() {
-        val joinedSchema = JimmerImmutablePrecompiler().compile(
+        val joinedSchema = compileFixture(
             inheritanceActionWorkspace(
                 strategy = "JOINED",
                 joinedTableDissociateAction = "LAX",
@@ -934,7 +939,7 @@ class JimmerImmutablePrecompilerTest {
         assertTrue(joinedSchema.normalizedSnapshot().contains("|JOINED|LAX|"))
 
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 inheritanceActionWorkspace(
                     strategy = "SINGLE_TABLE",
                     joinedTableDissociateAction = "LAX",
@@ -989,7 +994,7 @@ class JimmerImmutablePrecompilerTest {
         )
 
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace)
+            compileFixture(workspace)
         }
 
         assertEquals(extraDiscriminator.id, exception.declarationId)
@@ -1020,7 +1025,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
         val declaredException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(declaredWorkspace)
+            compileFixture(declaredWorkspace)
         }
         assertEquals(declaredDiscriminator.id, declaredException.declarationId)
         assertTrue(declaredException.message.orEmpty().contains("cannot be declared by an inheritance derived type"))
@@ -1039,7 +1044,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
         val missingException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(missingWorkspace)
+            compileFixture(missingWorkspace)
         }
         assertTrue(missingException.message.orEmpty().contains("must declare or inherit one property"))
 
@@ -1069,7 +1074,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
         val multipleException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(multipleWorkspace)
+            compileFixture(multipleWorkspace)
         }
         assertTrue(multipleException.message.orEmpty().contains("multiple discriminator properties"))
     }
@@ -1077,7 +1082,7 @@ class JimmerImmutablePrecompilerTest {
     @Test
     fun `discriminator must be scalar string or enum property`() {
         val enumId = LsiSymbolId.type("demo.AccountKind")
-        val enumSchema = JimmerImmutablePrecompiler().compile(
+        val enumSchema = compileFixture(
             discriminatorWorkspace(
                 discriminatorType = LsiDeclaredType(enumId),
                 extraDeclarations = listOf(declaration("demo.AccountKind", LsiTypeDeclarationKind.ENUM)),
@@ -1085,7 +1090,7 @@ class JimmerImmutablePrecompilerTest {
         )
         assertEquals(
             JimmerImmutablePrimaryMapping.DISCRIMINATOR,
-            enumSchema.types.single().props.single().primaryMapping,
+            enumSchema.types.single().props.single { prop -> prop.name == "kind" }.primaryMapping,
         )
 
         val invalidTypes = listOf<LsiTypeRef>(
@@ -1094,14 +1099,14 @@ class JimmerImmutablePrecompilerTest {
         )
         invalidTypes.forEach { invalidType ->
             val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(discriminatorWorkspace(invalidType))
+                compileFixture(discriminatorWorkspace(invalidType))
             }
             assertTrue(exception.message.orEmpty().contains("must be a scalar string or enum property"))
         }
 
         val targetId = LsiSymbolId.type("demo.Target")
         val associationException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 discriminatorWorkspace(
                     discriminatorType = LsiDeclaredType(targetId),
                     extraDeclarations = listOf(type("demo.Target", ENTITY, emptyList())),
@@ -1112,7 +1117,7 @@ class JimmerImmutablePrecompilerTest {
         assertTrue(associationException.message.orEmpty().contains("ManyToOne"))
 
         val formulaException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 discriminatorWorkspace(
                     discriminatorType = LsiDeclaredType(STRING_TYPE),
                     additionalAnnotations = listOf(formula(sql = "TYPE")),
@@ -1124,8 +1129,8 @@ class JimmerImmutablePrecompilerTest {
 
     @Test
     fun `preserves direct super and inherited declaration order across apt and ksp`() {
-        val aptSchema = JimmerImmutablePrecompiler().compile(orderedHierarchyWorkspace(LsiLanguage.JAVA))
-        val kspSchema = JimmerImmutablePrecompiler().compile(orderedHierarchyWorkspace(LsiLanguage.KOTLIN))
+        val aptSchema = compileFixture(orderedHierarchyWorkspace(LsiLanguage.JAVA))
+        val kspSchema = compileFixture(orderedHierarchyWorkspace(LsiLanguage.KOTLIN))
         val entityId = LsiSymbolId.type("demo.OrderedEntity")
         val primarySuperTypeId = LsiSymbolId.type("demo.APrimaryEntity")
         val aptEntity = aptSchema.types.single { type -> type.id == entityId }
@@ -1149,7 +1154,10 @@ class JimmerImmutablePrecompilerTest {
             aptEntity.superTypeIds,
         )
         assertEquals(primarySuperTypeId, aptEntity.primarySuperTypeId)
-        assertEquals(expectedPropNames, aptEntity.props.map(JimmerImmutableProp::name))
+        assertEquals(
+            expectedPropNames,
+            aptEntity.props.map(JimmerImmutableProp::name).filterNot { name -> name == "__fixtureId" },
+        )
         assertEquals(
             LsiSymbolId.property(entityId, "auditZ"),
             aptEntity.props.first().declarationId,
@@ -1165,6 +1173,7 @@ class JimmerImmutablePrecompilerTest {
             .asSequence()
             .filter { line -> line.startsWith("prop|${entityId.value}|") }
             .map { line -> line.split('|')[5] }
+            .filterNot { name -> name == "__fixtureId" }
             .toList()
         assertEquals(expectedPropNames, entitySnapshotPropNames)
     }
@@ -1242,7 +1251,7 @@ class JimmerImmutablePrecompilerTest {
             ) + properties + authorIdProp + bookAuthorAuthorProp,
         )
 
-        val book = JimmerImmutablePrecompiler().compile(workspace)
+        val book = compileFixture(workspace)
             .types.single { type -> type.id == bookId }
         val props = book.props.associateBy(JimmerImmutableProp::name)
 
@@ -1252,6 +1261,9 @@ class JimmerImmutablePrecompilerTest {
             JimmerImmutablePrimaryMapping.LOGICAL_DELETED,
             props.getValue("deleted").primaryMapping,
         )
+        assertEquals(props.getValue("id").id, book.idPropId)
+        assertEquals(props.getValue("version").id, book.versionPropId)
+        assertEquals(props.getValue("deleted").id, book.logicalDeletedPropId)
         assertEquals(JimmerImmutablePrimaryMapping.ASSOCIATION, props.getValue("author").primaryMapping)
         assertEquals(JimmerAssociationKind.MANY_TO_ONE, props.getValue("author").associationKind)
         assertEquals(JimmerImmutablePrimaryMapping.FORMULA, props.getValue("displayName").primaryMapping)
@@ -1280,6 +1292,450 @@ class JimmerImmutablePrecompilerTest {
         assertEquals(JimmerImmutablePrimaryMapping.SCALAR, props.getValue("description").primaryMapping)
         assertFalse(props.getValue("address").association)
         assertTrue(props.getValue("address").embedded)
+    }
+
+    @Test
+    fun `freezes inherited identity slots as effective owner properties`() {
+        val baseId = LsiSymbolId.type("demo.IdentityBase")
+        val entityId = LsiSymbolId.type("demo.IdentityEntity")
+        val baseIdProp = property(
+            baseId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val baseVersionProp = property(
+            baseId,
+            "version",
+            LsiPrimitiveType(LsiPrimitiveKind.INT),
+            listOf(annotation(VERSION)),
+        )
+        val baseDeletedProp = property(
+            baseId,
+            "deleted",
+            LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN),
+            listOf(annotation(LOGICAL_DELETED)),
+        )
+        val overriddenIdProp = property(
+            entityId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            annotations = listOf(annotation(COLUMN)),
+            overrides = listOf(LsiOverride(baseIdProp.id)),
+        )
+        val schema = compileFixture(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        "demo.IdentityBase",
+                        MAPPED_SUPERCLASS,
+                        listOf(baseIdProp.id, baseVersionProp.id, baseDeletedProp.id),
+                    ),
+                    baseIdProp,
+                    baseVersionProp,
+                    baseDeletedProp,
+                    type(
+                        "demo.IdentityEntity",
+                        ENTITY,
+                        listOf(overriddenIdProp.id),
+                        superTypes = listOf(LsiDeclaredType(baseId)),
+                    ),
+                    overriddenIdProp,
+                )
+            )
+        )
+
+        val base = schema.typesById.getValue(baseId)
+        val entity = schema.typesById.getValue(entityId)
+        assertEquals(LsiSymbolId.property(baseId, "id"), base.idPropId)
+        assertEquals(LsiSymbolId.property(baseId, "version"), base.versionPropId)
+        assertEquals(LsiSymbolId.property(baseId, "deleted"), base.logicalDeletedPropId)
+        assertEquals(LsiSymbolId.property(entityId, "id"), entity.idPropId)
+        assertEquals(LsiSymbolId.property(entityId, "version"), entity.versionPropId)
+        assertEquals(LsiSymbolId.property(entityId, "deleted"), entity.logicalDeletedPropId)
+        assertTrue(entity.props.single { prop -> prop.name == "id" }.overridden)
+    }
+
+    @Test
+    fun `requires entity id but allows mapped superclass without identity`() {
+        val mappedType = type("demo.IdentityOptionalBase", MAPPED_SUPERCLASS, emptyList())
+        val mappedSchema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(declarations = listOf(mappedType))
+        )
+        assertNull(mappedSchema.types.single().idPropId)
+
+        val entityType = type("demo.IdentityRequiredEntity", ENTITY, emptyList())
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(declarations = listOf(entityType))
+            )
+        }
+        assertEquals(entityType.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("must have exactly one"))
+    }
+
+    @Test
+    fun `inherits root version and logical-deleted slots into derived entity`() {
+        val rootId = LsiSymbolId.type("demo.IdentityRoot")
+        val childId = LsiSymbolId.type("demo.IdentityChild")
+        val rootIdProp = property(
+            rootId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val versionProp = property(
+            rootId,
+            "version",
+            LsiPrimitiveType(LsiPrimitiveKind.INT),
+            listOf(annotation(VERSION)),
+        )
+        val deletedProp = property(
+            rootId,
+            "deleted",
+            LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN),
+            listOf(annotation(LOGICAL_DELETED)),
+        )
+        val discriminatorProp = property(
+            rootId,
+            "kind",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(DISCRIMINATOR)),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type(
+                        "demo.IdentityRoot",
+                        ENTITY,
+                        listOf(rootIdProp.id, versionProp.id, deletedProp.id, discriminatorProp.id),
+                        typeAnnotations = listOf(annotation(INHERITANCE)),
+                    ),
+                    rootIdProp,
+                    versionProp,
+                    deletedProp,
+                    discriminatorProp,
+                    type(
+                        "demo.IdentityChild",
+                        ENTITY,
+                        emptyList(),
+                        superTypes = listOf(LsiDeclaredType(rootId)),
+                    ),
+                )
+            )
+        )
+
+        val child = schema.typesById.getValue(childId)
+        assertEquals(LsiSymbolId.property(childId, "id"), child.idPropId)
+        assertEquals(LsiSymbolId.property(childId, "version"), child.versionPropId)
+        assertEquals(LsiSymbolId.property(childId, "deleted"), child.logicalDeletedPropId)
+    }
+
+    @Test
+    fun `rejects duplicate and non-persistent identity slots`() {
+        val duplicateTypeId = LsiSymbolId.type("demo.DuplicateIdentity")
+        val firstId = property(
+            duplicateTypeId,
+            "firstId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val secondId = property(
+            duplicateTypeId,
+            "secondId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val duplicateException = assertFailsWith<JimmerImmutablePrecompileException> {
+            compileFixture(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type(
+                            "demo.DuplicateIdentity",
+                            ENTITY,
+                            listOf(firstId.id, secondId.id),
+                        ),
+                        firstId,
+                        secondId,
+                    )
+                )
+            )
+        }
+        assertEquals(secondId.id, duplicateException.declarationId)
+        assertTrue(duplicateException.message.orEmpty().contains("multiple properties"))
+
+        val immutableTypeId = LsiSymbolId.type("demo.SimpleIdentity")
+        val immutableId = property(
+            immutableTypeId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val kindException = assertFailsWith<JimmerImmutablePrecompileException> {
+            compileFixture(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.SimpleIdentity", IMMUTABLE, listOf(immutableId.id)),
+                        immutableId,
+                    )
+                )
+            )
+        }
+        assertEquals(immutableId.id, kindException.declarationId)
+        assertTrue(kindException.message.orEmpty().contains("neither an entity nor a mapped superclass"))
+    }
+
+    @Test
+    fun `resolves mapped-superclass identity diamonds and rejects unrelated slots`() {
+        fun mappedType(
+            typeId: LsiSymbolId,
+            memberIds: List<LsiSymbolId>,
+            superTypeIds: List<LsiSymbolId> = emptyList(),
+        ): LsiTypeDeclaration {
+            return type(
+                qualifiedName = typeId.requireTypeQualifiedName(),
+                marker = MAPPED_SUPERCLASS,
+                memberIds = memberIds,
+                superTypes = superTypeIds.map(::LsiDeclaredType),
+            )
+        }
+
+        val firstId = LsiSymbolId.type("demo.FirstIdentityBase")
+        val secondId = LsiSymbolId.type("demo.SecondIdentityBase")
+        val conflictId = LsiSymbolId.type("demo.ConflictingIdentityEntity")
+        val firstIdProp = property(
+            firstId,
+            "firstId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val secondIdProp = property(
+            secondId,
+            "secondId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val slotConflict = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        mappedType(firstId, listOf(firstIdProp.id)),
+                        firstIdProp,
+                        mappedType(secondId, listOf(secondIdProp.id)),
+                        secondIdProp,
+                        type(
+                            conflictId.requireTypeQualifiedName(),
+                            ENTITY,
+                            emptyList(),
+                            superTypes = listOf(LsiDeclaredType(firstId), LsiDeclaredType(secondId)),
+                        ),
+                    )
+                )
+            )
+        }
+        assertTrue(slotConflict.message.orEmpty().contains("multiple properties"))
+
+        val sameNameSecondProp = property(
+            secondId,
+            "firstId",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val nameConflict = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(
+                LsiWorkspace(
+                    declarations = listOf(
+                        mappedType(firstId, listOf(firstIdProp.id)),
+                        firstIdProp,
+                        mappedType(secondId, listOf(sameNameSecondProp.id)),
+                        sameNameSecondProp,
+                        type(
+                            conflictId.requireTypeQualifiedName(),
+                            ENTITY,
+                            emptyList(),
+                            superTypes = listOf(LsiDeclaredType(firstId), LsiDeclaredType(secondId)),
+                        ),
+                    )
+                )
+            )
+        }
+        assertEquals(conflictId, nameConflict.declarationId)
+        assertTrue(nameConflict.message.orEmpty().contains("inherits conflicting property"))
+
+        val rootId = LsiSymbolId.type("demo.IdentityDiamondRoot")
+        val leftId = LsiSymbolId.type("demo.IdentityDiamondLeft")
+        val rightId = LsiSymbolId.type("demo.IdentityDiamondRight")
+        val entityId = LsiSymbolId.type("demo.IdentityDiamondEntity")
+        val rootIdProp = property(
+            rootId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val diamond = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    mappedType(rootId, listOf(rootIdProp.id)),
+                    rootIdProp,
+                    mappedType(leftId, emptyList(), listOf(rootId)),
+                    mappedType(rightId, emptyList(), listOf(rootId)),
+                    type(
+                        entityId.requireTypeQualifiedName(),
+                        ENTITY,
+                        emptyList(),
+                        superTypes = listOf(LsiDeclaredType(leftId), LsiDeclaredType(rightId)),
+                    ),
+                )
+            )
+        ).typesById.getValue(entityId)
+        assertEquals(LsiSymbolId.property(entityId, "id"), diamond.idPropId)
+        assertEquals(1, diamond.props.count { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.ID })
+    }
+
+    @Test
+    fun `validates version and logical-deleted identity types`() {
+        fun failure(
+            name: String,
+            type: LsiTypeRef,
+            annotationType: LsiSymbolId,
+            extraDeclarations: List<LsiTypeDeclaration> = emptyList(),
+        ): JimmerImmutablePrecompileException {
+            val ownerId = LsiSymbolId.type("demo.$name")
+            val prop = property(ownerId, "value", type, listOf(annotation(annotationType)))
+            return assertFailsWith {
+                compileFixture(
+                    LsiWorkspace(
+                        declarations = listOf(
+                            type("demo.$name", MAPPED_SUPERCLASS, listOf(prop.id)),
+                            prop,
+                        ) + extraDeclarations,
+                    )
+                )
+            }
+        }
+
+        assertTrue(
+            failure("StringVersion", LsiDeclaredType(STRING_TYPE), VERSION)
+                .message.orEmpty().contains("non-null Int")
+        )
+        assertTrue(
+            failure("StringDeleted", LsiDeclaredType(STRING_TYPE), LOGICAL_DELETED)
+                .message.orEmpty().contains("Boolean, Int, enum, Long, UUID")
+        )
+        assertTrue(
+            failure(
+                "BoxedBooleanDeleted",
+                LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN, boxed = true),
+                LOGICAL_DELETED,
+            ).message.orEmpty().contains("primitive Boolean or Int")
+        )
+        assertTrue(
+            failure(
+                "NonNullTimeDeleted",
+                LsiDeclaredType(LsiSymbolId.type("java.time.Instant")),
+                LOGICAL_DELETED,
+            ).message.orEmpty().contains("must be nullable for a time type")
+        )
+
+        val nullableTimeOwnerId = LsiSymbolId.type("demo.NullableTimeDeleted")
+        val nullableTimeProp = property(
+            nullableTimeOwnerId,
+            "deletedAt",
+            LsiDeclaredType(
+                LsiSymbolId.type("java.time.Instant"),
+                nullability = LsiNullability.NULLABLE,
+            ),
+            listOf(annotation(LOGICAL_DELETED)),
+        )
+        val nullableTime = compileFixture(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.NullableTimeDeleted", MAPPED_SUPERCLASS, listOf(nullableTimeProp.id)),
+                    nullableTimeProp,
+                )
+            )
+        ).types.single()
+        assertEquals(nullableTimeProp.id, nullableTime.logicalDeletedPropId)
+
+        val enumTypeId = LsiSymbolId.type("demo.NullableDeleteState")
+        val nullableEnumOwnerId = LsiSymbolId.type("demo.NullableEnumDeleted")
+        val nullableEnumProp = property(
+            nullableEnumOwnerId,
+            "state",
+            LsiDeclaredType(enumTypeId, nullability = LsiNullability.NULLABLE),
+            listOf(
+                annotation(
+                    LOGICAL_DELETED,
+                    mapOf("value" to LsiAnnotationValue.StringValue("DELETED")),
+                )
+            ),
+        )
+        val nullableEnum = compileFixture(
+            LsiWorkspace(
+                declarations = listOf(
+                    declaration(
+                        enumTypeId.requireTypeQualifiedName(),
+                        kind = LsiTypeDeclarationKind.ENUM,
+                    ),
+                    type(
+                        "demo.NullableEnumDeleted",
+                        MAPPED_SUPERCLASS,
+                        listOf(nullableEnumProp.id),
+                    ),
+                    nullableEnumProp,
+                )
+            )
+        ).types.single()
+        assertEquals(nullableEnumProp.id, nullableEnum.logicalDeletedPropId)
+    }
+
+    @Test
+    fun `rejects version declared by inheritance derived entity`() {
+        val rootId = LsiSymbolId.type("demo.VersionRoot")
+        val childId = LsiSymbolId.type("demo.VersionChild")
+        val rootIdProp = property(
+            rootId,
+            "id",
+            LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            listOf(annotation(ID)),
+        )
+        val discriminatorProp = property(
+            rootId,
+            "kind",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(DISCRIMINATOR)),
+        )
+        val childVersionProp = property(
+            childId,
+            "version",
+            LsiPrimitiveType(LsiPrimitiveKind.INT),
+            listOf(annotation(VERSION)),
+        )
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            compileFixture(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type(
+                            "demo.VersionRoot",
+                            ENTITY,
+                            listOf(rootIdProp.id, discriminatorProp.id),
+                            typeAnnotations = listOf(annotation(INHERITANCE)),
+                        ),
+                        rootIdProp,
+                        discriminatorProp,
+                        type(
+                            "demo.VersionChild",
+                            ENTITY,
+                            listOf(childVersionProp.id),
+                            superTypes = listOf(LsiDeclaredType(rootId)),
+                        ),
+                        childVersionProp,
+                    )
+                )
+            )
+        }
+        assertEquals(childVersionProp.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("inheritance derived type"))
     }
 
     @Test
@@ -1328,7 +1784,7 @@ class JimmerImmutablePrecompilerTest {
                 }
             }
             return assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(LsiWorkspace(declarations = declarations))
+                compileFixture(LsiWorkspace(declarations = declarations))
             }.message.orEmpty()
         }
 
@@ -1396,7 +1852,7 @@ class JimmerImmutablePrecompilerTest {
             "value",
             LsiDeclaredType(immutableTargetId),
         )
-        val immutableValue = JimmerImmutablePrecompiler().compile(
+        val immutableValue = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.ImmutableOwner", IMMUTABLE, listOf(immutableValueProp.id)),
@@ -1464,7 +1920,7 @@ class JimmerImmutablePrecompilerTest {
                 )
             ),
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.Store", ENTITY, listOf(storeIdProp.id)),
@@ -1555,7 +2011,7 @@ class JimmerImmutablePrecompilerTest {
             ),
             overrides = listOf(LsiOverride(selectedIdProp.id)),
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.Author", ENTITY, listOf(authorIdProp.id)),
@@ -1655,7 +2111,7 @@ class JimmerImmutablePrecompilerTest {
                 )
             ),
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.Book", ENTITY, listOf(linksProp.id, authorViewProp.id, authorIdsProp.id)),
@@ -1738,7 +2194,7 @@ class JimmerImmutablePrecompilerTest {
                 add(viewProp)
             }
             return assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(LsiWorkspace(declarations = declarations))
+                compileFixture(LsiWorkspace(declarations = declarations))
             }.message.orEmpty()
         }
 
@@ -1830,7 +2286,7 @@ class JimmerImmutablePrecompilerTest {
                 annotations,
             )
             val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(
+                compileFixture(
                     LsiWorkspace(
                         declarations = listOf(
                             type("demo.Store", ENTITY, listOf(storeIdProp.id)),
@@ -1874,7 +2330,7 @@ class JimmerImmutablePrecompilerTest {
             LsiPrimitiveType(LsiPrimitiveKind.LONG),
         )
         val conflict = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 LsiWorkspace(
                     declarations = listOf(
                         type("demo.Store", ENTITY, listOf(storeIdProp.id)),
@@ -1914,7 +2370,7 @@ class JimmerImmutablePrecompilerTest {
             listOf(annotation(MANY_TO_ONE), annotation(MAPS_ID)),
         )
 
-        JimmerImmutablePrecompiler().compile(
+        compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.Order", ENTITY, listOf(orderIdProp.id)),
@@ -1977,7 +2433,7 @@ class JimmerImmutablePrecompilerTest {
                 addAll(deeperProps)
             }
             return assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(LsiWorkspace(declarations = declarations))
+                compileFixture(LsiWorkspace(declarations = declarations))
             }.message.orEmpty()
         }
 
@@ -2014,7 +2470,7 @@ class JimmerImmutablePrecompilerTest {
             LsiDeclaredType(STRING_TYPE, nullability = LsiNullability.PLATFORM),
             listOf(annotation(LsiSymbolId.type("org.jetbrains.annotations.NotNull"))),
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.NullityModel", IMMUTABLE, listOf(nullableProp.id, nonNullProp.id)),
@@ -2037,7 +2493,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
         val failure = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 LsiWorkspace(
                     declarations = listOf(
                         type("demo.NullityModel", IMMUTABLE, listOf(conflictingProp.id)),
@@ -2053,7 +2509,7 @@ class JimmerImmutablePrecompilerTest {
     fun `canonicalizes property type nullability and ignores nullity annotation spelling in snapshot`() {
         val entityId = LsiSymbolId.type("demo.NullabilityModel")
         val propertyId = LsiSymbolId.property(entityId, "rating")
-        val aptSchema = JimmerImmutablePrecompiler().compile(
+        val aptSchema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.NullabilityModel", IMMUTABLE, listOf(propertyId)),
@@ -2071,7 +2527,7 @@ class JimmerImmutablePrecompilerTest {
                 ),
             ),
         )
-        val kspSchema = JimmerImmutablePrecompiler().compile(
+        val kspSchema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.NullabilityModel", IMMUTABLE, listOf(propertyId)),
@@ -2172,8 +2628,8 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
 
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
-        val prop = schema.types.single().props.single()
+        val schema = compileFixture(workspace)
+        val prop = schema.types.single().props.single { candidate -> candidate.name == "code" }
 
         val validation = prop.validations.single()
         assertEquals(VALID_CODE, validation.annotationTypeId)
@@ -2252,7 +2708,7 @@ class JimmerImmutablePrecompilerTest {
                 )
             ),
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.Store", ENTITY, listOf(idProp.id)),
@@ -2382,7 +2838,7 @@ class JimmerImmutablePrecompilerTest {
             )
         }
 
-        val schema = JimmerImmutablePrecompiler().compile(workspace(idViewProp(EXPLICIT_CODE_CONVERTER)))
+        val schema = compileFixture(workspace(idViewProp(EXPLICIT_CODE_CONVERTER)))
         val converter = requireNotNull(
             schema.types.single { type -> type.id == bookId }
                 .props.single { prop -> prop.name == "storeId" }
@@ -2392,7 +2848,7 @@ class JimmerImmutablePrecompilerTest {
         assertEquals(LsiPrimitiveKind.BOOLEAN, assertIs<LsiPrimitiveType>(converter.targetType).kind)
 
         val failure = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace(idViewProp(INVALID_CODE_CONVERTER)))
+            compileFixture(workspace(idViewProp(INVALID_CODE_CONVERTER)))
         }
         assertTrue("source type" in failure.message.orEmpty())
 
@@ -2405,7 +2861,7 @@ class JimmerImmutablePrecompilerTest {
             )
         )
         val associationFailure = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 LsiWorkspace(
                     declarations = listOf(
                         type("demo.Store", ENTITY, listOf(idProp.id)),
@@ -2425,7 +2881,7 @@ class JimmerImmutablePrecompilerTest {
             annotations = idViewProp(EXPLICIT_CODE_CONVERTER).annotations + annotation(JSON_FORMAT)
         )
         val formatFailure = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace(formattedViewProp))
+            compileFixture(workspace(formattedViewProp))
         }
         assertTrue("cannot declare both" in formatFailure.message.orEmpty())
     }
@@ -2439,7 +2895,7 @@ class JimmerImmutablePrecompilerTest {
             childAnnotations = listOf(default("1", LsiLanguage.KOTLIN)),
         )
         val mappedException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(mappedChild)
+            compileFixture(mappedChild)
         }
         assertTrue(mappedException.message.orEmpty().contains("mapped superclass of an entity"))
 
@@ -2454,7 +2910,7 @@ class JimmerImmutablePrecompilerTest {
             baseTypeAnnotations = listOf(annotation(INHERITANCE)),
         )
         val entityException = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(entityParent)
+            compileFixture(entityParent)
         }
         assertTrue(entityException.message.orEmpty().contains("mapped superclass of an entity"))
     }
@@ -2498,11 +2954,11 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
 
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val schema = compileFixture(workspace)
         val value = schema.types
             .single { type -> type.id == LsiSymbolId.type("demo.Child") }
             .props
-            .single()
+            .single { prop -> prop.name == "value" }
 
         assertEquals(listOf(DEFAULT, COLUMN), value.annotations.map(LsiAnnotation::type))
         assertEquals("1", value.annotationString(DEFAULT, "value"))
@@ -2518,13 +2974,13 @@ class JimmerImmutablePrecompilerTest {
             childAnnotations = listOf(annotation(JAVA_OVERRIDE)),
         )
 
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val schema = compileFixture(workspace)
 
         assertEquals(2, schema.types.size)
         assertTrue(
             schema.types.single { type -> type.id == LsiSymbolId.type("demo.Child") }
                 .props
-                .single()
+                .single { prop -> prop.name == "value" }
                 .overridden
         )
     }
@@ -2590,7 +3046,7 @@ class JimmerImmutablePrecompilerTest {
 
         for (collectionType in collectionTypes) {
             val failure = assertFailsWith<JimmerImmutablePrecompileException> {
-                JimmerImmutablePrecompiler().compile(
+                compileFixture(
                     collectionPropertyWorkspace(
                         collectionType = collectionType,
                         annotations = emptyList(),
@@ -2600,7 +3056,7 @@ class JimmerImmutablePrecompilerTest {
             }
             assertTrue(failure.message.orEmpty().contains("must use java.util.List"))
 
-            val scalarSchema = JimmerImmutablePrecompiler().compile(
+            val scalarSchema = compileFixture(
                 collectionPropertyWorkspace(
                     collectionType = collectionType,
                     annotations = listOf(annotation(SCALAR)),
@@ -2609,7 +3065,7 @@ class JimmerImmutablePrecompilerTest {
             )
             assertFalse(scalarSchema.types.single().props.single { prop -> prop.name == "values" }.list)
 
-            val formulaSchema = JimmerImmutablePrecompiler().compile(
+            val formulaSchema = compileFixture(
                 collectionPropertyWorkspace(
                     collectionType = collectionType,
                     annotations = listOf(formula(dependencies = listOf("source"))),
@@ -2650,7 +3106,7 @@ class JimmerImmutablePrecompilerTest {
             ),
             modality = LsiModality.FINAL,
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.Address", EMBEDDABLE, listOf(cityProp.id)),
@@ -2722,7 +3178,7 @@ class JimmerImmutablePrecompilerTest {
                 listOf(formula(dependencies = listOf(dependency))),
                 modality = LsiModality.FINAL,
             )
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 LsiWorkspace(
                     declarations = listOf(
                         type("demo.FormulaEntity", ENTITY, listOf(nameProp.id, formulaProp.id)),
@@ -2757,7 +3213,7 @@ class JimmerImmutablePrecompilerTest {
                 listOf(formula(dependencies = listOf(dependency))),
                 modality = LsiModality.FINAL,
             )
-            return JimmerImmutablePrecompiler().compile(
+            return compileFixture(
                 LsiWorkspace(
                     declarations = listOf(
                         type(
@@ -2837,7 +3293,7 @@ class JimmerImmutablePrecompilerTest {
             typeResolverProp,
             referenceResolverProp,
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.TransientEntity", ENTITY, props.map(LsiProperty::id)),
@@ -2880,7 +3336,7 @@ class JimmerImmutablePrecompilerTest {
             ),
         )
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 LsiWorkspace(
                     declarations = listOf(
                         type("demo.TransientEntity", ENTITY, listOf(invalidProp.id)),
@@ -2930,7 +3386,7 @@ class JimmerImmutablePrecompilerTest {
             listOf(annotation(TRANSIENT)),
             overrides = listOf(LsiOverride(baseProp.id)),
         )
-        val schema = JimmerImmutablePrecompiler().compile(
+        val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
                     type("demo.TransientBase", MAPPED_SUPERCLASS, listOf(baseProp.id)),
@@ -2954,8 +3410,8 @@ class JimmerImmutablePrecompilerTest {
         )
 
         val base = schema.typesById.getValue(baseId).props.single()
-        val refChild = schema.typesById.getValue(refChildId).props.single()
-        val plainChild = schema.typesById.getValue(plainChildId).props.single()
+        val refChild = schema.typesById.getValue(refChildId).props.single { prop -> prop.name == "value" }
+        val plainChild = schema.typesById.getValue(plainChildId).props.single { prop -> prop.name == "value" }
         assertEquals(JimmerTransientResolver.Type(resolverTypeId), base.transientResolver)
         assertEquals(JimmerTransientResolver.Reference("childResolver"), refChild.transientResolver)
         assertTrue(refChild.fetchable)
@@ -2980,7 +3436,7 @@ class JimmerImmutablePrecompilerTest {
                 listOf(formula(sql = sql, dependencies = dependencies)),
                 modality = modality,
             )
-            JimmerImmutablePrecompiler().compile(
+            compileFixture(
                 LsiWorkspace(
                     declarations = listOf(
                         type("demo.FormulaContract", marker, listOf(sourceProp.id, formulaProp.id)),
@@ -3081,7 +3537,7 @@ class JimmerImmutablePrecompilerTest {
             extraTypes = extraTypes,
         )
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace)
+            compileFixture(workspace)
         }
         assertTrue(exception.message.orEmpty().contains(expected))
     }
@@ -3123,10 +3579,21 @@ class JimmerImmutablePrecompilerTest {
 
     private fun assertOverrideEligibilityRejected(workspace: LsiWorkspace) {
         val exception = assertFailsWith<JimmerImmutablePrecompileException> {
-            JimmerImmutablePrecompiler().compile(workspace)
+            compileFixture(workspace)
         }
 
         assertTrue(exception.message.orEmpty().contains("mapped superclass of an entity"))
+    }
+
+    private fun compileFixture(workspace: LsiWorkspace): JimmerImmutableSchema {
+        return JimmerImmutablePrecompiler().compile(workspace.completeEntityIdentities())
+    }
+
+    private fun compileFixture(
+        workspace: LsiWorkspace,
+        targetTypeIds: Set<LsiSymbolId>,
+    ): JimmerImmutableSchema {
+        return JimmerImmutablePrecompiler().compile(workspace.completeEntityIdentities(), targetTypeIds)
     }
 
     private fun entityOverrideWorkspace(): LsiWorkspace {

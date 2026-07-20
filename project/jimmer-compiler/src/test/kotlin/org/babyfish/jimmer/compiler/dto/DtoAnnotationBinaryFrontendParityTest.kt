@@ -29,6 +29,7 @@ import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
 import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
@@ -265,6 +266,7 @@ class DtoAnnotationBinaryFrontendParityTest {
         baseTypeId: LsiSymbolId,
     ): JimmerDtoAnnotationDeclaration {
         val baseType = assertIs<LsiTypeDeclaration>(workspace[baseTypeId])
+        val props = completeEntityProps(baseTypeId)
         val immutableSchema = JimmerImmutableSchema(
             listOf(
                 JimmerImmutableType(
@@ -275,7 +277,7 @@ class DtoAnnotationBinaryFrontendParityTest {
                     annotations = baseType.annotations,
                     typeParameterIds = emptyList(),
                     superTypeIds = emptyList(),
-                    props = emptyList(),
+                    props = props,
                     primarySuperTypeId = null,
                     inheritanceRootTypeId = null,
                     inheritanceStrategy = null,
@@ -283,6 +285,9 @@ class DtoAnnotationBinaryFrontendParityTest {
                     instantiable = true,
                     discriminatorValue = null,
                     discriminatorPropId = null,
+                    idPropId = props.single().id,
+                    versionPropId = null,
+                    logicalDeletedPropId = null,
                     acrossMicroServices = false,
                     microServiceName = "",
                 )

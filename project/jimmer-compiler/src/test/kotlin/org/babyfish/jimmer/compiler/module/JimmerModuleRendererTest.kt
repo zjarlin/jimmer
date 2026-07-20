@@ -14,6 +14,7 @@ import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.module.apt.JimmerModuleJavaRenderer
 import org.babyfish.jimmer.compiler.module.ksp.JimmerModuleKotlinRenderer
 import org.jetbrains.kotlin.cli.common.ExitCode
@@ -116,6 +117,7 @@ class JimmerModuleRendererTest {
         }
         val immutableSchema = JimmerImmutableSchema(
             types = ENTITY_NAMES.mapIndexed { index, qualifiedName ->
+                val props = completeEntityProps(ENTITY_IDS[index])
                 JimmerImmutableType(
                     id = ENTITY_IDS[index],
                     qualifiedName = qualifiedName,
@@ -124,7 +126,7 @@ class JimmerModuleRendererTest {
                     annotations = emptyList(),
                     typeParameterIds = emptyList(),
                     superTypeIds = emptyList(),
-                    props = emptyList(),
+                    props = props,
                     primarySuperTypeId = null,
                     inheritanceRootTypeId = null,
                     inheritanceStrategy = null,
@@ -132,6 +134,9 @@ class JimmerModuleRendererTest {
                     instantiable = true,
                     discriminatorValue = null,
                     discriminatorPropId = null,
+                    idPropId = props.single().id,
+                    versionPropId = null,
+                    logicalDeletedPropId = null,
                     acrossMicroServices = false,
                     microServiceName = "",
                 )

@@ -459,11 +459,11 @@ class JimmerImmutablePrecompiler {
             return JimmerImmutableView.Id(baseProp.id, null)
         }
         val targetType = requireNotNull(baseTargetType)
-        val targetIdProp = targetType.props.singleOrNull { candidate ->
-            candidate.primaryMapping == JimmerImmutablePrimaryMapping.ID
+        val targetIdProp = targetType.idPropId?.let { targetIdPropId ->
+            targetType.props.single { candidate -> candidate.id == targetIdPropId }
         } ?: throw invalidView(
             prop,
-            "base property '${baseProp.name}' targets '${targetType.qualifiedName}' without exactly one id property",
+            "base property '${baseProp.name}' targets '${targetType.qualifiedName}' without an id property",
         )
         val ignoreValueNullability = !prop.list
         if (
@@ -548,8 +548,8 @@ class JimmerImmutablePrecompiler {
             val idViewBasePropIds = type.props.mapNotNullTo(linkedSetOf()) { prop ->
                 (prop.view as? JimmerImmutableView.Id)?.basePropId
             }
-            val ownerIdProp = type.props.singleOrNull { prop ->
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+            val ownerIdProp = type.idPropId?.let { idPropId ->
+                type.props.single { prop -> prop.id == idPropId }
             }
             type.props.forEach { associationProp ->
                 if (
@@ -679,6 +679,13 @@ class JimmerImmutablePrecompiler {
             typeSystem = typeSystem,
             workspace = workspace,
         )
+        val identity = identity(
+            type = type,
+            kind = kind,
+            hierarchy = hierarchy,
+            props = props,
+            workspace = workspace,
+        )
         return JimmerImmutableType(
             id = type.id,
             qualifiedName = type.qualifiedName,
@@ -695,8 +702,169 @@ class JimmerImmutablePrecompiler {
             instantiable = hierarchy.instantiable,
             discriminatorValue = hierarchy.discriminatorValue,
             discriminatorPropId = discriminatorPropId,
+            idPropId = identity.idPropId,
+            versionPropId = identity.versionPropId,
+            logicalDeletedPropId = identity.logicalDeletedPropId,
             acrossMicroServices = microServiceMetadata.acrossMicroServices,
             microServiceName = microServiceMetadata.microServiceName,
+        )
+    }
+
+    private fun identity(
+        type: LsiTypeDeclaration,
+        kind: JimmerImmutableTypeKind,
+        hierarchy: JimmerImmutableHierarchy,
+        props: List<JimmerImmutableProp>,
+        workspace: LsiWorkspace,
+    ): JimmerImmutableIdentity {
+        val idProp = identityProp(type, props, JimmerImmutablePrimaryMapping.ID)
+        val versionProp = identityProp(type, props, JimmerImmutablePrimaryMapping.VERSION)
+        val logicalDeletedProp = identityProp(type, props, JimmerImmutablePrimaryMapping.LOGICAL_DELETED)
+        val identityProps = listOfNotNull(idProp, versionProp, logicalDeletedProp)
+        if (
+            identityProps.isNotEmpty() &&
+            kind !in setOf(JimmerImmutableTypeKind.ENTITY, JimmerImmutableTypeKind.MAPPED_SUPERCLASS)
+        ) {
+            val invalidProp = identityProps.first()
+            throw JimmerImmutablePrecompileException(
+                declarationId = invalidProp.declarationId,
+                message = "Immutable property '${invalidProp.id.value}' cannot be an identity property because " +
+                    "'${type.qualifiedName}' is neither an entity nor a mapped superclass",
+            )
+        }
+        if (kind == JimmerImmutableTypeKind.ENTITY && idProp == null) {
+            throw JimmerImmutablePrecompileException(
+                declarationId = type.id,
+                message = "Immutable entity '${type.qualifiedName}' must have exactly one " +
+                    "@${ID_ANNOTATION.requireTypeQualifiedName()} property",
+            )
+        }
+        identityProps.forEach { prop -> validateIdentityProp(prop, workspace) }
+        if (kind == JimmerImmutableTypeKind.ENTITY && hierarchy.inheritanceRootTypeId != null &&
+            hierarchy.inheritanceRootTypeId != type.id
+        ) {
+            listOfNotNull(versionProp, logicalDeletedProp).firstOrNull { prop ->
+                prop.declaringTypeId == type.id && prop.declaresPrimaryMapping(workspace)
+            }?.let { invalidProp ->
+                throw JimmerImmutablePrecompileException(
+                    declarationId = invalidProp.declarationId,
+                    message = "Immutable inheritance derived type '${type.qualifiedName}' cannot declare " +
+                        "@${requireNotNull(invalidProp.primaryAnnotationTypeId).requireTypeQualifiedName()}",
+                )
+            }
+        }
+        return JimmerImmutableIdentity(
+            idPropId = idProp?.id,
+            versionPropId = versionProp?.id,
+            logicalDeletedPropId = logicalDeletedProp?.id,
+        )
+    }
+
+    private fun identityProp(
+        type: LsiTypeDeclaration,
+        props: List<JimmerImmutableProp>,
+        mapping: JimmerImmutablePrimaryMapping,
+    ): JimmerImmutableProp? {
+        val candidates = props.filter { prop -> prop.primaryMapping == mapping }
+        if (candidates.size > 1) {
+            val annotationType = mapping.identityAnnotationType()
+            throw JimmerImmutablePrecompileException(
+                declarationId = candidates[1].declarationId,
+                message = "Immutable type '${type.qualifiedName}' has multiple properties decorated by " +
+                    "@${annotationType.requireTypeQualifiedName()}: " +
+                    candidates.joinToString { prop -> "'${prop.name}'" },
+            )
+        }
+        return candidates.singleOrNull()
+    }
+
+    private fun validateIdentityProp(
+        prop: JimmerImmutableProp,
+        workspace: LsiWorkspace,
+    ) {
+        val annotationType = prop.primaryMapping.identityAnnotationType()
+        if (prop.list || prop.association) {
+            throw invalidIdentityProp(
+                prop,
+                annotationType,
+                "must be a scalar property",
+            )
+        }
+        when (prop.primaryMapping) {
+            JimmerImmutablePrimaryMapping.ID -> {
+                if (prop.nullable) {
+                    throw invalidIdentityProp(prop, annotationType, "cannot be nullable")
+                }
+            }
+            JimmerImmutablePrimaryMapping.VERSION -> {
+                val primitiveType = prop.type as? LsiPrimitiveType
+                if (
+                    prop.nullable ||
+                    primitiveType?.kind != LsiPrimitiveKind.INT ||
+                    primitiveType.boxed
+                ) {
+                    throw invalidIdentityProp(prop, annotationType, "must be a non-null Int property")
+                }
+            }
+            JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> {
+                validateLogicalDeletedProp(prop, annotationType, workspace)
+            }
+            else -> error("Primary mapping ${prop.primaryMapping} is not an identity mapping")
+        }
+    }
+
+    private fun validateLogicalDeletedProp(
+        prop: JimmerImmutableProp,
+        annotationType: LsiSymbolId,
+        workspace: LsiWorkspace,
+    ) {
+        val type = prop.type
+        val primitiveType = type as? LsiPrimitiveType
+        val primitiveKind = primitiveType?.kind
+        if (primitiveKind == LsiPrimitiveKind.BOOLEAN || primitiveKind == LsiPrimitiveKind.INT) {
+            if (prop.nullable || primitiveType.boxed) {
+                throw invalidIdentityProp(
+                    prop,
+                    annotationType,
+                    "must use a non-null primitive Boolean or Int",
+                )
+            }
+            return
+        }
+        if (primitiveKind == LsiPrimitiveKind.LONG) {
+            return
+        }
+        val declaredType = type as? LsiDeclaredType
+        val typeId = declaredType?.declarationId
+        if (typeId == BOXED_LONG_TYPE_ID || typeId == UUID_TYPE_ID) {
+            return
+        }
+        val declaration = typeId?.let { candidateTypeId -> workspace[candidateTypeId] as? LsiTypeDeclaration }
+        if (declaration?.kind == LsiTypeDeclarationKind.ENUM) {
+            return
+        }
+        if (typeId in LOGICAL_DELETED_TIME_TYPE_IDS) {
+            if (!prop.nullable) {
+                throw invalidIdentityProp(prop, annotationType, "must be nullable for a time type")
+            }
+            return
+        }
+        throw invalidIdentityProp(
+            prop,
+            annotationType,
+            "must be Boolean, Int, enum, Long, UUID or a supported time type",
+        )
+    }
+
+    private fun invalidIdentityProp(
+        prop: JimmerImmutableProp,
+        annotationType: LsiSymbolId,
+        message: String,
+    ): JimmerImmutablePrecompileException {
+        return JimmerImmutablePrecompileException(
+            declarationId = prop.declarationId,
+            message = "Immutable property '${prop.id.value}' decorated by " +
+                "@${annotationType.requireTypeQualifiedName()} $message",
         )
     }
 
@@ -978,6 +1146,12 @@ private data class JimmerImmutableHierarchy(
     val joinedTableDissociateAction: JimmerJoinedTableDissociateAction?,
     val instantiable: Boolean,
     val discriminatorValue: String?,
+)
+
+private data class JimmerImmutableIdentity(
+    val idPropId: LsiSymbolId?,
+    val versionPropId: LsiSymbolId?,
+    val logicalDeletedPropId: LsiSymbolId?,
 )
 
 private data class JimmerMicroServiceMetadata(
@@ -2345,6 +2519,21 @@ private fun LsiSymbolId?.toPrimaryMapping(): JimmerImmutablePrimaryMapping? {
     }
 }
 
+private fun JimmerImmutablePrimaryMapping.identityAnnotationType(): LsiSymbolId {
+    return when (this) {
+        JimmerImmutablePrimaryMapping.ID -> ID_ANNOTATION
+        JimmerImmutablePrimaryMapping.VERSION -> VERSION_ANNOTATION
+        JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> LOGICAL_DELETED_ANNOTATION
+        else -> error("Primary mapping $this is not an identity mapping")
+    }
+}
+
+private fun JimmerImmutableProp.declaresPrimaryMapping(workspace: LsiWorkspace): Boolean {
+    val declaration = workspace[declarationId] as? LsiProperty ?: return false
+    val annotationType = primaryMapping.identityAnnotationType()
+    return declaration.annotations.hasAnnotation(annotationType)
+}
+
 private fun List<LsiAnnotation>.annotation(type: LsiSymbolId): LsiAnnotation? {
     return firstOrNull { annotation -> annotation.type == type }
 }
@@ -2615,6 +2804,23 @@ private val BOXED_PRIMITIVE_KINDS = mapOf(
     LsiSymbolId.type("java.lang.Double") to LsiPrimitiveKind.DOUBLE,
     LsiSymbolId.type("java.lang.Void") to LsiPrimitiveKind.VOID,
 )
+
+private val BOXED_LONG_TYPE_ID = LsiSymbolId.type("java.lang.Long")
+
+private val UUID_TYPE_ID = LsiSymbolId.type("java.util.UUID")
+
+private val LOGICAL_DELETED_TIME_TYPE_IDS = setOf(
+    "java.util.Date",
+    "java.sql.Date",
+    "java.sql.Time",
+    "java.sql.Timestamp",
+    "java.time.LocalDateTime",
+    "java.time.LocalDate",
+    "java.time.LocalTime",
+    "java.time.OffsetDateTime",
+    "java.time.ZonedDateTime",
+    "java.time.Instant",
+).mapTo(linkedSetOf(), LsiSymbolId::type)
 
 private val STRING_TYPE_IDS = setOf(
     "java.lang.String",

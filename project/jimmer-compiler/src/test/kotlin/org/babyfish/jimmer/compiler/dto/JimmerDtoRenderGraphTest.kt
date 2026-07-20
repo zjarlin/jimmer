@@ -29,6 +29,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.JimmerInheritanceStrategy
 import org.babyfish.jimmer.compiler.immutable.JimmerJoinedTableDissociateAction
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLanguage
@@ -682,6 +683,7 @@ class JimmerDtoRenderGraphTest {
         discriminatorValue: String? = null,
         discriminatorPropId: LsiSymbolId? = null,
     ): JimmerImmutableType {
+        val completeProps = completeEntityProps(id, props)
         return JimmerImmutableType(
             id = id,
             qualifiedName = id.requireTypeQualifiedName(),
@@ -690,7 +692,7 @@ class JimmerDtoRenderGraphTest {
             annotations = emptyList(),
             typeParameterIds = emptyList(),
             superTypeIds = superTypeIds,
-            props = props,
+            props = completeProps,
             primarySuperTypeId = primarySuperTypeId,
             inheritanceRootTypeId = inheritanceRootTypeId,
             inheritanceStrategy = inheritanceStrategy,
@@ -698,6 +700,15 @@ class JimmerDtoRenderGraphTest {
             instantiable = instantiable,
             discriminatorValue = discriminatorValue,
             discriminatorPropId = discriminatorPropId,
+            idPropId = completeProps.singleOrNull { prop ->
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+            }?.id,
+            versionPropId = completeProps.singleOrNull { prop ->
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION
+            }?.id,
+            logicalDeletedPropId = completeProps.singleOrNull { prop ->
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+            }?.id,
             acrossMicroServices = false,
             microServiceName = "",
         )

@@ -22,6 +22,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStat
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -29,6 +30,10 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiDeclaration
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
@@ -377,6 +382,7 @@ class JimmerModuleCompilerFeatureProviderTest {
 
     private fun resolvedDependencyState(qualifiedName: String): JimmerImmutableCompilerFeatureState {
         val typeId = LsiSymbolId.type(qualifiedName)
+        val props = completeEntityProps(typeId)
         return JimmerImmutableCompilerFeatureState(
             schema = JimmerImmutableSchema(
                 listOf(
@@ -388,7 +394,7 @@ class JimmerModuleCompilerFeatureProviderTest {
                         annotations = emptyList(),
                         typeParameterIds = emptyList(),
                         superTypeIds = emptyList(),
-                        props = emptyList(),
+                        props = props,
                         primarySuperTypeId = null,
                         inheritanceRootTypeId = null,
                         inheritanceStrategy = null,
@@ -396,6 +402,9 @@ class JimmerModuleCompilerFeatureProviderTest {
                         instantiable = true,
                         discriminatorValue = null,
                         discriminatorPropId = null,
+                        idPropId = props.single().id,
+                        versionPropId = null,
+                        logicalDeletedPropId = null,
                         acrossMicroServices = false,
                         microServiceName = "",
                     )
@@ -411,7 +420,7 @@ class JimmerModuleCompilerFeatureProviderTest {
         language: LsiLanguage,
         vararg qualifiedNames: String,
     ): LsiWorkspace {
-        val declarations = mutableListOf<LsiTypeDeclaration>()
+        val declarations = mutableListOf<LsiDeclaration>()
         val sources = mutableListOf<LsiSource>()
         qualifiedNames.forEach { qualifiedName ->
             val source = LsiSource.of(
@@ -419,13 +428,25 @@ class JimmerModuleCompilerFeatureProviderTest {
                 language,
             )
             sources += source
+            val typeId = LsiSymbolId.type(qualifiedName)
+            val idPropId = LsiSymbolId.property(typeId, "id")
+            val origin = LsiOrigin(LsiOriginKind.SOURCE, source)
             declarations += LsiTypeDeclaration(
-                id = LsiSymbolId.type(qualifiedName),
+                id = typeId,
                 name = qualifiedName.substringAfterLast('.'),
                 qualifiedName = qualifiedName,
                 kind = LsiTypeDeclarationKind.INTERFACE,
+                memberIds = listOf(idPropId),
                 annotations = listOf(LsiAnnotation(ENTITY)),
-                origin = LsiOrigin(LsiOriginKind.SOURCE, source),
+                origin = origin,
+            )
+            declarations += LsiProperty(
+                id = idPropId,
+                name = "id",
+                ownerId = typeId,
+                type = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                annotations = listOf(LsiAnnotation(ID)),
+                origin = origin,
             )
         }
         return LsiWorkspace(sources = sources, declarations = declarations)
@@ -451,6 +472,7 @@ class JimmerModuleCompilerFeatureProviderTest {
         const val ENTITIES_RESOURCE_PATH = "META-INF/jimmer/entities"
         const val IMMUTABLES_RESOURCE_PATH = "META-INF/jimmer/immutables"
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
+        val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         val PROVIDER = JimmerModuleCompilerFeatureProvider()
     }
 }

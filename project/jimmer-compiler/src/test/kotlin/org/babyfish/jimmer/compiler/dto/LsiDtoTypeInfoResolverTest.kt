@@ -8,6 +8,7 @@ import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -194,6 +195,7 @@ class LsiDtoTypeInfoResolverTest {
     }
 
     private fun immutableType(id: LsiSymbolId): JimmerImmutableType {
+        val props = completeEntityProps(id)
         return JimmerImmutableType(
             id = id,
             qualifiedName = id.requireTypeQualifiedName(),
@@ -202,7 +204,7 @@ class LsiDtoTypeInfoResolverTest {
             annotations = emptyList(),
             typeParameterIds = emptyList(),
             superTypeIds = emptyList(),
-            props = emptyList(),
+            props = props,
             primarySuperTypeId = null,
             inheritanceRootTypeId = null,
             inheritanceStrategy = null,
@@ -210,6 +212,9 @@ class LsiDtoTypeInfoResolverTest {
             instantiable = true,
             discriminatorValue = null,
             discriminatorPropId = null,
+            idPropId = props.single().id,
+            versionPropId = null,
+            logicalDeletedPropId = null,
             acrossMicroServices = false,
             microServiceName = "",
         )

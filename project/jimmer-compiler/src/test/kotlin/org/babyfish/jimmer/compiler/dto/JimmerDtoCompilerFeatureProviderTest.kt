@@ -30,6 +30,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableView
 import org.babyfish.jimmer.compiler.immutable.JimmerInheritanceStrategy
 import org.babyfish.jimmer.compiler.immutable.JimmerJoinedTableDissociateAction
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -1771,6 +1772,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         microServiceName: String = "",
     ): JimmerImmutableType {
         val qualifiedName = id.requireTypeQualifiedName()
+        val completeProps = completeEntityProps(id, props)
         return JimmerImmutableType(
             id = id,
             qualifiedName = qualifiedName,
@@ -1779,7 +1781,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             annotations = emptyList(),
             typeParameterIds = emptyList(),
             superTypeIds = superTypeIds,
-            props = props,
+            props = completeProps,
             primarySuperTypeId = primarySuperTypeId,
             inheritanceRootTypeId = inheritanceRootTypeId,
             inheritanceStrategy = inheritanceStrategy,
@@ -1787,6 +1789,15 @@ class JimmerDtoCompilerFeatureProviderTest {
             instantiable = instantiable,
             discriminatorValue = discriminatorValue,
             discriminatorPropId = discriminatorPropId,
+            idPropId = completeProps.singleOrNull { prop ->
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+            }?.id,
+            versionPropId = completeProps.singleOrNull { prop ->
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION
+            }?.id,
+            logicalDeletedPropId = completeProps.singleOrNull { prop ->
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+            }?.id,
             acrossMicroServices = acrossMicroServices,
             microServiceName = microServiceName,
         )

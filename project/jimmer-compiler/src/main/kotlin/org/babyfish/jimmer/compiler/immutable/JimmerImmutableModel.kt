@@ -320,6 +320,9 @@ data class JimmerImmutableType(
     val instantiable: Boolean,
     val discriminatorValue: String?,
     val discriminatorPropId: LsiSymbolId?,
+    val idPropId: LsiSymbolId?,
+    val versionPropId: LsiSymbolId?,
+    val logicalDeletedPropId: LsiSymbolId?,
     val acrossMicroServices: Boolean,
     val microServiceName: String,
 ) {
@@ -360,6 +363,33 @@ data class JimmerImmutableType(
         }
         require(discriminatorPropId == null || props.any { prop -> prop.id == discriminatorPropId }) {
             "Immutable discriminator property must belong to its type: ${id.value}"
+        }
+        require(
+            props.filter { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.ID }
+                .map(JimmerImmutableProp::id) == listOfNotNull(idPropId)
+        ) {
+            "Immutable id property metadata must match its effective property: ${id.value}"
+        }
+        require(
+            props.filter { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION }
+                .map(JimmerImmutableProp::id) == listOfNotNull(versionPropId)
+        ) {
+            "Immutable version property metadata must match its effective property: ${id.value}"
+        }
+        require(
+            props.filter { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED }
+                .map(JimmerImmutableProp::id) == listOfNotNull(logicalDeletedPropId)
+        ) {
+            "Immutable logical-deleted property metadata must match its effective property: ${id.value}"
+        }
+        require(
+            kind in setOf(JimmerImmutableTypeKind.ENTITY, JimmerImmutableTypeKind.MAPPED_SUPERCLASS) ||
+                idPropId == null && versionPropId == null && logicalDeletedPropId == null
+        ) {
+            "Only immutable entity or mapped superclass can declare identity properties: ${id.value}"
+        }
+        require(kind != JimmerImmutableTypeKind.ENTITY || idPropId != null) {
+            "Immutable entity must have an id property: ${id.value}"
         }
         require(!acrossMicroServices || kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
             "Only immutable mapped superclass can be across microservices: ${id.value}"

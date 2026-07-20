@@ -31,6 +31,9 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                 type.joinedTableDissociateAction?.name.orEmpty(),
                 type.discriminatorValue.orEmpty(),
                 type.discriminatorPropId?.value.orEmpty(),
+                type.idPropId?.value.orEmpty(),
+                type.versionPropId?.value.orEmpty(),
+                type.logicalDeletedPropId?.value.orEmpty(),
                 type.acrossMicroServices.toString(),
                 type.microServiceName,
             )

@@ -98,12 +98,14 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(LsiSymbolId.type("demo.Asset"), root.inheritanceRootTypeId)
         assertFalse(root.instantiable)
         assertEquals(LsiSymbolId.property(root.id, "kind"), root.discriminatorPropId)
+        assertEquals(LsiSymbolId.property(root.id, "id"), root.idPropId)
 
         val derived = aptSchema.types.single { type -> type.qualifiedName == "demo.Book" }
         assertEquals(root.id, derived.inheritanceRootTypeId)
         assertEquals("BOOK", derived.discriminatorValue)
         assertTrue(derived.instantiable)
         assertEquals(LsiSymbolId.property(derived.id, "kind"), derived.discriminatorPropId)
+        assertEquals(LsiSymbolId.property(derived.id, "id"), derived.idPropId)
         assertTrue(derived.props.any { prop ->
             prop.name == "createdBy" && prop.inherited
         })
@@ -133,6 +135,91 @@ class JimmerImmutableFrontendParityTest {
             ),
             authorIdsProp.view,
         )
+    }
+
+    @Test
+    fun `real apt and ksp frontends freeze identical identity slots`() {
+        val apt = compileApt(IDENTITY_JAVA_SOURCE)
+        val ksp = compileKsp(IDENTITY_KOTLIN_SOURCE)
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+
+        val record = aptSchema.types.single { type -> type.qualifiedName == "demo.IdentityRecord" }
+        assertEquals(LsiSymbolId.property(record.id, "id"), record.idPropId)
+        assertEquals(LsiSymbolId.property(record.id, "version"), record.versionPropId)
+        assertEquals(LsiSymbolId.property(record.id, "deleted"), record.logicalDeletedPropId)
+        val timed = aptSchema.types.single { type -> type.qualifiedName == "demo.TimedRecord" }
+        assertEquals(LsiSymbolId.property(timed.id, "deletedAt"), timed.logicalDeletedPropId)
+        assertTrue(timed.props.single { prop -> prop.name == "deletedAt" }.nullable)
+        val stateful = aptSchema.types.single { type -> type.qualifiedName == "demo.StatefulRecord" }
+        assertEquals(LsiSymbolId.property(stateful.id, "state"), stateful.logicalDeletedPropId)
+        assertTrue(stateful.props.single { prop -> prop.name == "state" }.nullable)
+    }
+
+    @Test
+    fun `real apt frontend rejects boxed logical-deleted primitives`() {
+        val result = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.LogicalDeleted;
+
+                @Entity
+                interface BoxedDeletedRecord {
+                    @Id
+                    long id();
+
+                    @LogicalDeleted
+                    Boolean deleted();
+                }
+            """.trimIndent()
+        )
+
+        assertNull(result.schema)
+        assertTrue(
+            result.diagnostic.orEmpty().contains("primitive Boolean or Int"),
+            result.diagnostic,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject entity without id identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+
+                @Entity
+                interface MissingIdRecord {
+                    String name();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+
+                @Entity
+                interface MissingIdRecord {
+                    val name: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(apt.diagnostic.orEmpty().contains("must have exactly one"))
     }
 
     @Test
@@ -174,7 +261,7 @@ class JimmerImmutableFrontendParityTest {
         val aptSchema = assertNotNull(apt.schema)
         val kspSchema = assertNotNull(ksp.schema)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
-        assertFalse(aptSchema.types.single().props.single().list)
+        assertFalse(aptSchema.types.single().props.single { prop -> prop.name == "values" }.list)
 
         val invalidApt = compileApt(INVALID_COLLECTION_JAVA_SOURCE)
         val invalidKsp = compileKsp(INVALID_COLLECTION_KOTLIN_SOURCE)
@@ -477,15 +564,22 @@ class JimmerImmutableFrontendParityTest {
 
                 import org.babyfish.jimmer.Formula;
                 import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
                 import org.babyfish.jimmer.sql.ManyToOne;
 
                 @Entity
                 interface Department {
+                    @Id
+                    long id();
+
                     String name();
                 }
 
                 @Entity
                 interface Employee {
+                    @Id
+                    long id();
+
                     String firstName();
 
                     @ManyToOne
@@ -507,15 +601,22 @@ class JimmerImmutableFrontendParityTest {
 
                 import org.babyfish.jimmer.Formula
                 import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
                 import org.babyfish.jimmer.sql.ManyToOne
 
                 @Entity
                 interface Department {
+                    @Id
+                    val id: Long
+
                     val name: String
                 }
 
                 @Entity
                 interface Employee {
+                    @Id
+                    val id: Long
+
                     val firstName: String
 
                     @ManyToOne
@@ -1289,6 +1390,107 @@ class JimmerImmutableFrontendParityTest {
             }
         """.trimIndent()
 
+        val IDENTITY_JAVA_SOURCE = """
+            package demo;
+
+            import java.time.Instant;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.LogicalDeleted;
+            import org.babyfish.jimmer.sql.MappedSuperclass;
+            import org.babyfish.jimmer.sql.Version;
+            import org.jetbrains.annotations.Nullable;
+
+            enum DeleteState {
+                ALIVE,
+                DELETED
+            }
+
+            @MappedSuperclass
+            interface IdentityBase {
+                @Id
+                long id();
+
+                @Version
+                int version();
+
+                @LogicalDeleted
+                boolean deleted();
+            }
+
+            @Entity
+            interface IdentityRecord extends IdentityBase {}
+
+            @Entity
+            interface TimedRecord {
+                @Id
+                long id();
+
+                @LogicalDeleted
+                @Nullable
+                Instant deletedAt();
+            }
+
+            @Entity
+            interface StatefulRecord {
+                @Id
+                long id();
+
+                @LogicalDeleted("DELETED")
+                @Nullable
+                DeleteState state();
+            }
+        """.trimIndent()
+
+        val IDENTITY_KOTLIN_SOURCE = """
+            package demo
+
+            import java.time.Instant
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.LogicalDeleted
+            import org.babyfish.jimmer.sql.MappedSuperclass
+            import org.babyfish.jimmer.sql.Version
+
+            enum class DeleteState {
+                ALIVE,
+                DELETED,
+            }
+
+            @MappedSuperclass
+            interface IdentityBase {
+                @Id
+                val id: Long
+
+                @Version
+                val version: Int
+
+                @LogicalDeleted
+                val deleted: Boolean
+            }
+
+            @Entity
+            interface IdentityRecord : IdentityBase
+
+            @Entity
+            interface TimedRecord {
+                @Id
+                val id: Long
+
+                @LogicalDeleted
+                val deletedAt: Instant?
+            }
+
+            @Entity
+            interface StatefulRecord {
+                @Id
+                val id: Long
+
+                @LogicalDeleted("DELETED")
+                val state: DeleteState?
+            }
+        """.trimIndent()
+
         val OVERRIDDEN_PROPERTY_JAVA_SOURCE = """
             package demo;
 
@@ -1348,9 +1550,13 @@ class JimmerImmutableFrontendParityTest {
             import java.util.Set;
             import org.babyfish.jimmer.Scalar;
             import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
 
             @Entity
             interface ScalarCollectionEntity {
+                @Id
+                long id();
+
                 @Scalar
                 Set<String> getValues();
             }
@@ -1361,9 +1567,13 @@ class JimmerImmutableFrontendParityTest {
 
             import org.babyfish.jimmer.Scalar
             import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
 
             @Entity
             interface ScalarCollectionEntity {
+                @Id
+                val id: Long
+
                 @Scalar
                 val values: Set<String>
             }
@@ -1494,6 +1704,9 @@ class JimmerImmutableFrontendParityTest {
 
             @Entity
             interface Book {
+                @Id
+                long id();
+
                 @ManyToOne
                 Store store();
 
@@ -1518,6 +1731,9 @@ class JimmerImmutableFrontendParityTest {
 
             @Entity
             interface Book {
+                @Id
+                val id: Long
+
                 @ManyToOne
                 val store: Store
 
@@ -1603,6 +1819,9 @@ class JimmerImmutableFrontendParityTest {
 
             @Entity
             interface Book {
+                @Id
+                long id();
+
                 @ManyToMany
                 List<Author> authors();
 
@@ -1627,6 +1846,9 @@ class JimmerImmutableFrontendParityTest {
 
             @Entity
             interface Book {
+                @Id
+                val id: Long
+
                 @ManyToMany
                 val authors: List<Author>
 

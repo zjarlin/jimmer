@@ -20,6 +20,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiOrigin
@@ -79,7 +80,7 @@ class JimmerDtoAnnotationContractTest {
     @Test
     fun `keeps dto bean validation nullity annotations while filtering immutable nullity`() {
         val fixture = fixture()
-        val baseProp = fixture.schema.types.single().props.single()
+        val baseProp = fixture.schema.types.single().props.single { prop -> prop.id == NAME_PROP }
         val dtoProp = fixture.graph.props.single() as JimmerDtoBaseProp
         val javaxNull = LsiSymbolId.type("javax.validation.constraints.Null")
         val jakartaNotNull = LsiSymbolId.type("jakarta.validation.constraints.NotNull")
@@ -327,7 +328,7 @@ class JimmerDtoAnnotationContractTest {
         val fixture = fixture()
         val immutableTag = LsiSymbolId.type("demo.ImmutableSiteTag")
         val dtoTag = LsiSymbolId.type("demo.DtoSiteTag")
-        val baseProp = fixture.schema.types.single().props.single()
+        val baseProp = fixture.schema.types.single().props.single { prop -> prop.id == NAME_PROP }
         val dtoProp = fixture.graph.props.single() as JimmerDtoBaseProp
         val schema = immutableSchema(
             typeAnnotations = fixture.schema.types.single().annotations,
@@ -717,7 +718,10 @@ class JimmerDtoAnnotationContractTest {
     private fun builderChainFixture(inputBuilder: Boolean): Fixture {
         val base = fixture()
         val templateType = base.schema.types.single()
-        val templateProp = templateType.props.single()
+        val templateProp = templateType.props.single { prop -> prop.id == NAME_PROP }
+        val bookIdProp = templateType.props.single { prop ->
+            prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+        }
         val headProp = templateProp.copy(
             id = STORE_PROP,
             declarationId = STORE_PROP,
@@ -744,17 +748,26 @@ class JimmerDtoAnnotationContractTest {
             annotations = listOf(lsiAnnotation(JSON_SERIALIZE.requireTypeQualifiedName())),
             overrideChain = listOf(STORE_NAME_PROP),
         )
+        val storeIdPropId = LsiSymbolId.property(STORE_TYPE, "id")
+        val storeIdProp = bookIdProp.copy(
+            id = storeIdPropId,
+            declarationId = storeIdPropId,
+            ownerTypeId = STORE_TYPE,
+            declaringTypeId = STORE_TYPE,
+            overrideChain = listOf(storeIdPropId),
+        )
         val schema = JimmerImmutableSchema(
             listOf(
                 templateType.copy(
                     annotations = emptyList(),
-                    props = listOf(headProp),
+                    props = listOf(bookIdProp, headProp),
                 ),
                 templateType.copy(
                     id = STORE_TYPE,
                     qualifiedName = STORE_TYPE.requireTypeQualifiedName(),
                     annotations = emptyList(),
-                    props = listOf(tailProp),
+                    props = listOf(storeIdProp, tailProp),
+                    idPropId = storeIdProp.id,
                 ),
             ).sortedBy(JimmerImmutableType::id)
         )
@@ -855,6 +868,7 @@ class JimmerDtoAnnotationContractTest {
             validations = emptyList(),
             converter = null,
         )
+        val props = completeEntityProps(BOOK_TYPE, listOf(prop))
         return JimmerImmutableSchema(
             listOf(
                 JimmerImmutableType(
@@ -865,7 +879,7 @@ class JimmerDtoAnnotationContractTest {
                     annotations = typeAnnotations,
                     typeParameterIds = emptyList(),
                     superTypeIds = emptyList(),
-                    props = listOf(prop),
+                    props = props,
                     primarySuperTypeId = null,
                     inheritanceRootTypeId = null,
                     inheritanceStrategy = null,
@@ -873,6 +887,11 @@ class JimmerDtoAnnotationContractTest {
                     instantiable = true,
                     discriminatorValue = null,
                     discriminatorPropId = null,
+                    idPropId = props.single { candidate ->
+                        candidate.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                    }.id,
+                    versionPropId = null,
+                    logicalDeletedPropId = null,
                     acrossMicroServices = false,
                     microServiceName = "",
                 )

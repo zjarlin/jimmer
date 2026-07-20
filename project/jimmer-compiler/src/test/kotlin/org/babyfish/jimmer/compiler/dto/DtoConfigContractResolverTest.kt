@@ -17,6 +17,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiOrigin
@@ -973,6 +974,7 @@ class DtoConfigContractResolverTest {
             typeId: LsiSymbolId,
             props: List<JimmerImmutableProp>,
         ): JimmerImmutableType {
+            val completeProps = completeEntityProps(typeId, props)
             return JimmerImmutableType(
                 id = typeId,
                 qualifiedName = typeId.requireTypeQualifiedName(),
@@ -981,7 +983,7 @@ class DtoConfigContractResolverTest {
                 annotations = emptyList(),
                 typeParameterIds = emptyList(),
                 superTypeIds = emptyList(),
-                props = props,
+                props = completeProps,
                 primarySuperTypeId = null,
                 inheritanceRootTypeId = null,
                 inheritanceStrategy = null,
@@ -989,6 +991,15 @@ class DtoConfigContractResolverTest {
                 instantiable = true,
                 discriminatorValue = null,
                 discriminatorPropId = null,
+                idPropId = completeProps.singleOrNull { prop ->
+                    prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                }?.id,
+                versionPropId = completeProps.singleOrNull { prop ->
+                    prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION
+                }?.id,
+                logicalDeletedPropId = completeProps.singleOrNull { prop ->
+                    prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+                }?.id,
                 acrossMicroServices = false,
                 microServiceName = "",
             )
