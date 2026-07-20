@@ -56,6 +56,7 @@ class ClientFrontendParityTest {
         val operations = aptSchema.services.single().operations.associateBy(ClientOperation::name)
         val byRoot = requireNotNull(operations["byRoot"])
         val byAlpha = requireNotNull(operations["byAlpha"])
+        val count = requireNotNull(operations["count"])
         assertEquals(
             listOf(BETA_EXCEPTION_ID, GAMMA_EXCEPTION_ID, ALPHA_EXCEPTION_ID),
             byRoot.exceptionTypeIds,
@@ -70,6 +71,7 @@ class ClientFrontendParityTest {
             byRoot.exceptionMetadata.single { metadata -> metadata.typeId == BRANCH_EXCEPTION_ID }.subTypeIds,
         )
         assertEquals(byRoot.exceptionMetadata, byAlpha.exceptionMetadata)
+        assertEquals(1, count.parameters.size)
     }
 
     private fun compileJava(sources: Map<String, String>): LsiWorkspace {
@@ -274,6 +276,7 @@ class ClientFrontendParityTest {
             "demo/ErrorService.java" to """
                 package demo;
 
+                import java.util.List;
                 import org.babyfish.jimmer.client.meta.Api;
 
                 @Api
@@ -284,6 +287,9 @@ class ClientFrontendParityTest {
 
                     @Api
                     int byAlpha() throws AlphaException;
+
+                    @Api
+                    int count(List<String> values);
                 }
             """.trimIndent(),
         )
@@ -328,6 +334,9 @@ class ClientFrontendParityTest {
                     @Api
                     @Throws(AlphaException::class)
                     fun byAlpha(): Int
+
+                    @Api
+                    fun count(values: MutableList<String>): Int
                 }
             """.trimIndent(),
         )

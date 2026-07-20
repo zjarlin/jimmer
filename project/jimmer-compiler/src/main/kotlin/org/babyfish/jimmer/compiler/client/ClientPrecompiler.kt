@@ -893,22 +893,25 @@ class ClientPrecompiler(
             }
         }
         return when (this) {
-            is LsiDeclaredType -> ClientDeclaredTypeRef(
-                typeId = declarationId,
-                typeName = workspace.clientTypeName(declarationId),
-                arguments = arguments.map { argument ->
-                    argument.toClientTypeArgument(
-                        serviceId = serviceId,
-                        defaultFetcherOwnerId = defaultFetcherOwnerId,
-                        sourceId = sourceId,
-                        workspace = workspace,
-                        jsonValueTypeIds = jsonValueTypeIds,
-                        nestedType = true,
-                    )
-                },
-                nullable = nullable,
-                fetchBy = fetchBy,
-            )
+            is LsiDeclaredType -> {
+                val clientTypeId = CLIENT_CANONICAL_TYPE_IDS[declarationId] ?: declarationId
+                ClientDeclaredTypeRef(
+                    typeId = clientTypeId,
+                    typeName = workspace.clientTypeName(clientTypeId),
+                    arguments = arguments.map { argument ->
+                        argument.toClientTypeArgument(
+                            serviceId = serviceId,
+                            defaultFetcherOwnerId = defaultFetcherOwnerId,
+                            sourceId = sourceId,
+                            workspace = workspace,
+                            jsonValueTypeIds = jsonValueTypeIds,
+                            nestedType = true,
+                        )
+                    },
+                    nullable = nullable,
+                    fetchBy = fetchBy,
+                )
+            }
             is LsiPrimitiveType -> ClientPrimitiveTypeRef(kind, nullable, fetchBy)
             is LsiArrayType -> ClientArrayTypeRef(
                 elementType = elementType.toClientTypeRef(
@@ -1559,6 +1562,9 @@ private val IMMUTABLE_TYPE_ANNOTATIONS = setOf(
 
 private val OBJECT_TYPE_ID = LsiSymbolId.type("java.lang.Object")
 private val OBJECT_TYPE_NAME = ClientTypeName("java.lang", listOf("Object"))
+private val CLIENT_CANONICAL_TYPE_IDS = mapOf(
+    LsiSymbolId.type("kotlin.collections.MutableList") to LsiSymbolId.type("java.util.List"),
+)
 private val JSON_NODE_SIMPLE_NAMES = setOf(
     "jsonnode",
     "jsonobject",

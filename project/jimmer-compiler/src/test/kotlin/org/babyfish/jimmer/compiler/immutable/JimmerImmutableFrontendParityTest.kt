@@ -26,6 +26,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -36,6 +37,7 @@ import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableFrontendParityTest {
@@ -754,6 +756,60 @@ class JimmerImmutableFrontendParityTest {
         assertNull(invalidKsp.schema)
         assertEquals(invalidApt.diagnostic, invalidKsp.diagnostic)
         assertTrue(invalidApt.diagnostic.orEmpty().contains("must use java.util.List"))
+    }
+
+    @Test
+    fun `real ksp preserves mutable list identity and requires scalar semantics`() {
+        val invalid = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface MutableListEntity {
+                    @Id
+                    val id: Long
+
+                    val values: MutableList<String>
+                }
+            """.trimIndent()
+        )
+
+        assertNull(invalid.schema)
+        assertTrue(invalid.diagnostic.orEmpty().contains("must use java.util.List"))
+
+        val scalar = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.Scalar
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface MutableListEntity {
+                    @Id
+                    val id: Long
+
+                    @Scalar
+                    val values: MutableList<String>
+                }
+            """.trimIndent()
+        )
+
+        assertNull(scalar.diagnostic)
+        val values = assertNotNull(scalar.schema)
+            .types
+            .single()
+            .props
+            .single { prop -> prop.name == "values" }
+        assertFalse(values.list)
+        assertEquals(
+            LsiSymbolId.type("kotlin.collections.MutableList"),
+            assertIs<LsiDeclaredType>(values.type).declarationId,
+        )
     }
 
     @Test

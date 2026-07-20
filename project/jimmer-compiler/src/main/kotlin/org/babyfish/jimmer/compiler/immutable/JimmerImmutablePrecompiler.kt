@@ -2577,6 +2577,7 @@ private fun LsiTypeRef.toConverterListType(): LsiDeclaredType {
 private fun LsiTypeRef.isCollectionType(typeSystem: LsiTypeSystem): Boolean {
     val declaredType = this as? LsiDeclaredType ?: return false
     return declaredType.declarationId == COLLECTION_TYPE_ID ||
+        declaredType.declarationId == KOTLIN_MUTABLE_LIST_TYPE_ID ||
         declaredType.declarationId in LIST_TYPE_IDS ||
         typeSystem.resolveSuperType(declaredType.declarationId, COLLECTION_TYPE_ID) != null
 }
@@ -2991,8 +2992,8 @@ private val PRIMARY_PROP_ANNOTATIONS = setOf(
 private val LIST_TYPE_IDS = setOf(
     "java.util.List",
     "kotlin.collections.List",
-    "kotlin.collections.MutableList",
 ).mapTo(linkedSetOf(), LsiSymbolId::type)
+private val KOTLIN_MUTABLE_LIST_TYPE_ID = LsiSymbolId.type("kotlin.collections.MutableList")
 
 private val COLLECTION_TYPE_ID = LsiSymbolId.type("java.util.Collection")
 

@@ -390,6 +390,72 @@ class KspLsiWorkspaceTest {
     }
 
     @Test
+    fun `preserves kotlin mutable list source identity`() {
+        val sourceFile = file("/workspace/src/main/kotlin/demo/MutableLists.kt")
+        val mutableListDeclaration = classDeclaration(
+            qualifiedName = "kotlin.collections.MutableList",
+            classKind = ClassKind.INTERFACE,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val stringDeclaration = classDeclaration(
+            qualifiedName = "kotlin.String",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val mutableListKspType = type(
+            declaration = mutableListDeclaration,
+            arguments = listOf(typeArgument(type(stringDeclaration))),
+        )
+        val frozenType = typeReference(
+            mutableListKspType
+        ).toLsiType(resolver())
+
+        val mutableListType = assertIs<LsiDeclaredType>(frozenType)
+        assertEquals(
+            LsiSymbolId.type("kotlin.collections.MutableList"),
+            mutableListType.declarationId,
+        )
+        assertEquals(
+            LsiSymbolId.type("java.lang.String"),
+            assertIs<LsiDeclaredType>(mutableListType.arguments.single().type).declarationId,
+        )
+
+        lateinit var service: KSClassDeclaration
+        lateinit var consume: KSFunctionDeclaration
+        val values = valueParameter(
+            name = "values",
+            parent = { consume },
+            type = typeReference(mutableListKspType),
+            file = sourceFile,
+        )
+        consume = function(
+            name = "consume",
+            parent = { service },
+            parameters = listOf(values),
+            file = sourceFile,
+        )
+        service = classDeclaration(
+            qualifiedName = "demo.MutableListService",
+            classKind = ClassKind.INTERFACE,
+            file = sourceFile,
+            declarations = { listOf(consume) },
+        )
+        val jvmSignature = "type:java.util.List<type:java.lang.String>"
+
+        assertEquals(jvmSignature, mutableListKspType.toKspStableSignature())
+        assertEquals(
+            LsiSymbolId.function(
+                owner = LsiSymbolId.type("demo.MutableListService"),
+                name = "consume",
+                parameterTypeSignatures = listOf(jvmSignature),
+            ),
+            KspLsiTypeContext(resolver()).toLsiCallableId(consume),
+        )
+    }
+
+    @Test
     fun `normalizes java getters and keeps kotlin property semantics`() {
         val sourceFile = file("/workspace/src/main/java/demo/Switches.java")
         val booleanDeclaration = classDeclaration(

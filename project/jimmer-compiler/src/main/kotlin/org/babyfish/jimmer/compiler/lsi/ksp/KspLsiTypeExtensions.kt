@@ -473,7 +473,7 @@ private fun KSType.toKspCallableStableSignature(): String {
     }
     return buildString {
         append("type:")
-        append(qualifiedName.toCanonicalLsiTypeName())
+        append(qualifiedName.toJvmSignatureTypeName())
         if (arguments.isNotEmpty()) {
             append('<')
             append(arguments.joinToString(",") { argument -> argument.toKspCallableStableSignature() })
@@ -525,7 +525,7 @@ private fun KSType.toKspErasedStableSignature(): String {
             ?: "type:java.lang.Object"
         return "array:$elementSignature"
     }
-    return "type:${qualifiedName.toCanonicalLsiTypeName()}"
+    return "type:${qualifiedName.toJvmSignatureTypeName()}"
 }
 
 internal fun KSType.toKspStableSignature(): String {
@@ -559,7 +559,7 @@ internal fun KSType.toKspStableSignature(): String {
     }
     return buildString {
         append("type:")
-        append(qualifiedName.toCanonicalLsiTypeName())
+        append(qualifiedName.toJvmSignatureTypeName())
         if (arguments.isNotEmpty()) {
             append('<')
             append(arguments.joinToString(",") { argument -> argument.toKspStableSignature() })
@@ -602,7 +602,9 @@ private fun String.toLsiPrimitiveKind(): LsiPrimitiveKind? = PRIMITIVE_TYPES[thi
 
 private fun String.toLsiPrimitiveArrayKind(): LsiPrimitiveKind? = PRIMITIVE_ARRAY_TYPES[this]
 
-private fun String.toCanonicalLsiTypeName(): String = KOTLIN_JVM_TYPE_NAMES[this] ?: this
+private fun String.toCanonicalLsiTypeName(): String = KOTLIN_LSI_TYPE_NAMES[this] ?: this
+
+private fun String.toJvmSignatureTypeName(): String = KOTLIN_JVM_TYPE_NAMES[this] ?: this
 
 private fun String.withoutWhitespace(): String = filterNot(Char::isWhitespace)
 
@@ -634,7 +636,7 @@ private val PRIMITIVE_ARRAY_TYPES = mapOf(
     "kotlin.DoubleArray" to LsiPrimitiveKind.DOUBLE,
 )
 
-private val KOTLIN_JVM_TYPE_NAMES = mapOf(
+private val KOTLIN_LSI_TYPE_NAMES = mapOf(
     "kotlin.Any" to "java.lang.Object",
     "kotlin.String" to "java.lang.String",
     "kotlin.CharSequence" to "java.lang.CharSequence",
@@ -647,9 +649,12 @@ private val KOTLIN_JVM_TYPE_NAMES = mapOf(
     "kotlin.collections.Collection" to "java.util.Collection",
     "kotlin.collections.MutableCollection" to "java.util.Collection",
     "kotlin.collections.List" to "java.util.List",
-    "kotlin.collections.MutableList" to "java.util.List",
     "kotlin.collections.Set" to "java.util.Set",
     "kotlin.collections.MutableSet" to "java.util.Set",
     "kotlin.collections.Map" to "java.util.Map",
     "kotlin.collections.MutableMap" to "java.util.Map",
+)
+
+private val KOTLIN_JVM_TYPE_NAMES = KOTLIN_LSI_TYPE_NAMES + mapOf(
+    "kotlin.collections.MutableList" to "java.util.List",
 )

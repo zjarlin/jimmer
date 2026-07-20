@@ -3384,7 +3384,12 @@ class JimmerImmutablePrecompilerTest {
 
     @Test
     fun `non-list collection types require scalar semantics`() {
-        val collectionTypes = listOf(COLLECTION_TYPE, SET_TYPE, CUSTOM_COLLECTION_TYPE)
+        val collectionTypes = listOf(
+            COLLECTION_TYPE,
+            SET_TYPE,
+            KOTLIN_MUTABLE_LIST_TYPE,
+            CUSTOM_COLLECTION_TYPE,
+        )
         val hierarchyTypes = listOf(
             declaration(
                 qualifiedName = COLLECTION_TYPE.requireTypeQualifiedName(),
@@ -3392,6 +3397,11 @@ class JimmerImmutablePrecompilerTest {
             ),
             declaration(
                 qualifiedName = SET_TYPE.requireTypeQualifiedName(),
+                kind = LsiTypeDeclarationKind.INTERFACE,
+                superTypes = listOf(LsiDeclaredType(COLLECTION_TYPE)),
+            ),
+            declaration(
+                qualifiedName = KOTLIN_MUTABLE_LIST_TYPE.requireTypeQualifiedName(),
                 kind = LsiTypeDeclarationKind.INTERFACE,
                 superTypes = listOf(LsiDeclaredType(COLLECTION_TYPE)),
             ),
@@ -4712,6 +4722,7 @@ class JimmerImmutablePrecompilerTest {
 
         private val COLLECTION_TYPE = LsiSymbolId.type("java.util.Collection")
         private val SET_TYPE = LsiSymbolId.type("java.util.Set")
+        private val KOTLIN_MUTABLE_LIST_TYPE = LsiSymbolId.type("kotlin.collections.MutableList")
         private val CUSTOM_COLLECTION_TYPE = LsiSymbolId.type("demo.CustomCollection")
 
         private val REMOTE_BASE_TYPE = LsiSymbolId.type("demo.RemoteBase")
