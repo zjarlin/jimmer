@@ -199,14 +199,21 @@ class JimmerImmutableFrontendParityTest {
             .single { type -> type.qualifiedName == "demo.Owner" }
             .props
             .associateBy(JimmerImmutableProp::name)
-        assertEquals(JimmerAssociationKind.ONE_TO_MANY, ownerProps.getValue("targets").associationKind)
-        assertTrue(ownerProps.getValue("targets").list)
+        val targets = ownerProps.getValue("targets")
+        assertEquals(JimmerAssociationKind.ONE_TO_MANY, targets.associationKind)
+        assertEquals(JimmerAssociationStorageKind.NONE, targets.associationStorage)
+        assertTrue(targets.list)
+        assertTrue(targets.reverse)
         val targetOwner = aptSchema.types
             .single { type -> type.qualifiedName == "demo.Target" }
             .props
             .single { prop -> prop.name == "owner" }
         assertEquals(JimmerAssociationKind.MANY_TO_ONE, targetOwner.associationKind)
+        assertEquals(JimmerAssociationStorageKind.COLUMN, targetOwner.associationStorage)
         assertFalse(targetOwner.list)
+        assertEquals(targetOwner.id, targets.mappedBy?.ownerPropId)
+        assertEquals(targetOwner.id, aptSchema.ownerPropIdByInversePropId.getValue(targets.id))
+        assertEquals(listOf(targets.id), aptSchema.inversePropIdsByOwnerPropId.getValue(targetOwner.id))
 
         val invalidApt = compileApt(INVALID_ASSOCIATION_JAVA_SOURCE)
         val invalidKsp = compileKsp(INVALID_ASSOCIATION_KOTLIN_SOURCE)
@@ -220,6 +227,246 @@ class JimmerImmutableFrontendParityTest {
                 "@type:org.babyfish.jimmer.sql.ManyToManyView",
             invalidApt.diagnostic,
         )
+    }
+
+    @Test
+    fun `real apt and ksp reject empty one-to-many mappedBy`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.ManyToOne;
+                import org.babyfish.jimmer.sql.OneToMany;
+
+                @Entity
+                interface EmptyMappedByOwner {
+                    @Id long id();
+
+                    @OneToMany(mappedBy = "")
+                    List<EmptyMappedByTarget> targets();
+                }
+
+                @Entity
+                interface EmptyMappedByTarget {
+                    @Id long id();
+
+                    @ManyToOne
+                    EmptyMappedByOwner owner();
+                }
+            """.trimIndent(),
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.ManyToOne
+                import org.babyfish.jimmer.sql.OneToMany
+
+                @Entity
+                interface EmptyMappedByOwner {
+                    @Id val id: Long
+
+                    @OneToMany(mappedBy = "")
+                    val targets: List<EmptyMappedByTarget>
+                }
+
+                @Entity
+                interface EmptyMappedByTarget {
+                    @Id val id: Long
+
+                    @ManyToOne
+                    val owner: EmptyMappedByOwner
+                }
+            """.trimIndent(),
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(apt.diagnostic.orEmpty().contains("must declare a non-empty mappedBy"))
+    }
+
+    @Test
+    fun `real apt and ksp resolve generic mappedBy to owner specific property ids`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+                import org.babyfish.jimmer.sql.ManyToOne;
+                import org.babyfish.jimmer.sql.OneToMany;
+
+                @MappedSuperclass
+                interface Base<T extends Base<T>> {
+                    @ManyToOne
+                    T parent();
+
+                    @OneToMany(mappedBy = "parent")
+                    List<T> children();
+                }
+
+                @Entity
+                interface Node extends Base<Node> {
+                    @Id
+                    long id();
+                }
+            """.trimIndent(),
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+                import org.babyfish.jimmer.sql.ManyToOne
+                import org.babyfish.jimmer.sql.OneToMany
+
+                @MappedSuperclass
+                interface Base<T : Base<T>> {
+                    @ManyToOne
+                    val parent: T
+
+                    @OneToMany(mappedBy = "parent")
+                    val children: List<T>
+                }
+
+                @Entity
+                interface Node : Base<Node> {
+                    @Id
+                    val id: Long
+                }
+            """.trimIndent(),
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        val aptBaseChildren = aptSchema.types.single { type -> type.qualifiedName == "demo.Base" }
+            .props.single { prop -> prop.name == "children" }
+        val aptNode = aptSchema.types.single { type -> type.qualifiedName == "demo.Node" }
+            .props.associateBy(JimmerImmutableProp::name)
+        assertNull(aptBaseChildren.mappedBy?.ownerPropId)
+        assertEquals(JimmerAssociationStorageKind.NONE, aptBaseChildren.associationStorage)
+        assertEquals(
+            LsiSymbolId.property(LsiSymbolId.type("demo.Node"), "parent"),
+            aptNode.getValue("children").mappedBy?.ownerPropId,
+        )
+        assertEquals(
+            listOf(aptNode.getValue("children").id),
+            aptSchema.inversePropIdsByOwnerPropId.getValue(aptNode.getValue("parent").id),
+        )
+    }
+
+    @Test
+    fun `real apt and ksp agree on middle table and JoinSql association storage`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.JoinSql;
+                import org.babyfish.jimmer.sql.ManyToMany;
+
+                @Entity
+                interface Book {
+                    @Id long id();
+
+                    @ManyToMany
+                    List<Author> authors();
+
+                    @ManyToMany
+                    @JoinSql("%alias.ID = %target_alias.ID")
+                    List<Tag> tags();
+                }
+
+                @Entity
+                interface Author {
+                    @Id long id();
+
+                    @ManyToMany(mappedBy = "authors")
+                    List<Book> books();
+                }
+
+                @Entity
+                interface Tag {
+                    @Id long id();
+
+                    @ManyToMany(mappedBy = "tags")
+                    List<Book> books();
+                }
+            """.trimIndent(),
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.JoinSql
+                import org.babyfish.jimmer.sql.ManyToMany
+
+                @Entity
+                interface Book {
+                    @Id val id: Long
+
+                    @ManyToMany
+                    val authors: List<Author>
+
+                    @ManyToMany
+                    @JoinSql("%alias.ID = %target_alias.ID")
+                    val tags: List<Tag>
+                }
+
+                @Entity
+                interface Author {
+                    @Id val id: Long
+
+                    @ManyToMany(mappedBy = "authors")
+                    val books: List<Book>
+                }
+
+                @Entity
+                interface Tag {
+                    @Id val id: Long
+
+                    @ManyToMany(mappedBy = "tags")
+                    val books: List<Book>
+                }
+            """.trimIndent(),
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        val bookProps = aptSchema.types.single { type -> type.qualifiedName == "demo.Book" }
+            .props.associateBy(JimmerImmutableProp::name)
+        val authorBooks = aptSchema.types.single { type -> type.qualifiedName == "demo.Author" }
+            .props.single { prop -> prop.name == "books" }
+        val tagBooks = aptSchema.types.single { type -> type.qualifiedName == "demo.Tag" }
+            .props.single { prop -> prop.name == "books" }
+        assertEquals(JimmerAssociationStorageKind.MIDDLE_TABLE, bookProps.getValue("authors").associationStorage)
+        assertEquals(JimmerAssociationStorageKind.NONE, bookProps.getValue("tags").associationStorage)
+        assertEquals(JimmerAssociationStorageKind.NONE, authorBooks.associationStorage)
+        assertEquals(JimmerAssociationStorageKind.NONE, tagBooks.associationStorage)
+        assertEquals(bookProps.getValue("authors").id, authorBooks.mappedBy?.ownerPropId)
+        assertEquals(bookProps.getValue("tags").id, tagBooks.mappedBy?.ownerPropId)
     }
 
     @Test

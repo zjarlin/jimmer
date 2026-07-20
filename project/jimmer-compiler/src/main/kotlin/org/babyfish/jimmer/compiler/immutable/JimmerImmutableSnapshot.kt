@@ -56,6 +56,8 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.primaryMapping.name,
                     prop.primaryAnnotationTypeId?.value.orEmpty(),
                     prop.associationKind.name,
+                    prop.associationStorage.name,
+                    prop.reverse.toString(),
                     prop.formulaKind.name,
                     prop.fetchable.toString(),
                     when (prop.view) {
@@ -87,6 +89,14 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                         converter.sourceNullable.toString(),
                         converter.targetNullable.toString(),
                         converter.propertyNullable.toString(),
+                    )
+                }
+                prop.mappedBy?.let { mappedBy ->
+                    appendRecord(
+                        "mapped-by",
+                        prop.id.value,
+                        mappedBy.name,
+                        mappedBy.ownerPropId?.value.orEmpty(),
                     )
                 }
                 prop.transientResolver?.let { resolver ->

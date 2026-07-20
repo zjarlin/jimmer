@@ -231,6 +231,298 @@ class JimmerImmutablePrecompilerTest {
     }
 
     @Test
+    fun `resolves association ownership and storage indexes`() {
+        val ownerId = LsiSymbolId.type("demo.StorageOwner")
+        val targetId = LsiSymbolId.type("demo.StorageTarget")
+        val leftId = LsiSymbolId.type("demo.StorageLeft")
+        val rightId = LsiSymbolId.type("demo.StorageRight")
+        val sqlLeftId = LsiSymbolId.type("demo.SqlLeft")
+        val sqlRightId = LsiSymbolId.type("demo.SqlRight")
+
+        fun id(ownerId: LsiSymbolId): LsiProperty {
+            return property(ownerId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(annotation(ID)))
+        }
+
+        val ownerTarget = property(
+            ownerId,
+            "target",
+            LsiDeclaredType(targetId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val ownerTargets = property(
+            ownerId,
+            "targets",
+            listType(targetId),
+            listOf(
+                annotation(
+                    ONE_TO_MANY,
+                    mapOf("mappedBy" to LsiAnnotationValue.StringValue("owner")),
+                )
+            ),
+        )
+        val targetOwner = property(
+            targetId,
+            "owner",
+            LsiDeclaredType(ownerId),
+            listOf(annotation(MANY_TO_ONE)),
+        )
+        val leftRights = property(
+            leftId,
+            "rights",
+            listType(rightId),
+            listOf(annotation(MANY_TO_MANY)),
+        )
+        val rightLefts = property(
+            rightId,
+            "lefts",
+            listType(leftId),
+            listOf(
+                annotation(
+                    MANY_TO_MANY,
+                    mapOf("mappedBy" to LsiAnnotationValue.StringValue("rights")),
+                )
+            ),
+        )
+        val sqlRights = property(
+            sqlLeftId,
+            "rights",
+            listType(sqlRightId),
+            listOf(
+                annotation(MANY_TO_MANY),
+                annotation(JOIN_SQL, mapOf("value" to LsiAnnotationValue.StringValue(
+                    "%alias.ID = %target_alias.ID"
+                ))),
+            ),
+        )
+        val sqlLefts = property(
+            sqlRightId,
+            "lefts",
+            listType(sqlLeftId),
+            listOf(
+                annotation(
+                    MANY_TO_MANY,
+                    mapOf("mappedBy" to LsiAnnotationValue.StringValue("rights")),
+                )
+            ),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(ownerId.requireTypeQualifiedName(), ENTITY, listOf(id(ownerId).id, ownerTarget.id, ownerTargets.id)),
+                type(targetId.requireTypeQualifiedName(), ENTITY, listOf(id(targetId).id, targetOwner.id)),
+                type(leftId.requireTypeQualifiedName(), ENTITY, listOf(id(leftId).id, leftRights.id)),
+                type(rightId.requireTypeQualifiedName(), ENTITY, listOf(id(rightId).id, rightLefts.id)),
+                type(sqlLeftId.requireTypeQualifiedName(), ENTITY, listOf(id(sqlLeftId).id, sqlRights.id)),
+                type(sqlRightId.requireTypeQualifiedName(), ENTITY, listOf(id(sqlRightId).id, sqlLefts.id)),
+                id(ownerId), ownerTarget, ownerTargets,
+                id(targetId), targetOwner,
+                id(leftId), leftRights,
+                id(rightId), rightLefts,
+                id(sqlLeftId), sqlRights,
+                id(sqlRightId), sqlLefts,
+            ),
+        )
+
+        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val owner = schema.typesById.getValue(ownerId).props.associateBy(JimmerImmutableProp::name)
+        val target = schema.typesById.getValue(targetId).props.associateBy(JimmerImmutableProp::name)
+        val left = schema.typesById.getValue(leftId).props.associateBy(JimmerImmutableProp::name)
+        val right = schema.typesById.getValue(rightId).props.associateBy(JimmerImmutableProp::name)
+        val sqlLeft = schema.typesById.getValue(sqlLeftId).props.associateBy(JimmerImmutableProp::name)
+        val sqlRight = schema.typesById.getValue(sqlRightId).props.associateBy(JimmerImmutableProp::name)
+
+        assertEquals(JimmerAssociationStorageKind.COLUMN, owner.getValue("target").associationStorage)
+        assertEquals(JimmerAssociationStorageKind.COLUMN, target.getValue("owner").associationStorage)
+        assertEquals(JimmerAssociationStorageKind.NONE, owner.getValue("targets").associationStorage)
+        assertEquals(target.getValue("owner").id, owner.getValue("targets").mappedBy?.ownerPropId)
+        assertTrue(owner.getValue("targets").reverse)
+        assertEquals(JimmerAssociationStorageKind.MIDDLE_TABLE, left.getValue("rights").associationStorage)
+        assertEquals(JimmerAssociationStorageKind.NONE, right.getValue("lefts").associationStorage)
+        assertEquals(left.getValue("rights").id, right.getValue("lefts").mappedBy?.ownerPropId)
+        assertEquals(JimmerAssociationStorageKind.NONE, sqlLeft.getValue("rights").associationStorage)
+        assertFalse(sqlLeft.getValue("rights").reverse)
+        assertEquals(sqlLeft.getValue("rights").id, sqlRight.getValue("lefts").mappedBy?.ownerPropId)
+        assertEquals(
+            listOf(owner.getValue("targets").id),
+            schema.inversePropIdsByOwnerPropId.getValue(target.getValue("owner").id),
+        )
+        assertEquals(
+            listOf(right.getValue("lefts").id),
+            schema.inversePropIdsByOwnerPropId.getValue(left.getValue("rights").id),
+        )
+    }
+
+    @Test
+    fun `rejects invalid association ownership and storage contracts`() {
+        fun id(ownerId: LsiSymbolId): LsiProperty {
+            return property(ownerId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(annotation(ID)))
+        }
+
+        fun failure(
+            ownerId: LsiSymbolId,
+            targetId: LsiSymbolId,
+            ownerProp: LsiProperty,
+            targetProp: LsiProperty,
+        ): String {
+            val ownerIdProp = id(ownerId)
+            val targetIdProp = id(targetId)
+            val workspace = LsiWorkspace(
+                declarations = listOf(
+                    type(ownerId.requireTypeQualifiedName(), ENTITY, listOf(ownerIdProp.id, ownerProp.id)),
+                    type(targetId.requireTypeQualifiedName(), ENTITY, listOf(targetIdProp.id, targetProp.id)),
+                    ownerIdProp,
+                    ownerProp,
+                    targetIdProp,
+                    targetProp,
+                ),
+            )
+            return assertFailsWith<JimmerImmutablePrecompileException> {
+                JimmerImmutablePrecompiler().compile(workspace)
+            }.message.orEmpty()
+        }
+
+        val ownerId = LsiSymbolId.type("demo.InvalidOwner")
+        val targetId = LsiSymbolId.type("demo.InvalidTarget")
+        assertTrue(
+            "cannot find mappedBy property" in failure(
+                ownerId,
+                targetId,
+                property(
+                    ownerId,
+                    "targets",
+                    listType(targetId),
+                    listOf(
+                        annotation(
+                            ONE_TO_MANY,
+                            mapOf("mappedBy" to LsiAnnotationValue.StringValue("missing")),
+                        )
+                    ),
+                ),
+                property(
+                    targetId,
+                    "owner",
+                    LsiDeclaredType(ownerId),
+                    listOf(annotation(MANY_TO_ONE)),
+                ),
+            )
+        )
+        assertTrue(
+            "must declare a non-empty mappedBy" in failure(
+                ownerId,
+                targetId,
+                property(
+                    ownerId,
+                    "targets",
+                    listType(targetId),
+                    listOf(
+                        annotation(
+                            ONE_TO_MANY,
+                            mapOf("mappedBy" to LsiAnnotationValue.StringValue("")),
+                        )
+                    ),
+                ),
+                property(
+                    targetId,
+                    "owner",
+                    LsiDeclaredType(ownerId),
+                    listOf(annotation(MANY_TO_ONE)),
+                ),
+            )
+        )
+        assertTrue(
+            "does not match mappedBy owner kind" in failure(
+                ownerId,
+                targetId,
+                property(
+                    ownerId,
+                    "target",
+                    listType(targetId),
+                    listOf(
+                        annotation(
+                            ONE_TO_MANY,
+                            mapOf("mappedBy" to LsiAnnotationValue.StringValue("owner")),
+                        )
+                    ),
+                ),
+                property(
+                    targetId,
+                    "owner",
+                    listType(ownerId),
+                    listOf(annotation(MANY_TO_MANY)),
+                ),
+            )
+        )
+        assertTrue(
+            "is itself an inverse association" in failure(
+                ownerId,
+                targetId,
+                property(
+                    ownerId,
+                    "target",
+                    listType(targetId),
+                    listOf(
+                        annotation(
+                            MANY_TO_MANY,
+                            mapOf("mappedBy" to LsiAnnotationValue.StringValue("owner")),
+                        )
+                    ),
+                ),
+                property(
+                    targetId,
+                    "owner",
+                    listType(ownerId),
+                    listOf(
+                        annotation(
+                            MANY_TO_MANY,
+                            mapOf("mappedBy" to LsiAnnotationValue.StringValue("target")),
+                        )
+                    ),
+                ),
+            )
+        )
+
+        val conflictingOwner = property(
+            ownerId,
+            "target",
+            LsiDeclaredType(targetId),
+            listOf(annotation(MANY_TO_ONE), annotation(JOIN_COLUMN), annotation(JOIN_TABLE)),
+        )
+        val targetOwner = property(
+            targetId,
+            "owner",
+            LsiDeclaredType(ownerId),
+            listOf(annotation(ONE_TO_MANY, mapOf("mappedBy" to LsiAnnotationValue.StringValue("target")))),
+        )
+        assertTrue(
+            "conflicting association storage annotations" in failure(
+                ownerId,
+                targetId,
+                conflictingOwner,
+                targetOwner,
+            )
+        )
+
+        val nonNullableInverse = property(
+            ownerId,
+            "target",
+            LsiDeclaredType(targetId),
+            listOf(
+                annotation(
+                    ONE_TO_ONE,
+                    mapOf("mappedBy" to LsiAnnotationValue.StringValue("owner")),
+                )
+            ),
+        )
+        assertTrue(
+            "must be nullable" in failure(
+                ownerId,
+                targetId,
+                nonNullableInverse,
+                property(targetId, "owner", LsiDeclaredType(ownerId), listOf(annotation(ONE_TO_ONE))),
+            )
+        )
+    }
+
+    @Test
     fun `generic mapped superclass formula dependencies use owner specific inherited property ids`() {
         val baseId = LsiSymbolId.type("demo.GenericFormulaBase")
         val childId = LsiSymbolId.type("demo.GenericFormulaChild")
@@ -417,6 +709,25 @@ class JimmerImmutablePrecompilerTest {
             JimmerImmutablePrecompiler().compile(unnamedWorkspace)
         }
         assertTrue(unnamedException.message.orEmpty().contains("requires non-empty micro service names"))
+
+        val nonNullWorkspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.RemoteOwner",
+                    marker = ENTITY,
+                    memberIds = listOf(association.id),
+                    markerArguments = mapOf(
+                        "microServiceName" to LsiAnnotationValue.StringValue("owner-service")
+                    ),
+                ),
+                association,
+                target,
+            )
+        )
+        val nonNullException = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutablePrecompiler().compile(nonNullWorkspace)
+        }
+        assertTrue(nonNullException.message.orEmpty().contains("must be nullable"))
 
         val joinSqlAssociation = association.copy(
             annotations = association.annotations + annotation(
@@ -2873,6 +3184,7 @@ class JimmerImmutablePrecompilerTest {
         } else {
             LsiNullability.NON_NULL
         }
+        val remoteNullability = LsiNullability.NULLABLE
         val parameterId = LsiSymbolId.typeParameter(REMOTE_BASE_TYPE, "T")
         val baseParentId = LsiSymbolId.property(REMOTE_BASE_TYPE, "parent")
         val productId = LsiSymbolId.property(REMOTE_NODE_TYPE, "product")
@@ -2915,7 +3227,7 @@ class JimmerImmutablePrecompilerTest {
         val productAssociation = property(
             ownerId = REMOTE_NODE_TYPE,
             name = "product",
-            type = LsiDeclaredType(REMOTE_PRODUCT_TYPE, nullability = nullability),
+            type = LsiDeclaredType(REMOTE_PRODUCT_TYPE, nullability = remoteNullability),
             annotations = listOf(annotation(MANY_TO_ONE)),
             origin = origin,
         )
@@ -3393,6 +3705,8 @@ class JimmerImmutablePrecompilerTest {
         private val MANY_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
         private val ONE_TO_MANY = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToMany")
         private val MANY_TO_MANY = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToMany")
+        private val JOIN_COLUMN = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinColumn")
+        private val JOIN_TABLE = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinTable")
         private val JOIN_SQL = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
         private val FORMULA = LsiSymbolId.type("org.babyfish.jimmer.Formula")
         private val TRANSIENT = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")

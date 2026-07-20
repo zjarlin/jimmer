@@ -18,6 +18,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
+import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
 import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
@@ -480,6 +481,14 @@ class JimmerDtoReusableIntegrationTest {
                 primaryAnnotationTypeId = null,
                 associationKind = associationKind,
                 formulaKind = JimmerFormulaKind.NONE,
+                mappedBy = null,
+                associationStorage = when (associationKind) {
+                    JimmerAssociationKind.ONE_TO_ONE,
+                    JimmerAssociationKind.MANY_TO_ONE,
+                    -> JimmerAssociationStorageKind.COLUMN
+                    JimmerAssociationKind.MANY_TO_MANY -> JimmerAssociationStorageKind.MIDDLE_TABLE
+                    else -> JimmerAssociationStorageKind.NONE
+                },
                 transientResolver = null,
                 view = null,
                 genericTarget = false,

@@ -83,8 +83,166 @@ class JimmerImmutablePrecompiler {
                 )
             }
             .sortedBy(JimmerImmutableType::id)
-        val types = resolveFormulaDependencies(resolveViews(preliminaryTypes))
+        val associationTypes = resolveAssociations(preliminaryTypes)
+        val types = resolveFormulaDependencies(resolveViews(associationTypes))
         return JimmerImmutableSchema(types)
+    }
+
+    private fun resolveAssociations(
+        types: List<JimmerImmutableType>,
+    ): List<JimmerImmutableType> {
+        val typesById = types.associateBy(JimmerImmutableType::id)
+        val propsByTypeAndName = types.associate { type ->
+            type.id to type.props.associateBy(JimmerImmutableProp::name)
+        }
+        val resolvedTypes = types.map { type ->
+            type.copy(
+                props = type.props.map { prop ->
+                    val mappedBy = prop.mappedBy ?: return@map prop
+                    val targetTypeId = prop.targetTypeId
+                    if (targetTypeId == null) {
+                        if (type.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS && prop.genericTarget) {
+                            return@map prop
+                        }
+                        throw invalidAssociation(
+                            prop,
+                            "cannot resolve mappedBy '${mappedBy.name}' without a concrete target type",
+                        )
+                    }
+                    val targetType = typesById[targetTypeId]
+                        ?: throw JimmerImmutablePrecompileException(
+                            declarationId = prop.declarationId,
+                            recoverable = true,
+                            message = "Cannot resolve association target type '${targetTypeId.value}' of immutable " +
+                                "property '${prop.id.value}'",
+                        )
+                    val associationOwner = propsByTypeAndName.getValue(targetType.id)[mappedBy.name]
+                        ?: throw invalidAssociation(
+                            prop,
+                            "cannot find mappedBy property '${mappedBy.name}' in '${targetType.qualifiedName}'",
+                        )
+                    validateAssociationOwner(
+                        inverseType = type,
+                        inverseProp = prop,
+                        associationOwner = associationOwner,
+                        typesById = typesById,
+                    )
+                    prop.copy(mappedBy = mappedBy.copy(ownerPropId = associationOwner.id))
+                },
+            )
+        }
+        val resolvedPropsById = resolvedTypes
+            .flatMap(JimmerImmutableType::props)
+            .associateBy(JimmerImmutableProp::id)
+        resolvedTypes
+            .flatMap(JimmerImmutableType::props)
+            .mapNotNull { prop -> prop.mappedBy?.ownerPropId?.let { ownerPropId -> ownerPropId to prop } }
+            .groupBy({ (ownerPropId, _) -> ownerPropId }, { (_, inverseProp) -> inverseProp })
+            .forEach { (ownerPropId, inverseProps) ->
+                val inversePropsByOriginalId = inverseProps.groupBy { inverseProp ->
+                    inverseProp.overrideChain.lastOrNull() ?: inverseProp.declarationId
+                }
+                if (inversePropsByOriginalId.size > 1) {
+                    val conflictingProp = inversePropsByOriginalId.values
+                        .map(List<JimmerImmutableProp>::first)
+                        .sortedBy(JimmerImmutableProp::id)[1]
+                    throw invalidAssociation(
+                        conflictingProp,
+                        "cannot reference association owner '${resolvedPropsById.getValue(ownerPropId).id.value}' " +
+                            "because an unrelated inverse property already references it",
+                    )
+                }
+            }
+        return resolvedTypes
+    }
+
+    private fun validateAssociationOwner(
+        inverseType: JimmerImmutableType,
+        inverseProp: JimmerImmutableProp,
+        associationOwner: JimmerImmutableProp,
+        typesById: Map<LsiSymbolId, JimmerImmutableType>,
+    ) {
+        val mappedBy = requireNotNull(inverseProp.mappedBy)
+        if (
+            associationOwner.primaryMapping != JimmerImmutablePrimaryMapping.ASSOCIATION ||
+            !associationOwner.association
+        ) {
+            throw invalidAssociation(
+                inverseProp,
+                "mappedBy '${mappedBy.name}' is not a persistent association",
+            )
+        }
+        if (associationOwner.mappedBy != null) {
+            throw invalidAssociation(
+                inverseProp,
+                "mappedBy '${mappedBy.name}' is itself an inverse association",
+            )
+        }
+        if (
+            associationOwner.associationStorage == JimmerAssociationStorageKind.NONE &&
+            !associationOwner.annotations.hasAnnotation(JOIN_SQL_ANNOTATION)
+        ) {
+            throw invalidAssociation(
+                inverseProp,
+                "mappedBy '${mappedBy.name}' has no persistent association storage",
+            )
+        }
+        if (!inverseProp.associationKind.isInverseOf(associationOwner.associationKind)) {
+            throw invalidAssociation(
+                inverseProp,
+                "association kind ${inverseProp.associationKind} does not match mappedBy owner kind " +
+                    associationOwner.associationKind,
+            )
+        }
+        val associationOwnerTargetTypeId = associationOwner.targetTypeId
+            ?: throw invalidAssociation(
+                inverseProp,
+                "mappedBy owner '${associationOwner.id.value}' has no concrete target type",
+            )
+        if (
+            !associationOwnerTargetTypeId.isSameAsOrSubtypeOf(inverseType.id, typesById) &&
+            !inverseType.id.isSameAsOrSubtypeOf(associationOwnerTargetTypeId, typesById)
+        ) {
+            throw invalidAssociation(
+                inverseProp,
+                "mappedBy owner '${associationOwner.id.value}' targets incompatible type " +
+                    "'${associationOwnerTargetTypeId.value}'",
+            )
+        }
+    }
+
+    private fun invalidAssociation(
+        prop: JimmerImmutableProp,
+        message: String,
+    ): JimmerImmutablePrecompileException {
+        return JimmerImmutablePrecompileException(
+            declarationId = prop.declarationId,
+            message = "Immutable association property '${prop.id.value}' $message",
+        )
+    }
+
+    private fun LsiSymbolId.isSameAsOrSubtypeOf(
+        superTypeId: LsiSymbolId,
+        typesById: Map<LsiSymbolId, JimmerImmutableType>,
+    ): Boolean {
+        if (this == superTypeId) {
+            return true
+        }
+        val visited = mutableSetOf<LsiSymbolId>()
+        val pending = ArrayDeque<LsiSymbolId>()
+        pending.add(this)
+        while (pending.isNotEmpty()) {
+            val typeId = pending.removeFirst()
+            if (!visited.add(typeId)) {
+                continue
+            }
+            val superTypeIds = typesById[typeId]?.superTypeIds.orEmpty()
+            if (superTypeId in superTypeIds) {
+                return true
+            }
+            pending.addAll(superTypeIds)
+        }
+        return false
     }
 
     private fun resolveFormulaDependencies(
@@ -399,7 +557,7 @@ class JimmerImmutablePrecompiler {
                         JimmerAssociationKind.ONE_TO_ONE,
                         JimmerAssociationKind.MANY_TO_ONE,
                     ) ||
-                    associationProp.isReverseAssociation() ||
+                    associationProp.reverse ||
                     associationProp.id in idViewBasePropIds
                 ) {
                     return@forEach
@@ -767,8 +925,17 @@ class JimmerImmutablePrecompiler {
             if (currentModel.association != inheritedModel.association) {
                 add("association category")
             }
+            if (currentModel.associationKind != inheritedModel.associationKind) {
+                add("association kind")
+            }
             if (currentModel.primaryAnnotationTypeId != inheritedModel.primaryAnnotationTypeId) {
                 add("primary mapping annotation")
+            }
+            if (currentModel.mappedBy?.name != inheritedModel.mappedBy?.name) {
+                add("mappedBy ownership")
+            }
+            if (currentModel.associationStorage != inheritedModel.associationStorage) {
+                add("association storage")
             }
             if (currentModel.formulaKind != inheritedModel.formulaKind) {
                 add("formula kind")
@@ -1341,6 +1508,13 @@ private fun LsiResolvedProperty.toImmutableProp(
     val primaryMapping = primaryAnnotation?.type.toPrimaryMapping()
         ?: if (association) JimmerImmutablePrimaryMapping.ASSOCIATION
         else JimmerImmutablePrimaryMapping.SCALAR
+    val mappedBy = mappedBy(associationKind)
+    val associationStorage = associationStorage(
+        associationKind = associationKind,
+        primaryMapping = primaryMapping,
+        mappedBy = mappedBy,
+        nullable = nullable,
+    )
     validatePropertyCategory(
         ownerTypeId = ownerTypeId,
         ownerKind = ownerKind,
@@ -1363,7 +1537,9 @@ private fun LsiResolvedProperty.toImmutableProp(
         targetTypeId = targetTypeId,
         targetKind = targetKind,
         association = association,
+        associationKind = associationKind,
         primaryMapping = primaryMapping,
+        nullable = nullable,
         ownerMicroServiceMetadata = ownerMicroServiceMetadata,
         targetMicroServiceMetadata = targetMicroServiceMetadata,
         remote = remote,
@@ -1402,6 +1578,8 @@ private fun LsiResolvedProperty.toImmutableProp(
             associationKind
         },
         formulaKind = formulaKind,
+        mappedBy = mappedBy,
+        associationStorage = associationStorage,
         transientResolver = transientResolver,
         view = null,
         genericTarget = genericTarget,
@@ -1409,6 +1587,126 @@ private fun LsiResolvedProperty.toImmutableProp(
         recursive = recursive,
         validations = validations(workspace),
         converter = converter(workspace, typeSystem, nullable, association),
+    )
+}
+
+private fun LsiResolvedProperty.mappedBy(
+    associationKind: JimmerAssociationKind,
+): JimmerMappedBy? {
+    val associationAnnotationType = when (associationKind) {
+        JimmerAssociationKind.ONE_TO_ONE -> ONE_TO_ONE_ANNOTATION
+        JimmerAssociationKind.ONE_TO_MANY -> ONE_TO_MANY_ANNOTATION
+        JimmerAssociationKind.MANY_TO_MANY -> MANY_TO_MANY_ANNOTATION
+        JimmerAssociationKind.NONE,
+        JimmerAssociationKind.IMPLICIT,
+        JimmerAssociationKind.MANY_TO_ONE,
+        JimmerAssociationKind.MANY_TO_MANY_VIEW,
+        -> return null
+    }
+    val associationAnnotation = annotations.annotation(associationAnnotationType) ?: return null
+    val mappedByName = associationAnnotation.typedStringValue("mappedBy", declaration.id).orEmpty()
+    if (associationKind == JimmerAssociationKind.ONE_TO_MANY &&
+        associationAnnotation.arguments.containsKey("mappedBy") &&
+        mappedByName.isEmpty()
+    ) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable one-to-many property '${declaration.id.value}' must declare a non-empty mappedBy",
+        )
+    }
+    return mappedByName.takeIf(String::isNotEmpty)?.let { name ->
+        JimmerMappedBy(name = name, ownerPropId = null)
+    }
+}
+
+private fun LsiResolvedProperty.associationStorage(
+    associationKind: JimmerAssociationKind,
+    primaryMapping: JimmerImmutablePrimaryMapping,
+    mappedBy: JimmerMappedBy?,
+    nullable: Boolean,
+): JimmerAssociationStorageKind {
+    val hasJoinColumns = annotations.hasAnnotation(JOIN_COLUMN_ANNOTATION) ||
+        annotations.hasAnnotation(JOIN_COLUMNS_ANNOTATION)
+    val hasJoinTable = annotations.hasAnnotation(JOIN_TABLE_ANNOTATION)
+    val hasJoinSql = annotations.hasAnnotation(JOIN_SQL_ANNOTATION)
+    val storageAnnotations = buildList {
+        if (hasJoinColumns) add(if (annotations.hasAnnotation(JOIN_COLUMN_ANNOTATION)) {
+            JOIN_COLUMN_ANNOTATION
+        } else {
+            JOIN_COLUMNS_ANNOTATION
+        })
+        if (hasJoinTable) add(JOIN_TABLE_ANNOTATION)
+        if (hasJoinSql) add(JOIN_SQL_ANNOTATION)
+    }
+    if (storageAnnotations.size > 1) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' cannot declare conflicting association storage " +
+                "annotations: ${storageAnnotations.joinToString { annotation -> "@${annotation.value}" }}",
+        )
+    }
+    if (storageAnnotations.isNotEmpty() && primaryMapping != JimmerImmutablePrimaryMapping.ASSOCIATION) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable property '${declaration.id.value}' can only declare association storage " +
+                "annotations on a persistent association",
+        )
+    }
+    if (mappedBy != null && storageAnnotations.isNotEmpty()) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Inverse immutable association property '${declaration.id.value}' cannot declare association storage",
+        )
+    }
+    if (hasJoinColumns && associationKind !in COLUMN_ASSOCIATION_KINDS) {
+        throw invalidAssociationStorageAnnotation(JOIN_COLUMN_ANNOTATION, associationKind)
+    }
+    if (hasJoinTable && associationKind !in MIDDLE_TABLE_ASSOCIATION_KINDS) {
+        throw invalidAssociationStorageAnnotation(JOIN_TABLE_ANNOTATION, associationKind)
+    }
+    if (hasJoinSql && associationKind != JimmerAssociationKind.MANY_TO_MANY) {
+        throw invalidAssociationStorageAnnotation(JOIN_SQL_ANNOTATION, associationKind)
+    }
+    if (
+        associationKind in LIST_ASSOCIATION_KINDS &&
+        primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+        nullable
+    ) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Immutable list association property '${declaration.id.value}' cannot be nullable",
+        )
+    }
+    if (mappedBy != null && associationKind == JimmerAssociationKind.ONE_TO_ONE && !nullable) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Inverse one-to-one property '${declaration.id.value}' must be nullable",
+        )
+    }
+    if (hasJoinTable && associationKind in COLUMN_ASSOCIATION_KINDS && !nullable) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "To-one property '${declaration.id.value}' using @${JOIN_TABLE_ANNOTATION.value} must be nullable",
+        )
+    }
+    return when {
+        primaryMapping != JimmerImmutablePrimaryMapping.ASSOCIATION -> JimmerAssociationStorageKind.NONE
+        mappedBy != null || hasJoinSql -> JimmerAssociationStorageKind.NONE
+        hasJoinTable || associationKind == JimmerAssociationKind.MANY_TO_MANY ->
+            JimmerAssociationStorageKind.MIDDLE_TABLE
+        associationKind in COLUMN_ASSOCIATION_KINDS -> JimmerAssociationStorageKind.COLUMN
+        else -> JimmerAssociationStorageKind.NONE
+    }
+}
+
+private fun LsiResolvedProperty.invalidAssociationStorageAnnotation(
+    annotationType: LsiSymbolId,
+    associationKind: JimmerAssociationKind,
+): JimmerImmutablePrecompileException {
+    return JimmerImmutablePrecompileException(
+        declarationId = declaration.id,
+        message = "Immutable association property '${declaration.id.value}' of kind $associationKind cannot be " +
+            "decorated by @${annotationType.value}",
     )
 }
 
@@ -1576,7 +1874,9 @@ private fun LsiResolvedProperty.validateMicroServiceAssociation(
     targetTypeId: LsiSymbolId?,
     targetKind: JimmerImmutableTypeKind?,
     association: Boolean,
+    associationKind: JimmerAssociationKind,
     primaryMapping: JimmerImmutablePrimaryMapping,
+    nullable: Boolean,
     ownerMicroServiceMetadata: JimmerMicroServiceMetadata,
     targetMicroServiceMetadata: JimmerMicroServiceMetadata?,
     remote: Boolean,
@@ -1606,6 +1906,12 @@ private fun LsiResolvedProperty.validateMicroServiceAssociation(
             declarationId = declaration.id,
             message = "Remote association '${declaration.id.value}' requires non-empty micro service names for " +
                 "both declaring type '${ownerTypeId.value}' and target type '${targetTypeId.value}'",
+        )
+    }
+    if (associationKind in COLUMN_ASSOCIATION_KINDS && !nullable) {
+        throw JimmerImmutablePrecompileException(
+            declarationId = declaration.id,
+            message = "Remote association '${declaration.id.value}' must be nullable",
         )
     }
     if (annotations.hasAnnotation(JOIN_SQL_ANNOTATION)) {
@@ -1934,18 +2240,13 @@ private fun LsiResolvedProperty.primaryMappingAnnotation(): LsiAnnotation? {
     return primaryAnnotations.singleOrNull()
 }
 
-private fun JimmerImmutableProp.isReverseAssociation(): Boolean {
-    val mappingAnnotation = primaryAnnotationTypeId?.let(annotations::annotation) ?: return false
-    return mappingAnnotation.stringValue("mappedBy").orEmpty().isNotEmpty()
-}
-
 private fun JimmerImmutableProp.allowsMapsIdNameConflict(
     expectedProp: JimmerImmutableProp,
     ownerIdProp: JimmerImmutableProp?,
 ): Boolean {
     val mapsId = annotations.annotation(MAPS_ID_ANNOTATION) ?: return false
     return mapsId.stringValue("value").orEmpty().isEmpty() &&
-        !isReverseAssociation() &&
+        !reverse &&
         primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
         ownerIdProp != null &&
         expectedProp.primaryMapping == JimmerImmutablePrimaryMapping.ID &&
@@ -2156,6 +2457,9 @@ private val ONE_TO_ONE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.On
 private val MANY_TO_ONE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
 private val ONE_TO_MANY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToMany")
 private val MANY_TO_MANY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToMany")
+private val JOIN_COLUMN_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinColumn")
+private val JOIN_COLUMNS_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinColumns")
+private val JOIN_TABLE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinTable")
 private val JOIN_SQL_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
 private val FORMULA_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.Formula")
 private val TRANSIENT_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Transient")

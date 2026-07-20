@@ -13,6 +13,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
+import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
 import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
@@ -844,6 +845,8 @@ class JimmerDtoAnnotationContractTest {
             primaryAnnotationTypeId = null,
             associationKind = JimmerAssociationKind.NONE,
             formulaKind = JimmerFormulaKind.NONE,
+            mappedBy = null,
+            associationStorage = JimmerAssociationStorageKind.NONE,
             transientResolver = null,
             view = null,
             genericTarget = false,

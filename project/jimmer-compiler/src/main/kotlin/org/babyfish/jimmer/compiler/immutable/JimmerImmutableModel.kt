@@ -14,6 +14,21 @@ data class JimmerImmutableSchema(
         .flatMap(JimmerImmutableType::props)
         .associateBy(JimmerImmutableProp::id)
 
+    val ownerPropIdByInversePropId: Map<LsiSymbolId, LsiSymbolId> = types
+        .flatMap(JimmerImmutableType::props)
+        .mapNotNull { prop ->
+            prop.mappedBy?.ownerPropId?.let { ownerPropId -> prop.id to ownerPropId }
+        }
+        .toMap()
+
+    val inversePropIdsByOwnerPropId: Map<LsiSymbolId, List<LsiSymbolId>> =
+        ownerPropIdByInversePropId.entries
+            .groupBy(
+                keySelector = Map.Entry<LsiSymbolId, LsiSymbolId>::value,
+                valueTransform = Map.Entry<LsiSymbolId, LsiSymbolId>::key,
+            )
+            .mapValues { (_, inversePropIds) -> inversePropIds.sorted() }
+
     val idViewPropIdsByBasePropId: Map<LsiSymbolId, List<LsiSymbolId>> = types
         .flatMap(JimmerImmutableType::props)
         .mapNotNull { prop ->
@@ -58,10 +73,124 @@ data class JimmerImmutableSchema(
                 "Immutable schema property owner must match containing type: ${type.id.value}"
             }
             type.props.forEach { prop ->
+                validateAssociationMetadata(type, prop)
                 validateView(type, prop)
                 validateFormulaDependencies(type, prop)
             }
         }
+        inversePropIdsByOwnerPropId.forEach { (ownerPropId, inversePropIds) ->
+            val originalInversePropIds = inversePropIds.map { inversePropId ->
+                val inverseProp = propsById.getValue(inversePropId)
+                inverseProp.overrideChain.lastOrNull() ?: inverseProp.declarationId
+            }.distinct()
+            require(originalInversePropIds.size == 1) {
+                "Immutable association owner cannot be referenced by unrelated inverse properties: " +
+                    ownerPropId.value
+            }
+        }
+    }
+
+    private fun validateAssociationMetadata(
+        ownerType: JimmerImmutableType,
+        prop: JimmerImmutableProp,
+    ) {
+        val hasJoinSql = prop.annotations.any { annotation -> annotation.type == JOIN_SQL_ANNOTATION }
+        if (hasJoinSql) {
+            require(
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+                    prop.associationKind == JimmerAssociationKind.MANY_TO_MANY &&
+                    prop.mappedBy == null &&
+                    prop.associationStorage == JimmerAssociationStorageKind.NONE
+            ) {
+                "Immutable JoinSql association metadata is illegal: ${prop.id.value}"
+            }
+        }
+        when (prop.associationStorage) {
+            JimmerAssociationStorageKind.NONE -> Unit
+            JimmerAssociationStorageKind.COLUMN -> require(
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+                    prop.associationKind in COLUMN_ASSOCIATION_KINDS &&
+                    prop.mappedBy == null
+            ) {
+                "Immutable column association storage is illegal: ${prop.id.value}"
+            }
+            JimmerAssociationStorageKind.MIDDLE_TABLE -> require(
+                prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+                    prop.associationKind in MIDDLE_TABLE_ASSOCIATION_KINDS &&
+                    prop.mappedBy == null
+            ) {
+                "Immutable middle-table association storage is illegal: ${prop.id.value}"
+            }
+        }
+        val mappedBy = prop.mappedBy ?: return
+        require(prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION && prop.association) {
+            "Only persistent immutable association can declare mappedBy: ${prop.id.value}"
+        }
+        require(prop.associationStorage == JimmerAssociationStorageKind.NONE) {
+            "Inverse immutable association cannot declare storage: ${prop.id.value}"
+        }
+        val ownerPropId = mappedBy.ownerPropId
+        if (ownerPropId == null) {
+            require(ownerType.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS && prop.genericTarget) {
+                "Only generic mapped-superclass association can have unresolved mappedBy: ${prop.id.value}"
+            }
+            return
+        }
+        val associationOwner = requireNotNull(propsById[ownerPropId]) {
+            "Immutable mappedBy owner property does not exist: ${ownerPropId.value}"
+        }
+        require(associationOwner.ownerTypeId == prop.targetTypeId) {
+            "Immutable mappedBy owner property belongs to an unexpected type: ${prop.id.value}"
+        }
+        require(
+            associationOwner.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+                associationOwner.association &&
+                associationOwner.mappedBy == null
+        ) {
+            "Immutable mappedBy must reference a direct persistent association: ${prop.id.value}"
+        }
+        require(
+            associationOwner.associationStorage != JimmerAssociationStorageKind.NONE ||
+                associationOwner.annotations.any { annotation -> annotation.type == JOIN_SQL_ANNOTATION }
+        ) {
+            "Immutable mappedBy must reference a stored or JoinSql association: ${prop.id.value}"
+        }
+        require(mappedBy.name == associationOwner.name) {
+            "Immutable mappedBy owner name does not match its resolved property: ${prop.id.value}"
+        }
+        require(prop.associationKind.isInverseOf(associationOwner.associationKind)) {
+            "Immutable mappedBy association cardinality does not match its owner: ${prop.id.value}"
+        }
+        val associationOwnerTargetTypeId = requireNotNull(associationOwner.targetTypeId) {
+            "Immutable mappedBy owner association must have a concrete target: ${prop.id.value}"
+        }
+        require(
+            associationOwnerTargetTypeId.isSameAsOrSubtypeOf(ownerType.id) ||
+                ownerType.id.isSameAsOrSubtypeOf(associationOwnerTargetTypeId)
+        ) {
+            "Immutable mappedBy owner association targets an incompatible type: ${prop.id.value}"
+        }
+    }
+
+    private fun LsiSymbolId.isSameAsOrSubtypeOf(superTypeId: LsiSymbolId): Boolean {
+        if (this == superTypeId) {
+            return true
+        }
+        val visited = mutableSetOf<LsiSymbolId>()
+        val pending = ArrayDeque<LsiSymbolId>()
+        pending.add(this)
+        while (pending.isNotEmpty()) {
+            val typeId = pending.removeFirst()
+            if (!visited.add(typeId)) {
+                continue
+            }
+            val superTypeIds = typesById[typeId]?.superTypeIds.orEmpty()
+            if (superTypeId in superTypeIds) {
+                return true
+            }
+            pending.addAll(superTypeIds)
+        }
+        return false
     }
 
     private fun validateFormulaDependencies(
@@ -269,6 +398,8 @@ data class JimmerImmutableProp(
     val primaryAnnotationTypeId: LsiSymbolId?,
     val associationKind: JimmerAssociationKind,
     val formulaKind: JimmerFormulaKind,
+    val mappedBy: JimmerMappedBy?,
+    val associationStorage: JimmerAssociationStorageKind,
     val transientResolver: JimmerTransientResolver?,
     val view: JimmerImmutableView?,
     val genericTarget: Boolean,
@@ -281,6 +412,8 @@ data class JimmerImmutableProp(
 
     val fetchable: Boolean = primaryMapping != JimmerImmutablePrimaryMapping.ID &&
         (primaryMapping != JimmerImmutablePrimaryMapping.TRANSIENT || transientResolver != null)
+
+    val reverse: Boolean = mappedBy != null
 
     init {
         require(association == (associationKind != JimmerAssociationKind.NONE)) {
@@ -329,6 +462,24 @@ data class JimmerImmutableProp(
         require(transientResolver == null || primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT) {
             "Only immutable transient property can declare a transient resolver: ${id.value}"
         }
+        require(mappedBy == null || association) {
+            "Only immutable association can declare mappedBy: ${id.value}"
+        }
+        require(mappedBy == null || associationStorage == JimmerAssociationStorageKind.NONE) {
+            "Inverse immutable association cannot declare storage: ${id.value}"
+        }
+        require(associationStorage == JimmerAssociationStorageKind.NONE || association) {
+            "Only immutable association can declare association storage: ${id.value}"
+        }
+    }
+}
+
+data class JimmerMappedBy(
+    val name: String,
+    val ownerPropId: LsiSymbolId?,
+) {
+    init {
+        require(name.isNotEmpty()) { "Immutable mappedBy property name cannot be empty" }
     }
 }
 
@@ -408,6 +559,40 @@ enum class JimmerAssociationKind {
     MANY_TO_MANY,
     MANY_TO_MANY_VIEW,
 }
+
+enum class JimmerAssociationStorageKind {
+    NONE,
+    COLUMN,
+    MIDDLE_TABLE,
+}
+
+internal fun JimmerAssociationKind.isInverseOf(ownerKind: JimmerAssociationKind): Boolean {
+    return when (ownerKind) {
+        JimmerAssociationKind.ONE_TO_ONE -> this == JimmerAssociationKind.ONE_TO_ONE
+        JimmerAssociationKind.MANY_TO_ONE -> this == JimmerAssociationKind.ONE_TO_MANY
+        JimmerAssociationKind.MANY_TO_MANY -> this == JimmerAssociationKind.MANY_TO_MANY
+        JimmerAssociationKind.NONE,
+        JimmerAssociationKind.IMPLICIT,
+        JimmerAssociationKind.ONE_TO_MANY,
+        JimmerAssociationKind.MANY_TO_MANY_VIEW,
+        -> false
+    }
+}
+
+internal val COLUMN_ASSOCIATION_KINDS = setOf(
+    JimmerAssociationKind.ONE_TO_ONE,
+    JimmerAssociationKind.MANY_TO_ONE,
+)
+
+internal val MIDDLE_TABLE_ASSOCIATION_KINDS = COLUMN_ASSOCIATION_KINDS + JimmerAssociationKind.MANY_TO_MANY
+
+internal val LIST_ASSOCIATION_KINDS = setOf(
+    JimmerAssociationKind.ONE_TO_MANY,
+    JimmerAssociationKind.MANY_TO_MANY,
+    JimmerAssociationKind.MANY_TO_MANY_VIEW,
+)
+
+private val JOIN_SQL_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
 
 enum class JimmerFormulaKind {
     NONE,

@@ -10,6 +10,7 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
+import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
 import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
@@ -1023,6 +1024,8 @@ class DtoConfigContractResolverTest {
                 primaryAnnotationTypeId = null,
                 associationKind = JimmerAssociationKind.MANY_TO_MANY,
                 formulaKind = JimmerFormulaKind.NONE,
+                mappedBy = null,
+                associationStorage = JimmerAssociationStorageKind.MIDDLE_TABLE,
                 transientResolver = null,
                 view = null,
                 genericTarget = false,
