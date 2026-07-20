@@ -6,6 +6,7 @@ import com.google.devtools.ksp.symbol.FileLocation
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
+import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSNode
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
@@ -26,29 +27,28 @@ internal class KspLsiContext(
     private val frontendOptions: org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions,
 ) {
 
-    fun documentation(declaration: KSDeclaration): String? {
-        declaration.docString
+    fun sourceDocumentation(node: KSNode): String? {
+        return (node as? KSDeclaration)?.docString
             ?.trim()
             ?.takeIf(String::isNotEmpty)
-            ?.let { return it }
+    }
+
+    fun documentation(declaration: KSDeclaration): String? {
+        sourceDocumentation(declaration)?.let { return it }
         declaration.description()?.let { return it }
         return declaration.generatedImmutableDocumentation()
     }
 
     fun source(node: KSNode): LsiSource? {
+        if (node is KSFile) {
+            return node.toLsiSource()
+        }
         val declaration = node.enclosingDeclaration() ?: return null
         if (declaration.origin != Origin.JAVA && declaration.origin != Origin.KOTLIN) {
             return null
         }
         val file = declaration.containingFile ?: return null
-        val path = file.filePath.takeIf(String::isNotBlank)
-            ?: file.fileName.takeIf(String::isNotBlank)
-            ?: return null
-        return LsiSource.of(
-            path = path,
-            language = declaration.origin.toLsiLanguage(),
-            kind = path.toLsiSourceKind(),
-        )
+        return file.toLsiSource(declaration.origin)
     }
 
     fun location(node: KSNode): LsiLocation? {
@@ -158,6 +158,20 @@ internal class KspLsiContext(
         return annotations.any { annotation ->
             annotation.annotationType.resolve().declaration.qualifiedName?.asString() in IMMUTABLE_TYPE_ANNOTATIONS
         }
+    }
+
+    private fun KSFile.toLsiSource(origin: Origin = this.origin): LsiSource? {
+        if (origin != Origin.JAVA && origin != Origin.KOTLIN) {
+            return null
+        }
+        val path = filePath.takeIf(String::isNotBlank)
+            ?: fileName.takeIf(String::isNotBlank)
+            ?: return null
+        return LsiSource.of(
+            path = path,
+            language = origin.toLsiLanguage(),
+            kind = path.toLsiSourceKind(),
+        )
     }
 }
 

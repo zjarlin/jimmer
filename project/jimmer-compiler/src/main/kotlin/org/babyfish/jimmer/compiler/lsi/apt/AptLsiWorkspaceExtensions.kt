@@ -15,6 +15,7 @@ import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiOverride
 import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiPackageAnnotationScope
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -32,6 +33,7 @@ import javax.lang.model.element.Element
 import javax.lang.model.element.ElementKind
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
+import javax.lang.model.element.PackageElement
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
 import javax.lang.model.type.DeclaredType
@@ -41,23 +43,36 @@ fun RoundEnvironment.toLsiWorkspace(
     processingEnvironment: ProcessingEnvironment,
     frontendOptions: LsiFrontendOptions,
 ): LsiWorkspace {
-    val rootTypes = rootElements.filterIsInstance<TypeElement>()
-    return rootTypes.toLsiWorkspace(processingEnvironment, frontendOptions)
+    val roundSymbols = toAptLsiRoundSymbols(processingEnvironment, frontendOptions)
+    return roundSymbols.rootTypes.toLsiWorkspace(
+        processingEnvironment = processingEnvironment,
+        frontendOptions = frontendOptions,
+        packageElements = roundSymbols.packageElements,
+    )
 }
 
 fun Collection<TypeElement>.toLsiWorkspace(
     processingEnvironment: ProcessingEnvironment,
     frontendOptions: LsiFrontendOptions,
+    packageElements: Collection<PackageElement>,
     additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
 ): LsiWorkspace {
-    return AptLsiWorkspaceBuilder(processingEnvironment, frontendOptions).build(this, additionalSeeds)
+    return AptLsiWorkspaceBuilder(processingEnvironment, frontendOptions).build(
+        rootTypes = this,
+        packageElements = packageElements,
+        additionalSeeds = additionalSeeds,
+    )
 }
 
 fun TypeElement.toLsiTypeDeclaration(
     processingEnvironment: ProcessingEnvironment,
     frontendOptions: LsiFrontendOptions,
 ): LsiTypeDeclaration {
-    val workspace = listOf(this).toLsiWorkspace(processingEnvironment, frontendOptions)
+    val workspace = listOf(this).toLsiWorkspace(
+        processingEnvironment = processingEnvironment,
+        frontendOptions = frontendOptions,
+        packageElements = listOf(processingEnvironment.elementUtils.getPackageOf(this)),
+    )
     return requireNotNull(workspace[LsiSymbolId.type(qualifiedName.toString())] as? LsiTypeDeclaration)
 }
 
@@ -73,18 +88,47 @@ class AptLsiWorkspaceBuilder(
 
     fun build(
         rootTypes: Collection<TypeElement>,
+        packageElements: Collection<PackageElement>,
         additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
     ): LsiWorkspace {
         val sourceTypeElements = rootTypes
             .flatMap(::collectTypeElements)
             .distinctBy { typeElement -> typeElement.qualifiedName.toString() }
         val declarations = freezeSemanticDeclarations(sourceTypeElements, additionalSeeds)
-        val sources = declarations.mapNotNull { declaration -> declaration.origin.source }
+        val annotationScopes = freezePackageAnnotationScopes(packageElements)
+        val sources = buildList {
+            declarations.mapNotNullTo(this) { declaration -> declaration.origin.source }
+            annotationScopes.mapNotNullTo(this) { annotationScope -> annotationScope.origin.source }
+        }
         return LsiWorkspace(
             sources = sources,
             declarations = declarations,
             typeHierarchy = freezeTypeHierarchy(declarations.referencedTypeIds()),
+            annotationScopes = annotationScopes,
         )
+    }
+
+    private fun freezePackageAnnotationScopes(
+        packageElements: Collection<PackageElement>,
+    ): List<LsiPackageAnnotationScope> {
+        return packageElements
+            .distinctBy { packageElement -> packageElement.qualifiedName.toString() }
+            .sortedBy { packageElement -> packageElement.qualifiedName.toString() }
+            .mapNotNull { packageElement ->
+                val annotations = packageElement.annotationMirrors
+                if (annotations.isEmpty()) {
+                    return@mapNotNull null
+                }
+                LsiPackageAnnotationScope(
+                    packageName = packageElement.qualifiedName.toString(),
+                    annotations = context.toLsiAnnotations(
+                        annotations = annotations,
+                        useSiteTarget = LsiAnnotationUseSiteTarget.PACKAGE,
+                    ),
+                    location = context.location(packageElement),
+                    origin = context.origin(packageElement),
+                )
+            }
     }
 
     private fun freezeSemanticDeclarations(
@@ -290,6 +334,7 @@ class AptLsiWorkspaceBuilder(
             enumEntries = enumEntries,
             annotationMembers = typeElement.toLsiAnnotationMembers(typeParameterIds),
             documentation = context.documentation(typeElement),
+            sourceDocumentation = context.sourceDocumentation(typeElement),
             annotations = context.toLsiAnnotations(
                 annotations = typeElement.annotationMirrors,
                 useSiteTarget = LsiAnnotationUseSiteTarget.TYPE,
@@ -355,6 +400,7 @@ class AptLsiWorkspaceBuilder(
             overrides = toLsiOverrides(owner),
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = toLsiCallableAnnotations(this),
             location = context.location(this),
             origin = context.origin(this),
@@ -393,6 +439,7 @@ class AptLsiWorkspaceBuilder(
             overrides = toLsiOverrides(owner),
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = toLsiCallableAnnotations(this),
             location = context.location(this),
             origin = context.origin(this),
@@ -426,6 +473,7 @@ class AptLsiWorkspaceBuilder(
             },
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = context.toLsiAnnotations(
                 annotations = annotationMirrors,
                 useSiteTarget = LsiAnnotationUseSiteTarget.CONSTRUCTOR,
@@ -454,6 +502,7 @@ class AptLsiWorkspaceBuilder(
             static = Modifier.STATIC in modifiers,
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = (declarationAnnotations + typeAnnotations).distinct(),
             location = context.location(this),
             origin = context.origin(this),
@@ -482,6 +531,7 @@ class AptLsiWorkspaceBuilder(
             type = context.toLsiType(asType(), typeParameterIds),
             vararg = vararg,
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = declarationAnnotations + typeAnnotations,
             location = context.location(this),
             origin = context.origin(this),
@@ -494,6 +544,7 @@ class AptLsiWorkspaceBuilder(
             name = simpleName.toString(),
             ownerId = ownerId,
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = context.toLsiAnnotations(
                 annotations = annotationMirrors,
                 useSiteTarget = LsiAnnotationUseSiteTarget.FIELD,

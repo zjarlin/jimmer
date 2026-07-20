@@ -19,9 +19,30 @@ data class LsiSemanticSnapshotOptions(
 fun LsiWorkspace.toSemanticSnapshot(
     options: LsiSemanticSnapshotOptions = LsiSemanticSnapshotOptions(),
 ): String {
-    return declarations.joinToString(separator = "\n", postfix = if (declarations.isEmpty()) "" else "\n") { declaration ->
-        declaration.toSemanticSnapshotLine(options)
+    val lines = buildList {
+        annotationScopes.mapTo(this) { annotationScope ->
+            annotationScope.toSemanticSnapshotLine(options)
+        }
+        declarations.mapTo(this) { declaration ->
+            declaration.toSemanticSnapshotLine(options)
+        }
     }
+    return lines.joinToString(separator = "\n", postfix = if (lines.isEmpty()) "" else "\n")
+}
+
+private fun LsiAnnotationScope.toSemanticSnapshotLine(options: LsiSemanticSnapshotOptions): String {
+    val logicalPath = when (this) {
+        is LsiPackageAnnotationScope -> ""
+        is LsiFileAnnotationScope -> logicalPath.escapeSnapshotText()
+    }
+    return listOf(
+        "annotation-scope",
+        id.value,
+        kind.name,
+        packageName.escapeSnapshotText(),
+        logicalPath,
+        annotations.toSemanticSnapshot(options),
+    ).joinToString("|")
 }
 
 private fun LsiDeclaration.toSemanticSnapshotLine(options: LsiSemanticSnapshotOptions): String {

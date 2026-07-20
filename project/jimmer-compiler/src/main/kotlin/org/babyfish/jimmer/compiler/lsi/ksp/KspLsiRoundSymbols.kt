@@ -18,20 +18,30 @@ import site.addzero.lsi.core.LsiSymbolId
  * 当前 KSP 轮内的原生符号索引，不得跨轮保存。
  */
 internal data class KspLsiRoundSymbols(
-    val sourceFiles: List<KSFile>,
+    val allSourceFiles: List<KSFile>,
+    val currentSourceFiles: List<KSFile>,
+    val allValidFileScopes: List<KspLsiFileScopeInput>,
+    val currentValidFileScopes: List<KspLsiFileScopeInput>,
     val allValidRootTypes: List<KSClassDeclaration>,
     val currentValidRootTypes: List<KSClassDeclaration>,
     val invalidRootTypes: List<KSClassDeclaration>,
+    val invalidFileAnnotationScopes: List<KspLsiFileScopeInput>,
     val annotatedById: Map<LsiSymbolId, KSAnnotated>,
     val filesById: Map<LsiSymbolId, KSFile>,
 )
 
 internal fun Resolver.toKspLsiRoundSymbols(
     frontendOptions: LsiFrontendOptions,
+    pendingFileScopeSourcePaths: Set<String>,
 ): KspLsiRoundSymbols {
-    val sourceFiles = getAllFiles().toList()
-    val allRoots = sourceFiles.asSequence().toKspRootTypes()
-    val currentRoots = getNewFiles().toKspRootTypes()
+    val allSourceFiles = getAllFiles().toStableKspFileList()
+    val currentSourceFiles = getNewFiles().toStableKspFileList()
+    val fileScopePlan = allSourceFiles.toKspLsiFileScopePlan()
+    val currentFileScopeSourcePaths = currentSourceFiles
+        .mapTo(hashSetOf(), KSFile::normalizedLsiSourcePath)
+        .apply { addAll(pendingFileScopeSourcePaths) }
+    val allRoots = allSourceFiles.asSequence().toKspRootTypes()
+    val currentRoots = currentSourceFiles.asSequence().toKspRootTypes()
     val allValidRoots = mutableListOf<Pair<KSClassDeclaration, KSFile>>()
     val invalidRoots = mutableListOf<KSClassDeclaration>()
     for ((declaration, file) in allRoots) {
@@ -46,7 +56,11 @@ internal fun Resolver.toKspLsiRoundSymbols(
         allValidRoots = allValidRoots,
         currentValidRoots = currentValidRoots,
         invalidRoots = invalidRoots,
-        sourceFiles = sourceFiles,
+        allSourceFiles = allSourceFiles,
+        currentSourceFiles = currentSourceFiles,
+        allValidFileScopes = fileScopePlan.validScopes,
+        currentValidFileScopes = fileScopePlan.validScopesFor(currentFileScopeSourcePaths),
+        invalidFileAnnotationScopes = fileScopePlan.invalidScopes,
     )
 }
 
@@ -75,17 +89,30 @@ private class KspLsiRoundSymbolIndexer(
         allValidRoots: List<Pair<KSClassDeclaration, KSFile>>,
         currentValidRoots: List<Pair<KSClassDeclaration, KSFile>>,
         invalidRoots: List<KSClassDeclaration>,
-        sourceFiles: List<KSFile>,
+        allSourceFiles: List<KSFile>,
+        currentSourceFiles: List<KSFile>,
+        allValidFileScopes: List<KspLsiFileScopeInput>,
+        currentValidFileScopes: List<KspLsiFileScopeInput>,
+        invalidFileAnnotationScopes: List<KspLsiFileScopeInput>,
     ): KspLsiRoundSymbols {
+        allValidFileScopes.forEach(::indexFileScope)
         allValidRoots.forEach { (root, file) -> indexType(root, file) }
         return KspLsiRoundSymbols(
-            sourceFiles = sourceFiles,
+            allSourceFiles = allSourceFiles,
+            currentSourceFiles = currentSourceFiles,
+            allValidFileScopes = allValidFileScopes,
+            currentValidFileScopes = currentValidFileScopes,
             allValidRootTypes = allValidRoots.map { (root, _) -> root },
             currentValidRootTypes = currentValidRoots.map { (root, _) -> root },
             invalidRootTypes = invalidRoots.toList(),
+            invalidFileAnnotationScopes = invalidFileAnnotationScopes,
             annotatedById = annotatedById.toMap(),
             filesById = filesById.toMap(),
         )
+    }
+
+    private fun indexFileScope(scope: KspLsiFileScopeInput) {
+        index(scope.id, scope.file, scope.file)
     }
 
     private fun indexType(type: KSClassDeclaration, file: KSFile) {

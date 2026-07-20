@@ -36,8 +36,28 @@ value class LsiSymbolId(
     companion object {
 
         private const val TYPE_PREFIX = "type:"
+        private const val PACKAGE_SCOPE_PREFIX = "package-scope:"
+        private const val FILE_SCOPE_MARKER = "/file:"
+        private const val DEFAULT_PACKAGE_COMPONENT = "default"
+        private const val NAMED_PACKAGE_PREFIX = "named:"
         private const val TYPE_PARAMETER_MARKER = "/type-parameter:"
         private const val HEX_DIGITS = "0123456789ABCDEF"
+
+        fun packageScope(packageName: String): LsiSymbolId {
+            return LsiSymbolId(PACKAGE_SCOPE_PREFIX + encodePackageName(packageName))
+        }
+
+        fun fileScope(packageName: String, logicalPath: String): LsiSymbolId {
+            val normalizedLogicalPath = LsiSource.of(logicalPath).path
+            require(logicalPath == normalizedLogicalPath && !logicalPath.hasWindowsDrivePrefix()) {
+                "File scope logical path must be normalized and relative: '$logicalPath'"
+            }
+            return LsiSymbolId(
+                packageScope(packageName).value +
+                    FILE_SCOPE_MARKER +
+                    encodeComponent(logicalPath, "file scope logical path")
+            )
+        }
 
         fun type(qualifiedName: String): LsiSymbolId {
             return LsiSymbolId(TYPE_PREFIX + encodeComponent(qualifiedName, "qualified type name"))
@@ -84,6 +104,16 @@ value class LsiSymbolId(
 
         fun typeParameter(owner: LsiSymbolId, name: String): LsiSymbolId {
             return LsiSymbolId("${owner.value}$TYPE_PARAMETER_MARKER${encodeComponent(name, "type parameter name")}")
+        }
+
+        private fun encodePackageName(packageName: String): String {
+            require(packageName == packageName.trim()) {
+                "Package name cannot have surrounding whitespace: '$packageName'"
+            }
+            if (packageName.isEmpty()) {
+                return DEFAULT_PACKAGE_COMPONENT
+            }
+            return NAMED_PACKAGE_PREFIX + encodeComponent(packageName, "package name")
         }
 
         private fun encodeComponent(value: String, role: String): String {
@@ -142,6 +172,10 @@ value class LsiSymbolId(
                 in 'A'..'F' -> code - 'A'.code + 10
                 else -> -1
             }
+        }
+
+        private fun String.hasWindowsDrivePrefix(): Boolean {
+            return length >= 3 && this[0].isLetter() && this[1] == ':' && this[2] == '/'
         }
     }
 }

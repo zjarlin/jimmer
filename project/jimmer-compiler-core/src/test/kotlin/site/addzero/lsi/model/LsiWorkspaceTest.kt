@@ -2,6 +2,7 @@ package site.addzero.lsi.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import site.addzero.lsi.core.LsiLanguage
@@ -23,10 +24,12 @@ class LsiWorkspaceTest {
             qualifiedName = "demo.Model",
             kind = LsiTypeDeclarationKind.CLASS,
             documentation = "first",
+            sourceDocumentation = "source-first",
             origin = LsiOrigin(LsiOriginKind.SOURCE, firstSource),
         )
         val second = first.copy(
             documentation = "second",
+            sourceDocumentation = "source-second",
             origin = LsiOrigin(LsiOriginKind.SOURCE, secondSource),
         )
 
@@ -36,6 +39,7 @@ class LsiWorkspaceTest {
 
         assertEquals(listOf(firstSource, secondSource), merged.sources)
         assertEquals("second", (merged[typeId] as LsiTypeDeclaration).documentation)
+        assertEquals("source-second", merged[typeId]?.sourceDocumentation)
     }
 
     @Test
@@ -100,6 +104,106 @@ class LsiWorkspaceTest {
             merged.typeHierarchyEntry(typeId)?.directSuperTypes,
         )
         assertTrue(requireNotNull(merged.typeHierarchyEntry(typeId)).isExternal)
+    }
+
+    @Test
+    fun `merges annotation scopes and resolves their originating sources`() {
+        val source = LsiSource.of("demo/package-info.java", LsiLanguage.JAVA)
+        val packageScopeId = LsiSymbolId.packageScope("demo")
+        val generatedFileScopeId = LsiSymbolId.fileScope("demo", "generated/Generated.kt")
+        val oldPackageScope = LsiPackageAnnotationScope(
+            packageName = "demo",
+            annotations = listOf(annotation("demo.Old")),
+            origin = LsiOrigin(LsiOriginKind.SOURCE, source),
+        )
+        val newPackageScope = oldPackageScope.copy(annotations = listOf(annotation("demo.New")))
+        val generatedFileScope = LsiFileAnnotationScope(
+            packageName = "demo",
+            logicalPath = "generated/Generated.kt",
+            annotations = listOf(annotation("demo.FileMarker")),
+            origin = LsiOrigin(
+                kind = LsiOriginKind.GENERATED,
+                originatingSymbols = setOf(packageScopeId),
+            ),
+        )
+
+        val merged = LsiWorkspace(annotationScopes = listOf(oldPackageScope)).merge(
+            LsiWorkspace(annotationScopes = listOf(generatedFileScope, newPackageScope)),
+        )
+
+        assertEquals(newPackageScope, merged.annotationScope(packageScopeId))
+        assertEquals(generatedFileScope, merged.annotationScope(generatedFileScopeId))
+        assertTrue(merged.contains(packageScopeId))
+        assertTrue(merged.contains(generatedFileScopeId))
+        assertEquals(setOf(source), merged.originatingSources(setOf(generatedFileScopeId)))
+    }
+
+    @Test
+    fun `rejects duplicate annotation scope ids`() {
+        val first = LsiPackageAnnotationScope(
+            packageName = "demo",
+            annotations = listOf(annotation("demo.First")),
+            origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+        )
+        val second = first.copy(annotations = listOf(annotation("demo.Second")))
+
+        assertFailsWith<IllegalArgumentException> {
+            LsiWorkspace(annotationScopes = listOf(first, second))
+        }
+    }
+
+    @Test
+    fun `rejects blank file annotation scope logical paths`() {
+        assertFailsWith<IllegalArgumentException> {
+            LsiFileAnnotationScope(
+                packageName = "demo",
+                logicalPath = " ",
+                origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiFileAnnotationScope(
+                packageName = "demo",
+                logicalPath = "/workspace/Model.kt",
+                origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiFileAnnotationScope(
+                packageName = "demo",
+                logicalPath = "generated/../Model.kt",
+                origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiFileAnnotationScope(
+                packageName = "demo",
+                logicalPath = "C:/workspace/Model.kt",
+                origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+            )
+        }
+    }
+
+    @Test
+    fun `same package file scopes can use distinct logical paths`() {
+        val first = LsiFileAnnotationScope(
+            packageName = "demo",
+            logicalPath = "alpha/Model.kt",
+            origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+        )
+        val second = LsiFileAnnotationScope(
+            packageName = "demo",
+            logicalPath = "beta/Model.kt",
+            origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
+        )
+
+        val workspace = LsiWorkspace(annotationScopes = listOf(first, second))
+
+        assertEquals(listOf(first.id, second.id).sorted(), workspace.annotationScopes.map(LsiAnnotationScope::id))
+    }
+
+    private fun annotation(qualifiedName: String): LsiAnnotation {
+        return LsiAnnotation(LsiSymbolId.type(qualifiedName))
     }
 
     private fun externalHierarchy(

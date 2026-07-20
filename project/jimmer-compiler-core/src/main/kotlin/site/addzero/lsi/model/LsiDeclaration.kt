@@ -50,6 +50,7 @@ sealed interface LsiDeclaration {
     val name: String
     val visibility: LsiVisibility
     val documentation: String?
+    val sourceDocumentation: String?
     val annotations: List<LsiAnnotation>
     val location: LsiLocation?
     val origin: LsiOrigin
@@ -72,6 +73,7 @@ data class LsiTypeDeclaration(
     val enumEntries: List<LsiEnumEntry> = emptyList(),
     val annotationMembers: List<LsiAnnotationMember> = emptyList(),
     override val documentation: String? = null,
+    override val sourceDocumentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
     override val origin: LsiOrigin
@@ -130,6 +132,7 @@ data class LsiEnumEntry(
     override val name: String,
     val ownerId: LsiSymbolId,
     override val documentation: String? = null,
+    override val sourceDocumentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
     override val origin: LsiOrigin
@@ -151,6 +154,7 @@ data class LsiField(
     val static: Boolean = false,
     override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
     override val documentation: String? = null,
+    override val sourceDocumentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
     override val origin: LsiOrigin
@@ -173,6 +177,7 @@ data class LsiProperty(
     val overrides: List<LsiOverride> = emptyList(),
     override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
     override val documentation: String? = null,
+    override val sourceDocumentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
     override val origin: LsiOrigin
@@ -202,6 +207,7 @@ data class LsiFunction(
     val overrides: List<LsiOverride> = emptyList(),
     override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
     override val documentation: String? = null,
+    override val sourceDocumentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
     override val origin: LsiOrigin
@@ -230,6 +236,7 @@ data class LsiConstructor(
     val thrownTypes: List<LsiTypeRef> = emptyList(),
     override val visibility: LsiVisibility = LsiVisibility.PUBLIC,
     override val documentation: String? = null,
+    override val sourceDocumentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
     override val origin: LsiOrigin
@@ -259,6 +266,7 @@ data class LsiParameter(
     val vararg: Boolean = false,
     val hasDefault: Boolean = false,
     override val documentation: String? = null,
+    override val sourceDocumentation: String? = null,
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val location: LsiLocation? = null,
     override val origin: LsiOrigin

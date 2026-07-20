@@ -6,6 +6,7 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.stableSignature
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 
 class LsiSymbolIdTest {
@@ -82,6 +83,33 @@ class LsiSymbolIdTest {
         )
 
         assertEquals("元素 类型", typeParameter.requireTypeParameterName())
+    }
+
+    @Test
+    fun `包和文件作用域使用稳定分域标识`() {
+        val packageScope = LsiSymbolId.packageScope("demo.model")
+        val fileScope = LsiSymbolId.fileScope("demo.model", "generated/Book.kt")
+        val defaultPackageScope = LsiSymbolId.packageScope("")
+        val namedDefaultPackageScope = LsiSymbolId.packageScope("default")
+
+        assertEquals("package-scope:named:demo.model", packageScope.value)
+        assertEquals("package-scope:named:demo.model/file:generated%2FBook.kt", fileScope.value)
+        assertEquals("package-scope:default", defaultPackageScope.value)
+        assertEquals("package-scope:named:default", namedDefaultPackageScope.value)
+        assertNotEquals(defaultPackageScope, namedDefaultPackageScope)
+    }
+
+    @Test
+    fun `文件作用域拒绝绝对和未规范化逻辑路径`() {
+        assertFailsWith<IllegalArgumentException> {
+            LsiSymbolId.fileScope("demo.model", "/workspace/Book.kt")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiSymbolId.fileScope("demo.model", "generated/../Book.kt")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiSymbolId.fileScope("demo.model", "C:/workspace/Book.kt")
+        }
     }
 
     @Test

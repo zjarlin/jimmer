@@ -13,6 +13,7 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiNullability
+import site.addzero.lsi.model.LsiPackageAnnotationScope
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -74,17 +75,80 @@ class AptLsiWorkspaceTest {
             assertIs<LsiTypeDeclaration>(compilation.workspace[annotatedTypeId]).documentation,
         )
         assertEquals(
+            null,
+            assertIs<LsiTypeDeclaration>(compilation.workspace[annotatedTypeId]).sourceDocumentation,
+        )
+        assertEquals(
             "annotated property",
             compilation.workspace.requireProperty(annotatedTypeId, "name").documentation,
+        )
+        assertEquals(
+            null,
+            compilation.workspace.requireProperty(annotatedTypeId, "name").sourceDocumentation,
         )
         assertEquals(
             "direct type",
             assertIs<LsiTypeDeclaration>(compilation.workspace[directTypeId]).documentation,
         )
         assertEquals(
+            "direct type",
+            assertIs<LsiTypeDeclaration>(compilation.workspace[directTypeId]).sourceDocumentation,
+        )
+        assertEquals(
             "direct property",
             compilation.workspace.requireProperty(directTypeId, "name").documentation,
         )
+        assertEquals(
+            "direct property",
+            compilation.workspace.requireProperty(directTypeId, "name").sourceDocumentation,
+        )
+    }
+
+    @Test
+    fun `freezes annotated package scopes with and without root types`() {
+        val compilation = compile(
+            "marker/PackageMarker.java" to """
+                package marker;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Target;
+
+                @Target(ElementType.PACKAGE)
+                public @interface PackageMarker {
+                    String value();
+                }
+            """.trimIndent(),
+            "only/package-info.java" to """
+                @marker.PackageMarker("package-only")
+                package only;
+            """.trimIndent(),
+            "rooted/package-info.java" to """
+                @marker.PackageMarker("rooted")
+                package rooted;
+            """.trimIndent(),
+            "rooted/Model.java" to """
+                package rooted;
+
+                interface Model {}
+            """.trimIndent(),
+        )
+
+        assertTrue(compilation.success, compilation.diagnostics)
+        assertEquals(
+            setOf("only", "rooted"),
+            compilation.workspace.annotationScopes.mapTo(linkedSetOf()) { scope -> scope.packageName },
+        )
+        val packageOnlyScope = assertIs<LsiPackageAnnotationScope>(
+            compilation.workspace.annotationScope(LsiSymbolId.packageScope("only")),
+        )
+        val annotation = packageOnlyScope.annotations.single()
+        assertEquals(LsiSymbolId.type("marker.PackageMarker"), annotation.type)
+        assertEquals(LsiAnnotationUseSiteTarget.PACKAGE, annotation.useSiteTarget)
+        assertEquals(
+            LsiAnnotationValue.StringValue("package-only"),
+            annotation.arguments.getValue("value").value,
+        )
+        assertTrue(packageOnlyScope.origin.source?.path?.endsWith("only/package-info.java") == true)
     }
 
     @Test
@@ -869,7 +933,9 @@ class AptLsiWorkspaceTest {
         }
         return CompilationResult(
             success = success,
-            workspace = processor.workspaces.firstOrNull { workspace -> workspace.declarations.isNotEmpty() }
+            workspace = processor.workspaces.firstOrNull { workspace ->
+                workspace.declarations.isNotEmpty() || workspace.annotationScopes.isNotEmpty()
+            }
                 ?: LsiWorkspace.EMPTY,
             diagnostics = diagnostics.toErrorMessage(),
         )

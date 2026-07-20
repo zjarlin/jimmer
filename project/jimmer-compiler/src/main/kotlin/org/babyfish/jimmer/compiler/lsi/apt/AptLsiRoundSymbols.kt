@@ -5,6 +5,7 @@ import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.element.Element
 import javax.lang.model.element.ElementKind
 import javax.lang.model.element.ExecutableElement
+import javax.lang.model.element.PackageElement
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
 import site.addzero.lsi.core.LsiSymbolId
@@ -15,10 +16,11 @@ import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
  */
 internal data class AptLsiRoundSymbols(
     val rootTypes: List<TypeElement>,
+    val packageElements: List<PackageElement>,
     val elementsById: Map<LsiSymbolId, Element>,
 ) {
     companion object {
-        val EMPTY = AptLsiRoundSymbols(emptyList(), emptyMap())
+        val EMPTY = AptLsiRoundSymbols(emptyList(), emptyList(), emptyMap())
     }
 }
 
@@ -30,7 +32,15 @@ internal fun RoundEnvironment.toAptLsiRoundSymbols(
     val rootTypes = (rootElements.filterIsInstance<TypeElement>() + additionalRootTypes)
         .distinctBy { type -> type.qualifiedName.toString() }
         .sortedBy { type -> type.qualifiedName.toString() }
-    return AptLsiRoundSymbolIndexer(processingEnvironment, frontendOptions).index(rootTypes)
+    val packageElements = buildList {
+        addAll(rootElements.filterIsInstance<PackageElement>())
+        rootTypes.mapTo(this) { type -> processingEnvironment.elementUtils.getPackageOf(type) }
+    }.distinctBy { packageElement -> packageElement.qualifiedName.toString() }
+        .sortedBy { packageElement -> packageElement.qualifiedName.toString() }
+    return AptLsiRoundSymbolIndexer(processingEnvironment, frontendOptions).index(
+        rootTypes = rootTypes,
+        packageElements = packageElements,
+    )
 }
 
 private class AptLsiRoundSymbolIndexer(
@@ -41,9 +51,17 @@ private class AptLsiRoundSymbolIndexer(
 
     private val elementsById = linkedMapOf<LsiSymbolId, Element>()
 
-    fun index(rootTypes: List<TypeElement>): AptLsiRoundSymbols {
+    fun index(
+        rootTypes: List<TypeElement>,
+        packageElements: List<PackageElement>,
+    ): AptLsiRoundSymbols {
+        packageElements.forEach(::indexPackage)
         rootTypes.forEach(::indexType)
-        return AptLsiRoundSymbols(rootTypes, elementsById.toMap())
+        return AptLsiRoundSymbols(rootTypes, packageElements, elementsById.toMap())
+    }
+
+    private fun indexPackage(packageElement: PackageElement) {
+        elementsById[LsiSymbolId.packageScope(packageElement.qualifiedName.toString())] = packageElement
     }
 
     private fun indexType(type: TypeElement) {

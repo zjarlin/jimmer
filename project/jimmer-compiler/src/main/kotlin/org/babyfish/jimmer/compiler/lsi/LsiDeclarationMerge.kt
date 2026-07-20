@@ -31,12 +31,13 @@ private fun mergeDeclarations(declarations: List<LsiDeclaration>): LsiDeclaratio
 }
 
 private fun mergeProperties(properties: List<LsiProperty>): LsiProperty {
-    val preferred = properties.minWith(
+    val orderedProperties = properties.sortedWith(
         compareBy<LsiProperty>(
             { property -> property.getterPreference() },
             LsiProperty::getterName,
-        )
+        ),
     )
+    val preferred = orderedProperties.first()
     properties.forEach { property ->
         require(property.ownerId == preferred.ownerId) {
             "Duplicate LSI property '${preferred.id.value}' has different owners"
@@ -56,6 +57,7 @@ private fun mergeProperties(properties: List<LsiProperty>): LsiProperty {
         .sortedWith(compareBy(LsiOverride::distance, LsiOverride::declarationId))
     return preferred.copy(
         documentation = properties.firstNotNullOfOrNull(LsiProperty::documentation),
+        sourceDocumentation = orderedProperties.firstNotNullOfOrNull(LsiProperty::sourceDocumentation),
         annotations = properties.flatMap(LsiProperty::annotations).distinct(),
         overrides = overrides,
     )

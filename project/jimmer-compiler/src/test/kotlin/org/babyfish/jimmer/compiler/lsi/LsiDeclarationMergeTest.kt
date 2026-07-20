@@ -29,22 +29,25 @@ class LsiDeclarationMergeTest {
             ownerId = ownerId,
             getterName = "students",
             type = type,
+            sourceDocumentation = "bare getter documentation",
             annotations = listOf(annotationA),
             overrides = listOf(LsiOverride(overriddenId)),
             origin = ORIGIN,
         )
         val beanGetter = bareGetter.copy(
             getterName = "getStudents",
+            sourceDocumentation = "bean getter documentation",
             annotations = listOf(annotationB),
             overrides = emptyList(),
         )
 
-        val merged = listOf(bareGetter, beanGetter)
+        val merged = listOf(beanGetter, bareGetter)
             .mergeDeclarationsById()
             .single() as LsiProperty
 
         assertEquals("students", merged.getterName)
-        assertEquals(listOf(annotationA, annotationB), merged.annotations)
+        assertEquals("bare getter documentation", merged.sourceDocumentation)
+        assertEquals(listOf(annotationB, annotationA), merged.annotations)
         assertEquals(listOf(LsiOverride(overriddenId)), merged.overrides)
     }
 

@@ -4,7 +4,6 @@ import org.babyfish.jimmer.apt.Context
 import org.babyfish.jimmer.apt.GeneratorException
 import org.babyfish.jimmer.apt.MetaException
 import org.babyfish.jimmer.apt.client.ClientProcessor
-import org.babyfish.jimmer.apt.client.ExportDocProcessor
 import org.babyfish.jimmer.apt.client.FetchByUnsupportedException
 import org.babyfish.jimmer.apt.dto.DtoProcessor
 import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
@@ -173,7 +172,6 @@ class JimmerProcessor : AbstractProcessor() {
             var generated = lsiRoundResult.generatedSources
             if (!roundEnv.processingOver()) {
                 val immutableTypeElements = ImmutableProcessor(context, messager).process(roundEnv).keys
-                ExportDocProcessor(context).process(roundEnv)
                 generated = generated || immutableTypeElements.isNotEmpty()
             }
             if (

@@ -3,6 +3,7 @@ package site.addzero.lsi.model
 import site.addzero.lsi.core.LsiSymbolId
 
 enum class LsiAnnotationUseSiteTarget {
+    PACKAGE,
     FILE,
     TYPE,
     CONSTRUCTOR,

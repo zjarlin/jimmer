@@ -31,6 +31,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiPackageAnnotationScope
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiUnresolvedType
 
@@ -53,6 +54,13 @@ class AptLsiCompilerDriverTest {
 
                     boolean isActive();
                 }
+            """.trimIndent(),
+        )
+        val packageInfoFile = sourceDir.resolve("demo/package-info.java")
+        packageInfoFile.writeText(
+            """
+                @Deprecated
+                package demo;
             """.trimIndent(),
         )
         projectDir.resolve("src/main/dto/Model.dto").also { file ->
@@ -81,7 +89,7 @@ class AptLsiCompilerDriverTest {
                     System.getProperty("java.class.path"),
                 ),
                 null,
-                fileManager.getJavaFileObjects(sourceFile),
+                fileManager.getJavaFileObjects(sourceFile, packageInfoFile),
             )
             task.setProcessors(listOf(processor))
             task.call()
@@ -100,6 +108,9 @@ class AptLsiCompilerDriverTest {
             provider.rounds.last().inputDocumentSnapshots.single(),
         )
         val firstRoundProperty = assertIs<LsiProperty>(provider.rounds.first().workspace[PROPERTY_ID])
+        assertIs<LsiPackageAnnotationScope>(
+            provider.rounds.first().workspace.annotationScope(LsiSymbolId.packageScope("demo")),
+        )
         assertIs<LsiUnresolvedType>(firstRoundProperty.type)
         assertEquals(
             "isActive",

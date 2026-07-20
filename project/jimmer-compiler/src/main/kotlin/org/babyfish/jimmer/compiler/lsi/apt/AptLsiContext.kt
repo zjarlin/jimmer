@@ -33,11 +33,14 @@ internal class AptLsiContext(
         null
     }
 
-    fun documentation(element: Element): String? {
-        elements.getDocComment(element)
+    fun sourceDocumentation(element: Element): String? {
+        return elements.getDocComment(element)
             ?.trim()
             ?.takeIf(String::isNotEmpty)
-            ?.let { return it }
+    }
+
+    fun documentation(element: Element): String? {
+        sourceDocumentation(element)?.let { return it }
         element.description()?.let { return it }
         return element.generatedImmutableDocumentation()
     }

@@ -102,6 +102,7 @@ class AptLsiCompilerDriver(
             currentRoundSymbols.rootTypes.toLsiWorkspace(
                 processingEnvironment = processingEnvironment,
                 frontendOptions = frontendOptions,
+                packageElements = currentRoundSymbols.packageElements,
                 additionalSeeds = inputDocumentSnapshots.flatMap { snapshot -> snapshot.typeSeeds },
             )
         }
@@ -111,6 +112,7 @@ class AptLsiCompilerDriver(
             currentRoundSymbols.rootTypes.toLsiWorkspace(
                 processingEnvironment = processingEnvironment,
                 frontendOptions = frontendOptions,
+                packageElements = currentRoundSymbols.packageElements,
             )
         }
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
@@ -143,9 +145,14 @@ class AptLsiCompilerDriver(
         roundResult.diagnostics.forEach { diagnostic ->
             emitDiagnostic(diagnostic, currentRoundSymbols)
         }
-        val currentRoundSources = currentWorkspace.declarations.mapNotNull { declaration ->
-            declaration.origin.source?.let { source -> declaration.id to source }
-        }.toMap()
+        val currentRoundSources = buildMap {
+            currentWorkspace.declarations.forEach { declaration ->
+                declaration.origin.source?.let { source -> put(declaration.id, source) }
+            }
+            currentWorkspace.annotationScopes.forEach { annotationScope ->
+                annotationScope.origin.source?.let { source -> put(annotationScope.id, source) }
+            }
+        }
         roundResult.newArtifacts.forEach { artifact ->
             writer.write(
                 artifact = artifact,

@@ -67,15 +67,20 @@ class KspLsiCompilerDriver(
 
     private var inputDocumentSnapshots = emptyList<CompilerInputDocumentSnapshot>()
 
+    private var pendingFileScopeSourcePaths = emptySet<String>()
+
     fun process(resolver: Resolver): List<KSAnnotated> {
         availableTypeIds = classpathTypeIds.filterTo(sortedSetOf()) { typeId ->
             val name = resolver.getKSNameFromString(typeId.requireTypeQualifiedName())
             resolver.getClassDeclarationByName(name) != null
         }
-        val currentRoundSymbols = resolver.toKspLsiRoundSymbols(frontendOptions)
+        val currentRoundSymbols = resolver.toKspLsiRoundSymbols(
+            frontendOptions = frontendOptions,
+            pendingFileScopeSourcePaths = pendingFileScopeSourcePaths,
+        )
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         if (inputDocumentKinds.isNotEmpty()) {
-            val sourceFiles = currentRoundSymbols.sourceFiles
+            val sourceFiles = currentRoundSymbols.allSourceFiles
                 .map { file -> File(file.filePath) }
             inputDocumentSnapshots = inputDocumentScanner.scan(
                 startPaths = sourceFiles,
@@ -88,11 +93,13 @@ class KspLsiCompilerDriver(
         workspace = currentRoundSymbols.allValidRootTypes.toLsiWorkspace(
             resolver = resolver,
             frontendOptions = frontendOptions,
+            fileScopes = currentRoundSymbols.allValidFileScopes,
             additionalSeeds = documentSeeds,
         )
         val currentWorkspace = currentRoundSymbols.currentValidRootTypes.toLsiWorkspace(
             resolver = resolver,
             frontendOptions = frontendOptions,
+            fileScopes = currentRoundSymbols.currentValidFileScopes,
         )
         val currentRootTypeIds = currentRoundSymbols.currentValidRootTypes.mapTo(sortedSetOf()) { type ->
             LsiSymbolId.type(requireNotNull(type.qualifiedName?.asString()))
@@ -112,6 +119,8 @@ class KspLsiCompilerDriver(
         )
         lastRoundResult = roundResult
         nextRoundNumber++
+        pendingFileScopeSourcePaths = currentRoundSymbols.invalidFileAnnotationScopes
+            .mapTo(sortedSetOf(), KspLsiFileScopeInput::normalizedSourcePath)
         roundResult.diagnostics.forEach { diagnostic ->
             emitDiagnostic(diagnostic, currentRoundSymbols.annotatedById)
         }
@@ -119,7 +128,7 @@ class KspLsiCompilerDriver(
             writer.write(
                 artifact = artifact,
                 currentRoundFiles = currentRoundSymbols.filesById,
-                currentRoundSourceFiles = currentRoundSymbols.sourceFiles,
+                currentRoundSourceFiles = currentRoundSymbols.allSourceFiles,
             )
         }
         return deferredSymbols(currentRoundSymbols)
@@ -164,6 +173,11 @@ class KspLsiCompilerDriver(
             for (invalidRoot in currentRoundSymbols.invalidRootTypes) {
                 if (seen.add(invalidRoot)) {
                     add(invalidRoot)
+                }
+            }
+            for (invalidScope in currentRoundSymbols.invalidFileAnnotationScopes) {
+                if (seen.add(invalidScope.file)) {
+                    add(invalidScope.file)
                 }
             }
         }

@@ -19,6 +19,7 @@ import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
 class KspJavaDeclarationFactsTest {
@@ -62,6 +63,7 @@ class KspJavaDeclarationFactsTest {
         assertTrue(workspace.type("demo.JavaTypes.Inner").requiresEnclosingInstance)
         assertFalse(workspace.type("demo.JavaTypes.StaticNested").requiresEnclosingInstance)
         assertFalse(workspace.type("demo.JavaTypes.NestedRecord").requiresEnclosingInstance)
+        assertEquals(LsiTypeDeclarationKind.RECORD, workspace.type("demo.JavaTypes.NestedRecord").kind)
         assertTrue(workspace.type("demo.JavaEnum.Inner").requiresEnclosingInstance)
         assertFalse(workspace.type("demo.JavaInterface.Nested").requiresEnclosingInstance)
         assertFalse(workspace.type("demo.JavaTypes").abstractDeclaration)

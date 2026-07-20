@@ -75,8 +75,6 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             explicitApi = explicitApi,
             targetServiceTypeIds = targets.serviceTypeIds,
             currentServiceTypeIds = currentTargets.serviceTypeIds,
-            targetExportedTypeIds = targets.exportedTypeIds,
-            currentExportedTypeIds = currentTargets.exportedTypeIds,
             unresolvedRootTypeIds = outcome.unresolvedRootTypeIds,
             invalidRootTypeIds = outcome.failures.mapTo(sortedSetOf(), ClientCompilerFailure::rootTypeId),
             failures = outcome.failures,
@@ -126,8 +124,6 @@ internal data class JimmerClientCompilerFeatureState(
     val explicitApi: Boolean,
     val targetServiceTypeIds: Set<LsiSymbolId>,
     val currentServiceTypeIds: Set<LsiSymbolId>,
-    val targetExportedTypeIds: Set<LsiSymbolId>,
-    val currentExportedTypeIds: Set<LsiSymbolId>,
     val unresolvedRootTypeIds: Set<LsiSymbolId>,
     val invalidRootTypeIds: Set<LsiSymbolId>,
     val failures: List<ClientCompilerFailure>,
@@ -143,8 +139,6 @@ internal data class JimmerClientCompilerFeatureState(
         append(schema.fingerprint())
         appendIds(targetServiceTypeIds)
         appendIds(currentServiceTypeIds)
-        appendIds(targetExportedTypeIds)
-        appendIds(currentExportedTypeIds)
         appendIds(unresolvedRootTypeIds)
         appendIds(invalidRootTypeIds)
         failures.sortedWith(compareBy(ClientCompilerFailure::rootTypeId, ClientCompilerFailure::declarationId))
@@ -172,10 +166,7 @@ internal data class JimmerClientCompilerFeatureState(
         require(currentServiceTypeIds.all(targetServiceTypeIds::contains)) {
             "Current client service ids must be part of all target service ids"
         }
-        require(currentExportedTypeIds.all(targetExportedTypeIds::contains)) {
-            "Current exported client type ids must be part of all exported target ids"
-        }
-        val targetRootTypeIds = targetServiceTypeIds + targetExportedTypeIds
+        val targetRootTypeIds = targetServiceTypeIds
         require(unresolvedRootTypeIds.all(targetRootTypeIds::contains)) {
             "Unresolved client root ids must be part of client targets"
         }
@@ -223,8 +214,6 @@ private fun disabledClientState(
         explicitApi = false,
         targetServiceTypeIds = emptySet(),
         currentServiceTypeIds = emptySet(),
-        targetExportedTypeIds = emptySet(),
-        currentExportedTypeIds = emptySet(),
         unresolvedRootTypeIds = emptySet(),
         invalidRootTypeIds = emptySet(),
         failures = emptyList(),
@@ -375,14 +364,12 @@ private fun ClientPrecompileTargets.compilationTargets(
     }
     return ClientPrecompileTargets(
         serviceTypeIds = serviceTypeIds.accepted(),
-        exportedTypeIds = exportedTypeIds.accepted(),
     )
 }
 
 private fun ClientPrecompileTargets.only(typeIds: Set<LsiSymbolId>): ClientPrecompileTargets {
     return ClientPrecompileTargets(
         serviceTypeIds = serviceTypeIds intersect typeIds,
-        exportedTypeIds = exportedTypeIds intersect typeIds,
     )
 }
 
@@ -420,7 +407,7 @@ private const val ERROR_FEATURE_ID = "error"
 private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val IGNORE_RESOURCE_GENERATION_OPTION = "jimmer.buddy.ignoreResourceGeneration"
 
-private val EMPTY_SCHEMA = ClientPrecompiledSchema(emptyList(), emptyList())
+private val EMPTY_SCHEMA = ClientPrecompiledSchema(emptyList())
 private val ENABLE_IMPLICIT_API_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.client.EnableImplicitApi")
 private val KOTLIN_METADATA_ANNOTATION = LsiSymbolId.type("kotlin.Metadata")

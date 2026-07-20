@@ -184,6 +184,45 @@ class LsiSemanticSnapshotTest {
         assertTrue(snapshot.contains("type|${nestedId.value}|Row|sample.Outer.Row|CLASS|${outerId.value}|true|false|true|"))
     }
 
+    @Test
+    fun `snapshots package and file annotation scopes`() {
+        val packageMarker = annotation(
+            type = LsiSymbolId.type("sample.PackageMarker"),
+            target = LsiAnnotationUseSiteTarget.PACKAGE,
+        )
+        val fileMarker = annotation(
+            type = LsiSymbolId.type("sample.FileMarker"),
+            target = LsiAnnotationUseSiteTarget.FILE,
+        )
+        val workspace = LsiWorkspace(
+            annotationScopes = listOf(
+                LsiFileAnnotationScope(
+                    packageName = "sample",
+                    logicalPath = "generated/Model.kt",
+                    annotations = listOf(fileMarker),
+                    origin = ORIGIN,
+                ),
+                LsiPackageAnnotationScope(
+                    packageName = "sample",
+                    annotations = listOf(packageMarker),
+                    origin = ORIGIN,
+                ),
+            ),
+        )
+
+        val snapshot = workspace.toSemanticSnapshot(
+            LsiSemanticSnapshotOptions(includeAnnotationUseSiteTarget = true),
+        )
+
+        assertEquals(
+            "annotation-scope|package-scope:named:sample|PACKAGE|sample||" +
+                "type:sample.PackageMarker@PACKAGE(value=EXPLICIT:string:1)\n" +
+            "annotation-scope|package-scope:named:sample/file:generated%2FModel.kt|FILE|sample|generated/Model.kt|" +
+                "type:sample.FileMarker@FILE(value=EXPLICIT:string:1)\n",
+            snapshot,
+        )
+    }
+
     private fun workspace(
         ownerId: LsiSymbolId,
         property: LsiProperty,

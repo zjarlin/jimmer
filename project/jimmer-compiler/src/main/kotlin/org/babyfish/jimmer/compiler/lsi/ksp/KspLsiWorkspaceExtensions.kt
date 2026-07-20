@@ -12,6 +12,7 @@ import com.google.devtools.ksp.symbol.FunctionKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
+import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeArgument
@@ -32,6 +33,7 @@ import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiEnumEntry
 import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFileAnnotationScope
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiOverride
 import site.addzero.lsi.model.LsiParameter
@@ -51,19 +53,30 @@ import site.addzero.lsi.model.toAnnotationMemberType
 fun Resolver.toLsiWorkspace(
     frontendOptions: LsiFrontendOptions,
 ): LsiWorkspace {
-    val rootTypes = getAllFiles()
+    val sourceFiles = getAllFiles().toStableKspFileList()
+    val fileScopePlan = sourceFiles.toKspLsiFileScopePlan()
+    val rootTypes = sourceFiles.asSequence()
         .flatMap { file -> file.declarations.filterIsInstance<KSClassDeclaration>() }
         .filter { declaration -> declaration.classKind != ClassKind.ENUM_ENTRY }
         .toList()
-    return rootTypes.toLsiWorkspace(this, frontendOptions)
+    return rootTypes.toLsiWorkspace(
+        resolver = this,
+        frontendOptions = frontendOptions,
+        fileScopes = fileScopePlan.validScopes,
+    )
 }
 
-fun Collection<KSClassDeclaration>.toLsiWorkspace(
+internal fun Collection<KSClassDeclaration>.toLsiWorkspace(
     resolver: Resolver,
     frontendOptions: LsiFrontendOptions,
+    fileScopes: Collection<KspLsiFileScopeInput>,
     additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
 ): LsiWorkspace {
-    return KspLsiWorkspaceBuilder(resolver, frontendOptions).build(this, additionalSeeds)
+    return KspLsiWorkspaceBuilder(resolver, frontendOptions).build(
+        rootTypes = this,
+        fileScopes = fileScopes,
+        additionalSeeds = additionalSeeds,
+    )
 }
 
 fun KSClassDeclaration.toLsiTypeDeclaration(
@@ -73,7 +86,11 @@ fun KSClassDeclaration.toLsiTypeDeclaration(
     val qualifiedName = requireNotNull(qualifiedName?.asString()) {
         "KSP LSI type declaration must have a qualified name"
     }
-    val workspace = listOf(this).toLsiWorkspace(resolver, frontendOptions)
+    val workspace = listOf(this).toLsiWorkspace(
+        resolver = resolver,
+        frontendOptions = frontendOptions,
+        fileScopes = listOfNotNull(containingFile).toKspLsiFileScopePlan().validScopes,
+    )
     return requireNotNull(workspace[LsiSymbolId.type(qualifiedName)] as? LsiTypeDeclaration)
 }
 
@@ -81,7 +98,7 @@ fun KSClassDeclaration.toLsiTypeDeclaration(
  * 在单个 KSP 编译轮内把有效符号冻结为不可变 LSI 快照。
  */
 @OptIn(KspExperimental::class)
-class KspLsiWorkspaceBuilder(
+internal class KspLsiWorkspaceBuilder(
     private val resolver: Resolver,
     private val frontendOptions: LsiFrontendOptions,
 ) {
@@ -94,6 +111,7 @@ class KspLsiWorkspaceBuilder(
 
     fun build(
         rootTypes: Collection<KSClassDeclaration>,
+        fileScopes: Collection<KspLsiFileScopeInput>,
         additionalSeeds: Collection<LsiTypeSeed> = emptyList(),
     ): LsiWorkspace {
         require(rootTypes.all(KSClassDeclaration::validate)) {
@@ -103,12 +121,37 @@ class KspLsiWorkspaceBuilder(
             .flatMap(::collectTypeDeclarations)
             .distinctBy { declaration -> declaration.qualifiedName?.asString() }
         val declarations = freezeSemanticDeclarations(sourceTypeDeclarations, additionalSeeds)
-        val sources = declarations.mapNotNull { declaration -> declaration.origin.source }
+        val annotationScopes = freezeFileAnnotationScopes(fileScopes)
+        val sources = buildList {
+            declarations.mapNotNullTo(this) { declaration -> declaration.origin.source }
+            annotationScopes.mapNotNullTo(this) { annotationScope -> annotationScope.origin.source }
+        }
         return LsiWorkspace(
             sources = sources,
             declarations = declarations,
             typeHierarchy = freezeTypeHierarchy(declarations.referencedTypeIds()),
+            annotationScopes = annotationScopes,
         )
+    }
+
+    private fun freezeFileAnnotationScopes(
+        fileScopes: Collection<KspLsiFileScopeInput>,
+    ): List<LsiFileAnnotationScope> {
+        return fileScopes
+            .sortedBy(KspLsiFileScopeInput::normalizedSourcePath)
+            .map { scope ->
+                val file = scope.file
+                LsiFileAnnotationScope(
+                    packageName = file.packageName.asString(),
+                    logicalPath = scope.logicalPath,
+                    annotations = annotationContext.toLsiAnnotations(
+                        annotations = scope.annotations.asSequence(),
+                        useSiteTarget = LsiAnnotationUseSiteTarget.FILE,
+                    ),
+                    location = context.location(file),
+                    origin = context.origin(file),
+                )
+            }
     }
 
     private fun freezeSemanticDeclarations(
@@ -313,18 +356,23 @@ class KspLsiWorkspaceBuilder(
             inheritedIds = inheritedTypeParameterIds,
         )
         val javaDeclaration = typeDeclaration.origin == Origin.JAVA || typeDeclaration.origin == Origin.JAVA_LIB
+        val javaRecord = javaDeclaration && typeDeclaration.isJavaRecord()
         val enclosingDeclaration = typeDeclaration.parentDeclaration as? KSClassDeclaration
         val javaMemberClassRequiresEnclosingInstance =
             javaDeclaration &&
                 typeDeclaration.classKind == ClassKind.CLASS &&
                 enclosingDeclaration?.classKind in setOf(ClassKind.CLASS, ClassKind.ENUM_CLASS) &&
                 Modifier.JAVA_STATIC !in typeDeclaration.modifiers &&
-                !typeDeclaration.isJavaRecord()
+                !javaRecord
         return LsiTypeDeclaration(
             id = typeId,
             name = typeDeclaration.simpleName.asString(),
             qualifiedName = typeId.requireTypeQualifiedName(),
-            kind = typeDeclaration.classKind.toLsiTypeDeclarationKind(),
+            kind = if (javaRecord) {
+                LsiTypeDeclarationKind.RECORD
+            } else {
+                typeDeclaration.classKind.toLsiTypeDeclarationKind()
+            },
             enclosingTypeId = enclosingDeclaration?.toLsiTypeId(),
             requiresEnclosingInstance =
                 Modifier.INNER in typeDeclaration.modifiers || javaMemberClassRequiresEnclosingInstance,
@@ -348,6 +396,7 @@ class KspLsiWorkspaceBuilder(
             enumEntries = enumEntries,
             annotationMembers = typeDeclaration.toLsiAnnotationMembers(typeParameterIds),
             documentation = context.documentation(typeDeclaration),
+            sourceDocumentation = context.sourceDocumentation(typeDeclaration),
             annotations = annotationContext.toLsiAnnotations(
                 annotations = typeDeclaration.annotations,
                 useSiteTarget = LsiAnnotationUseSiteTarget.TYPE,
@@ -433,6 +482,7 @@ class KspLsiWorkspaceBuilder(
             overrides = toLsiOverrides(owner),
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = toLsiPropertyAnnotations(),
             location = context.location(this),
             origin = context.origin(this),
@@ -458,6 +508,7 @@ class KspLsiWorkspaceBuilder(
             static = Modifier.JAVA_STATIC in modifiers,
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = (declarationAnnotations + typeAnnotations).distinct(),
             location = context.location(this),
             origin = context.origin(this),
@@ -480,6 +531,7 @@ class KspLsiWorkspaceBuilder(
             overrides = toLsiOverrides(owner),
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = toLsiFunctionAnnotations(),
             location = context.location(this),
             origin = context.origin(this),
@@ -519,6 +571,7 @@ class KspLsiWorkspaceBuilder(
             overrides = toLsiOverrides(owner),
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = toLsiFunctionAnnotations(),
             location = context.location(this),
             origin = context.origin(this),
@@ -548,6 +601,7 @@ class KspLsiWorkspaceBuilder(
             }.toList(),
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = annotationContext.toLsiAnnotations(
                 annotations = annotations,
                 useSiteTarget = LsiAnnotationUseSiteTarget.CONSTRUCTOR,
@@ -579,6 +633,7 @@ class KspLsiWorkspaceBuilder(
             type = typeContext.toLsiType(type.resolve(), typeParameterIds),
             vararg = isVararg,
             hasDefault = hasDefault,
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = (parameterAnnotations + typeAnnotations).distinct(),
             location = context.location(this),
             origin = context.origin(this),
@@ -591,6 +646,7 @@ class KspLsiWorkspaceBuilder(
             name = simpleName.asString(),
             ownerId = ownerId,
             documentation = context.documentation(this),
+            sourceDocumentation = context.sourceDocumentation(this),
             annotations = annotationContext.toLsiAnnotations(
                 annotations = annotations,
                 useSiteTarget = LsiAnnotationUseSiteTarget.FIELD,

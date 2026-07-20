@@ -3,7 +3,6 @@ package org.babyfish.jimmer.compiler.client
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -338,47 +337,6 @@ class ClientPrecompilerTest {
     }
 
     @Test
-    fun `exports type and property docs with nested exclusion`() {
-        val outerId = LsiSymbolId.type("demo.Models")
-        val outerProperty = property(
-            ownerId = outerId,
-            name = "name",
-            documentation = "名称。",
-        )
-        val outer = type(
-            qualifiedName = "demo.Models",
-            annotations = listOf(annotation(EXPORT_DOC)),
-            memberIds = listOf(outerProperty.id),
-            documentation = "模型。",
-        )
-        val nested = type(
-            qualifiedName = "demo.Models.Detail",
-            documentation = "详情。",
-        )
-        val excluded = type(
-            qualifiedName = "demo.Models.Secret",
-            annotations = listOf(
-                annotation(
-                    EXPORT_DOC,
-                    mapOf("excluded" to LsiAnnotationValue.BooleanValue(true)),
-                )
-            ),
-            documentation = "机密。",
-        )
-
-        val schema = ClientPrecompiler().compile(
-            LsiWorkspace(declarations = listOf(excluded, outerProperty, nested, outer)),
-            EMPTY_ERROR_SCHEMA,
-        )
-
-        assertEquals(
-            listOf("demo.Models", "demo.Models.Detail", "demo.Models.name"),
-            schema.exportedDocs.map(ClientExportedDoc::key),
-        )
-        assertFalse(schema.exportedDocs.any { doc -> doc.key == "demo.Models.Secret" })
-    }
-
-    @Test
     fun `java getter and kotlin function produce equivalent snapshots`() {
         val javaSchema = ClientPrecompiler().compile(
             languageWorkspace(LsiLanguage.JAVA, javaGetter = true),
@@ -613,7 +571,6 @@ class ClientPrecompilerTest {
         private val DEFAULT_FETCHER_OWNER =
             LsiSymbolId.type("org.babyfish.jimmer.client.meta.DefaultFetcherOwner")
         private val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
-        private val EXPORT_DOC = LsiSymbolId.type("org.babyfish.jimmer.client.ExportDoc")
         private val FETCH_BY = LsiSymbolId.type("org.babyfish.jimmer.client.FetchBy")
         private val GET_MAPPING =
             LsiSymbolId.type("org.springframework.web.bind.annotation.GetMapping")

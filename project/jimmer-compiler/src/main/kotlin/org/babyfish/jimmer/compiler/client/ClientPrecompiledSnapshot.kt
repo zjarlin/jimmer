@@ -62,14 +62,6 @@ fun ClientPrecompiledSchema.normalizedSnapshot(): String {
                 }
             }
         }
-        exportedDocs.sortedBy(ClientExportedDoc::key).forEach { doc ->
-            appendRecord(
-                "export-doc",
-                doc.declarationId.value,
-                doc.key,
-                doc.content,
-            )
-        }
     }
 }
 

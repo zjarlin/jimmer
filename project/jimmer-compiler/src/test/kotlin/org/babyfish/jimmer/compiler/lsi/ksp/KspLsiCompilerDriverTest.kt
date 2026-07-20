@@ -5,6 +5,7 @@ import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
+import com.google.devtools.ksp.symbol.AnnotationUseSiteTarget
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.FileLocation
 import com.google.devtools.ksp.symbol.KSAnnotated
@@ -46,6 +47,7 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.model.LsiFileAnnotationScope
 
 class KspLsiCompilerDriverTest {
 
@@ -256,14 +258,22 @@ class KspLsiCompilerDriverTest {
             file = { existingFile },
             valid = true,
         )
-        existingFile = file(listOf(existingRoot))
+        existingFile = file(
+            declarations = listOf(existingRoot),
+            path = "/workspace/src/main/kotlin/demo/Existing.kt",
+            annotations = sequenceOf(fileAnnotation("demo.ExistingFileMarker")),
+        )
         lateinit var currentFile: KSFile
         val currentRoot = classDeclaration(
             qualifiedName = "demo.Valid",
             file = { currentFile },
             valid = true,
         )
-        currentFile = file(listOf(currentRoot))
+        currentFile = file(
+            declarations = listOf(currentRoot),
+            path = "/workspace/src/main/kotlin/demo/Current.kt",
+            annotations = sequenceOf(fileAnnotation("demo.CurrentFileMarker")),
+        )
         val provider = DriverFeatureProvider()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
@@ -288,7 +298,122 @@ class KspLsiCompilerDriverTest {
         assertTrue(round.workspace.contains(LsiSymbolId.type("demo.Valid")))
         assertFalse(round.currentWorkspace.contains(LsiSymbolId.type("demo.Existing")))
         assertTrue(round.currentWorkspace.contains(LsiSymbolId.type("demo.Valid")))
+        val existingScopeId = LsiSymbolId.fileScope("demo", "Existing.kt")
+        val currentScopeId = LsiSymbolId.fileScope("demo", "Current.kt")
+        assertIs<LsiFileAnnotationScope>(round.workspace.annotationScope(existingScopeId))
+        assertIs<LsiFileAnnotationScope>(round.workspace.annotationScope(currentScopeId))
+        assertFalse(round.currentWorkspace.contains(existingScopeId))
+        assertTrue(round.currentWorkspace.contains(currentScopeId))
         assertEquals(setOf(LsiSymbolId.type("demo.Valid")), round.currentRootTypeIds)
+    }
+
+    @Test
+    fun `uses shared unique logical paths for same package file names`() {
+        lateinit var existingFile: KSFile
+        val existingRoot = classDeclaration(
+            qualifiedName = "demo.Existing",
+            file = { existingFile },
+            valid = true,
+        )
+        existingFile = file(
+            declarations = listOf(existingRoot),
+            path = "/workspace/src/alpha/Model.kt",
+            annotations = sequenceOf(fileAnnotation("demo.ExistingFileMarker")),
+        )
+        lateinit var currentFile: KSFile
+        val currentRoot = classDeclaration(
+            qualifiedName = "demo.Current",
+            file = { currentFile },
+            valid = true,
+        )
+        currentFile = file(
+            declarations = listOf(currentRoot),
+            path = "/workspace/src/beta/Model.kt",
+            annotations = sequenceOf(fileAnnotation("demo.CurrentFileMarker")),
+        )
+        val provider = FileScopeFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-same-file-name-test",
+        )
+
+        driver.process(
+            resolver(
+                allFiles = listOf(existingFile, currentFile),
+                newFiles = listOf(currentFile),
+            ),
+        )
+
+        val round = provider.rounds.single().round
+        val existingScopeId = LsiSymbolId.fileScope("demo", "alpha/Model.kt")
+        val currentScopeId = LsiSymbolId.fileScope("demo", "beta/Model.kt")
+        assertEquals(
+            listOf("alpha/Model.kt", "beta/Model.kt"),
+            round.workspace.annotationScopes
+                .filterIsInstance<LsiFileAnnotationScope>()
+                .map(LsiFileAnnotationScope::logicalPath),
+        )
+        assertIs<LsiFileAnnotationScope>(round.workspace.annotationScope(existingScopeId))
+        assertIs<LsiFileAnnotationScope>(round.workspace.annotationScope(currentScopeId))
+        assertFalse(round.currentWorkspace.contains(existingScopeId))
+        assertTrue(round.currentWorkspace.contains(currentScopeId))
+        assertFalse(round.workspace.contains(LsiSymbolId.fileScope("demo", "Model.kt")))
+    }
+
+    @Test
+    fun `defers invalid file annotation and freezes it in the next round`() {
+        val sourcePath = "/workspace/src/main/kotlin/demo/Config.kt"
+        val invalidFile = file(
+            declarations = emptyList(),
+            path = sourcePath,
+            annotations = sequenceOf(fileAnnotation("generated.FileMarker", valid = false)),
+        )
+        val validFile = file(
+            declarations = emptyList(),
+            path = sourcePath,
+            annotations = sequenceOf(fileAnnotation("generated.FileMarker")),
+        )
+        val provider = FileScopeFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-file-annotation-defer-test",
+        )
+
+        val firstDeferred = driver.process(
+            resolver(
+                allFiles = listOf(invalidFile),
+                newFiles = listOf(invalidFile),
+            ),
+        )
+
+        assertEquals(1, firstDeferred.size)
+        assertSame(invalidFile, firstDeferred.single())
+        assertTrue(provider.rounds.single().round.workspace.annotationScopes.isEmpty())
+
+        val secondDeferred = driver.process(
+            resolver(
+                allFiles = listOf(validFile),
+                newFiles = emptyList(),
+            ),
+        )
+
+        assertTrue(secondDeferred.isEmpty())
+        val secondRound = provider.rounds.last().round
+        val scopeId = LsiSymbolId.fileScope("demo", "Config.kt")
+        assertIs<LsiFileAnnotationScope>(secondRound.workspace.annotationScope(scopeId))
+        assertIs<LsiFileAnnotationScope>(secondRound.currentWorkspace.annotationScope(scopeId))
     }
 
     @Test
@@ -352,6 +477,7 @@ class KspLsiCompilerDriverTest {
         assertEquals("META-INF/jimmer/driver-final", resourceCall.path)
         assertEquals("", resourceCall.extension)
         assertTrue(resourceCall.dependencies.aggregating)
+        assertTrue(resourceCall.dependencies.isAllSources)
         assertTrue(resourceCall.dependencies.originatingFiles.isEmpty())
         assertTrue(provider.rounds.last().round.isFinal)
         assertTrue(provider.rounds.last().round.workspace.contains(LsiSymbolId.type("demo.Valid")))
@@ -429,6 +555,25 @@ class KspLsiCompilerDriverTest {
             id = "ksp-input-document-test",
             inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
         )
+
+        val rounds = mutableListOf<JimmerCompilerCollectContext>()
+
+        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+            rounds += context
+            return JimmerCompilerFeatureCollection()
+        }
+
+        override fun precompile(
+            context: JimmerCompilerPrecompileContext,
+        ): JimmerCompilerFeaturePrecompileResult {
+            return JimmerCompilerFeaturePrecompileResult(
+                state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
+            )
+        }
+    }
+
+    private class FileScopeFeatureProvider : JimmerCompilerFeatureProvider {
+        override val descriptor = JimmerCompilerFeatureDescriptor(id = "ksp-file-scope-test")
 
         val rounds = mutableListOf<JimmerCompilerCollectContext>()
 
@@ -559,18 +704,81 @@ class KspLsiCompilerDriverTest {
     private fun file(
         declarations: List<KSClassDeclaration>,
         path: String = "/workspace/src/main/kotlin/demo/Models.kt",
+        packageName: String = "demo",
+        annotations: Sequence<KSAnnotation> = emptySequence(),
     ): KSFile {
         return proxy(KSFile::class.java, "KSFile($path)") { method, _ ->
             when (method.name) {
-                "getPackageName" -> name("demo")
-                "getFileName" -> "Models.kt"
+                "getPackageName" -> name(packageName)
+                "getFileName" -> path.substringAfterLast('/')
                 "getFilePath" -> path
                 "getDeclarations" -> declarations.asSequence()
-                "getAnnotations" -> emptySequence<KSAnnotation>()
+                "getAnnotations" -> annotations
                 "getOrigin" -> Origin.KOTLIN
                 "getLocation" -> FileLocation(path, 1)
                 "getParent" -> null
                 "accept" -> true
+                else -> UNHANDLED
+            }
+        }
+    }
+
+    private fun fileAnnotation(
+        qualifiedName: String,
+        valid: Boolean = true,
+    ): KSAnnotation {
+        val declaration = proxy(
+            type = KSClassDeclaration::class.java,
+            label = "KSClassDeclaration($qualifiedName)",
+        ) { method, _ ->
+            when (method.name) {
+                "getSimpleName" -> name(qualifiedName.substringAfterLast('.'))
+                "getQualifiedName" -> name(qualifiedName)
+                "getPackageName" -> name(qualifiedName.substringBeforeLast('.', ""))
+                "getClassKind" -> ClassKind.ANNOTATION_CLASS
+                "getOrigin" -> Origin.KOTLIN_LIB
+                "getContainingFile", "getParentDeclaration", "getParent", "getPrimaryConstructor" -> null
+                "getTypeParameters" -> emptyList<com.google.devtools.ksp.symbol.KSTypeParameter>()
+                "getDeclarations", "getSuperTypes", "getAnnotations", "getSealedSubclasses" -> emptySequence<Any>()
+                "getModifiers" -> emptySet<Modifier>()
+                "getDocString" -> null
+                "getLocation" -> com.google.devtools.ksp.symbol.NonExistLocation
+                "isCompanionObject" -> false
+                "accept" -> valid
+                else -> UNHANDLED
+            }
+        }
+        val annotationType = proxy(KSType::class.java, "KSType($qualifiedName)") { method, _ ->
+            when (method.name) {
+                "getDeclaration" -> declaration
+                "getArguments" -> emptyList<Any>()
+                "getAnnotations" -> emptySequence<KSAnnotation>()
+                "isError", "isMarkedNullable", "isFunctionType", "isSuspendFunctionType" -> false
+                else -> UNHANDLED
+            }
+        }
+        val annotationTypeReference = proxy(KSTypeReference::class.java, "KSTypeReference($qualifiedName)") { method, _ ->
+            when (method.name) {
+                "resolve" -> annotationType
+                "getAnnotations" -> emptySequence<KSAnnotation>()
+                "getModifiers" -> emptySet<Modifier>()
+                "getOrigin" -> Origin.KOTLIN_LIB
+                "getLocation" -> com.google.devtools.ksp.symbol.NonExistLocation
+                "getParent" -> declaration
+                "accept" -> true
+                else -> UNHANDLED
+            }
+        }
+        return proxy(KSAnnotation::class.java, "KSAnnotation($qualifiedName)") { method, _ ->
+            when (method.name) {
+                "getAnnotationType" -> annotationTypeReference
+                "getArguments", "getDefaultArguments" -> emptyList<Any>()
+                "getShortName" -> declaration.simpleName
+                "getUseSiteTarget" -> AnnotationUseSiteTarget.FILE
+                "getOrigin" -> Origin.KOTLIN
+                "getLocation" -> com.google.devtools.ksp.symbol.NonExistLocation
+                "getParent" -> null
+                "accept" -> valid
                 else -> UNHANDLED
             }
         }

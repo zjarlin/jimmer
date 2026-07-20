@@ -151,6 +151,7 @@ private fun LsiAnnotationUseSiteTarget.toPoetUseSiteTarget(): AnnotationSpec.Use
         LsiAnnotationUseSiteTarget.PARAMETER -> AnnotationSpec.UseSiteTarget.PARAM
         LsiAnnotationUseSiteTarget.SET_PARAMETER -> AnnotationSpec.UseSiteTarget.SETPARAM
         LsiAnnotationUseSiteTarget.DELEGATE -> AnnotationSpec.UseSiteTarget.DELEGATE
+        LsiAnnotationUseSiteTarget.PACKAGE,
         LsiAnnotationUseSiteTarget.TYPE,
         LsiAnnotationUseSiteTarget.CONSTRUCTOR,
         LsiAnnotationUseSiteTarget.METHOD,

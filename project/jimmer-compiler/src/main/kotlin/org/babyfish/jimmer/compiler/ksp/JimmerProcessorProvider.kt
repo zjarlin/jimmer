@@ -21,7 +21,6 @@ import org.babyfish.jimmer.ksp.GeneratorException
 import org.babyfish.jimmer.ksp.MetaException
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.client.ClientProcessor
-import org.babyfish.jimmer.ksp.client.ExportDocProcessor
 import org.babyfish.jimmer.ksp.dto.DtoProcessor
 import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
 import java.util.regex.Pattern
@@ -74,8 +73,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
 
             private var explicitClientApi = false
 
-            private var exportDocContent: String? = null
-
             private var clientContent: String? = null
 
             private var clientReadyInLatestRound = false
@@ -100,16 +97,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
             override fun finish() {
                 lsiDriver.finish()
                 ddlFeature.finish()
-                exportDocContent?.let { content ->
-                    environment.codeGenerator.createNewFile(
-                        dependencies = Dependencies.ALL_FILES,
-                        packageName = "META-INF.jimmer",
-                        fileName = "doc",
-                        extensionName = "properties",
-                    ).bufferedWriter().use { writer ->
-                        writer.write(content)
-                    }
-                }
                 if (clientReadyInLatestRound) {
                     clientContent?.let { content ->
                         environment.codeGenerator.createNewFile(
@@ -130,7 +117,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                 hasInvalidDeferred: Boolean,
             ) {
                 clientReadyInLatestRound = false
-                exportDocContent = null
                 clientContent = null
                 try {
                     val context = Context(resolver, environment)
@@ -177,7 +163,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                     ) {
                         return
                     }
-                    exportDocContent = ExportDocProcessor(context).render()
                     if (!context.isBuddyIgnoreResourceGeneration) {
                         clientContent = ClientProcessor(
                             context,

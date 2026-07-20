@@ -49,6 +49,9 @@ class KspGeneratedArtifactWriter(
         currentRoundSourceFiles: Collection<KSFile>,
     ): Dependencies {
         val allFiles = currentRoundSourceFiles.distinct()
+        if (aggregationMode == ArtifactAggregationMode.AGGREGATING && allFiles.isEmpty()) {
+            return Dependencies.ALL_FILES
+        }
         val filesBySourcePath = allFiles.associateBy { file ->
             LsiSource.of(file.filePath).path
         }

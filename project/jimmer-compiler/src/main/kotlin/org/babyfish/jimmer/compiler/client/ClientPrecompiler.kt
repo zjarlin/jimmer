@@ -15,7 +15,6 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
-import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
@@ -66,7 +65,6 @@ class ClientPrecompiler(
             .sortedBy { service -> service.id }
         return ClientPrecompiledSchema(
             services = services,
-            exportedDocs = compileExportedDocs(types, targets.exportedTypeIds, workspace),
         )
     }
 
@@ -77,7 +75,6 @@ class ClientPrecompiler(
             serviceTypeIds = types
                 .filter(::isApiService)
                 .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
-            exportedTypeIds = exportedTypeIds(types),
         )
     }
 
@@ -297,66 +294,6 @@ class ClientPrecompiler(
             return true
         }
         return options.explicitApi && SPRING_MAPPING_ANNOTATIONS.any(declaration.annotations::hasAnnotation)
-    }
-
-    private fun compileExportedDocs(
-        types: List<LsiTypeDeclaration>,
-        exportedTypeIds: Set<LsiSymbolId>,
-        workspace: LsiWorkspace,
-    ): List<ClientExportedDoc> {
-        return buildList {
-            for (type in types) {
-                if (type.id !in exportedTypeIds) {
-                    continue
-                }
-                type.clientDoc()?.let { doc ->
-                    add(ClientExportedDoc(type.id, type.qualifiedName, doc))
-                }
-                type.memberIds
-                    .map { memberId ->
-                        workspace[memberId] ?: throw ClientPrecompileException(
-                            declarationId = type.id,
-                            recoverable = true,
-                            message = "Exported client document type '${type.qualifiedName}' references missing " +
-                                "member '${memberId.value}'",
-                        )
-                    }
-                    .filterIsInstance<LsiProperty>()
-                    .filterNot(LsiProperty::static)
-                    .forEach { property ->
-                        property.clientDoc()?.let { doc ->
-                            add(
-                                ClientExportedDoc(
-                                    declarationId = property.id,
-                                    key = "${type.qualifiedName}.${property.name}",
-                                    content = doc,
-                                )
-                            )
-                        }
-                    }
-            }
-        }.distinctBy(ClientExportedDoc::key).sortedBy(ClientExportedDoc::key)
-    }
-
-    private fun exportedTypeIds(
-        types: List<LsiTypeDeclaration>,
-    ): Set<LsiSymbolId> {
-        val exportByTypeId = mutableMapOf<LsiSymbolId, Boolean>()
-        fun isExported(type: LsiTypeDeclaration): Boolean {
-            exportByTypeId[type.id]?.let { exported -> return exported }
-            val exportDoc = type.annotations.annotation(EXPORT_DOC_ANNOTATION)
-            val exported = if (exportDoc != null) {
-                !exportDoc.booleanValue("excluded")
-            } else {
-                type.enclosingType(types)?.let(::isExported) ?: false
-            }
-            exportByTypeId[type.id] = exported
-            return exported
-        }
-        return types
-            .asSequence()
-            .filter { type -> type.kind in EXPORTABLE_TYPE_KINDS && isExported(type) }
-            .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
     }
 
     private fun LsiTypeRef.toClientTypeRef(
@@ -658,7 +595,6 @@ private fun ClientTypeArgument.stableTypeSignature(): String {
 private val API_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.client.meta.Api")
 private val API_IGNORE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.client.ApiIgnore")
 private val DESCRIPTION_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.client.Description")
-private val EXPORT_DOC_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.client.ExportDoc")
 private val FETCH_BY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.client.FetchBy")
 private val DEFAULT_FETCHER_OWNER_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.client.meta.DefaultFetcherOwner")
@@ -684,12 +620,6 @@ private val NULLABLE_ANNOTATIONS = setOf(
     "org.jspecify.annotations.Nullable",
     "org.springframework.lang.Nullable",
 ).mapTo(linkedSetOf(), LsiSymbolId::type)
-
-private val EXPORTABLE_TYPE_KINDS = setOf(
-    LsiTypeDeclarationKind.CLASS,
-    LsiTypeDeclarationKind.INTERFACE,
-    LsiTypeDeclarationKind.ENUM,
-)
 
 private val VOID_TYPE_NAMES = setOf(
     "java.lang.Void",

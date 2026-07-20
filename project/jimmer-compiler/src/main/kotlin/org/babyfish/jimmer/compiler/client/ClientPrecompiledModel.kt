@@ -6,20 +6,17 @@ import site.addzero.lsi.model.LsiVariance
 
 data class ClientPrecompiledSchema(
     val services: List<ClientService>,
-    val exportedDocs: List<ClientExportedDoc>,
 )
 
 data class ClientPrecompileTargets(
     val serviceTypeIds: Set<LsiSymbolId>,
-    val exportedTypeIds: Set<LsiSymbolId>,
 ) {
     init {
         serviceTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
-        exportedTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
     }
 
     val rootTypeIds: Set<LsiSymbolId>
-        get() = serviceTypeIds + exportedTypeIds
+        get() = serviceTypeIds
 
     fun without(typeIds: Set<LsiSymbolId>): ClientPrecompileTargets {
         if (typeIds.isEmpty()) {
@@ -27,7 +24,6 @@ data class ClientPrecompileTargets(
         }
         return ClientPrecompileTargets(
             serviceTypeIds = serviceTypeIds - typeIds,
-            exportedTypeIds = exportedTypeIds - typeIds,
         )
     }
 }
@@ -165,16 +161,5 @@ data class ClientFetchBy(
 ) {
     init {
         require(value.isNotBlank()) { "Client FetchBy value cannot be blank" }
-    }
-}
-
-data class ClientExportedDoc(
-    val declarationId: LsiSymbolId,
-    val key: String,
-    val content: String,
-) {
-    init {
-        require(key.isNotBlank()) { "Client exported document key cannot be blank" }
-        require(content.isNotBlank()) { "Client exported document content cannot be blank" }
     }
 }

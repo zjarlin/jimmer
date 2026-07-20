@@ -5,7 +5,9 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.validate
+import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiFileScopeInput
 import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
+import org.babyfish.jimmer.compiler.lsi.ksp.toKspLsiFileScopePlan
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompiler
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerFiles
@@ -56,12 +58,21 @@ class JimmerDdlCompilerKspFeature(
                 hasErrors = true
             }
         }
-        val validRoots = resolver.getAllFiles()
+        val sourceFiles = resolver.getAllFiles().toList()
+        val fileScopePlan = sourceFiles.toKspLsiFileScopePlan()
+        deferred += fileScopePlan.invalidScopes.map(KspLsiFileScopeInput::file)
+        val validRoots = sourceFiles.asSequence()
             .flatMap { file -> file.declarations.filterIsInstance<KSClassDeclaration>() }
             .filter(KSClassDeclaration::validate)
             .toList()
         if (validRoots.isNotEmpty()) {
-            merge(validRoots.toLsiWorkspace(resolver, frontendOptions))
+            merge(
+                validRoots.toLsiWorkspace(
+                    resolver = resolver,
+                    frontendOptions = frontendOptions,
+                    fileScopes = fileScopePlan.validScopes,
+                ),
+            )
         }
         return deferred
     }

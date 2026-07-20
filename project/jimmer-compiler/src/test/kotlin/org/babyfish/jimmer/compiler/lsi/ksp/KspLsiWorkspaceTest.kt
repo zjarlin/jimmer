@@ -43,9 +43,11 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFileAnnotationScope
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiWorkspace
@@ -118,6 +120,10 @@ class KspLsiWorkspaceTest {
                 )
             ),
             frontendOptions,
+            fileScopes = listOfNotNull(annotatedModel.containingFile, directModel.containingFile)
+                .distinct()
+                .toKspLsiFileScopePlan()
+                .validScopes,
         )
 
         val annotatedTypeId = LsiSymbolId.type("demo.AnnotatedModel")
@@ -126,12 +132,59 @@ class KspLsiWorkspaceTest {
             "annotated type",
             assertIs<LsiTypeDeclaration>(workspace[annotatedTypeId]).documentation,
         )
+        assertEquals(
+            null,
+            assertIs<LsiTypeDeclaration>(workspace[annotatedTypeId]).sourceDocumentation,
+        )
         assertEquals("annotated property", workspace.requireProperty(annotatedTypeId, "name").documentation)
+        assertEquals(null, workspace.requireProperty(annotatedTypeId, "name").sourceDocumentation)
         assertEquals(
             "direct type",
             assertIs<LsiTypeDeclaration>(workspace[directTypeId]).documentation,
         )
+        assertEquals(
+            "direct type",
+            assertIs<LsiTypeDeclaration>(workspace[directTypeId]).sourceDocumentation,
+        )
         assertEquals("direct property", workspace.requireProperty(directTypeId, "name").documentation)
+        assertEquals("direct property", workspace.requireProperty(directTypeId, "name").sourceDocumentation)
+    }
+
+    @Test
+    fun `freezes annotated file scope without declarations`() {
+        val markerType = classDeclaration(
+            qualifiedName = "demo.FileMarker",
+            classKind = ClassKind.ANNOTATION_CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val sourceFile = file(
+            path = "/workspace/src/main/kotlin/scoped/package.kt",
+            packageName = "scoped",
+            annotations = sequenceOf(
+                annotation(
+                    type = markerType,
+                    arguments = emptyList(),
+                    useSiteTarget = AnnotationUseSiteTarget.FILE,
+                ),
+            ),
+        )
+        val workspace = emptyList<KSClassDeclaration>().toLsiWorkspace(
+            resolver = resolver(classesByName = mapOf("demo.FileMarker" to markerType)),
+            frontendOptions = frontendOptions,
+            fileScopes = listOf(sourceFile).toKspLsiFileScopePlan().validScopes,
+        )
+
+        assertTrue(workspace.declarations.isEmpty())
+        val scope = assertIs<LsiFileAnnotationScope>(
+            workspace.annotationScope(LsiSymbolId.fileScope("scoped", "package.kt")),
+        )
+        assertEquals("scoped", scope.packageName)
+        assertEquals("package.kt", scope.logicalPath)
+        assertEquals(LsiSymbolId.type("demo.FileMarker"), scope.annotations.single().type)
+        assertEquals(LsiAnnotationUseSiteTarget.FILE, scope.annotations.single().useSiteTarget)
+        assertEquals(LsiLanguage.KOTLIN, scope.origin.source?.language)
+        assertTrue(scope.origin.source?.path?.endsWith("scoped/package.kt") == true)
     }
 
     @Test
@@ -219,6 +272,7 @@ class KspLsiWorkspaceTest {
                 )
             ),
             frontendOptions,
+            fileScopes = listOfNotNull(binaryBook.containingFile).toKspLsiFileScopePlan().validScopes,
         )
 
         val bookId = LsiSymbolId.type("demo.BinaryBook")
@@ -240,7 +294,11 @@ class KspLsiWorkspaceTest {
             origin = Origin.KOTLIN_LIB,
             file = null,
         )
-        val workspace = listOf(javaBinary, kotlinBinary).toLsiWorkspace(resolver(), frontendOptions)
+        val workspace = listOf(javaBinary, kotlinBinary).toLsiWorkspace(
+            resolver = resolver(),
+            frontendOptions = frontendOptions,
+            fileScopes = emptyList(),
+        )
         val javaDeclaration = assertIs<LsiTypeDeclaration>(
             workspace[LsiSymbolId.type("demo.JavaBinary")]
         )
@@ -333,6 +391,7 @@ class KspLsiWorkspaceTest {
         val defaultJavaWorkspace = listOf(javaDeclaration).toLsiWorkspace(
             resolver(),
             frontendOptions,
+            fileScopes = listOfNotNull(javaDeclaration.containingFile).toKspLsiFileScopePlan().validScopes,
         )
         val keepPrefixOptions = LsiFrontendOptions.from(
             mapOf(LsiFrontendOptions.KEEP_IS_PREFIX_OPTION to "true"),
@@ -340,10 +399,12 @@ class KspLsiWorkspaceTest {
         val keepPrefixJavaWorkspace = listOf(javaDeclaration).toLsiWorkspace(
             resolver(),
             keepPrefixOptions,
+            fileScopes = listOfNotNull(javaDeclaration.containingFile).toKspLsiFileScopePlan().validScopes,
         )
         val kotlinWorkspace = listOf(kotlinDeclaration).toLsiWorkspace(
             resolver(),
             frontendOptions,
+            fileScopes = listOfNotNull(kotlinDeclaration.containingFile).toKspLsiFileScopePlan().validScopes,
         )
         val ownerId = LsiSymbolId.type("demo.Switches")
 
@@ -397,7 +458,11 @@ class KspLsiWorkspaceTest {
             declarations = { listOf(dataField, dataGetter) },
         )
 
-        val workspace = listOf(treeDeclaration).toLsiWorkspace(resolver(), frontendOptions)
+        val workspace = listOf(treeDeclaration).toLsiWorkspace(
+            resolver = resolver(),
+            frontendOptions = frontendOptions,
+            fileScopes = listOfNotNull(treeDeclaration.containingFile).toKspLsiFileScopePlan().validScopes,
+        )
 
         val ownerId = LsiSymbolId.type("demo.Tree")
         val fieldId = LsiSymbolId.field(ownerId, "data")
@@ -440,7 +505,11 @@ class KspLsiWorkspaceTest {
             declarations = { listOf(nested, inner) },
         )
 
-        val workspace = listOf(outer).toLsiWorkspace(resolver(), frontendOptions)
+        val workspace = listOf(outer).toLsiWorkspace(
+            resolver = resolver(),
+            frontendOptions = frontendOptions,
+            fileScopes = listOfNotNull(outer.containingFile).toKspLsiFileScopePlan().validScopes,
+        )
 
         val outerId = LsiSymbolId.type("demo.Outer")
         val outerSnapshot = assertIs<LsiTypeDeclaration>(workspace[outerId])
@@ -513,6 +582,11 @@ class KspLsiWorkspaceTest {
         val workspace = listOf(outer, javaSealed, kotlinSealed).toLsiWorkspace(
             resolver(classesByName = mapOf("java.lang.Record" to recordBase)),
             frontendOptions,
+            fileScopes = listOfNotNull(
+                outer.containingFile,
+                javaSealed.containingFile,
+                kotlinSealed.containingFile,
+            ).distinct().toKspLsiFileScopePlan().validScopes,
         )
 
         assertTrue(
@@ -526,6 +600,10 @@ class KspLsiWorkspaceTest {
         assertFalse(
             assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.JavaTypes.NestedRecord")])
                 .requiresEnclosingInstance,
+        )
+        assertEquals(
+            LsiTypeDeclarationKind.RECORD,
+            assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.JavaTypes.NestedRecord")]).kind,
         )
         assertFalse(
             assertIs<LsiTypeDeclaration>(workspace[LsiSymbolId.type("demo.JavaSealed")])
@@ -580,7 +658,11 @@ class KspLsiWorkspaceTest {
             declarations = { listOf(constructor) },
         )
 
-        val workspace = listOf(service).toLsiWorkspace(resolver(), frontendOptions)
+        val workspace = listOf(service).toLsiWorkspace(
+            resolver = resolver(),
+            frontendOptions = frontendOptions,
+            fileScopes = listOfNotNull(service.containingFile).toKspLsiFileScopePlan().validScopes,
+        )
 
         val serviceId = LsiSymbolId.type("demo.Service")
         val frozen = workspace.declarationsOfType<LsiConstructor>().single()
@@ -758,7 +840,16 @@ class KspLsiWorkspaceTest {
         }
 
         val workspace = listOf(parentDeclaration, middleDeclaration, childDeclaration, modeDeclaration)
-            .toLsiWorkspace(resolver, frontendOptions)
+            .toLsiWorkspace(
+                resolver = resolver,
+                frontendOptions = frontendOptions,
+                fileScopes = listOfNotNull(
+                    parentDeclaration.containingFile,
+                    middleDeclaration.containingFile,
+                    childDeclaration.containingFile,
+                    modeDeclaration.containingFile,
+                ).distinct().toKspLsiFileScopePlan().validScopes,
+            )
 
         val parentId = LsiSymbolId.type("demo.Parent")
         val middleId = LsiSymbolId.type("demo.Middle")
@@ -1041,6 +1132,7 @@ class KspLsiWorkspaceTest {
         val workspace = listOf(localModel).toLsiWorkspace(
             resolver(classesByName = classesByName),
             frontendOptions,
+            fileScopes = listOfNotNull(localModel.containingFile).toKspLsiFileScopePlan().validScopes,
         )
 
         val externalBaseId = LsiSymbolId.type("external.ExternalBase")
@@ -1113,7 +1205,11 @@ class KspLsiWorkspaceTest {
         )
 
         val function = listOf(service)
-            .toLsiWorkspace(resolver(), frontendOptions)
+            .toLsiWorkspace(
+                resolver = resolver(),
+                frontendOptions = frontendOptions,
+                fileScopes = listOfNotNull(service.containingFile).toKspLsiFileScopePlan().validScopes,
+            )
             .declarationsOfType<LsiFunction>()
             .single()
 
@@ -1191,7 +1287,11 @@ class KspLsiWorkspaceTest {
 
         val ownerId = LsiSymbolId.type("demo.Factory")
         val functions = listOf(factory)
-            .toLsiWorkspace(resolver(), frontendOptions)
+            .toLsiWorkspace(
+                resolver = resolver(),
+                frontendOptions = frontendOptions,
+                fileScopes = listOfNotNull(factory.containingFile).toKspLsiFileScopePlan().validScopes,
+            )
             .declarationsOfType<LsiFunction>()
 
         assertEquals(
@@ -1284,7 +1384,11 @@ class KspLsiWorkspaceTest {
 
         val ownerId = LsiSymbolId.type("demo.BoundedFactory")
         val ids = listOf(factory)
-            .toLsiWorkspace(resolver(), frontendOptions)
+            .toLsiWorkspace(
+                resolver = resolver(),
+                frontendOptions = frontendOptions,
+                fileScopes = listOfNotNull(factory.containingFile).toKspLsiFileScopePlan().validScopes,
+            )
             .declarationsOfType<LsiFunction>()
             .mapTo(linkedSetOf(), LsiFunction::id)
 
@@ -1320,7 +1424,11 @@ class KspLsiWorkspaceTest {
         )
 
         val exception = assertFailsWith<IllegalArgumentException> {
-            listOf(invalidType).toLsiWorkspace(resolver(), frontendOptions)
+            listOf(invalidType).toLsiWorkspace(
+                resolver = resolver(),
+                frontendOptions = frontendOptions,
+                fileScopes = listOfNotNull(invalidType.containingFile).toKspLsiFileScopePlan().validScopes,
+            )
         }
 
         assertTrue(exception.message.orEmpty().contains("current round"))
@@ -1367,13 +1475,18 @@ class KspLsiWorkspaceTest {
         }
     }
 
-    private fun file(path: String): KSFile {
+    private fun file(
+        path: String,
+        packageName: String = "demo",
+        annotations: Sequence<KSAnnotation> = emptySequence(),
+    ): KSFile {
         return proxy("KSFile($path)") { method, _ ->
             when (method.name) {
                 "getFilePath" -> path
                 "getFileName" -> path.substringAfterLast('/')
-                "getPackageName" -> name("demo")
-                "getDeclarations", "getAnnotations" -> emptySequence<KSDeclaration>()
+                "getPackageName" -> name(packageName)
+                "getDeclarations" -> emptySequence<KSDeclaration>()
+                "getAnnotations" -> annotations
                 "getOrigin" -> Origin.KOTLIN
                 "getLocation" -> FileLocation(path, 1)
                 "accept" -> true

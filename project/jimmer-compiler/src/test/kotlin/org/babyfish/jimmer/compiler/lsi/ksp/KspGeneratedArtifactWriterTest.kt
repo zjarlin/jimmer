@@ -11,6 +11,7 @@ import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
@@ -73,10 +74,35 @@ class KspGeneratedArtifactWriterTest {
         assertEquals("", resourceCall.extension)
         assertEquals("schema", resourceCall.content())
         assertTrue(resourceCall.dependencies.aggregating)
+        assertFalse(resourceCall.dependencies.isAllSources)
         assertEquals(3, resourceCall.dependencies.originatingFiles.size)
         assertSame(firstFile, resourceCall.dependencies.originatingFiles[0])
         assertSame(secondFile, resourceCall.dependencies.originatingFiles[1])
         assertSame(thirdFile, resourceCall.dependencies.originatingFiles[2])
+    }
+
+    @Test
+    fun `writes final aggregating resource with all files dependency`() {
+        val codeGenerator = CapturingCodeGenerator()
+        val writer = KspGeneratedArtifactWriter(codeGenerator)
+
+        writer.write(
+            GeneratedArtifact.create(
+                kind = ArtifactKind.RESOURCE,
+                path = "META-INF/jimmer/doc.properties",
+                content = "demo.Book=Book",
+                aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                originatingSymbols = setOf(LsiSymbolId.type("demo.Book")),
+                originatingSources = setOf(LsiSource.of("/workspace/Book.kt", LsiLanguage.KOTLIN)),
+            ),
+            emptyMap(),
+            emptyList(),
+        )
+
+        val resourceCall = codeGenerator.calls.single()
+        assertTrue(resourceCall.dependencies.isAllSources)
+        assertTrue(resourceCall.dependencies.aggregating)
+        assertTrue(resourceCall.dependencies.originatingFiles.isEmpty())
     }
 
     @Test
