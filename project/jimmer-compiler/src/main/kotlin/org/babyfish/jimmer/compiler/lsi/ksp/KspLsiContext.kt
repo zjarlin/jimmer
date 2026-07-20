@@ -215,6 +215,7 @@ internal fun KSDeclaration.toLsiModality(): LsiModality {
         Modifier.SEALED in modifiers -> LsiModality.SEALED
         this is KSClassDeclaration && isAbstract() -> LsiModality.ABSTRACT
         this is KSPropertyDeclaration && isAbstract() -> LsiModality.ABSTRACT
+        this is KSFunctionDeclaration && isAbstract -> LsiModality.ABSTRACT
         Modifier.ABSTRACT in modifiers -> LsiModality.ABSTRACT
         Modifier.OPEN in modifiers -> LsiModality.OPEN
         Modifier.FINAL in modifiers || Modifier.PRIVATE in modifiers -> LsiModality.FINAL

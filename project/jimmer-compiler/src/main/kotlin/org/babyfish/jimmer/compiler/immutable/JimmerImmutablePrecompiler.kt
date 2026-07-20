@@ -3,9 +3,11 @@ package org.babyfish.jimmer.compiler.immutable
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -71,6 +73,7 @@ class JimmerImmutablePrecompiler {
                     type = type,
                     kind = kindByTypeId.getValue(type.id),
                     microServiceMetadata = microServiceMetadataByTypeId.getValue(type.id),
+                    workspace = workspace,
                 )
                 compileType(
                     type = type,
@@ -588,6 +591,7 @@ class JimmerImmutablePrecompiler {
         type: LsiTypeDeclaration,
         kind: JimmerImmutableTypeKind,
         microServiceMetadata: JimmerMicroServiceMetadata,
+        workspace: LsiWorkspace,
     ) {
         if (type.enclosingTypeId != null) {
             throw JimmerImmutablePrecompileException(
@@ -624,6 +628,38 @@ class JimmerImmutablePrecompiler {
                     "when acrossMicroServices is true",
             )
         }
+        validateDeclaredFunctions(type, workspace)
+    }
+
+    private fun validateDeclaredFunctions(
+        type: LsiTypeDeclaration,
+        workspace: LsiWorkspace,
+    ) {
+        type.memberIds
+            .mapNotNull { memberId -> workspace[memberId] as? LsiFunction }
+            .sortedBy(LsiFunction::id)
+            .forEach { function ->
+                if (function.modality == LsiModality.ABSTRACT) {
+                    throw JimmerImmutablePrecompileException(
+                        declarationId = function.id,
+                        message = "Immutable type '${type.qualifiedName}' cannot declare abstract function " +
+                            "'${function.name}'",
+                    )
+                }
+                val jimmerAnnotationName = function.annotations
+                    .filter { annotation -> annotation.useSiteTarget == LsiAnnotationUseSiteTarget.METHOD }
+                    .map { annotation -> annotation.type.requireTypeQualifiedName() }
+                    .filter { annotationName -> annotationName.startsWith(JIMMER_PACKAGE_PREFIX) }
+                    .minOrNull()
+                if (jimmerAnnotationName != null) {
+                    throw JimmerImmutablePrecompileException(
+                        declarationId = function.id,
+                        message = "Immutable non-abstract function '${function.name}' declared by " +
+                            "'${type.qualifiedName}' cannot be decorated by Jimmer annotation " +
+                            "@$jimmerAnnotationName",
+                    )
+                }
+            }
     }
 
     private fun compileType(
@@ -2703,6 +2739,8 @@ private fun JimmerImmutableTypeKind.description(): String {
         JimmerImmutableTypeKind.EMBEDDABLE -> "an embeddable"
     }
 }
+
+private const val JIMMER_PACKAGE_PREFIX = "org.babyfish.jimmer."
 
 private val IMMUTABLE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.Immutable")
 private val ENTITY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")

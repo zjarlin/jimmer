@@ -19,6 +19,7 @@ import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiOverride
@@ -34,6 +35,87 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutablePrecompilerTest {
+
+    @Test
+    fun `allows concrete helper functions without jimmer annotations`() {
+        val typeId = LsiSymbolId.type("demo.HelperBase")
+        val functionId = LsiSymbolId.function(typeId, "normalize")
+        val typedFunctionId = LsiSymbolId.function(typeId, "typed")
+        val schema = JimmerImmutablePrecompiler().compile(
+            LsiWorkspace(
+                declarations = listOf(
+                    type("demo.HelperBase", MAPPED_SUPERCLASS, listOf(functionId, typedFunctionId)),
+                    LsiFunction(
+                        id = functionId,
+                        name = "normalize",
+                        ownerId = typeId,
+                        returnType = LsiPrimitiveType(LsiPrimitiveKind.INT),
+                        modality = LsiModality.OPEN,
+                        origin = SYNTHETIC_ORIGIN,
+                    ),
+                    LsiFunction(
+                        id = typedFunctionId,
+                        name = "typed",
+                        ownerId = typeId,
+                        returnType = LsiDeclaredType(STRING_TYPE),
+                        modality = LsiModality.FINAL,
+                        annotations = listOf(
+                            annotation(T_NULLABLE).copy(
+                                useSiteTarget = LsiAnnotationUseSiteTarget.RETURN_TYPE,
+                            )
+                        ),
+                        origin = SYNTHETIC_ORIGIN,
+                    ),
+                )
+            )
+        )
+
+        assertTrue(schema.types.single().props.isEmpty())
+    }
+
+    @Test
+    fun `rejects abstract and annotated helper functions`() {
+        fun failure(
+            typeName: String,
+            modality: LsiModality,
+            annotations: List<LsiAnnotation> = emptyList(),
+        ): JimmerImmutablePrecompileException {
+            val typeId = LsiSymbolId.type("demo.$typeName")
+            val functionId = LsiSymbolId.function(typeId, "normalize")
+            return assertFailsWith {
+                JimmerImmutablePrecompiler().compile(
+                    LsiWorkspace(
+                        declarations = listOf(
+                            type("demo.$typeName", MAPPED_SUPERCLASS, listOf(functionId)),
+                            LsiFunction(
+                                id = functionId,
+                                name = "normalize",
+                                ownerId = typeId,
+                                returnType = LsiPrimitiveType(LsiPrimitiveKind.INT),
+                                modality = modality,
+                                annotations = annotations,
+                                origin = SYNTHETIC_ORIGIN,
+                            ),
+                        )
+                    )
+                )
+            }
+        }
+
+        val abstractFailure = failure("AbstractHelperBase", LsiModality.ABSTRACT)
+        assertTrue(abstractFailure.message.orEmpty().contains("cannot declare abstract function 'normalize'"))
+
+        val annotatedFailure = failure(
+            "AnnotatedHelperBase",
+            LsiModality.OPEN,
+            listOf(
+                annotation(API_IGNORE).copy(
+                    useSiteTarget = LsiAnnotationUseSiteTarget.METHOD,
+                )
+            ),
+        )
+        assertTrue(annotatedFailure.message.orEmpty().contains("Jimmer annotation @org.babyfish.jimmer.client.ApiIgnore"))
+    }
 
     @Test
     fun `entity overrides mapped superclass default annotation after generic substitution`() {
@@ -4262,6 +4344,8 @@ class JimmerImmutablePrecompilerTest {
         private val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         private val VERSION = LsiSymbolId.type("org.babyfish.jimmer.sql.Version")
         private val LOGICAL_DELETED = LsiSymbolId.type("org.babyfish.jimmer.sql.LogicalDeleted")
+        private val API_IGNORE = LsiSymbolId.type("org.babyfish.jimmer.client.ApiIgnore")
+        private val T_NULLABLE = LsiSymbolId.type("org.babyfish.jimmer.client.TNullable")
         private val ONE_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToOne")
         private val MANY_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
         private val ONE_TO_MANY = LsiSymbolId.type("org.babyfish.jimmer.sql.OneToMany")

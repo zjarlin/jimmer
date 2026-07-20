@@ -223,6 +223,216 @@ class JimmerImmutableFrontendParityTest {
     }
 
     @Test
+    fun `real apt and ksp frontends accept concrete immutable helper functions`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface FunctionRecord {
+                    @Id
+                    long id();
+
+                    default int normalize(int value) {
+                        return value;
+                    }
+
+                    default void touch() {}
+
+                    default <T> T echo(T value) throws Exception {
+                        return value;
+                    }
+
+                    static int twice(int value) {
+                        return value * 2;
+                    }
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface FunctionRecord {
+                    @Id
+                    val id: Long
+
+                    fun normalize(value: Int): Int = value
+
+                    fun touch() {}
+
+                    @Throws(Exception::class)
+                    fun <T> echo(value: T): T = value
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        assertEquals(assertNotNull(apt.schema).normalizedSnapshot(), assertNotNull(ksp.schema).normalizedSnapshot())
+    }
+
+    @Test
+    fun `real apt default formula and ksp calculated property remain properties`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.Formula;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface FormulaRecord {
+                    @Id
+                    long id();
+
+                    String firstName();
+
+                    String lastName();
+
+                    @Formula(dependencies = {"firstName", "lastName"})
+                    default String fullName() {
+                        return firstName() + " " + lastName();
+                    }
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.Formula
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface FormulaRecord {
+                    @Id
+                    val id: Long
+
+                    val firstName: String
+
+                    val lastName: String
+
+                    @Formula(dependencies = ["firstName", "lastName"])
+                    val fullName: String
+                        get() = "${'$'}firstName ${'$'}lastName"
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        assertEquals(
+            JimmerFormulaKind.LANGUAGE,
+            aptSchema.types.single().props.single { prop -> prop.name == "fullName" }.formulaKind,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject abstract immutable functions identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface FunctionRecord {
+                    @Id
+                    long id();
+
+                    int normalize(int value);
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface FunctionRecord {
+                    @Id
+                    val id: Long
+
+                    fun normalize(value: Int): Int
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(apt.diagnostic.orEmpty().contains("cannot declare abstract function 'normalize'"))
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject jimmer annotations on concrete functions identically`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.client.ApiIgnore;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface FunctionRecord {
+                    @Id
+                    long id();
+
+                    @ApiIgnore
+                    default int normalize(int value) {
+                        return value;
+                    }
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.client.ApiIgnore
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface FunctionRecord {
+                    @Id
+                    val id: Long
+
+                    @ApiIgnore
+                    fun normalize(value: Int): Int = value
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(
+            apt.diagnostic.orEmpty().contains(
+                "Jimmer annotation @org.babyfish.jimmer.client.ApiIgnore"
+            )
+        )
+    }
+
+    @Test
     fun `real apt and ksp frontends produce identical overridden property annotations`() {
         val apt = compileApt(OVERRIDDEN_PROPERTY_JAVA_SOURCE)
         val ksp = compileKsp(OVERRIDDEN_PROPERTY_KOTLIN_SOURCE)
