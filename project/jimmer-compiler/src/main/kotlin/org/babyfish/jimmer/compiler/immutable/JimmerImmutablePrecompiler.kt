@@ -2498,11 +2498,26 @@ private fun JimmerImmutableProp.valueType(): LsiTypeRef {
         ?: type
 }
 
-private fun LsiTypeRef.boxedTypeSignature(ignoreRootNullability: Boolean): String {
+private fun LsiTypeRef.boxedTypeSignature(
+    ignoreRootNullability: Boolean,
+    root: Boolean = true,
+): String {
     val base = when (this) {
-        is LsiPrimitiveType -> "scalar:${kind.name}"
+        is LsiPrimitiveType -> buildString {
+            append("scalar:${kind.name}")
+            if (!root) {
+                append(if (boxed) ":boxed" else ":primitive")
+            }
+        }
         is LsiDeclaredType -> BOXED_PRIMITIVE_KINDS[declarationId]
-            ?.let { kind -> "scalar:${kind.name}" }
+            ?.let { kind ->
+                buildString {
+                    append("scalar:${kind.name}")
+                    if (!root) {
+                        append(":boxed")
+                    }
+                }
+            }
             ?: buildString {
                 append(if (declarationId in LIST_TYPE_IDS) CONVERTER_LIST_TYPE.value else declarationId.value)
                 if (arguments.isNotEmpty()) {
@@ -2511,7 +2526,10 @@ private fun LsiTypeRef.boxedTypeSignature(ignoreRootNullability: Boolean): Strin
                     append('>')
                 }
             }
-        is LsiArrayType -> "array:${elementType.boxedTypeSignature(ignoreRootNullability = false)}"
+        is LsiArrayType -> "array:${elementType.boxedTypeSignature(
+            ignoreRootNullability = false,
+            root = false,
+        )}"
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
     }
@@ -2522,11 +2540,11 @@ private fun LsiTypeArgument.boxedTypeSignature(): String {
     return when (variance) {
         site.addzero.lsi.model.LsiVariance.STAR -> "*"
         site.addzero.lsi.model.LsiVariance.INVARIANT ->
-            requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false)
+            requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false, root = false)
         site.addzero.lsi.model.LsiVariance.IN ->
-            "in:${requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false)}"
+            "in:${requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false, root = false)}"
         site.addzero.lsi.model.LsiVariance.OUT ->
-            "out:${requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false)}"
+            "out:${requireNotNull(type).boxedTypeSignature(ignoreRootNullability = false, root = false)}"
     }
 }
 
@@ -2875,7 +2893,12 @@ private fun LsiTypeRef.normalizedTypeSignature(
                 append('>')
             }
         }
-        is LsiPrimitiveType -> "primitive:${kind.name.lowercase()}"
+        is LsiPrimitiveType -> buildString {
+            append("primitive:${kind.name.lowercase()}")
+            if (boxed) {
+                append(":boxed")
+            }
+        }
         is LsiArrayType -> "array:${elementType.normalizedTypeSignature()}"
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"

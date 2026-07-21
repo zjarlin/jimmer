@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.compiler.error.apt
 
 import com.squareup.javapoet.AnnotationSpec
-import com.squareup.javapoet.ArrayTypeName
 import com.squareup.javapoet.ClassName
 import com.squareup.javapoet.CodeBlock
 import com.squareup.javapoet.FieldSpec
@@ -11,24 +10,18 @@ import com.squareup.javapoet.ParameterSpec
 import com.squareup.javapoet.ParameterizedTypeName
 import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeSpec
-import com.squareup.javapoet.TypeVariableName
-import com.squareup.javapoet.WildcardTypeName
 import javax.lang.model.element.Modifier
 import org.babyfish.jimmer.compiler.error.ErrorCodeModel
 import org.babyfish.jimmer.compiler.error.ErrorFamilyModel
 import org.babyfish.jimmer.compiler.error.ErrorFieldModel
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import org.babyfish.jimmer.compiler.render.apt.toJavaTypeName
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
-import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiWorkspace
 
 class ErrorJavaRenderer {
@@ -291,46 +284,6 @@ private fun ErrorFieldModel.javaType(): TypeName {
 
 private fun ErrorFieldModel.nullabilityAnnotation(): ClassName {
     return if (nullable) NULLABLE else NON_NULL
-}
-
-private fun LsiTypeRef.toJavaTypeName(): TypeName {
-    return when (this) {
-        is LsiPrimitiveType -> when (kind) {
-            LsiPrimitiveKind.BOOLEAN -> TypeName.BOOLEAN
-            LsiPrimitiveKind.BYTE -> TypeName.BYTE
-            LsiPrimitiveKind.SHORT -> TypeName.SHORT
-            LsiPrimitiveKind.INT -> TypeName.INT
-            LsiPrimitiveKind.LONG -> TypeName.LONG
-            LsiPrimitiveKind.CHAR -> TypeName.CHAR
-            LsiPrimitiveKind.FLOAT -> TypeName.FLOAT
-            LsiPrimitiveKind.DOUBLE -> TypeName.DOUBLE
-            LsiPrimitiveKind.UNIT,
-            LsiPrimitiveKind.VOID,
-            -> TypeName.VOID
-        }
-        is LsiDeclaredType -> {
-            val raw = ClassName.bestGuess(declarationId.qualifiedTypeName())
-            if (arguments.isEmpty()) {
-                raw
-            } else {
-                ParameterizedTypeName.get(raw, *arguments.map { argument ->
-                    when (argument.variance) {
-                        LsiVariance.STAR -> WildcardTypeName.subtypeOf(Any::class.java)
-                        LsiVariance.INVARIANT -> requireNotNull(argument.type).toJavaTypeName().box()
-                        LsiVariance.IN -> WildcardTypeName.supertypeOf(requireNotNull(argument.type).toJavaTypeName().box())
-                        LsiVariance.OUT -> WildcardTypeName.subtypeOf(requireNotNull(argument.type).toJavaTypeName().box())
-                    }
-                }.toTypedArray())
-            }
-        }
-        is LsiArrayType -> ArrayTypeName.of(elementType.toJavaTypeName())
-        is LsiTypeParameterRef -> TypeVariableName.get(parameterId.requireTypeParameterName())
-        is LsiUnresolvedType -> ClassName.bestGuess(displayName.filterNot(Char::isWhitespace))
-    }
-}
-
-private fun site.addzero.lsi.core.LsiSymbolId.qualifiedTypeName(): String {
-    return requireTypeQualifiedName()
 }
 
 private val CLIENT_EXCEPTION = ClassName.get("org.babyfish.jimmer", "ClientException")

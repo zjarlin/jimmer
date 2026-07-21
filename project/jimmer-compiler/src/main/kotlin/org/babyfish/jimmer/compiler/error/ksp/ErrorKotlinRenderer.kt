@@ -2,46 +2,28 @@ package org.babyfish.jimmer.compiler.error.ksp
 
 import com.squareup.kotlinpoet.ANY
 import com.squareup.kotlinpoet.AnnotationSpec
-import com.squareup.kotlinpoet.BOOLEAN
-import com.squareup.kotlinpoet.BYTE
-import com.squareup.kotlinpoet.CHAR
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
-import com.squareup.kotlinpoet.DOUBLE
-import com.squareup.kotlinpoet.FLOAT
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
-import com.squareup.kotlinpoet.INT
 import com.squareup.kotlinpoet.KModifier
-import com.squareup.kotlinpoet.LONG
 import com.squareup.kotlinpoet.LIST
 import com.squareup.kotlinpoet.MAP
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
-import com.squareup.kotlinpoet.SHORT
 import com.squareup.kotlinpoet.STRING
-import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
-import com.squareup.kotlinpoet.TypeVariableName
-import com.squareup.kotlinpoet.UNIT
-import com.squareup.kotlinpoet.WildcardTypeName
 import org.babyfish.jimmer.compiler.error.ErrorCodeModel
 import org.babyfish.jimmer.compiler.error.ErrorFamilyModel
 import org.babyfish.jimmer.compiler.error.ErrorFieldModel
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
-import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiWorkspace
 
 class ErrorKotlinRenderer {
@@ -305,47 +287,6 @@ private fun ErrorFieldModel.kotlinType(): TypeName {
     return result.copy(nullable = nullable)
 }
 
-private fun LsiTypeRef.toKotlinTypeName(): TypeName {
-    return when (this) {
-        is LsiPrimitiveType -> when (kind) {
-            LsiPrimitiveKind.BOOLEAN -> BOOLEAN
-            LsiPrimitiveKind.BYTE -> BYTE
-            LsiPrimitiveKind.SHORT -> SHORT
-            LsiPrimitiveKind.INT -> INT
-            LsiPrimitiveKind.LONG -> LONG
-            LsiPrimitiveKind.CHAR -> CHAR
-            LsiPrimitiveKind.FLOAT -> FLOAT
-            LsiPrimitiveKind.DOUBLE -> DOUBLE
-            LsiPrimitiveKind.UNIT,
-            LsiPrimitiveKind.VOID,
-            -> UNIT
-        }
-        is LsiDeclaredType -> {
-            val raw = KOTLIN_TYPES[declarationId.qualifiedTypeName()]
-                ?: ClassName.bestGuess(declarationId.qualifiedTypeName())
-            if (arguments.isEmpty()) {
-                raw
-            } else {
-                raw.parameterizedBy(arguments.map { argument ->
-                    when (argument.variance) {
-                        LsiVariance.STAR -> STAR
-                        LsiVariance.INVARIANT -> requireNotNull(argument.type).toKotlinTypeName()
-                        LsiVariance.IN -> WildcardTypeName.consumerOf(requireNotNull(argument.type).toKotlinTypeName())
-                        LsiVariance.OUT -> WildcardTypeName.producerOf(requireNotNull(argument.type).toKotlinTypeName())
-                    }
-                })
-            }
-        }
-        is LsiArrayType -> ClassName("kotlin", "Array").parameterizedBy(elementType.toKotlinTypeName())
-        is LsiTypeParameterRef -> TypeVariableName(parameterId.requireTypeParameterName())
-        is LsiUnresolvedType -> ClassName.bestGuess(displayName.filterNot(Char::isWhitespace))
-    }
-}
-
-private fun site.addzero.lsi.core.LsiSymbolId.qualifiedTypeName(): String {
-    return requireTypeQualifiedName()
-}
-
 private val CLIENT_EXCEPTION = ClassName("org.babyfish.jimmer", "ClientException")
 private val GENERATED_BY = ClassName("org.babyfish.jimmer.internal", "GeneratedBy")
 private val CODE_BASED_EXCEPTION = ClassName("org.babyfish.jimmer.error", "CodeBasedException")
@@ -353,16 +294,3 @@ private val CODE_BASED_RUNTIME_EXCEPTION = ClassName("org.babyfish.jimmer.error"
 private val JSON_IGNORE = ClassName("com.fasterxml.jackson.annotation", "JsonIgnore")
 private val JVM_STATIC = ClassName("kotlin.jvm", "JvmStatic")
 private val THROWABLE = ClassName("kotlin", "Throwable")
-
-private val KOTLIN_TYPES = mapOf(
-    "java.lang.Boolean" to BOOLEAN,
-    "java.lang.Byte" to BYTE,
-    "java.lang.Short" to SHORT,
-    "java.lang.Integer" to INT,
-    "java.lang.Long" to LONG,
-    "java.lang.Character" to CHAR,
-    "java.lang.Float" to FLOAT,
-    "java.lang.Double" to DOUBLE,
-    "java.lang.String" to STRING,
-    "java.lang.Object" to ANY,
-)

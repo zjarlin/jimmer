@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.transactional.apt
 
 import com.squareup.javapoet.AnnotationSpec
+import com.squareup.javapoet.ArrayTypeName
 import com.squareup.javapoet.ClassName
 import com.squareup.javapoet.CodeBlock
 import com.squareup.javapoet.JavaFile
@@ -188,7 +189,10 @@ private fun TransactionalMethod.transactionCode(
 }
 
 private fun TransactionalParameter.toJavaParameter(): ParameterSpec {
-    return ParameterSpec.builder(type.toJavaTypeName(), name)
+    val javaType = type.toJavaTypeName().let { elementType ->
+        if (vararg) ArrayTypeName.of(elementType) else elementType
+    }
+    return ParameterSpec.builder(javaType, name)
         .apply {
             this@toJavaParameter.annotations
                 .filter { annotation ->

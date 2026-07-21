@@ -83,6 +83,33 @@ class TransactionalPrecompilerTest {
     }
 
     @Test
+    fun `snapshot distinguishes primitive and boxed method types`() {
+        val schema = TransactionalPrecompiler().compile(javaWorkspace())
+        val type = schema.types.single()
+        val rawSchema = schema.copy(
+            types = listOf(
+                type.copy(
+                    methods = type.methods.map { method ->
+                        method.copy(returnType = LsiPrimitiveType(LsiPrimitiveKind.INT))
+                    }
+                )
+            ),
+        )
+        val boxedSchema = rawSchema.copy(
+            types = rawSchema.types.map { transactionalType ->
+                transactionalType.copy(
+                    methods = transactionalType.methods.map { method ->
+                        method.copy(returnType = LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true))
+                    }
+                )
+            },
+        )
+
+        assertNotEquals(rawSchema.normalizedSnapshot(), boxedSchema.normalizedSnapshot())
+        assertNotEquals(rawSchema.fingerprint(), boxedSchema.fingerprint())
+    }
+
+    @Test
     fun `rejects invalid type sql client and methods`() {
         assertRejected(
             workspace(modality = LsiModality.FINAL),

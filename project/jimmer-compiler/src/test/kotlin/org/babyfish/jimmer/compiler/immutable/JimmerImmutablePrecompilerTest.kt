@@ -2875,6 +2875,7 @@ class JimmerImmutablePrecompilerTest {
                         type = LsiPrimitiveType(
                             LsiPrimitiveKind.INT,
                             nullability = LsiNullability.PLATFORM,
+                            boxed = true,
                         ),
                         annotations = listOf(
                             annotation(LsiSymbolId.type("org.jetbrains.annotations.Nullable")),
@@ -2893,6 +2894,7 @@ class JimmerImmutablePrecompilerTest {
                         type = LsiPrimitiveType(
                             LsiPrimitiveKind.INT,
                             nullability = LsiNullability.NULLABLE,
+                            boxed = true,
                         ),
                     ),
                 ),
@@ -2903,7 +2905,7 @@ class JimmerImmutablePrecompilerTest {
         val kspProp = kspSchema.types.single().props.single()
         assertTrue(aptProp.nullable)
         assertEquals(LsiNullability.NULLABLE, aptProp.type.nullability)
-        assertEquals("primitive:int?", aptProp.type.normalizedTypeSignature())
+        assertEquals("primitive:int:boxed?", aptProp.type.normalizedTypeSignature())
         assertEquals(kspProp.type, aptProp.type)
         assertTrue(aptProp.annotations.any { annotation ->
             annotation.type == LsiSymbolId.type("org.jetbrains.annotations.Nullable")
@@ -3000,6 +3002,72 @@ class JimmerImmutablePrecompilerTest {
         assertTrue(converter.propertyNullable)
         assertTrue(schema.normalizedSnapshot().contains("validation"))
         assertTrue(schema.normalizedSnapshot().contains("converter"))
+    }
+
+    @Test
+    fun `converter source boxing is equivalent only at the root`() {
+        val modelId = LsiSymbolId.type("demo.BoxingModel")
+        val propertyId = LsiSymbolId.property(modelId, "value")
+
+        fun compile(
+            propertyType: LsiTypeRef,
+            converterSourceType: LsiTypeRef,
+        ): JimmerImmutableSchema {
+            val valueProp = property(
+                ownerId = modelId,
+                name = "value",
+                type = propertyType,
+                annotations = listOf(annotation(CODE_FORMAT)),
+            )
+            val codeFormatType = declaration(
+                qualifiedName = "demo.CodeFormat",
+                kind = LsiTypeDeclarationKind.ANNOTATION,
+                annotations = listOf(
+                    annotation(
+                        JSON_CONVERTER,
+                        mapOf(
+                            "value" to LsiAnnotationValue.ClassValue(LsiDeclaredType(CODE_CONVERTER))
+                        ),
+                    )
+                ),
+            )
+            val converterType = declaration(
+                qualifiedName = "demo.CodeConverter",
+                kind = LsiTypeDeclarationKind.CLASS,
+                superTypes = listOf(
+                    LsiDeclaredType(
+                        declarationId = CONVERTER,
+                        arguments = listOf(
+                            LsiTypeArgument.invariant(converterSourceType),
+                            LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE)),
+                        ),
+                    )
+                ),
+            )
+            return compileFixture(
+                LsiWorkspace(
+                    declarations = listOf(
+                        type("demo.BoxingModel", IMMUTABLE, listOf(propertyId)),
+                        valueProp,
+                        codeFormatType,
+                        converterType,
+                    ),
+                )
+            )
+        }
+
+        val rawInt = LsiPrimitiveType(LsiPrimitiveKind.INT)
+        val boxedInt = LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true)
+        val scalarSchema = compile(rawInt, boxedInt)
+        assertEquals(rawInt, scalarSchema.types.single().props.single().type)
+
+        val failure = assertFailsWith<JimmerImmutablePrecompileException> {
+            compile(
+                propertyType = LsiArrayType(rawInt),
+                converterSourceType = LsiArrayType(boxedInt),
+            )
+        }
+        assertTrue(failure.message.orEmpty().contains("source type"), failure.message)
     }
 
     @Test
@@ -3354,6 +3422,11 @@ class JimmerImmutablePrecompilerTest {
             baseType = LsiDeclaredType(STRING_TYPE),
             childType = LsiDeclaredType(STRING_TYPE, nullability = LsiNullability.NULLABLE),
             expected = "nullability",
+        )
+        assertOverrideRejected(
+            baseType = LsiPrimitiveType(LsiPrimitiveKind.INT),
+            childType = LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true),
+            expected = "resolved type",
         )
         assertOverrideRejected(
             baseType = LsiDeclaredType(STRING_TYPE),

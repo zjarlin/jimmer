@@ -27,6 +27,7 @@ import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.mergeLsiTypeSeeds
 import site.addzero.lsi.model.toAnnotationMemberType
+import site.addzero.lsi.model.toJvmCallableParameterType
 import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSource
 import javax.annotation.processing.ProcessingEnvironment
@@ -553,12 +554,19 @@ class AptLsiWorkspaceBuilder(
             annotations = asType().annotationMirrors,
             useSiteTarget = LsiAnnotationUseSiteTarget.PARAMETER,
         )
+        val parameterType = if (vararg) {
+            val arrayType = asType() as? javax.lang.model.type.ArrayType
+                ?: error("APT vararg parameter must have an array type: $this")
+            arrayType.componentType
+        } else {
+            asType()
+        }
         return LsiParameter(
             id = LsiSymbolId.parameter(callableId, index, simpleName.toString()),
             name = simpleName.toString(),
             callableId = callableId,
             index = index,
-            type = context.toLsiType(asType(), typeParameterIds),
+            type = context.toLsiType(parameterType, typeParameterIds).toJvmCallableParameterType(),
             vararg = vararg,
             documentation = context.documentation(this),
             sourceDocumentation = context.sourceDocumentation(this),

@@ -24,7 +24,11 @@ internal fun LsiTypeRef.toJavaTypeName(): TypeName {
     return when (this) {
         is LsiPrimitiveType -> {
             val primitiveTypeName = kind.toJavaTypeName()
-            if (boxed) primitiveTypeName.box() else primitiveTypeName
+            when {
+                !boxed -> primitiveTypeName
+                kind == LsiPrimitiveKind.UNIT -> ClassName.get("kotlin", "Unit")
+                else -> primitiveTypeName.box()
+            }
         }
         is LsiDeclaredType -> {
             val rawType = ClassName.bestGuess(declarationId.requireTypeQualifiedName())
@@ -116,7 +120,7 @@ private fun LsiAnnotationValue.toJavaAnnotationValue(): CodeBlock {
             ClassName.bestGuess(enumType.requireTypeQualifiedName()),
             entryName,
         )
-        is LsiAnnotationValue.ClassValue -> CodeBlock.of("\$T.class", type.toJavaTypeName())
+        is LsiAnnotationValue.ClassValue -> CodeBlock.of("\$T.class", type.toJavaClassLiteralTypeName())
         is LsiAnnotationValue.NestedAnnotationValue -> CodeBlock.of(
             "\$L",
             annotation.toJavaAnnotationSpec(),
@@ -133,6 +137,15 @@ private fun LsiAnnotationValue.toJavaAnnotationValue(): CodeBlock {
             }
             .add("}")
             .build()
+    }
+}
+
+private fun LsiTypeRef.toJavaClassLiteralTypeName(): TypeName {
+    val primitive = this as? LsiPrimitiveType
+    return if (primitive?.kind == LsiPrimitiveKind.UNIT) {
+        ClassName.get("kotlin", "Unit")
+    } else {
+        toJavaTypeName()
     }
 }
 

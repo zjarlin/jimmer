@@ -505,6 +505,17 @@ class AptLsiWorkspaceTest {
         assertEquals(LsiSymbolId.constructor(modelId), privateConstructor.id)
         val publicConstructor = constructors.single { constructor -> constructor.parameters.size == 3 }
         assertEquals(LsiVisibility.PUBLIC, publicConstructor.visibility)
+        assertEquals(
+            LsiSymbolId.constructor(
+                modelId,
+                listOf(
+                    "parameter:type:demo.Model:0",
+                    "parameter:method:<init>:0:type:java.lang.CharSequence",
+                    "array:primitive:int",
+                ),
+            ),
+            publicConstructor.id,
+        )
         assertEquals(LsiAnnotationUseSiteTarget.CONSTRUCTOR, publicConstructor.annotations.single().useSiteTarget)
         assertEquals(
             LsiSymbolId.type("demo.ParameterMarker"),
@@ -515,7 +526,10 @@ class AptLsiWorkspaceTest {
             assertIs<LsiTypeParameterRef>(publicConstructor.parameters.first().type).parameterId,
         )
         assertTrue(publicConstructor.parameters.last().vararg)
-        assertIs<LsiArrayType>(publicConstructor.parameters.last().type)
+        assertEquals(
+            LsiPrimitiveKind.INT,
+            assertIs<LsiPrimitiveType>(publicConstructor.parameters.last().type).kind,
+        )
         assertEquals(
             LsiSymbolId.type("java.lang.CharSequence"),
             assertIs<LsiDeclaredType>(publicConstructor.typeParameters.single().upperBounds.single()).declarationId,
@@ -844,11 +858,18 @@ class AptLsiWorkspaceTest {
             "demo/Factory.java" to """
                 package demo;
 
+                import java.util.List;
+
                 public class Factory {
                     public <E> void of(E first, E second) {}
                     public <E> void of(E first, E... rest) {}
                     public <T extends Number> void convert(T value) {}
                     public <T extends CharSequence> void convert(T value) {}
+                    public void raw(int value) {}
+                    public void boxed(Integer value) {}
+                    public void primitiveArray(int[] values) {}
+                    public void boxedArray(Integer[] values) {}
+                    public void generic(List<Integer> values) {}
                 }
             """.trimIndent(),
         )
@@ -884,6 +905,15 @@ class AptLsiWorkspaceTest {
                     ownerId,
                     "convert",
                     listOf("parameter:method:convert:0:type:java.lang.CharSequence"),
+                ),
+                LsiSymbolId.function(ownerId, "raw", listOf("primitive:int")),
+                LsiSymbolId.function(ownerId, "boxed", listOf("type:java.lang.Integer")),
+                LsiSymbolId.function(ownerId, "primitiveArray", listOf("array:primitive:int")),
+                LsiSymbolId.function(ownerId, "boxedArray", listOf("array:type:java.lang.Integer")),
+                LsiSymbolId.function(
+                    ownerId,
+                    "generic",
+                    listOf("type:java.util.List<type:java.lang.Integer>"),
                 ),
             ),
             functions.mapTo(linkedSetOf(), LsiFunction::id),

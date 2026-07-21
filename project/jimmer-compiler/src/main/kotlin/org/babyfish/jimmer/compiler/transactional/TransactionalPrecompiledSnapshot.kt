@@ -171,7 +171,12 @@ private fun LsiTypeRef.canonicalText(): String {
                 append('>')
             }
         }
-        is LsiPrimitiveType -> "primitive:${kind.name.lowercase()}"
+        is LsiPrimitiveType -> buildString {
+            append("primitive:${kind.name.lowercase()}")
+            if (boxed) {
+                append(":boxed")
+            }
+        }
         is LsiArrayType -> "array:${elementType.canonicalText()}"
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"

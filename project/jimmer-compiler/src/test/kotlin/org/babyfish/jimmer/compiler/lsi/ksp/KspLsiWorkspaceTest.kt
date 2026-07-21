@@ -40,12 +40,15 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFileAnnotationScope
 import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameterRef
@@ -453,6 +456,142 @@ class KspLsiWorkspaceTest {
             ),
             KspLsiTypeContext(resolver()).toLsiCallableId(consume),
         )
+    }
+
+    @Test
+    fun `uses jvm primitive representations in callable ids`() {
+        val sourceFile = file("/workspace/src/main/kotlin/demo/PrimitiveFactory.kt")
+        val intDeclaration = classDeclaration(
+            qualifiedName = "kotlin.Int",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val intArrayDeclaration = classDeclaration(
+            qualifiedName = "kotlin.IntArray",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val arrayDeclaration = classDeclaration(
+            qualifiedName = "kotlin.Array",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val listDeclaration = classDeclaration(
+            qualifiedName = "kotlin.collections.List",
+            classKind = ClassKind.INTERFACE,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val rawIntType = type(intDeclaration)
+        val boxedIntType = type(intDeclaration, nullability = Nullability.NULLABLE)
+        val primitiveArrayType = type(intArrayDeclaration)
+        val boxedArrayType = type(
+            declaration = arrayDeclaration,
+            arguments = listOf(typeArgument(rawIntType)),
+        )
+        val genericType = type(
+            declaration = listDeclaration,
+            arguments = listOf(typeArgument(rawIntType)),
+        )
+        val nullableBoxedArrayType = type(
+            declaration = arrayDeclaration,
+            arguments = listOf(typeArgument(boxedIntType)),
+        )
+        val nullableGenericType = type(
+            declaration = listDeclaration,
+            arguments = listOf(typeArgument(boxedIntType)),
+        )
+        lateinit var factory: KSClassDeclaration
+
+        fun method(name: String, parameterType: KSType): KSFunctionDeclaration {
+            lateinit var method: KSFunctionDeclaration
+            val value = valueParameter(
+                name = "value",
+                parent = { method },
+                type = typeReference(parameterType),
+                file = sourceFile,
+            )
+            method = function(
+                name = name,
+                parent = { factory },
+                parameters = listOf(value),
+                file = sourceFile,
+            )
+            return method
+        }
+
+        val methods = listOf(
+            method("raw", rawIntType),
+            method("boxed", boxedIntType),
+            method("primitiveArray", primitiveArrayType),
+            method("boxedArray", boxedArrayType),
+            method("generic", genericType),
+        )
+        factory = classDeclaration(
+            qualifiedName = "demo.PrimitiveFactory",
+            classKind = ClassKind.CLASS,
+            file = sourceFile,
+            declarations = { methods },
+        )
+        val ownerId = LsiSymbolId.type("demo.PrimitiveFactory")
+        val ids = methods.mapTo(linkedSetOf()) { method ->
+            KspLsiTypeContext(resolver()).toLsiCallableId(method)
+        }
+
+        assertEquals(
+            setOf(
+                LsiSymbolId.function(ownerId, "raw", listOf("primitive:int")),
+                LsiSymbolId.function(ownerId, "boxed", listOf("type:java.lang.Integer")),
+                LsiSymbolId.function(ownerId, "primitiveArray", listOf("array:primitive:int")),
+                LsiSymbolId.function(ownerId, "boxedArray", listOf("array:type:java.lang.Integer")),
+                LsiSymbolId.function(
+                    ownerId,
+                    "generic",
+                    listOf("type:java.util.List<type:java.lang.Integer>"),
+                ),
+            ),
+            ids,
+        )
+
+        val frozenRaw = assertIs<LsiPrimitiveType>(typeReference(rawIntType).toLsiType(resolver()))
+        val frozenBoxed = assertIs<LsiPrimitiveType>(typeReference(boxedIntType).toLsiType(resolver()))
+        val frozenPrimitiveArray = assertIs<LsiArrayType>(
+            typeReference(primitiveArrayType).toLsiType(resolver()),
+        )
+        val frozenBoxedArray = assertIs<LsiArrayType>(
+            typeReference(boxedArrayType).toLsiType(resolver()),
+        )
+        val frozenGeneric = assertIs<LsiDeclaredType>(
+            typeReference(genericType).toLsiType(resolver()),
+        )
+        val frozenNullableBoxedArray = assertIs<LsiArrayType>(
+            typeReference(nullableBoxedArrayType).toLsiType(resolver()),
+        )
+        val frozenNullableGeneric = assertIs<LsiDeclaredType>(
+            typeReference(nullableGenericType).toLsiType(resolver()),
+        )
+
+        assertFalse(frozenRaw.boxed)
+        assertTrue(frozenBoxed.boxed)
+        assertEquals(LsiNullability.NULLABLE, frozenBoxed.nullability)
+        assertFalse(assertIs<LsiPrimitiveType>(frozenPrimitiveArray.elementType).boxed)
+        val frozenBoxedArrayElement = assertIs<LsiPrimitiveType>(frozenBoxedArray.elementType)
+        assertTrue(frozenBoxedArrayElement.boxed)
+        assertEquals(LsiNullability.NON_NULL, frozenBoxedArrayElement.nullability)
+        val frozenGenericArgument = assertIs<LsiPrimitiveType>(frozenGeneric.arguments.single().type)
+        assertTrue(frozenGenericArgument.boxed)
+        assertEquals(LsiNullability.NON_NULL, frozenGenericArgument.nullability)
+        val frozenNullableArrayElement = assertIs<LsiPrimitiveType>(frozenNullableBoxedArray.elementType)
+        assertTrue(frozenNullableArrayElement.boxed)
+        assertEquals(LsiNullability.NULLABLE, frozenNullableArrayElement.nullability)
+        val frozenNullableGenericArgument = assertIs<LsiPrimitiveType>(
+            frozenNullableGeneric.arguments.single().type,
+        )
+        assertTrue(frozenNullableGenericArgument.boxed)
+        assertEquals(LsiNullability.NULLABLE, frozenNullableGenericArgument.nullability)
     }
 
     @Test

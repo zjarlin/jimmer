@@ -18,6 +18,10 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
@@ -67,6 +71,48 @@ class KspJavaDeclarationFactsTest {
         assertTrue(workspace.type("demo.JavaEnum.Inner").requiresEnclosingInstance)
         assertFalse(workspace.type("demo.JavaInterface.Nested").requiresEnclosingInstance)
         assertFalse(workspace.type("demo.JavaTypes").abstractDeclaration)
+        val ownerId = LsiSymbolId.type("demo.JavaTypes")
+        assertEquals(
+            LsiSymbolId.constructor(
+                ownerId,
+                listOf("parameter:method:<init>:0:type:java.lang.CharSequence"),
+            ),
+            workspace.declarationsOfType<LsiConstructor>()
+                .single { constructor ->
+                    constructor.ownerId == ownerId && constructor.parameters.isNotEmpty()
+                }
+                .id,
+        )
+        val functionIds = workspace.declarationsOfType<LsiFunction>()
+            .filter { function -> function.ownerId == ownerId }
+            .mapTo(linkedSetOf(), LsiFunction::id)
+        assertEquals(
+            setOf(
+                LsiSymbolId.function(ownerId, "raw", listOf("primitive:int")),
+                LsiSymbolId.function(ownerId, "boxed", listOf("type:java.lang.Integer")),
+                LsiSymbolId.function(ownerId, "primitiveArray", listOf("array:primitive:int")),
+                LsiSymbolId.function(ownerId, "boxedArray", listOf("array:type:java.lang.Integer")),
+                LsiSymbolId.function(
+                    ownerId,
+                    "generic",
+                    listOf("type:java.util.List<type:java.lang.Integer>"),
+                ),
+                LsiSymbolId.function(
+                    ownerId,
+                    "vararg",
+                    listOf("array:type:java.lang.Integer"),
+                ),
+            ),
+            functionIds,
+        )
+        val vararg = workspace.declarationsOfType<LsiFunction>()
+            .single { function -> function.name == "vararg" }
+            .parameters
+            .single()
+        assertTrue(vararg.vararg)
+        val varargElementType = assertIs<LsiPrimitiveType>(vararg.type)
+        assertEquals(LsiPrimitiveKind.INT, varargElementType.kind)
+        assertTrue(varargElementType.boxed)
     }
 
     private class CapturingProvider : SymbolProcessorProvider {
@@ -114,7 +160,17 @@ class KspJavaDeclarationFactsTest {
         val JAVA_SOURCE = """
             package demo;
 
+            import java.util.List;
+
             public sealed class JavaTypes permits JavaTypes.Child {
+                JavaTypes() {}
+                <T extends CharSequence> JavaTypes(T value) {}
+                void raw(int value) {}
+                void boxed(Integer value) {}
+                void primitiveArray(int[] values) {}
+                void boxedArray(Integer[] values) {}
+                void generic(List<Integer> values) {}
+                void vararg(Integer... values) {}
                 public final class Inner {}
                 public static final class StaticNested {}
                 public record NestedRecord(String value) {}

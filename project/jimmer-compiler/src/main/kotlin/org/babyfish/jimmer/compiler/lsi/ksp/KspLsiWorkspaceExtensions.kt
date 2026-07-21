@@ -47,6 +47,7 @@ import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.toJvmCallableParameterType
 import site.addzero.lsi.model.mergeLsiTypeSeeds
 import site.addzero.lsi.model.toAnnotationMemberType
 
@@ -564,7 +565,7 @@ internal class KspLsiWorkspaceBuilder(
             } ?: LsiPrimitiveType(LsiPrimitiveKind.UNIT),
             parameters = lsiParameters,
             receiverType = extensionReceiver?.let { receiverType ->
-                typeContext.toLsiType(receiverType, typeParameterIds)
+                typeContext.toLsiType(receiverType, typeParameterIds).toJvmCallableParameterType()
             },
             suspending = Modifier.SUSPEND in modifiers,
             typeParameters = typeParameters,
@@ -635,7 +636,7 @@ internal class KspLsiWorkspaceBuilder(
             name = parameterName,
             callableId = callableId,
             index = index,
-            type = typeContext.toLsiType(type, typeParameterIds),
+            type = typeContext.toLsiType(type, typeParameterIds).toJvmCallableParameterType(),
             vararg = isVararg,
             hasDefault = hasDefault,
             sourceDocumentation = context.sourceDocumentation(this),

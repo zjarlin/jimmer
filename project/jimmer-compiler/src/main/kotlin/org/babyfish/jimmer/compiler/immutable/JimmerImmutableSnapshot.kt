@@ -241,7 +241,12 @@ private fun LsiTypeRef.canonicalTypeText(): String {
             } else {
                 kind
             }
-            "primitive:${semanticKind.name.lowercase()}"
+            buildString {
+                append("primitive:${semanticKind.name.lowercase()}")
+                if (boxed) {
+                    append(":boxed")
+                }
+            }
         }
         is LsiArrayType -> "array:${elementType.canonicalTypeText()}"
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"

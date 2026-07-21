@@ -118,7 +118,7 @@ class JimmerDtoFrontendParityTest {
             marker.arguments.getValue("value").value,
         )
         assertTrue(ratingProp.nullable)
-        assertEquals("primitive:int?", ratingProp.type.normalizedTypeSignature())
+        assertEquals("primitive:int:boxed?", ratingProp.type.normalizedTypeSignature())
         assertEquals(
             JimmerImmutableView.Id(
                 basePropId = storeProp.id,

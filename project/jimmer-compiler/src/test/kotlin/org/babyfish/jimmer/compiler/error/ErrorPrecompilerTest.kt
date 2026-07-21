@@ -3,6 +3,7 @@ package org.babyfish.jimmer.compiler.error
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -52,6 +53,36 @@ class ErrorPrecompilerTest {
 
         assertEquals(apt.normalizedSnapshot(), ksp.normalizedSnapshot())
         assertEquals(apt.fingerprint(), ksp.fingerprint())
+    }
+
+    @Test
+    fun `snapshot distinguishes primitive and boxed error fields`() {
+        val schema = ErrorPrecompiler().compile(errorWorkspace(LsiLanguage.JAVA, repeatableContainer = true))
+        val family = schema.families.single()
+        val boxedFamily = family.copy(
+            codes = family.codes.map { code ->
+                code.copy(
+                    declaredFields = code.declaredFields.map { field ->
+                        if (field.name == "min") {
+                            field.copy(type = LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true))
+                        } else {
+                            field
+                        }
+                    },
+                    fields = code.fields.map { field ->
+                        if (field.name == "min") {
+                            field.copy(type = LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true))
+                        } else {
+                            field
+                        }
+                    },
+                )
+            },
+        )
+        val boxedSchema = ErrorPrecompiledSchema(listOf(boxedFamily))
+
+        assertNotEquals(schema.normalizedSnapshot(), boxedSchema.normalizedSnapshot())
+        assertNotEquals(schema.fingerprint(), boxedSchema.fingerprint())
     }
 
     @Test

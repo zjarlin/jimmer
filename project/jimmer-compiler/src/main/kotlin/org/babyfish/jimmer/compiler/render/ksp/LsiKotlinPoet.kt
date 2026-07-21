@@ -14,6 +14,7 @@ import com.squareup.kotlinpoet.LONG
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.SHORT
 import com.squareup.kotlinpoet.STAR
+import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
@@ -33,8 +34,12 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
 
 internal fun LsiTypeRef.toKotlinTypeName(): TypeName {
+    return toKotlinTypeName(referenceContext = false)
+}
+
+private fun LsiTypeRef.toKotlinTypeName(referenceContext: Boolean): TypeName {
     val typeName = when (this) {
-        is LsiPrimitiveType -> kind.toKotlinTypeName()
+        is LsiPrimitiveType -> toKotlinPrimitiveTypeName(referenceContext)
         is LsiDeclaredType -> {
             val qualifiedName = declarationId.requireTypeQualifiedName()
             val rawType = KOTLIN_TYPES[qualifiedName] ?: ClassName.bestGuess(qualifiedName)
@@ -45,19 +50,20 @@ internal fun LsiTypeRef.toKotlinTypeName(): TypeName {
                     arguments.map { argument ->
                         when (argument.variance) {
                             LsiVariance.STAR -> STAR
-                            LsiVariance.INVARIANT -> requireNotNull(argument.type).toKotlinTypeName()
+                            LsiVariance.INVARIANT -> requireNotNull(argument.type)
+                                .toKotlinTypeName(referenceContext = true)
                             LsiVariance.IN -> WildcardTypeName.consumerOf(
-                                requireNotNull(argument.type).toKotlinTypeName()
+                                requireNotNull(argument.type).toKotlinTypeName(referenceContext = true)
                             )
                             LsiVariance.OUT -> WildcardTypeName.producerOf(
-                                requireNotNull(argument.type).toKotlinTypeName()
+                                requireNotNull(argument.type).toKotlinTypeName(referenceContext = true)
                             )
                         }
                     }
                 )
             }
         }
-        is LsiArrayType -> ClassName("kotlin", "Array").parameterizedBy(elementType.toKotlinTypeName())
+        is LsiArrayType -> elementType.toKotlinArrayTypeName()
         is LsiTypeParameterRef -> TypeVariableName(parameterId.requireTypeParameterName())
         is LsiUnresolvedType -> ClassName.bestGuess(displayName.filterNot(Char::isWhitespace))
     }
@@ -104,6 +110,67 @@ private fun LsiPrimitiveKind.toKotlinTypeName(): TypeName {
     }
 }
 
+private fun LsiPrimitiveType.toKotlinPrimitiveTypeName(referenceContext: Boolean): TypeName {
+    if (kind == LsiPrimitiveKind.VOID && (boxed || referenceContext)) {
+        return JAVA_LANG_VOID
+    }
+    if (
+        boxed &&
+        !referenceContext &&
+        nullability != LsiNullability.NULLABLE &&
+        kind != LsiPrimitiveKind.UNIT
+    ) {
+        return kind.toKotlinBoxedTypeName()
+    }
+    return kind.toKotlinTypeName()
+}
+
+private fun LsiPrimitiveKind.toKotlinBoxedTypeName(): TypeName {
+    return when (this) {
+        LsiPrimitiveKind.BOOLEAN -> ClassName("java.lang", "Boolean")
+        LsiPrimitiveKind.BYTE -> ClassName("java.lang", "Byte")
+        LsiPrimitiveKind.SHORT -> ClassName("java.lang", "Short")
+        LsiPrimitiveKind.INT -> ClassName("java.lang", "Integer")
+        LsiPrimitiveKind.LONG -> ClassName("java.lang", "Long")
+        LsiPrimitiveKind.CHAR -> ClassName("java.lang", "Character")
+        LsiPrimitiveKind.FLOAT -> ClassName("java.lang", "Float")
+        LsiPrimitiveKind.DOUBLE -> ClassName("java.lang", "Double")
+        LsiPrimitiveKind.UNIT -> UNIT
+        LsiPrimitiveKind.VOID -> JAVA_LANG_VOID
+    }
+}
+
+private fun LsiTypeRef.toKotlinArrayTypeName(): TypeName {
+    val primitiveType = this as? LsiPrimitiveType
+    if (
+        primitiveType != null &&
+        !primitiveType.boxed &&
+        primitiveType.nullability == LsiNullability.NON_NULL
+    ) {
+        primitiveType.kind.toKotlinPrimitiveArrayTypeName()?.let { return it }
+    }
+    return ClassName("kotlin", "Array").parameterizedBy(
+        toKotlinTypeName(referenceContext = true)
+    )
+}
+
+private fun LsiPrimitiveKind.toKotlinPrimitiveArrayTypeName(): TypeName? {
+    val simpleName = when (this) {
+        LsiPrimitiveKind.BOOLEAN -> "BooleanArray"
+        LsiPrimitiveKind.BYTE -> "ByteArray"
+        LsiPrimitiveKind.SHORT -> "ShortArray"
+        LsiPrimitiveKind.INT -> "IntArray"
+        LsiPrimitiveKind.LONG -> "LongArray"
+        LsiPrimitiveKind.CHAR -> "CharArray"
+        LsiPrimitiveKind.FLOAT -> "FloatArray"
+        LsiPrimitiveKind.DOUBLE -> "DoubleArray"
+        LsiPrimitiveKind.UNIT,
+        LsiPrimitiveKind.VOID,
+        -> return null
+    }
+    return ClassName("kotlin", simpleName)
+}
+
 private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
     return when (this) {
         is LsiAnnotationValue.BooleanValue -> CodeBlock.of("%L", value)
@@ -120,7 +187,7 @@ private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
             ClassName.bestGuess(enumType.requireTypeQualifiedName()),
             entryName,
         )
-        is LsiAnnotationValue.ClassValue -> CodeBlock.of("%T::class", type.toKotlinTypeName().copy(nullable = false))
+        is LsiAnnotationValue.ClassValue -> type.toKotlinClassLiteral()
         is LsiAnnotationValue.NestedAnnotationValue -> CodeBlock.of(
             "%L",
             annotation.toKotlinAnnotationSpec(),
@@ -138,6 +205,19 @@ private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
             .add("]")
             .build()
     }
+}
+
+private fun LsiTypeRef.toKotlinClassLiteral(): CodeBlock {
+    val primitive = this as? LsiPrimitiveType
+    if (primitive?.kind == LsiPrimitiveKind.VOID && !primitive.boxed) {
+        error("Kotlin annotation source cannot represent the primitive void class literal")
+    }
+    val typeName = if (primitive?.boxed == true) {
+        primitive.kind.toKotlinBoxedTypeName()
+    } else {
+        toKotlinTypeName()
+    }
+    return CodeBlock.of("%T::class", typeName.copy(nullable = false))
 }
 
 private fun LsiAnnotationUseSiteTarget.toPoetUseSiteTarget(): AnnotationSpec.UseSiteTarget? {
@@ -183,6 +263,7 @@ private val KOTLIN_TYPES = mapOf(
     "java.lang.Character" to CHAR,
     "java.lang.Float" to FLOAT,
     "java.lang.Double" to DOUBLE,
+    "java.lang.String" to STRING,
     "java.lang.Object" to ANY,
     "kotlin.Boolean" to BOOLEAN,
     "kotlin.Byte" to BYTE,
@@ -192,6 +273,9 @@ private val KOTLIN_TYPES = mapOf(
     "kotlin.Char" to CHAR,
     "kotlin.Float" to FLOAT,
     "kotlin.Double" to DOUBLE,
+    "kotlin.String" to STRING,
     "kotlin.Any" to ANY,
     "kotlin.Unit" to UNIT,
 )
+
+private val JAVA_LANG_VOID = ClassName("java.lang", "Void")

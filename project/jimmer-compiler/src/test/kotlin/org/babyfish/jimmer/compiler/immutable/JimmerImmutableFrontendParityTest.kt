@@ -37,7 +37,9 @@ import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableFrontendParityTest {
@@ -809,6 +811,96 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(
             LsiSymbolId.type("kotlin.collections.MutableList"),
             assertIs<LsiDeclaredType>(values.type).declarationId,
+        )
+    }
+
+    @Test
+    fun `real apt and ksp preserve primitive array boxing semantics`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                interface ArrayEntity {
+                    @Id
+                    long id();
+
+                    int[] primitiveValues();
+
+                    Integer[] boxedValues();
+
+                    String[] textValues();
+
+                    List<Integer> numbers();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface ArrayEntity {
+                    @Id
+                    val id: Long
+
+                    val primitiveValues: IntArray
+
+                    val boxedValues: Array<Int>
+
+                    val textValues: Array<String>
+
+                    val numbers: List<Int>
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptSchema = assertNotNull(apt.schema)
+        val kspSchema = assertNotNull(ksp.schema)
+        assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
+        val aptProps = aptSchema.types.single().props.associateBy(JimmerImmutableProp::name)
+        val kspProps = kspSchema.types.single().props.associateBy(JimmerImmutableProp::name)
+        val aptPrimitiveElement = assertIs<LsiPrimitiveType>(
+            assertIs<LsiArrayType>(aptProps.getValue("primitiveValues").type).elementType,
+        )
+        val kspPrimitiveElement = assertIs<LsiPrimitiveType>(
+            assertIs<LsiArrayType>(kspProps.getValue("primitiveValues").type).elementType,
+        )
+        val aptBoxedElement = assertIs<LsiPrimitiveType>(
+            assertIs<LsiArrayType>(aptProps.getValue("boxedValues").type).elementType,
+        )
+        val kspBoxedElement = assertIs<LsiPrimitiveType>(
+            assertIs<LsiArrayType>(kspProps.getValue("boxedValues").type).elementType,
+        )
+        val aptListElement = assertIs<LsiPrimitiveType>(
+            assertIs<LsiDeclaredType>(aptProps.getValue("numbers").type).arguments.single().type,
+        )
+        val kspListElement = assertIs<LsiPrimitiveType>(
+            assertIs<LsiDeclaredType>(kspProps.getValue("numbers").type).arguments.single().type,
+        )
+
+        assertFalse(aptPrimitiveElement.boxed)
+        assertFalse(kspPrimitiveElement.boxed)
+        assertTrue(aptBoxedElement.boxed)
+        assertTrue(kspBoxedElement.boxed)
+        assertTrue(aptListElement.boxed)
+        assertTrue(kspListElement.boxed)
+        assertEquals(
+            "array:primitive:int!!",
+            aptProps.getValue("primitiveValues").type.normalizedTypeSignature(),
+        )
+        assertEquals(
+            "array:primitive:int:boxed!!",
+            aptProps.getValue("boxedValues").type.normalizedTypeSignature(),
         )
     }
 

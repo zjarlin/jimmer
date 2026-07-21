@@ -8,12 +8,18 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiJvmTypeParameterDescriptor
+import site.addzero.lsi.model.LsiJvmTypeParameterOwner
+import site.addzero.lsi.model.LsiJvmTypeSignatureContext
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.mergeAnnotations
+import site.addzero.lsi.model.toJvmCallableParameterType
+import site.addzero.lsi.model.toJvmReferenceType
+import site.addzero.lsi.model.toJvmTypeSignature
 import javax.annotation.processing.ProcessingEnvironment
 import javax.lang.model.element.ElementKind
 import javax.lang.model.element.ExecutableElement
@@ -22,7 +28,6 @@ import javax.lang.model.element.TypeParameterElement
 import javax.lang.model.type.ArrayType
 import javax.lang.model.type.DeclaredType
 import javax.lang.model.type.ErrorType
-import javax.lang.model.type.IntersectionType
 import javax.lang.model.type.NoType
 import javax.lang.model.type.PrimitiveType
 import javax.lang.model.type.TypeKind
@@ -78,7 +83,7 @@ internal fun AptLsiContext.toLsiTypeParameters(
     val lsiParameters = parameters.map { parameter ->
         val bounds = parameter.bounds
             .filterNot(::isImplicitObjectBound)
-            .map { bound -> toLsiType(bound, allIds) }
+            .map { bound -> toLsiType(bound, allIds).toJvmReferenceType() }
         LsiTypeParameter(
             id = requireNotNull(ownIds[parameter]),
             name = parameter.simpleName.toString(),
@@ -108,8 +113,21 @@ internal fun AptLsiContext.typeParameterIdsInScope(
 internal fun AptLsiContext.toLsiCallableId(method: ExecutableElement): LsiSymbolId {
     val owner = method.enclosingElement as TypeElement
     val ownerId = LsiSymbolId.type(owner.qualifiedName.toString())
+    val provisionalCallableId = if (method.kind == ElementKind.CONSTRUCTOR) {
+        LsiSymbolId.constructor(ownerId)
+    } else {
+        LsiSymbolId.function(ownerId, method.simpleName.toString())
+    }
+    val inheritedTypeParameterIds = typeParameterIdsInScope(method)
+    val ownTypeParameterIds = method.typeParameters.associateWith { parameter ->
+        LsiSymbolId.typeParameter(provisionalCallableId, parameter.simpleName.toString())
+    }
+    val typeParameterIds = inheritedTypeParameterIds + ownTypeParameterIds
+    val signatureContext = toJvmTypeSignatureContext(typeParameterIds)
     val parameterSignatures = method.parameters.map { parameter ->
-        parameter.asType().toAptStableSignature()
+        toLsiType(parameter.asType(), typeParameterIds)
+            .toJvmCallableParameterType()
+            .toJvmTypeSignature(context = signatureContext)
     }
     if (method.kind == ElementKind.CONSTRUCTOR) {
         return LsiSymbolId.constructor(ownerId, parameterSignatures)
@@ -122,6 +140,34 @@ internal fun AptLsiContext.toLsiCallableId(method: ExecutableElement): LsiSymbol
         name = method.simpleName.toString(),
         parameterTypeSignatures = parameterSignatures,
     )
+}
+
+private fun AptLsiContext.toJvmTypeSignatureContext(
+    typeParameterIds: Map<TypeParameterElement, LsiSymbolId>,
+): LsiJvmTypeSignatureContext {
+    val descriptors = typeParameterIds.map { (parameter, id) ->
+        val owner = parameter.genericElement
+        val parameterOwner = when (owner) {
+            is TypeElement -> LsiJvmTypeParameterOwner.Type(
+                LsiSymbolId.type(owner.qualifiedName.toString())
+            )
+            is ExecutableElement -> LsiJvmTypeParameterOwner.Method(owner.simpleName.toString())
+            else -> error("Unsupported APT JVM type parameter owner: $owner")
+        }
+        val index = when (owner) {
+            is TypeElement -> owner.typeParameters.indexOf(parameter)
+            is ExecutableElement -> owner.typeParameters.indexOf(parameter)
+            else -> error("Unsupported APT JVM type parameter owner: $owner")
+        }
+        id to LsiJvmTypeParameterDescriptor(
+            id = id,
+            owner = parameterOwner,
+            index = index,
+            upperBounds = parameter.bounds
+                .map { bound -> toLsiType(bound, typeParameterIds).toJvmReferenceType() },
+        )
+    }.toMap()
+    return LsiJvmTypeSignatureContext(typeParameters = descriptors)
 }
 
 internal fun ExecutableElement.isLsiPropertyGetter(): Boolean {
@@ -188,77 +234,6 @@ internal fun ExecutableElement.toLsiPropertyName(
         return java.beans.Introspector.decapitalize(methodName.substring(2))
     }
     return methodName
-}
-
-internal fun TypeMirror.toAptStableSignature(): String {
-    return when (this) {
-        is PrimitiveType -> "primitive:${kind.name.lowercase()}"
-        is ArrayType -> "array:${componentType.toAptStableSignature()}"
-        is DeclaredType -> buildString {
-            val typeElement = asElement() as? TypeElement
-            append("type:")
-            append(typeElement?.qualifiedName ?: toString().substringBefore('<'))
-            if (typeArguments.isNotEmpty()) {
-                append('<')
-                append(typeArguments.joinToString(",") { argument -> argument.toAptTypeArgumentSignature() })
-                append('>')
-            }
-        }
-        is TypeVariable -> {
-            val parameter = asElement() as? TypeParameterElement
-            val index = parameter?.genericElement
-                ?.let { owner ->
-                    when (owner) {
-                        is TypeElement -> owner.typeParameters.indexOf(parameter)
-                        is ExecutableElement -> owner.typeParameters.indexOf(parameter)
-                        else -> -1
-                    }
-                }
-                ?: -1
-            val ownerSignature = when (val owner = parameter?.genericElement) {
-                is TypeElement -> "type:${owner.qualifiedName}"
-                is ExecutableElement -> "method:${owner.simpleName}"
-                else -> "unknown"
-            }
-            val signature = "parameter:$ownerSignature:$index"
-            if (parameter?.genericElement is ExecutableElement) {
-                "$signature:${upperBound.toAptErasedStableSignature()}"
-            } else {
-                signature
-            }
-        }
-        is NoType -> if (kind == TypeKind.VOID) "primitive:void" else "none"
-        is WildcardType -> toAptTypeArgumentSignature()
-        else -> "${kind.name.lowercase()}:${toString().withoutWhitespace()}"
-    }
-}
-
-private fun TypeMirror.toAptErasedStableSignature(): String {
-    return when (this) {
-        is PrimitiveType -> "primitive:${kind.name.lowercase()}"
-        is ArrayType -> "array:${componentType.toAptErasedStableSignature()}"
-        is DeclaredType -> {
-            val typeElement = asElement() as? TypeElement
-            val qualifiedName = typeElement?.qualifiedName
-                ?.toString()
-                ?.takeIf(String::isNotBlank)
-                ?: toString().substringBefore('<').ifBlank { "java.lang.Object" }
-            "type:$qualifiedName"
-        }
-        is TypeVariable -> upperBound.toAptErasedStableSignature()
-        is IntersectionType -> bounds
-            .firstOrNull()
-            ?.toAptErasedStableSignature()
-            ?.takeIf(String::isNotBlank)
-            ?: "type:java.lang.Object"
-        is WildcardType -> {
-            extendsBound?.toAptErasedStableSignature()
-                ?: superBound?.toAptErasedStableSignature()
-                ?: "type:java.lang.Object"
-        }
-        is NoType -> if (kind == TypeKind.VOID) "primitive:void" else "none"
-        else -> "${kind.name.lowercase()}:${toString().withoutWhitespace()}"
-    }
 }
 
 private fun AptLsiContext.toLsiTypeArgument(
@@ -519,21 +494,5 @@ private val APT_BOXED_PRIMITIVE_KINDS = mapOf(
     "java.lang.Float" to LsiPrimitiveKind.FLOAT,
     "java.lang.Double" to LsiPrimitiveKind.DOUBLE,
     "java.lang.Void" to LsiPrimitiveKind.VOID,
+    "kotlin.Unit" to LsiPrimitiveKind.UNIT,
 )
-
-private fun TypeMirror.toAptTypeArgumentSignature(): String {
-    if (this !is WildcardType) {
-        return toAptStableSignature()
-    }
-    val superBound = superBound
-    if (superBound != null) {
-        return "in:${superBound.toAptStableSignature()}"
-    }
-    val extendsBound = extendsBound
-    if (extendsBound != null) {
-        return "out:${extendsBound.toAptStableSignature()}"
-    }
-    return "*"
-}
-
-private fun String.withoutWhitespace(): String = filterNot(Char::isWhitespace)

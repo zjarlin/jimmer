@@ -18,6 +18,7 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -38,6 +39,8 @@ class ErrorRendererTest {
         assertContains(artifact.content, "class OutOfRange extends BookException")
         assertContains(artifact.content, "@ClientException")
         assertContains(artifact.content, "return BookErrorCode.OUT_OF_RANGE")
+        assertContains(artifact.content, "int[] primitiveValues")
+        assertContains(artifact.content, "Integer[] boxedValues")
         compileJava(artifact.content)
     }
 
@@ -57,6 +60,9 @@ class ErrorRendererTest {
         assertContains(artifact.content, ") : BookException(message, cause, timestamp)")
         assertContains(artifact.content, "\"timestamp\" to timestamp")
         assertContains(artifact.content, "\"min\" to min")
+        assertContains(artifact.content, "label: String")
+        assertContains(artifact.content, "primitiveValues: IntArray")
+        assertContains(artifact.content, "boxedValues: Array<Int>")
     }
 
     private fun fixture(language: LsiLanguage): Pair<ErrorPrecompiledSchema, LsiWorkspace> {
@@ -92,6 +98,30 @@ class ErrorRendererTest {
             documentation = null,
             declaredBy = CODE_ID,
         )
+        val label = ErrorFieldModel(
+            name = "label",
+            type = LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
+            list = false,
+            nullable = false,
+            documentation = null,
+            declaredBy = CODE_ID,
+        )
+        val primitiveValues = ErrorFieldModel(
+            name = "primitiveValues",
+            type = LsiArrayType(LsiPrimitiveType(LsiPrimitiveKind.INT)),
+            list = false,
+            nullable = false,
+            documentation = null,
+            declaredBy = CODE_ID,
+        )
+        val boxedValues = ErrorFieldModel(
+            name = "boxedValues",
+            type = LsiArrayType(LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true)),
+            list = false,
+            nullable = false,
+            documentation = null,
+            declaredBy = CODE_ID,
+        )
         val code = ErrorCodeModel(
             id = CODE_ID,
             enumEntryName = "OUT_OF_RANGE",
@@ -100,8 +130,8 @@ class ErrorRendererTest {
             exceptionTypeId = LsiSymbolId.type("demo.BookException.OutOfRange"),
             exceptionSimpleName = "OutOfRange",
             documentation = "Out of range.",
-            declaredFields = listOf(min),
-            fields = listOf(shared, min),
+            declaredFields = listOf(min, label, primitiveValues, boxedValues),
+            fields = listOf(shared, min, label, primitiveValues, boxedValues),
         )
         return ErrorPrecompiledSchema(
             families = listOf(

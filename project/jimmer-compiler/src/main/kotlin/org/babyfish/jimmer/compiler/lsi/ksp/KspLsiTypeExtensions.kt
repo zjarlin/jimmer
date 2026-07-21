@@ -25,6 +25,9 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiJvmTypeParameterDescriptor
+import site.addzero.lsi.model.LsiJvmTypeParameterOwner
+import site.addzero.lsi.model.LsiJvmTypeSignatureContext
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
@@ -32,6 +35,9 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.mergeAnnotations
+import site.addzero.lsi.model.toJvmCallableParameterType
+import site.addzero.lsi.model.toJvmReferenceType
+import site.addzero.lsi.model.toJvmTypeSignature
 
 fun KSTypeReference.toLsiType(
     resolver: Resolver,
@@ -56,6 +62,7 @@ internal class KspLsiTypeContext(
     fun toLsiType(
         reference: KSTypeReference,
         typeParameterIds: Map<KSTypeParameter, LsiSymbolId> = emptyMap(),
+        primitiveBoxed: Boolean? = null,
     ): LsiTypeRef {
         val type = reference.resolve()
         val annotations = mergeAnnotations(
@@ -66,7 +73,7 @@ internal class KspLsiTypeContext(
             type = type,
             typeParameterIds = typeParameterIds,
             annotations = annotations,
-            primitiveBoxed = reference.toLsiPrimitiveBoxedHint(),
+            primitiveBoxed = primitiveBoxed ?: reference.toLsiPrimitiveBoxedHint(),
         )
     }
 
@@ -104,7 +111,7 @@ internal class KspLsiTypeContext(
                 kind = primitiveKind,
                 nullability = type.nullability.toLsiNullability(),
                 annotations = annotations,
-                boxed = primitiveBoxed ?: (type.nullability != Nullability.NOT_NULL),
+                boxed = primitiveBoxed ?: primitiveKind.defaultKspBoxed(type.nullability),
             )
         }
         val primitiveArrayKind = qualifiedName.toLsiPrimitiveArrayKind()
@@ -146,7 +153,9 @@ internal class KspLsiTypeContext(
         val lsiParameters = parameters.map { parameter ->
             val bounds = parameter.bounds
                 .filterNot { bound -> isImplicitAnyBound(bound.resolve()) }
-                .map { bound -> toLsiType(bound, allIds) }
+                .map { bound ->
+                    toLsiType(bound, allIds, primitiveBoxed = true).toJvmReferenceType()
+                }
                 .toList()
             LsiTypeParameter(
                 id = requireNotNull(ownIds[parameter]),
@@ -183,13 +192,34 @@ internal class KspLsiTypeContext(
             "KSP LSI callable owner must have a qualified name"
         }
         val ownerId = LsiSymbolId.type(ownerName)
+        val provisionalCallableId = if (function.isConstructor()) {
+            LsiSymbolId.constructor(ownerId)
+        } else {
+            LsiSymbolId.function(ownerId, function.simpleName.asString())
+        }
+        val inheritedTypeParameterIds = typeParameterIdsInScope(function)
+        val ownTypeParameterIds = function.typeParameters.associateWith { parameter ->
+            LsiSymbolId.typeParameter(provisionalCallableId, parameter.name.asString())
+        }
+        val typeParameterIds = inheritedTypeParameterIds + ownTypeParameterIds
+        val signatureContext = toJvmTypeSignatureContext(typeParameterIds)
+        fun signature(reference: KSTypeReference): String {
+            return toLsiType(reference, typeParameterIds)
+                .toJvmCallableParameterType()
+                .toJvmTypeSignature(context = signatureContext)
+        }
         val parameterTypeSignatures = buildList {
-            function.extensionReceiver?.resolve()?.let { receiverType ->
-                add(receiverType.toKspCallableStableSignature())
+            function.extensionReceiver?.let { receiverType ->
+                add(signature(receiverType))
             }
             function.parameters.mapTo(this) { parameter ->
-                val signature = parameter.type.resolve().toKspCallableStableSignature()
-                if (parameter.isVararg) "array:$signature" else signature
+                val parameterType = toLsiType(parameter.type, typeParameterIds).toJvmCallableParameterType()
+                val jvmParameterType = if (parameter.isVararg) {
+                    LsiArrayType(parameterType)
+                } else {
+                    parameterType
+                }
+                jvmParameterType.toJvmTypeSignature(context = signatureContext)
             }
         }
         return if (function.isConstructor()) {
@@ -201,6 +231,40 @@ internal class KspLsiTypeContext(
                 parameterTypeSignatures = parameterTypeSignatures,
             )
         }
+    }
+
+    private fun toJvmTypeSignatureContext(
+        typeParameterIds: Map<KSTypeParameter, LsiSymbolId>,
+    ): LsiJvmTypeSignatureContext {
+        val descriptors = typeParameterIds.map { (parameter, id) ->
+            val owner = parameter.parentDeclaration
+            val parameterOwner = when (owner) {
+                is KSClassDeclaration -> LsiJvmTypeParameterOwner.Type(
+                    LsiSymbolId.type(
+                        requireNotNull(owner.qualifiedName?.asString()) {
+                            "KSP JVM type parameter owner must have a qualified name"
+                        }
+                    )
+                )
+                is KSFunctionDeclaration -> LsiJvmTypeParameterOwner.Method(owner.simpleName.asString())
+                else -> error("Unsupported KSP JVM type parameter owner: $owner")
+            }
+            val index = owner.typeParameters.indexOf(parameter)
+            id to LsiJvmTypeParameterDescriptor(
+                id = id,
+                owner = parameterOwner,
+                index = index,
+                upperBounds = parameter.bounds
+                    .map { bound ->
+                        toLsiType(bound, typeParameterIds, primitiveBoxed = true).toJvmReferenceType()
+                    }
+                    .toList(),
+            )
+        }.toMap()
+        return LsiJvmTypeSignatureContext(
+            canonicalDeclaredTypeIds = KSP_JVM_TYPE_ID_ALIASES,
+            typeParameters = descriptors,
+        )
     }
 
     fun toLsiDeclarationId(
@@ -256,7 +320,7 @@ internal class KspLsiTypeContext(
         }
         val reference = requireNotNull(type)
         val argumentAnnotations = toLsiTypeAnnotations(annotations)
-        val lsiType = toLsiType(reference, typeParameterIds)
+        val lsiType = toLsiType(reference, typeParameterIds, primitiveBoxed = true)
             .withAdditionalAnnotations(argumentAnnotations)
         return when (variance) {
             Variance.INVARIANT -> LsiTypeArgument.invariant(lsiType)
@@ -431,104 +495,9 @@ private fun KSType.isLsiBooleanType(): Boolean {
     return declaration.qualifiedName?.asString() in LSI_BOOLEAN_TYPE_NAMES
 }
 
-private fun KSType.toKspCallableStableSignature(): String {
-    if (isError) {
-        return "unresolved:${toString().withoutWhitespace()}"
-    }
-    val declaration = declaration
-    if (declaration is KSTypeParameter) {
-        val owner = declaration.parentDeclaration
-        val parameterIndex = owner?.typeParameters?.indexOf(declaration) ?: -1
-        val ownerSignature = when (owner) {
-            is KSClassDeclaration -> "type:${owner.qualifiedName?.asString().orEmpty()}"
-            is KSFunctionDeclaration -> "method:${owner.simpleName.asString()}"
-            else -> "unknown"
-        }
-        val signature = "parameter:$ownerSignature:$parameterIndex"
-        if (owner !is KSFunctionDeclaration) {
-            return signature
-        }
-        val erasedBound = declaration.bounds
-            .map(KSTypeReference::resolve)
-            .firstOrNull()
-            ?.toKspErasedStableSignature()
-            ?: "type:java.lang.Object"
-        return "$signature:$erasedBound"
-    }
-    val qualifiedName = declaration.qualifiedName?.asString()
-        ?: return "unresolved:${toString().withoutWhitespace()}"
-    val primitiveKind = qualifiedName.toLsiPrimitiveKind()
-    if (primitiveKind != null) {
-        return "primitive:${primitiveKind.name.lowercase()}"
-    }
-    val primitiveArrayKind = qualifiedName.toLsiPrimitiveArrayKind()
-    if (primitiveArrayKind != null) {
-        return "array:primitive:${primitiveArrayKind.name.lowercase()}"
-    }
-    if (qualifiedName == "kotlin.Array") {
-        val elementSignature = arguments.singleOrNull()
-            ?.toKspCallableStableSignature()
-            ?: "*"
-        return "array:$elementSignature"
-    }
-    return buildString {
-        append("type:")
-        append(qualifiedName.toJvmSignatureTypeName())
-        if (arguments.isNotEmpty()) {
-            append('<')
-            append(arguments.joinToString(",") { argument -> argument.toKspCallableStableSignature() })
-            append('>')
-        }
-    }
-}
-
-private fun KSTypeArgument.toKspCallableStableSignature(): String {
-    if (variance == Variance.STAR || type == null) {
-        return "*"
-    }
-    val signature = requireNotNull(type).resolve().toKspCallableStableSignature()
-    return when (variance) {
-        Variance.INVARIANT -> signature
-        Variance.COVARIANT -> "out:$signature"
-        Variance.CONTRAVARIANT -> "in:$signature"
-        Variance.STAR -> "*"
-    }
-}
-
-private fun KSType.toKspErasedStableSignature(): String {
-    if (isError) {
-        return "unresolved:${toString().withoutWhitespace()}"
-    }
-    val declaration = declaration
-    if (declaration is KSTypeParameter) {
-        return declaration.bounds
-            .map(KSTypeReference::resolve)
-            .firstOrNull()
-            ?.toKspErasedStableSignature()
-            ?: "type:java.lang.Object"
-    }
-    val qualifiedName = declaration.qualifiedName?.asString()
-        ?: return "unresolved:${toString().withoutWhitespace()}"
-    val primitiveKind = qualifiedName.toLsiPrimitiveKind()
-    if (primitiveKind != null) {
-        return "primitive:${primitiveKind.name.lowercase()}"
-    }
-    val primitiveArrayKind = qualifiedName.toLsiPrimitiveArrayKind()
-    if (primitiveArrayKind != null) {
-        return "array:primitive:${primitiveArrayKind.name.lowercase()}"
-    }
-    if (qualifiedName == "kotlin.Array") {
-        val elementSignature = arguments.singleOrNull()
-            ?.type
-            ?.resolve()
-            ?.toKspErasedStableSignature()
-            ?: "type:java.lang.Object"
-        return "array:$elementSignature"
-    }
-    return "type:${qualifiedName.toJvmSignatureTypeName()}"
-}
-
-internal fun KSType.toKspStableSignature(): String {
+internal fun KSType.toKspStableSignature(
+    primitiveBoxed: Boolean? = null,
+): String {
     if (isError) {
         return "unresolved:${toString().withoutWhitespace()}"
     }
@@ -547,7 +516,10 @@ internal fun KSType.toKspStableSignature(): String {
         ?: return "unresolved:${toString().withoutWhitespace()}"
     val primitiveKind = qualifiedName.toLsiPrimitiveKind()
     if (primitiveKind != null) {
-        return "primitive:${primitiveKind.name.lowercase()}"
+        return LsiPrimitiveType(
+            kind = primitiveKind,
+            boxed = primitiveBoxed ?: primitiveKind.defaultKspBoxed(nullability),
+        ).toJvmTypeSignature()
     }
     val primitiveArrayKind = qualifiedName.toLsiPrimitiveArrayKind()
     if (primitiveArrayKind != null) {
@@ -572,7 +544,7 @@ private fun KSTypeArgument.toKspStableSignature(): String {
     if (variance == Variance.STAR || type == null) {
         return "*"
     }
-    val signature = requireNotNull(type).resolve().toKspStableSignature()
+    val signature = requireNotNull(type).resolve().toKspStableSignature(primitiveBoxed = true)
     return when (variance) {
         Variance.INVARIANT -> signature
         Variance.COVARIANT -> "out:$signature"
@@ -599,6 +571,10 @@ private fun Variance.toLsiVariance(): LsiVariance {
 }
 
 private fun String.toLsiPrimitiveKind(): LsiPrimitiveKind? = PRIMITIVE_TYPES[this]
+
+private fun LsiPrimitiveKind.defaultKspBoxed(nullability: Nullability): Boolean {
+    return this == LsiPrimitiveKind.VOID || nullability != Nullability.NOT_NULL
+}
 
 private fun String.toLsiPrimitiveArrayKind(): LsiPrimitiveKind? = PRIMITIVE_ARRAY_TYPES[this]
 
@@ -658,3 +634,7 @@ private val KOTLIN_LSI_TYPE_NAMES = mapOf(
 private val KOTLIN_JVM_TYPE_NAMES = KOTLIN_LSI_TYPE_NAMES + mapOf(
     "kotlin.collections.MutableList" to "java.util.List",
 )
+
+private val KSP_JVM_TYPE_ID_ALIASES = KOTLIN_JVM_TYPE_NAMES.map { (source, target) ->
+    LsiSymbolId.type(source) to LsiSymbolId.type(target)
+}.toMap()
