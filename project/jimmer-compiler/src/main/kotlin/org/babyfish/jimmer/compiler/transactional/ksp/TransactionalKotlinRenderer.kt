@@ -19,10 +19,14 @@ import org.babyfish.jimmer.compiler.transactional.TransactionalType
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotationTarget
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiModality
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.annotationTargetPolicy
 
 class TransactionalKotlinRenderer {
 
@@ -63,7 +67,7 @@ class TransactionalKotlinRenderer {
                     )
                 }
                 if (primaryConstructor != null) {
-                    primaryConstructor(primaryConstructor.toKotlinConstructor())
+                    primaryConstructor(primaryConstructor.toKotlinConstructor(workspace))
                     primaryConstructor.parameters.forEach { parameter ->
                         addSuperclassConstructorParameter(
                             "%L",
@@ -73,7 +77,7 @@ class TransactionalKotlinRenderer {
                 } else {
                     type.constructors.forEach { constructor ->
                         addFunction(
-                            constructor.toKotlinConstructor().toBuilder()
+                            constructor.toKotlinConstructor(workspace).toBuilder()
                                 .callSuperConstructor(
                                     constructor.parameters.map { parameter ->
                                         parameter.toKotlinArgument()
@@ -83,7 +87,7 @@ class TransactionalKotlinRenderer {
                         )
                     }
                 }
-                type.methods.forEach { method -> addFunction(method.toKotlinFunction(type)) }
+                type.methods.forEach { method -> addFunction(method.toKotlinFunction(type, workspace)) }
             }
             .build()
         val content = FileSpec.builder(type.packageName, type.generatedSimpleName)
@@ -113,7 +117,7 @@ class TransactionalKotlinRenderer {
     }
 }
 
-private fun TransactionalConstructor.toKotlinConstructor(): FunSpec {
+private fun TransactionalConstructor.toKotlinConstructor(workspace: LsiWorkspace): FunSpec {
     return FunSpec.constructorBuilder()
         .apply {
             when (visibility) {
@@ -130,14 +134,17 @@ private fun TransactionalConstructor.toKotlinConstructor(): FunSpec {
                 }
                 .forEach { annotation -> addAnnotation(annotation.toKotlinAnnotationSpec()) }
             this@toKotlinConstructor.parameters.forEach { parameter ->
-                addParameter(parameter.toKotlinParameter())
+                addParameter(parameter.toKotlinParameter(workspace))
             }
             this@toKotlinConstructor.documentation?.let { documentation -> addKdoc("%L\n", documentation) }
         }
         .build()
 }
 
-private fun TransactionalMethod.toKotlinFunction(type: TransactionalType): FunSpec {
+private fun TransactionalMethod.toKotlinFunction(
+    type: TransactionalType,
+    workspace: LsiWorkspace,
+): FunSpec {
     return FunSpec.builder(name)
         .addModifiers(KModifier.OVERRIDE)
         .apply {
@@ -157,7 +164,7 @@ private fun TransactionalMethod.toKotlinFunction(type: TransactionalType): FunSp
                 addTypeVariable(parameter.toKotlinTypeVariableName())
             }
             this@toKotlinFunction.parameters.forEach { parameter ->
-                addParameter(parameter.toKotlinParameter())
+                addParameter(parameter.toKotlinParameter(workspace))
             }
             returns(
                 this@toKotlinFunction.returnType.toKotlinTypeName(
@@ -189,7 +196,7 @@ private fun TransactionalMethod.toKotlinFunction(type: TransactionalType): FunSp
         .build()
 }
 
-private fun TransactionalParameter.toKotlinParameter(): ParameterSpec {
+private fun TransactionalParameter.toKotlinParameter(workspace: LsiWorkspace): ParameterSpec {
     return ParameterSpec.builder(name, type.toKotlinTypeName())
         .apply {
             if (this@toKotlinParameter.vararg) {
@@ -198,13 +205,20 @@ private fun TransactionalParameter.toKotlinParameter(): ParameterSpec {
             this@toKotlinParameter.annotations
                 .filter { annotation ->
                     annotation.useSiteTarget == null ||
-                        annotation.useSiteTarget == LsiAnnotationUseSiteTarget.PARAMETER
+                        annotation.useSiteTarget == LsiAnnotationUseSiteTarget.PARAMETER ||
+                        annotation.useSiteTarget == LsiAnnotationUseSiteTarget.ALL &&
+                        workspace.allowsParameterTarget(annotation.type)
                 }
                 .forEach { annotation ->
                     addAnnotation(annotation.copy(useSiteTarget = null).toKotlinAnnotationSpec())
                 }
         }
         .build()
+}
+
+private fun LsiWorkspace.allowsParameterTarget(annotationTypeId: LsiSymbolId): Boolean {
+    val declaration = this[annotationTypeId] as? LsiTypeDeclaration ?: return false
+    return declaration.annotationTargetPolicy().allows(LsiAnnotationTarget.PARAMETER)
 }
 
 private fun TransactionalParameter.toKotlinArgument(): CodeBlock {

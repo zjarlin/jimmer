@@ -7,7 +7,9 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.transactional.apt.TransactionalJavaRenderer
@@ -18,7 +20,10 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiParameter
@@ -79,6 +84,45 @@ class TransactionalRendererTest {
 
         assertEquals(1, javaArtifact.content.lineSequence().count { line -> "@TypeMarker" in line })
         assertEquals(1, kotlinArtifact.content.lineSequence().count { line -> "@TypeMarker" in line })
+    }
+
+    @Test
+    fun `kotlin renderer projects all annotations only onto allowed constructor parameters`() {
+        val parameterMarker = annotationDeclaration("ParameterMarker", "VALUE_PARAMETER")
+        val getterMarker = annotationDeclaration("GetterMarker", "PROPERTY_GETTER")
+        val annotations = listOf(parameterMarker, getterMarker).map { declaration ->
+            LsiAnnotation(
+                type = declaration.id,
+                useSiteTarget = LsiAnnotationUseSiteTarget.ALL,
+            )
+        } + LsiAnnotation(
+            type = LsiSymbolId.type("demo.MissingMarker"),
+            useSiteTarget = LsiAnnotationUseSiteTarget.ALL,
+        )
+        val (schema, workspace) = kotlinFixture()
+        val annotatedSchema = schema.copy(
+            types = schema.types.map { type ->
+                type.copy(
+                    constructors = type.constructors.map { constructor ->
+                        constructor.copy(
+                            parameters = constructor.parameters.map { parameter ->
+                                parameter.copy(annotations = parameter.annotations + annotations)
+                            },
+                        )
+                    },
+                )
+            },
+        )
+
+        val annotatedWorkspace = LsiWorkspace(
+            sources = workspace.sources + listOf(parameterMarker, getterMarker).mapNotNull { it.origin.source },
+            declarations = workspace.declarations + parameterMarker + getterMarker,
+        )
+        val artifact = TransactionalKotlinRenderer().render(annotatedSchema, annotatedWorkspace).single()
+
+        assertContains(artifact.content, "@ParameterMarker")
+        assertFalse("@GetterMarker" in artifact.content)
+        assertFalse("@MissingMarker" in artifact.content)
     }
 
     private fun javaFixture(): Pair<TransactionalPrecompiledSchema, LsiWorkspace> {
@@ -270,6 +314,33 @@ class TransactionalRendererTest {
         )
     }
 
+    private fun annotationDeclaration(
+        simpleName: String,
+        target: String,
+    ): LsiTypeDeclaration {
+        val source = LsiSource.of("demo/$simpleName.kt", LsiLanguage.KOTLIN)
+        return LsiTypeDeclaration(
+            id = LsiSymbolId.type("demo.$simpleName"),
+            name = simpleName,
+            qualifiedName = "demo.$simpleName",
+            kind = LsiTypeDeclarationKind.ANNOTATION,
+            annotations = listOf(
+                LsiAnnotation(
+                    type = KOTLIN_TARGET,
+                    arguments = mapOf(
+                        "allowedTargets" to LsiAnnotationArgument(
+                            value = LsiAnnotationValue.ArrayValue(
+                                listOf(LsiAnnotationValue.EnumValue(KOTLIN_ANNOTATION_TARGET, target)),
+                            ),
+                            origin = LsiAnnotationArgumentOrigin.EXPLICIT,
+                        ),
+                    ),
+                ),
+            ),
+            origin = LsiOrigin(LsiOriginKind.SOURCE, source),
+        )
+    }
+
     private fun TransactionalPrecompiledSchema.withAnnotatedReturnType(
         annotation: LsiAnnotation,
     ): TransactionalPrecompiledSchema {
@@ -348,5 +419,7 @@ class TransactionalRendererTest {
         val KOTLIN_SERVICE_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.kt.transaction.ServiceA")
         val J_SQL_CLIENT = LsiSymbolId.type("org.babyfish.jimmer.sql.JSqlClient")
         val K_SQL_CLIENT = LsiSymbolId.type("org.babyfish.jimmer.sql.kt.KSqlClient")
+        val KOTLIN_TARGET = LsiSymbolId.type("kotlin.annotation.Target")
+        val KOTLIN_ANNOTATION_TARGET = LsiSymbolId.type("kotlin.annotation.AnnotationTarget")
     }
 }

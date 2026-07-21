@@ -9,6 +9,7 @@ import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
+import site.addzero.lsi.model.LsiAnnotationTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -20,6 +21,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.annotationTargetPolicy
 import site.addzero.lsi.model.stableSignature
 
 internal data class JimmerDtoAnnotationContract(
@@ -805,39 +807,17 @@ private fun LsiTypeDeclaration.annotationDeclarationKind(): JimmerDtoAnnotationD
 }
 
 private fun LsiTypeDeclaration.dtoAnnotationTargetPolicy(): DtoAnnotationTargetPolicy {
-    val javaTarget = annotations.firstOrNull { annotation -> annotation.type == JAVA_TARGET }
-    val kotlinTarget = annotations.firstOrNull { annotation -> annotation.type == KOTLIN_TARGET }
-    if (javaTarget == null && kotlinTarget == null) {
-        return DtoAnnotationTargetPolicy(declared = false, allowedPlacements = emptyList())
-    }
-    val allowedPlacements = buildSet {
-        javaTarget?.enumEntryNames("value")?.forEach { entryName ->
-            JAVA_TARGET_PLACEMENTS[entryName]?.let(::add)
-        }
-        kotlinTarget?.enumEntryNames("allowedTargets")?.forEach { entryName ->
-            KOTLIN_TARGET_PLACEMENTS[entryName]?.let(::add)
-        }
-    }.sorted()
-    return DtoAnnotationTargetPolicy(declared = true, allowedPlacements = allowedPlacements)
+    val policy = annotationTargetPolicy()
+    return DtoAnnotationTargetPolicy(
+        declared = policy.declared,
+        allowedPlacements = policy.targets.mapNotNull(LSI_TARGET_PLACEMENTS::get).distinct().sorted(),
+    )
 }
 
 private data class DtoAnnotationTargetPolicy(
     val declared: Boolean,
     val allowedPlacements: List<JimmerDtoAnnotationPlacement>,
 )
-
-private fun LsiAnnotation.enumEntryNames(argumentName: String): List<String> {
-    val value = arguments[argumentName]?.value ?: return emptyList()
-    return value.enumEntryNames()
-}
-
-private fun LsiAnnotationValue.enumEntryNames(): List<String> {
-    return when (this) {
-        is LsiAnnotationValue.EnumValue -> listOf(entryName)
-        is LsiAnnotationValue.ArrayValue -> elements.flatMap(LsiAnnotationValue::enumEntryNames)
-        else -> emptyList()
-    }
-}
 
 private fun LsiAnnotation.toAppliedAnnotation(): JimmerDtoAppliedAnnotation {
     return JimmerDtoAppliedAnnotation(
@@ -1086,34 +1066,22 @@ private val PROP_APPLICATION_PLACEMENTS = setOf(
     JimmerDtoAnnotationPlacement.PROPERTY,
 )
 
-private val JAVA_TARGET_PLACEMENTS = mapOf(
-    "TYPE" to JimmerDtoAnnotationPlacement.TYPE,
-    "ANNOTATION_TYPE" to JimmerDtoAnnotationPlacement.ANNOTATION_TYPE,
-    "CONSTRUCTOR" to JimmerDtoAnnotationPlacement.CONSTRUCTOR,
-    "FIELD" to JimmerDtoAnnotationPlacement.FIELD,
-    "METHOD" to JimmerDtoAnnotationPlacement.GETTER,
-    "PARAMETER" to JimmerDtoAnnotationPlacement.PARAMETER,
-    "TYPE_USE" to JimmerDtoAnnotationPlacement.TYPE_USE,
-    "TYPE_PARAMETER" to JimmerDtoAnnotationPlacement.TYPE_PARAMETER,
-    "LOCAL_VARIABLE" to JimmerDtoAnnotationPlacement.LOCAL_VARIABLE,
-)
-
-private val KOTLIN_TARGET_PLACEMENTS = mapOf(
-    "CLASS" to JimmerDtoAnnotationPlacement.TYPE,
-    "ANNOTATION_CLASS" to JimmerDtoAnnotationPlacement.ANNOTATION_TYPE,
-    "CONSTRUCTOR" to JimmerDtoAnnotationPlacement.CONSTRUCTOR,
-    "FIELD" to JimmerDtoAnnotationPlacement.FIELD,
-    "FUNCTION" to JimmerDtoAnnotationPlacement.GETTER,
-    "PROPERTY_GETTER" to JimmerDtoAnnotationPlacement.GETTER,
-    "PROPERTY_SETTER" to JimmerDtoAnnotationPlacement.SETTER,
-    "PROPERTY" to JimmerDtoAnnotationPlacement.PROPERTY,
-    "VALUE_PARAMETER" to JimmerDtoAnnotationPlacement.PARAMETER,
-    "TYPE" to JimmerDtoAnnotationPlacement.TYPE_USE,
-    "TYPE_PARAMETER" to JimmerDtoAnnotationPlacement.TYPE_PARAMETER,
-    "LOCAL_VARIABLE" to JimmerDtoAnnotationPlacement.LOCAL_VARIABLE,
-    "EXPRESSION" to JimmerDtoAnnotationPlacement.EXPRESSION,
-    "FILE" to JimmerDtoAnnotationPlacement.FILE,
-    "TYPEALIAS" to JimmerDtoAnnotationPlacement.TYPE_ALIAS,
+private val LSI_TARGET_PLACEMENTS = mapOf(
+    LsiAnnotationTarget.TYPE to JimmerDtoAnnotationPlacement.TYPE,
+    LsiAnnotationTarget.ANNOTATION_TYPE to JimmerDtoAnnotationPlacement.ANNOTATION_TYPE,
+    LsiAnnotationTarget.CONSTRUCTOR to JimmerDtoAnnotationPlacement.CONSTRUCTOR,
+    LsiAnnotationTarget.FIELD to JimmerDtoAnnotationPlacement.FIELD,
+    LsiAnnotationTarget.METHOD to JimmerDtoAnnotationPlacement.GETTER,
+    LsiAnnotationTarget.PARAMETER to JimmerDtoAnnotationPlacement.PARAMETER,
+    LsiAnnotationTarget.TYPE_USE to JimmerDtoAnnotationPlacement.TYPE_USE,
+    LsiAnnotationTarget.TYPE_PARAMETER to JimmerDtoAnnotationPlacement.TYPE_PARAMETER,
+    LsiAnnotationTarget.LOCAL_VARIABLE to JimmerDtoAnnotationPlacement.LOCAL_VARIABLE,
+    LsiAnnotationTarget.PROPERTY to JimmerDtoAnnotationPlacement.PROPERTY,
+    LsiAnnotationTarget.GETTER to JimmerDtoAnnotationPlacement.GETTER,
+    LsiAnnotationTarget.SETTER to JimmerDtoAnnotationPlacement.SETTER,
+    LsiAnnotationTarget.EXPRESSION to JimmerDtoAnnotationPlacement.EXPRESSION,
+    LsiAnnotationTarget.FILE to JimmerDtoAnnotationPlacement.FILE,
+    LsiAnnotationTarget.TYPE_ALIAS to JimmerDtoAnnotationPlacement.TYPE_ALIAS,
 )
 
 private val DTO_PRIMITIVE_KINDS = mapOf(
@@ -1182,7 +1150,6 @@ private val LSI_LOCATION_COMPARATOR = compareBy<LsiLocation>(
     { location -> location.end },
 )
 
-private val JAVA_TARGET = LsiSymbolId.type("java.lang.annotation.Target")
 private val KOTLIN_TARGET = LsiSymbolId.type("kotlin.annotation.Target")
 private val KOTLIN_METADATA = LsiSymbolId.type("kotlin.Metadata")
 

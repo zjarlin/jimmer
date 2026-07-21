@@ -65,6 +65,10 @@ internal class KspLsiTypeContext(
         primitiveBoxed: Boolean? = null,
     ): LsiTypeRef {
         val type = reference.resolve()
+        val sourceArguments = reference.element
+            ?.typeArguments
+            ?.takeIf { arguments -> arguments.size == type.arguments.size }
+            ?: type.arguments
         val annotations = mergeAnnotations(
             declared = toLsiTypeAnnotations(reference.annotations),
             inherited = toLsiTypeAnnotations(type.annotations),
@@ -74,6 +78,7 @@ internal class KspLsiTypeContext(
             typeParameterIds = typeParameterIds,
             annotations = annotations,
             primitiveBoxed = primitiveBoxed ?: reference.toLsiPrimitiveBoxedHint(),
+            arguments = sourceArguments,
         )
     }
 
@@ -89,6 +94,7 @@ internal class KspLsiTypeContext(
         typeParameterIds: Map<KSTypeParameter, LsiSymbolId>,
         annotations: List<LsiAnnotation>,
         primitiveBoxed: Boolean? = null,
+        arguments: List<KSTypeArgument> = type.arguments,
     ): LsiTypeRef {
         if (type.isError) {
             return LsiUnresolvedType(
@@ -123,7 +129,7 @@ internal class KspLsiTypeContext(
             )
         }
         if (qualifiedName == "kotlin.Array") {
-            val elementType = type.arguments.singleOrNull()?.toLsiTypeArgument(typeParameterIds)?.type
+            val elementType = arguments.singleOrNull()?.toLsiTypeArgument(typeParameterIds)?.type
                 ?: LsiUnresolvedType("*")
             return LsiArrayType(
                 elementType = elementType,
@@ -133,7 +139,7 @@ internal class KspLsiTypeContext(
         }
         return LsiDeclaredType(
             declarationId = LsiSymbolId.type(qualifiedName.toCanonicalLsiTypeName()),
-            arguments = type.arguments.map { argument ->
+            arguments = arguments.map { argument ->
                 argument.toLsiTypeArgument(typeParameterIds)
             },
             nullability = type.nullability.toLsiNullability(),

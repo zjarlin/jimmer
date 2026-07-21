@@ -8,6 +8,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
+import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -74,6 +75,20 @@ class LsiKotlinPoetTest {
             annotation.toKotlinAnnotationSpec()
         }
         assertContains(exception.message.orEmpty(), "primitive void class literal")
+    }
+
+    @Test
+    fun `rejects all use site target instead of silently changing semantics`() {
+        val annotation = LsiAnnotation(
+            type = LsiSymbolId.type("demo.Marker"),
+            useSiteTarget = LsiAnnotationUseSiteTarget.ALL,
+        )
+
+        val exception = assertFailsWith<IllegalStateException> {
+            annotation.toKotlinAnnotationSpec()
+        }
+
+        assertContains(exception.message.orEmpty(), "ALL annotation use-site target")
     }
 
     @Test

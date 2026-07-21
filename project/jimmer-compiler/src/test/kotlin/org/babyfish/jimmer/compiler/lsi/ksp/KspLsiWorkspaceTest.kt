@@ -13,6 +13,7 @@ import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSNode
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSReferenceElement
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeArgument
 import com.google.devtools.ksp.symbol.KSTypeParameter
@@ -61,6 +62,11 @@ class KspLsiWorkspaceTest {
 
     private enum class ReflectionMode {
         FIRST,
+    }
+
+    @Test
+    fun `maps ksp all annotation use site target`() {
+        assertEquals(LsiAnnotationUseSiteTarget.ALL, kspAnnotationUseSiteTarget("ALL"))
     }
 
     @Test
@@ -629,6 +635,80 @@ class KspLsiWorkspaceTest {
         )
         assertTrue(frozenNullableGenericArgument.boxed)
         assertEquals(LsiNullability.NULLABLE, frozenNullableGenericArgument.nullability)
+    }
+
+    @Test
+    fun `freezes source type arguments before resolved arguments`() {
+        val stringDeclaration = classDeclaration(
+            qualifiedName = "kotlin.String",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val listDeclaration = classDeclaration(
+            qualifiedName = "kotlin.collections.List",
+            classKind = ClassKind.INTERFACE,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val arrayDeclaration = classDeclaration(
+            qualifiedName = "kotlin.Array",
+            classKind = ClassKind.CLASS,
+            origin = Origin.KOTLIN_LIB,
+            file = null,
+        )
+        val annotationDeclaration = classDeclaration(
+            qualifiedName = "demo.TypeUse",
+            classKind = ClassKind.ANNOTATION_CLASS,
+            file = null,
+        )
+        val markerDeclaration = classDeclaration(
+            qualifiedName = "demo.Marker",
+            classKind = ClassKind.CLASS,
+            file = null,
+        )
+        val resolvedStringType = type(stringDeclaration)
+        val resolvedArgument = typeArgument(resolvedStringType)
+        val typeUseAnnotation = annotation(
+            type = annotationDeclaration,
+            arguments = listOf(valueArgument("type", type(markerDeclaration))),
+        )
+        val sourceArgument = typeArgument(
+            reference = typeReference(
+                type = resolvedStringType,
+                annotations = sequenceOf(typeUseAnnotation),
+            ),
+        )
+        val context = KspLsiTypeContext(resolver())
+
+        val frozenDeclared = assertIs<LsiDeclaredType>(
+            context.toLsiType(
+                typeReference(
+                    type = type(listDeclaration, listOf(resolvedArgument)),
+                    sourceArguments = listOf(sourceArgument),
+                ),
+            ),
+        )
+        val frozenArray = assertIs<LsiArrayType>(
+            context.toLsiType(
+                typeReference(
+                    type = type(arrayDeclaration, listOf(resolvedArgument)),
+                    sourceArguments = listOf(sourceArgument),
+                ),
+            ),
+        )
+        val fallbackDeclared = assertIs<LsiDeclaredType>(
+            context.toLsiType(
+                typeReference(
+                    type = type(listDeclaration, listOf(resolvedArgument)),
+                    sourceArguments = emptyList(),
+                ),
+            ),
+        )
+
+        assertSourceTypeUseAnnotation(requireNotNull(frozenDeclared.arguments.single().type))
+        assertSourceTypeUseAnnotation(frozenArray.elementType)
+        assertTrue(requireNotNull(fallbackDeclared.arguments.single().type).annotations.isEmpty())
     }
 
     @Test
@@ -1731,6 +1811,19 @@ class KspLsiWorkspaceTest {
         return annotations.single { annotation -> annotation.type == LsiSymbolId.type(qualifiedName) }
     }
 
+    private fun assertSourceTypeUseAnnotation(type: site.addzero.lsi.model.LsiTypeRef) {
+        val annotation = type.annotations.single()
+        assertEquals(LsiSymbolId.type("demo.TypeUse"), annotation.type)
+        assertEquals(
+            LsiSymbolId.type("demo.Marker"),
+            assertIs<LsiDeclaredType>(
+                assertIs<LsiAnnotationValue.ClassValue>(
+                    annotation.arguments.getValue("type").value,
+                ).type,
+            ).declarationId,
+        )
+    }
+
     private fun resolver(
         classesByName: Map<String, KSClassDeclaration> = emptyMap(),
         overrides: (KSDeclaration, KSDeclaration, KSClassDeclaration) -> Boolean = { _, _, _ -> false },
@@ -2002,10 +2095,12 @@ class KspLsiWorkspaceTest {
     private fun typeReference(
         type: KSType,
         annotations: Sequence<KSAnnotation> = emptySequence(),
+        sourceArguments: List<KSTypeArgument>? = null,
     ): KSTypeReference {
         return proxy("KSTypeReference($type)") { method, _ ->
             when (method.name) {
                 "resolve" -> type
+                "getElement" -> sourceArguments?.let(::referenceElement)
                 "getAnnotations" -> annotations
                 "getModifiers" -> emptySet<Modifier>()
                 "getOrigin" -> Origin.KOTLIN
@@ -2021,15 +2116,32 @@ class KspLsiWorkspaceTest {
         type: KSType,
         variance: Variance = Variance.INVARIANT,
     ): KSTypeArgument {
-        val reference = typeReference(type)
-        return proxy("KSTypeArgument($type)") { method, _ ->
+        return typeArgument(typeReference(type), variance)
+    }
+
+    private fun typeArgument(
+        reference: KSTypeReference,
+        variance: Variance = Variance.INVARIANT,
+    ): KSTypeArgument {
+        return proxy("KSTypeArgument($reference)") { method, _ ->
             when (method.name) {
                 "getType" -> reference
                 "getVariance" -> variance
                 "getAnnotations" -> emptySequence<KSAnnotation>()
                 "getOrigin" -> Origin.KOTLIN
-                "getLocation" -> type.declaration.location
-                "getParent" -> type.declaration
+                "getLocation" -> reference.location
+                "getParent" -> reference.parent
+                "accept" -> true
+                else -> defaultValue(method.returnType)
+            }
+        }
+    }
+
+    private fun referenceElement(arguments: List<KSTypeArgument>): KSReferenceElement {
+        return proxy("KSReferenceElement") { method, _ ->
+            when (method.name) {
+                "getTypeArguments" -> arguments
+                "getOrigin" -> Origin.KOTLIN
                 "accept" -> true
                 else -> defaultValue(method.returnType)
             }

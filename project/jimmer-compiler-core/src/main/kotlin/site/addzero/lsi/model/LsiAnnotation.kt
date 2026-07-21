@@ -16,7 +16,8 @@ enum class LsiAnnotationUseSiteTarget {
     RECEIVER,
     PARAMETER,
     SET_PARAMETER,
-    DELEGATE
+    DELEGATE,
+    ALL
 }
 
 enum class LsiAnnotationArgumentOrigin {

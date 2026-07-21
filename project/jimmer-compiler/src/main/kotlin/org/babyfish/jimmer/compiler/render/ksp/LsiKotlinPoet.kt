@@ -237,6 +237,9 @@ private fun LsiAnnotationUseSiteTarget.toPoetUseSiteTarget(): AnnotationSpec.Use
         LsiAnnotationUseSiteTarget.METHOD,
         LsiAnnotationUseSiteTarget.RETURN_TYPE,
         -> null
+        LsiAnnotationUseSiteTarget.ALL -> error(
+            "KotlinPoet renderer cannot emit the Kotlin ALL annotation use-site target"
+        )
     }
 }
 

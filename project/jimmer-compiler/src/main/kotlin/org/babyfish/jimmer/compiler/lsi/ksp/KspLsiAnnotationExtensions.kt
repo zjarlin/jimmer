@@ -143,16 +143,22 @@ private fun KSValueArgument.argumentName(): String {
 }
 
 private fun AnnotationUseSiteTarget.toLsiUseSiteTarget(): LsiAnnotationUseSiteTarget {
-    return when (this) {
-        AnnotationUseSiteTarget.FILE -> LsiAnnotationUseSiteTarget.FILE
-        AnnotationUseSiteTarget.PROPERTY -> LsiAnnotationUseSiteTarget.PROPERTY
-        AnnotationUseSiteTarget.FIELD -> LsiAnnotationUseSiteTarget.FIELD
-        AnnotationUseSiteTarget.GET -> LsiAnnotationUseSiteTarget.GETTER
-        AnnotationUseSiteTarget.SET -> LsiAnnotationUseSiteTarget.SETTER
-        AnnotationUseSiteTarget.RECEIVER -> LsiAnnotationUseSiteTarget.RECEIVER
-        AnnotationUseSiteTarget.PARAM -> LsiAnnotationUseSiteTarget.PARAMETER
-        AnnotationUseSiteTarget.SETPARAM -> LsiAnnotationUseSiteTarget.SET_PARAMETER
-        AnnotationUseSiteTarget.DELEGATE -> LsiAnnotationUseSiteTarget.DELEGATE
+    return kspAnnotationUseSiteTarget(name)
+}
+
+internal fun kspAnnotationUseSiteTarget(name: String): LsiAnnotationUseSiteTarget {
+    return when (name) {
+        "FILE" -> LsiAnnotationUseSiteTarget.FILE
+        "PROPERTY" -> LsiAnnotationUseSiteTarget.PROPERTY
+        "FIELD" -> LsiAnnotationUseSiteTarget.FIELD
+        "GET" -> LsiAnnotationUseSiteTarget.GETTER
+        "SET" -> LsiAnnotationUseSiteTarget.SETTER
+        "RECEIVER" -> LsiAnnotationUseSiteTarget.RECEIVER
+        "PARAM" -> LsiAnnotationUseSiteTarget.PARAMETER
+        "SETPARAM" -> LsiAnnotationUseSiteTarget.SET_PARAMETER
+        "DELEGATE" -> LsiAnnotationUseSiteTarget.DELEGATE
+        "ALL" -> LsiAnnotationUseSiteTarget.ALL
+        else -> error("Unsupported KSP annotation use-site target: $name")
     }
 }
 
