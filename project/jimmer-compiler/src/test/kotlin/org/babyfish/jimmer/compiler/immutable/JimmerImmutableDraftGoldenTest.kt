@@ -40,6 +40,16 @@ class JimmerImmutableDraftGoldenTest {
         assertGoldens("ksp/override", compileKsp(OVERRIDE_KSP_FIXTURE))
     }
 
+    @Test
+    fun `apt validation draft matches legacy golden`() {
+        assertGoldens("apt/validation", compileApt(VALIDATION_APT_FIXTURE))
+    }
+
+    @Test
+    fun `ksp validation draft matches legacy golden`() {
+        assertGoldens("ksp/validation", compileKsp(VALIDATION_KSP_FIXTURE))
+    }
+
     private fun compileApt(fixture: DraftFixture): Map<String, ByteArray> {
         val projectDir = createTempDirectory(prefix = "jimmer-draft-apt-golden").toFile()
         val sourceDir = projectDir.resolve("src/main/java/demo")
@@ -295,6 +305,115 @@ class JimmerImmutableDraftGoldenTest {
                 "BaseOnlyOneSwitchDraft.kt",
                 "OverrideBookDraft.kt",
             ),
+        )
+
+        val VALIDATION_APT_FIXTURE = DraftFixture(
+            sources = linkedMapOf(
+                "IdCard.java" to """
+                    package demo;
+
+                    import java.lang.annotation.ElementType;
+                    import java.lang.annotation.Retention;
+                    import java.lang.annotation.RetentionPolicy;
+                    import java.lang.annotation.Target;
+                    import javax.validation.Constraint;
+
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.METHOD)
+                    @Constraint(validatedBy = IdCardValidator.class)
+                    public @interface IdCard {
+                        String message();
+                    }
+                """.trimIndent(),
+                "IdCardValidator.java" to """
+                    package demo;
+
+                    import javax.validation.ConstraintValidator;
+                    import javax.validation.ConstraintValidatorContext;
+
+                    public class IdCardValidator implements ConstraintValidator<IdCard, String> {
+                        @Override
+                        public boolean isValid(String value, ConstraintValidatorContext context) {
+                            return value.length() == 15 || value.length() == 18;
+                        }
+                    }
+                """.trimIndent(),
+                "ValidatedDraftModel.java" to """
+                    package demo;
+
+                    import javax.validation.constraints.NotBlank;
+                    import javax.validation.constraints.Pattern;
+                    import javax.validation.constraints.Size;
+                    import org.babyfish.jimmer.Immutable;
+
+                    @Immutable
+                    public interface ValidatedDraftModel {
+                        String requiredName();
+
+                        @NotBlank(message = "title must not be blank")
+                        @Size(min = 2, max = 8, message = "title size")
+                        @Pattern(
+                            regexp = "[A-Z][a-z]+",
+                            message = "title pattern"
+                        )
+                        @IdCard(message = "invalid id card")
+                        String title();
+                    }
+                """.trimIndent(),
+            ),
+            generatedFiles = listOf("ValidatedDraftModelDraft.java"),
+        )
+
+        val VALIDATION_KSP_FIXTURE = DraftFixture(
+            sources = linkedMapOf(
+                "IdCard.kt" to """
+                    package demo
+
+                    import javax.validation.Constraint
+
+                    @Retention(AnnotationRetention.RUNTIME)
+                    @Target(AnnotationTarget.PROPERTY)
+                    @Constraint(validatedBy = [IdCardValidator::class])
+                    annotation class IdCard(
+                        val message: String,
+                    )
+                """.trimIndent(),
+                "IdCardValidator.kt" to """
+                    package demo
+
+                    import javax.validation.ConstraintValidator
+                    import javax.validation.ConstraintValidatorContext
+
+                    class IdCardValidator : ConstraintValidator<IdCard, String> {
+                        override fun isValid(value: String?, context: ConstraintValidatorContext?): Boolean {
+                            return value?.let { it.length == 15 || it.length == 18 } ?: true
+                        }
+                    }
+                """.trimIndent(),
+                "ValidatedDraftModel.kt" to """
+                    package demo
+
+                    import javax.validation.constraints.NotBlank
+                    import javax.validation.constraints.Pattern
+                    import javax.validation.constraints.Size
+                    import org.babyfish.jimmer.Immutable
+
+                    @Immutable
+                    interface ValidatedDraftModel {
+                        val requiredName: String
+
+                        @get:NotBlank(message = "title must not be blank")
+                        @get:Size(min = 2, max = 8, message = "title size")
+                        @get:Pattern(
+                            regexp = "[A-Z][a-z]+",
+                            message = "title pattern",
+                        )
+                        @IdCard(message = "invalid id card")
+                        val title: String
+                    }
+                """.trimIndent(),
+            ),
+            generatedFiles = listOf("ValidatedDraftModelDraft.kt"),
         )
 
         fun runtimeClasspath(): List<File> {
