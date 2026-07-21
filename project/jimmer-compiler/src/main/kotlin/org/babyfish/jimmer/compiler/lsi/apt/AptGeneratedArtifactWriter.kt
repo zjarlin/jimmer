@@ -49,7 +49,11 @@ class AptGeneratedArtifactWriter(
         currentRoundElements: Map<LsiSymbolId, Element>,
         currentRoundSources: Map<LsiSymbolId, LsiSource>,
     ): Array<Element> {
-        val elements = dependencySymbols
+        val dependencyElements = dependencySymbols
+            .sorted()
+            .mapNotNull(currentRoundElements::get)
+            .distinct()
+        val originatingElements = originatingSymbols
             .sorted()
             .mapNotNull(currentRoundElements::get)
             .distinct()
@@ -62,7 +66,7 @@ class AptGeneratedArtifactWriter(
                 "APT stable artifact cannot depend on non-current sources: $path; " +
                     unmatchedSources.joinToString { source -> source.path }
             }
-            require(elements.isNotEmpty()) {
+            require(dependencyElements.isNotEmpty()) {
                 "APT stable artifact requires current-round originating elements: $path"
             }
         }
@@ -71,11 +75,21 @@ class AptGeneratedArtifactWriter(
                 "APT isolating artifact cannot depend on non-APT sources: $path; " +
                     unmatchedSources.joinToString { source -> source.path }
             }
-            require(elements.size == 1) {
+            require(originatingElements.size == 1) {
                 "APT isolating artifact requires one current-round originating element: $path"
             }
+            val originatingSourcePaths = buildSet {
+                originatingSymbols.mapNotNullTo(this) { symbolId ->
+                    currentRoundSources[symbolId]?.path
+                }
+                originatingSources.mapTo(this, LsiSource::path)
+            }
+            require(dependencySources.all { source -> source.path in originatingSourcePaths }) {
+                "APT isolating artifact cannot depend on another source: $path"
+            }
+            return originatingElements.toTypedArray()
         }
-        return elements.toTypedArray()
+        return dependencyElements.toTypedArray()
     }
 
     private fun GeneratedArtifact.javaQualifiedName(): String {

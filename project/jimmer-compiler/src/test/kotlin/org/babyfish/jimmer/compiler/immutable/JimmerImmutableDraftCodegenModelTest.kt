@@ -11,6 +11,7 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
@@ -149,6 +150,14 @@ class JimmerImmutableDraftCodegenModelTest {
         assertTrue(VALID_BOOK in book.dependencySymbols)
         assertTrue(VALIDATOR in book.dependencySymbols)
         assertTrue(BASE_SOURCE in book.dependencySources)
+        val artifactMetadata = JimmerImmutableDraftArtifactMetadata(draftSchema)
+        assertEquals("demo.BookDraft", artifactMetadata.javaQualifiedName(book))
+        assertEquals("demo.ModelsDraft", artifactMetadata.kotlinQualifiedFileName(book))
+        assertEquals(ArtifactAggregationMode.AGGREGATING, artifactMetadata.aggregationMode(book))
+        assertEquals(
+            listOf(AUTHOR, BASE_ID, BOOK),
+            artifactMetadata.generatedTypes(setOf(BOOK, BASE_ID, AUTHOR)).map { type -> type.typeId },
+        )
         val excludedAnnotationSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             schema,
             workspace,

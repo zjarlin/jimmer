@@ -27,6 +27,36 @@ import site.addzero.lsi.core.LsiSymbolId
 class AptGeneratedArtifactWriterTest {
 
     @Test
+    fun `keeps same-source transitive dependencies isolating`() {
+        val filer = CapturingFiler()
+        val writer = AptGeneratedArtifactWriter(filer)
+        val childId = LsiSymbolId.type("demo.Child")
+        val baseId = LsiSymbolId.type("demo.Base")
+        val childElement = element("Child")
+        val baseElement = element("Base")
+        val sharedSource = LsiSource.of("/workspace/Models.java", LsiLanguage.JAVA)
+
+        writer.write(
+            GeneratedArtifact.source(
+                kind = ArtifactKind.JAVA_SOURCE,
+                qualifiedName = "demo.ChildDraft",
+                content = "package demo; public interface ChildDraft {}",
+                aggregationMode = ArtifactAggregationMode.ISOLATING,
+                originatingSymbols = setOf(childId),
+                originatingSources = setOf(sharedSource),
+                dependencySymbols = setOf(childId, baseId),
+                dependencySources = setOf(sharedSource),
+            ),
+            currentRoundElements = mapOf(childId to childElement, baseId to baseElement),
+            currentRoundSources = mapOf(childId to sharedSource, baseId to sharedSource),
+        )
+
+        val call = filer.sourceCalls.single()
+        assertEquals(1, call.originatingElements.size)
+        assertSame(childElement, call.originatingElements.single())
+    }
+
+    @Test
     fun `writes transitive dependency elements separately from artifact origin`() {
         val filer = CapturingFiler()
         val writer = AptGeneratedArtifactWriter(filer)
