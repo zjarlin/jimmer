@@ -15,7 +15,7 @@ class JimmerProcessorKspIncrementalClientResourceTest {
 
     @Test
     fun `rebuilds aggregating client resource after service rename and deletion`() {
-        val projectDir = createTempDirectory(prefix = "jimmer-ksp-client-incremental").toFile()
+        val projectDir = createTempDirectory(prefix = "jimmer-compiler-client-incremental").toFile()
         val sourceDir = projectDir.resolve("src/main/kotlin/demo")
         val outputDir = projectDir.resolve("build/ksp").apply(File::mkdirs)
         val stableFile = sourceDir.writeService("StableService", "stable")
@@ -64,7 +64,7 @@ class JimmerProcessorKspIncrementalClientResourceTest {
     ): CompilationResult {
         val logger = CapturingKspLogger()
         val configuration = KSPJvmConfig.Builder().apply {
-            moduleName = "jimmer-ksp-client-incremental"
+            moduleName = "jimmer-compiler-client-incremental"
             sourceRoots = sourceFiles
             libraries = runtimeClasspath()
             projectBaseDir = projectDir

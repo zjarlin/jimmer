@@ -30,7 +30,7 @@ class KspJavaDeclarationFactsTest {
 
     @Test
     fun `real java source freezes member class record and concrete sealed facts`() {
-        val projectDir = createTempDirectory(prefix = "jimmer-ksp-java-facts").toFile()
+        val projectDir = createTempDirectory(prefix = "jimmer-compiler-java-facts").toFile()
         val kotlinSource = projectDir.resolve("src/main/kotlin/demo/Anchor.kt").also { file ->
             file.parentFile.mkdirs()
             file.writeText("package demo\nfun anchor() = Unit")

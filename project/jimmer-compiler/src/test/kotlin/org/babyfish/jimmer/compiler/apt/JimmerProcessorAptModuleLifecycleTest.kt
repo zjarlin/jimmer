@@ -33,7 +33,7 @@ class JimmerProcessorAptModuleLifecycleTest {
 
     @Test
     fun `apt aggregates Fetchers after immutable generated sources become visible`() {
-        val projectDir = createTempDirectory(prefix = "jimmer-apt-module-lifecycle").toFile()
+        val projectDir = createTempDirectory(prefix = "jimmer-compiler-module-lifecycle").toFile()
         val sourceDir = projectDir.resolve("src/main/java")
         val classesDir = projectDir.resolve("build/classes").apply { mkdirs() }
         val generatedDir = projectDir.resolve("build/generated").apply { mkdirs() }

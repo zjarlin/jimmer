@@ -18,7 +18,7 @@ class JimmerProcessorAptClientLifecycleTest {
 
     @Test
     fun `client resource includes an api generated after the first jimmer round`() {
-        val projectDir = createTempDirectory(prefix = "jimmer-apt-client-lifecycle").toFile()
+        val projectDir = createTempDirectory(prefix = "jimmer-compiler-client-lifecycle").toFile()
         val sourceDir = projectDir.resolve("src/main/java")
         val classesDir = projectDir.resolve("build/classes").apply { mkdirs() }
         val generatedDir = projectDir.resolve("build/generated").apply { mkdirs() }

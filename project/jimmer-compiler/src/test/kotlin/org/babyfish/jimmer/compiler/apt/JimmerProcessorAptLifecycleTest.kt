@@ -78,7 +78,7 @@ class JimmerProcessorAptLifecycleTest {
         generatedTypeName: String = "demo.Book",
         generatedSource: String = BOOK_SOURCE,
     ): AptCompilationResult {
-        val projectDir = createTempDirectory(prefix = "jimmer-apt-lifecycle").toFile()
+        val projectDir = createTempDirectory(prefix = "jimmer-compiler-lifecycle").toFile()
         val sourceDir = projectDir.resolve("src/main/java")
         val classesDir = projectDir.resolve("build/classes").apply { mkdirs() }
         val generatedDir = projectDir.resolve("build/generated").apply { mkdirs() }

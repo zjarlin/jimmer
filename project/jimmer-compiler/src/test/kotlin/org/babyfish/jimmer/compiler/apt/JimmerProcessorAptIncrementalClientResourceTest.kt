@@ -31,7 +31,7 @@ class JimmerProcessorAptIncrementalClientResourceTest {
 
     @Test
     fun `runs client aggregation when enable implicit api is the only trigger`() {
-        val projectDir = createTempDirectory(prefix = "jimmer-apt-client-implicit-trigger").toFile()
+        val projectDir = createTempDirectory(prefix = "jimmer-compiler-client-implicit-trigger").toFile()
         val sourceDir = projectDir.resolve("src/main/java/demo")
         val classesDir = projectDir.resolve("build/classes").apply(File::mkdirs)
         val generatedDir = projectDir.resolve("build/generated").apply(File::mkdirs)
@@ -63,7 +63,7 @@ class JimmerProcessorAptIncrementalClientResourceTest {
 
     @Test
     fun `rebuilds client resource after service rename and deletion`() {
-        val projectDir = createTempDirectory(prefix = "jimmer-apt-client-incremental").toFile()
+        val projectDir = createTempDirectory(prefix = "jimmer-compiler-client-incremental").toFile()
         val sourceDir = projectDir.resolve("src/main/java/demo")
         val classesDir = projectDir.resolve("build/classes").apply(File::mkdirs)
         val generatedDir = projectDir.resolve("build/generated").apply(File::mkdirs)
