@@ -12,7 +12,6 @@ import org.babyfish.jimmer.ksp.GeneratorException
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.immutable.generator.DraftGenerator
-import org.babyfish.jimmer.ksp.immutable.generator.PropsGenerator
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.MappedSuperclass
@@ -85,17 +84,6 @@ class ImmutableProcessor(
                             "or ${Embeddable::class.qualifiedName}: " +
                             classDeclarations.joinToString { it.fullName }
                 )
-            }
-            val sqlClassDeclarations = classDeclarations.filter {
-                it.annotation(Entity::class) !== null ||
-                        it.annotation(MappedSuperclass::class) !== null
-            }
-            if (sqlClassDeclarations.isNotEmpty()) {
-                val sqlClassDeclaration = sqlClassDeclarations[0]
-                if (sqlClassDeclaration.typeParameters.isEmpty()) {
-                    PropsGenerator(ctx.environment.codeGenerator, ctx, file, sqlClassDeclaration)
-                        .generate()
-                }
             }
         }
     }

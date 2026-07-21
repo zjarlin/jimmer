@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.codegen.GeneratedArtifactConflictException
@@ -246,13 +247,140 @@ class CompilerSessionTest {
     }
 
     @Test
+    fun `稳定源码连续两个有效轮相同后才写出`() {
+        val source = generatedSource("stable", ArtifactEmissionMode.STABLE)
+        val session = CompilerSession(
+            "stable-source",
+            listOf(resultFeature("immutable", listOf(source))),
+        )
+
+        val first = session.execute(emptyRound(0))
+        val second = session.execute(emptyRound(1))
+
+        assertTrue(first.newArtifacts.isEmpty())
+        assertTrue(session.snapshot().rounds.first().newArtifacts.isEmpty())
+        assertEquals(listOf(source), second.newArtifacts)
+        assertEquals(listOf(source), session.artifacts())
+    }
+
+    @Test
+    fun `稳定源码候选暴露下一轮需重冻的来源符号`() {
+        val firstTypeId = LsiSymbolId.type("example.Book")
+        val secondTypeId = LsiSymbolId.type("example.SpecialBook")
+        val source = generatedSource("stable", ArtifactEmissionMode.STABLE).copy(
+            originatingSymbols = setOf(firstTypeId, secondTypeId),
+        )
+        val session = CompilerSession(
+            "stable-source-origins",
+            listOf(resultFeature("immutable", listOf(source))),
+        )
+
+        session.execute(emptyRound(0))
+
+        assertEquals(
+            setOf(firstTypeId, secondTypeId),
+            session.pendingStableSourceOriginatingSymbols(),
+        )
+
+        session.execute(emptyRound(1))
+
+        assertTrue(session.pendingStableSourceOriginatingSymbols().isEmpty())
+    }
+
+    @Test
+    fun `稳定源码变化后重新等待连续相同轮`() {
+        val firstSource = generatedSource("first", ArtifactEmissionMode.STABLE)
+        val secondSource = firstSource.copy(content = "second")
+        val session = CompilerSession(
+            "changing-stable-source",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    listOf(if (round == 0) firstSource else secondSource)
+                }
+            ),
+        )
+
+        val first = session.execute(emptyRound(0))
+        val second = session.execute(emptyRound(1))
+        val third = session.execute(emptyRound(2))
+
+        assertTrue(first.newArtifacts.isEmpty())
+        assertTrue(second.newArtifacts.isEmpty())
+        assertEquals(listOf(secondSource), third.newArtifacts)
+        assertEquals(listOf(secondSource), session.artifacts())
+    }
+
+    @Test
+    fun `稳定源码写出后变化直接冲突`() {
+        val source = generatedSource("stable", ArtifactEmissionMode.STABLE)
+        val changed = source.copy(content = "changed")
+        val session = CompilerSession(
+            "emitted-stable-source-conflict",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    listOf(if (round < 2) source else changed)
+                }
+            ),
+        )
+
+        session.execute(emptyRound(0))
+        session.execute(emptyRound(1))
+        val exception = assertFailsWith<GeneratedArtifactConflictException> {
+            session.execute(emptyRound(2))
+        }
+
+        assertEquals(source, exception.existing)
+        assertEquals(changed, exception.incoming)
+        assertEquals(2, session.snapshot().rounds.size)
+        assertEquals(listOf(source), session.artifacts())
+    }
+
+    @Test
+    fun `最终轮仍有稳定源码候选时直接失败`() {
+        val source = generatedSource("pending", ArtifactEmissionMode.STABLE)
+        val session = CompilerSession(
+            "pending-stable-source",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    if (round == 0) listOf(source) else emptyList()
+                }
+            ),
+        )
+
+        session.execute(emptyRound(0))
+        val exception = assertFailsWith<PendingStableSourceArtifactsException> {
+            session.execute(emptyRound(1, isFinal = true))
+        }
+
+        assertEquals(listOf(source), exception.artifacts)
+        assertEquals(1, session.snapshot().rounds.size)
+        assertTrue(session.artifacts().isEmpty())
+    }
+
+    @Test
+    fun `即时源码仍在首个有效轮写出且相同内容不重复`() {
+        val source = generatedSource("immediate", ArtifactEmissionMode.IMMEDIATE)
+        val session = CompilerSession(
+            "immediate-source",
+            listOf(resultFeature("immutable", listOf(source))),
+        )
+
+        val first = session.execute(emptyRound(0))
+        val second = session.execute(emptyRound(1))
+
+        assertEquals(listOf(source), first.newArtifacts)
+        assertTrue(second.newArtifacts.isEmpty())
+        assertEquals(listOf(source), session.artifacts())
+    }
+
+    @Test
     fun `最终轮禁止生成源码`() {
         val sourceId = LsiSymbolId.type("example.Book")
         val source = GeneratedArtifact.source(
             kind = ArtifactKind.JAVA_SOURCE,
             qualifiedName = "example.BookDraft",
             content = "package example; class BookDraft {}",
-            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            aggregationMode = ArtifactAggregationMode.AGGREGATING,
             originatingSymbols = setOf(sourceId),
         )
         val session = CompilerSession(
@@ -401,6 +529,37 @@ class CompilerSessionTest {
         override fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult {
             return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
         }
+    }
+
+    private fun roundResultFeature(
+        id: String,
+        artifacts: (Int) -> List<GeneratedArtifact>,
+    ): JimmerCompilerFeatureProvider = object : JimmerCompilerFeatureProvider {
+        override val descriptor = JimmerCompilerFeatureDescriptor(id)
+
+        override fun precompile(
+            context: JimmerCompilerPrecompileContext,
+        ): JimmerCompilerFeaturePrecompileResult {
+            return JimmerCompilerFeaturePrecompileResult(TextState(id))
+        }
+
+        override fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult {
+            return JimmerCompilerFeatureRenderResult(artifacts = artifacts(context.round.number))
+        }
+    }
+
+    private fun generatedSource(
+        content: String,
+        emissionMode: ArtifactEmissionMode,
+    ): GeneratedArtifact {
+        return GeneratedArtifact.source(
+            kind = ArtifactKind.JAVA_SOURCE,
+            qualifiedName = "example.BookDraft",
+            content = content,
+            aggregationMode = ArtifactAggregationMode.AGGREGATING,
+            emissionMode = emissionMode,
+            originatingSymbols = setOf(LsiSymbolId.type("example.Book")),
+        )
     }
 
     private data class TextState(

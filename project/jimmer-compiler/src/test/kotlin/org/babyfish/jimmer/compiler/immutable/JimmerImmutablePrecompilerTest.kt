@@ -1303,7 +1303,7 @@ class JimmerImmutablePrecompilerTest {
 
         assertEquals(ArtifactAggregationMode.AGGREGATING, metadata.aggregationMode(root))
         assertEquals(setOf(rootId, childId), metadata.originatingSymbols(root))
-        assertEquals(ArtifactAggregationMode.ISOLATING, metadata.aggregationMode(child))
+        assertEquals(ArtifactAggregationMode.AGGREGATING, metadata.aggregationMode(child))
         assertEquals(setOf(childId), metadata.originatingSymbols(child))
     }
 
@@ -3121,11 +3121,17 @@ class JimmerImmutablePrecompilerTest {
     }
 
     @Test
-    fun `inherits and lifts target id converter for list id view`() {
+    fun `inherits and lifts declaring type id converter for list id view`() {
         val storeId = LsiSymbolId.type("demo.Store")
         val bookId = LsiSymbolId.type("demo.Book")
-        val idProp = property(
+        val storeIdProp = property(
             storeId,
+            "id",
+            LsiDeclaredType(STRING_TYPE),
+            listOf(annotation(ID)),
+        )
+        val bookIdProp = property(
+            bookId,
             "id",
             LsiDeclaredType(STRING_TYPE),
             listOf(annotation(ID), annotation(CODE_FORMAT)),
@@ -3185,9 +3191,10 @@ class JimmerImmutablePrecompilerTest {
         val schema = compileFixture(
             LsiWorkspace(
                 declarations = listOf(
-                    type("demo.Store", ENTITY, listOf(idProp.id)),
-                    type("demo.Book", ENTITY, listOf(storesProp.id, storeIdsProp.id)),
-                    idProp,
+                    type("demo.Store", ENTITY, listOf(storeIdProp.id)),
+                    type("demo.Book", ENTITY, listOf(bookIdProp.id, storesProp.id, storeIdsProp.id)),
+                    storeIdProp,
+                    bookIdProp,
                     storesProp,
                     storeIdsProp,
                     codeFormatType,

@@ -38,7 +38,22 @@ data class ClientPrecompileOptions(
 data class ClientPrecompileDependencies(
     val immutableSchema: JimmerImmutableSchema,
     val errorSchema: ErrorPrecompiledSchema,
+    val definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
 )
+
+data class ClientDefinitionDocumentation(
+    val type: String?,
+    val properties: Map<String, String>,
+) {
+    init {
+        require(properties.keys.none(String::isBlank)) {
+            "Client definition documentation property name cannot be blank"
+        }
+        require(properties.values.none(String::isBlank)) {
+            "Client definition property documentation cannot be blank"
+        }
+    }
+}
 
 class ClientPrecompileException(
     val declarationId: LsiSymbolId,
@@ -85,6 +100,7 @@ class ClientPrecompiler(
                 service = service,
                 immutableSchema = dependencies.immutableSchema,
                 errorSchema = dependencies.errorSchema,
+                definitionDocumentationByTypeId = dependencies.definitionDocumentationByTypeId,
             ).forEach { definition -> definitionsById.putIfAbsent(definition.id, definition) }
         }
         return ClientPrecompiledSchema(
@@ -433,6 +449,7 @@ class ClientPrecompiler(
         service: ClientService,
         immutableSchema: JimmerImmutableSchema,
         errorSchema: ErrorPrecompiledSchema,
+        definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
     ): List<ClientTypeDefinition> {
         val exceptionMetadataByTypeId = service.operations
             .flatMap(ClientOperation::exceptionMetadata)
@@ -472,6 +489,7 @@ class ClientPrecompiler(
                         rootServiceId = service.id,
                         type = type,
                         immutableSchema = immutableSchema,
+                        definitionDocumentation = definitionDocumentationByTypeId[type.id],
                         exceptionMetadata = exceptionMetadataByTypeId[type.id],
                     )
                 } else {
@@ -555,6 +573,7 @@ class ClientPrecompiler(
         rootServiceId: LsiSymbolId,
         type: LsiTypeDeclaration,
         immutableSchema: JimmerImmutableSchema,
+        definitionDocumentation: ClientDefinitionDocumentation?,
         exceptionMetadata: ClientExceptionMetadata?,
     ): ClientTypeDefinition {
         val immutableType = immutableSchema.typesById[type.id]
@@ -564,7 +583,7 @@ class ClientPrecompiler(
                 typeName = workspace.clientTypeName(type.id),
                 kind = ClientDefinitionKind.ENUM,
                 apiIgnore = type.annotations.hasAnnotation(API_IGNORE_ANNOTATION),
-                doc = type.clientDoc(),
+                doc = type.clientDoc() ?: definitionDocumentation?.type.normalizedClientDoc(),
                 error = null,
                 properties = emptyList(),
                 superTypes = emptyList(),
@@ -589,6 +608,7 @@ class ClientPrecompiler(
                 immutableProps = immutableType?.props.orEmpty(),
                 clientException = type.annotations.hasAnnotation(CLIENT_EXCEPTION_ANNOTATION),
                 defaultFetcherOwnerId = type.defaultFetcherOwnerId(),
+                definitionDocumentation = definitionDocumentation,
             )
         } else {
             emptyList()
@@ -611,19 +631,34 @@ class ClientPrecompiler(
                 ).requireResolvedDefinitionType(rootServiceId, type.id)
             }
         val polymorphicBranches = if (type.kind == LsiTypeDeclarationKind.INTERFACE) {
-            workspace.declarationsOfType<LsiTypeDeclaration>()
+            val branchesByOrder = workspace.declarationsOfType<LsiTypeDeclaration>()
                 .asSequence()
                 .filter { candidate -> candidate.enclosingTypeId == type.id }
                 .filter { candidate -> candidate.kind == LsiTypeDeclarationKind.CLASS }
-                .filter { candidate -> candidate.isPolymorphicBranchOf(type.id) }
-                .map { candidate ->
-                    ClientDeclaredTypeRef(
+                .mapNotNull { candidate ->
+                    val order = candidate.polymorphicBranchOrder(type.id) ?: return@mapNotNull null
+                    order to ClientDeclaredTypeRef(
                         typeId = candidate.id,
                         typeName = workspace.clientTypeName(candidate.id),
                     )
                 }
-                .sortedBy(ClientDeclaredTypeRef::typeId)
                 .toList()
+            val duplicateOrder = branchesByOrder
+                .groupingBy { (order) -> order }
+                .eachCount()
+                .entries
+                .firstOrNull { (_, count) -> count > 1 }
+                ?.key
+            if (duplicateOrder != null) {
+                throw ClientPrecompileException(
+                    declarationId = type.id,
+                    rootTypeId = rootServiceId,
+                    message = "Client polymorphic definition '${type.id.value}' has duplicate branch order $duplicateOrder",
+                )
+            }
+            branchesByOrder
+                .sortedBy { (order) -> order }
+                .map { (_, branch) -> branch }
         } else {
             emptyList()
         }
@@ -632,7 +667,7 @@ class ClientPrecompiler(
             typeName = workspace.clientTypeName(type.id),
             kind = if (immutable) ClientDefinitionKind.IMMUTABLE else ClientDefinitionKind.OBJECT,
             apiIgnore = type.annotations.hasAnnotation(API_IGNORE_ANNOTATION),
-            doc = type.clientDoc(),
+            doc = type.clientDoc() ?: definitionDocumentation?.type.normalizedClientDoc(),
             error = exceptionMetadata?.code?.let { code ->
                 ClientDefinitionError(exceptionMetadata.family, code)
             },
@@ -651,6 +686,7 @@ class ClientPrecompiler(
         immutableProps: List<JimmerImmutableProp>,
         clientException: Boolean,
         defaultFetcherOwnerId: LsiSymbolId?,
+        definitionDocumentation: ClientDefinitionDocumentation?,
     ): List<ClientDefinitionProperty> {
         val immutablePropsByDeclarationId = immutableProps.associateBy(JimmerImmutableProp::declarationId)
         val fieldsByName = type.memberIds
@@ -679,10 +715,10 @@ class ClientPrecompiler(
                             defaultFetcherOwnerId = defaultFetcherOwnerId,
                             sourceId = member.id,
                             workspace = workspace,
-                        ).withAdditionalNullability(
-                            immutableProp?.converter?.propertyNullable == true,
                         ).requireResolvedDefinitionType(rootServiceId, member.id),
-                        doc = member.clientDoc() ?: field?.clientDoc(),
+                        doc = member.clientDoc()
+                            ?: field?.clientDoc()
+                            ?: definitionDocumentation?.properties?.get(member.name).normalizedClientDoc(),
                     )
                 }
                 is LsiFunction -> {
@@ -702,7 +738,9 @@ class ClientPrecompiler(
                             sourceId = member.id,
                             workspace = workspace,
                         ).requireResolvedDefinitionType(rootServiceId, member.id),
-                        doc = member.clientDoc() ?: field?.clientDoc(),
+                        doc = member.clientDoc()
+                            ?: field?.clientDoc()
+                            ?: definitionDocumentation?.properties?.get(propertyName).normalizedClientDoc(),
                     )
                 }
                 else -> null
@@ -840,8 +878,7 @@ class ClientPrecompiler(
         )
         val nullable = nullability == LsiNullability.NULLABLE ||
             !nestedType && primitiveType?.boxed == true ||
-            nullableAnnotations.isNotEmpty() ||
-            fetchBy?.nullable == true
+            nullableAnnotations.isNotEmpty()
         if (this is LsiDeclaredType) {
             workspace.jsonValueType(declarationId)?.let { jsonValueType ->
                 if (declarationId in jsonValueTypeIds) {
@@ -1076,6 +1113,7 @@ private data class GeneratedClientErrorType(
 private val EMPTY_CLIENT_DEPENDENCIES = ClientPrecompileDependencies(
     immutableSchema = JimmerImmutableSchema(emptyList()),
     errorSchema = ErrorPrecompiledSchema(emptyList()),
+    definitionDocumentationByTypeId = emptyMap(),
 )
 
 private fun ErrorPrecompiledSchema.generatedErrorType(typeId: LsiSymbolId): GeneratedClientErrorType? {
@@ -1186,9 +1224,8 @@ private fun LsiProperty.isClientDefinitionProperty(
 }
 
 private fun LsiProperty.isJavaBeanGetter(): Boolean {
-    return getterName.startsWith("get") && getterName.length > 3 && getterName[3].isUpperCase() ||
-        type.isBooleanLike() && getterName.startsWith("is") &&
-        getterName.length > 2 && getterName[2].isUpperCase()
+    return getterName.isJavaBeanGetterName("get") ||
+        type.isBooleanLike() && getterName.isJavaBeanGetterName("is")
 }
 
 private fun LsiFunction.clientDefinitionPropertyName(clientException: Boolean): String? {
@@ -1203,10 +1240,10 @@ private fun LsiFunction.clientDefinitionPropertyName(clientException: Boolean): 
         return null
     }
     val propertyName = when {
-        returnType.isBooleanLike() && name.startsWith("is") && name.length > 2 && name[2].isUpperCase() -> {
+        returnType.isBooleanLike() && name.isJavaBeanGetterName("is") -> {
             name.substring(2).clientDecapitalize()
         }
-        name.startsWith("get") && name.length > 3 && name[3].isUpperCase() -> {
+        name.isJavaBeanGetterName("get") -> {
             name.substring(3).clientDecapitalize()
         }
         else -> null
@@ -1218,6 +1255,10 @@ private fun LsiFunction.clientDefinitionPropertyName(clientException: Boolean): 
         return null
     }
     return propertyName
+}
+
+private fun String.isJavaBeanGetterName(prefix: String): Boolean {
+    return startsWith(prefix) && length > prefix.length && !this[prefix.length].isLowerCase()
 }
 
 private fun String.clientDecapitalize(): String {
@@ -1268,6 +1309,30 @@ private fun ClientTypeRef.withAdditionalNullability(nullable: Boolean): ClientTy
         is ClientTypeParameterRef -> copy(nullable = true)
         is ClientUnresolvedTypeRef -> copy(nullable = true)
     }
+}
+
+private fun LsiTypeDeclaration.polymorphicBranchOrder(ownerTypeId: LsiSymbolId): Int? {
+    val annotation = annotations.annotation(GENERATED_POLYMORPHIC_BRANCH_ANNOTATION) ?: return null
+    val value = annotation.arguments["value"]?.value as? LsiAnnotationValue.ClassValue
+        ?: throw ClientPrecompileException(
+            declarationId = id,
+            message = "Client polymorphic branch '${id.value}' has no owner type",
+        )
+    if (value.type.declaredTypeId() != ownerTypeId) {
+        return null
+    }
+    val order = (annotation.arguments["order"]?.value as? LsiAnnotationValue.IntValue)?.value
+        ?: throw ClientPrecompileException(
+            declarationId = id,
+            message = "Client polymorphic branch '${id.value}' has no order",
+        )
+    if (order < 0) {
+        throw ClientPrecompileException(
+            declarationId = id,
+            message = "Client polymorphic branch '${id.value}' has negative order $order",
+        )
+    }
+    return order
 }
 
 private fun LsiTypeDeclaration.isPolymorphicBranchOf(ownerTypeId: LsiSymbolId): Boolean {
@@ -1352,6 +1417,10 @@ private fun LsiDeclaration.clientDoc(): String? {
         ?: annotations.annotation(DESCRIPTION_ANNOTATION)?.stringValue("value")
         ?: return null
     return source.normalizeDoc().takeIf(String::isNotBlank)
+}
+
+private fun String?.normalizedClientDoc(): String? {
+    return this?.normalizeDoc()?.takeIf(String::isNotBlank)
 }
 
 private fun LsiDeclaration.hasUnresolvedClientType(): Boolean {

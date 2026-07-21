@@ -11,6 +11,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
+import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -33,11 +34,11 @@ import site.addzero.lsi.model.LsiWorkspace
 class JimmerClientCompilerFeatureProviderTest {
 
     @Test
-    fun `registered client feature declares immutable and error dependencies`() {
+    fun `registered client feature declares dto immutable and error dependencies`() {
         val provider = JimmerCompilerFeatureProviders.load()
             .single { candidate -> candidate.descriptor.id == "client" }
 
-        assertEquals(setOf("error", "immutable"), provider.descriptor.dependsOn)
+        assertEquals(setOf("dto", "error", "immutable"), provider.descriptor.dependsOn)
     }
 
     @Test
@@ -269,6 +270,7 @@ class JimmerClientCompilerFeatureProviderTest {
         assertTrue(deferredState.immutableDependencyFingerprint.isNotBlank())
         assertTrue(deferredState.fingerprint.contains(deferredState.immutableDependencyFingerprint))
         assertTrue(deferredState.fingerprint.contains(deferredState.errorDependencyFingerprint))
+        assertTrue(deferredState.fingerprint.contains(deferredState.dtoDependencyFingerprint))
         assertEquals(
             listOf(BOOK_NOT_FOUND_EXCEPTION_ID),
             deferredState.schema.services.single().operations.single().exceptionTypeIds,
@@ -292,6 +294,7 @@ class JimmerClientCompilerFeatureProviderTest {
         assertTrue(invalidState.errorDependencyFingerprint.startsWith("INVALID:"))
         assertTrue(invalidState.fingerprint.contains(invalidState.immutableDependencyFingerprint))
         assertTrue(invalidState.fingerprint.contains(invalidState.errorDependencyFingerprint))
+        assertTrue(invalidState.fingerprint.contains(invalidState.dtoDependencyFingerprint))
         assertTrue(invalidState.schema.services.single().operations.single().exceptionTypeIds.isEmpty())
         assertTrue(invalidState.schema.services.single().operations.single().exceptionMetadata.isEmpty())
     }
@@ -365,6 +368,7 @@ class JimmerClientCompilerFeatureProviderTest {
             providers = listOf(
                 ErrorCompilerFeatureProvider(),
                 JimmerImmutableCompilerFeatureProvider(),
+                JimmerDtoCompilerFeatureProvider(),
                 JimmerClientCompilerFeatureProvider(),
             ),
         )

@@ -139,6 +139,27 @@ class ErrorPrecompilerTest {
     }
 
     @Test
+    fun `preserves leading acronym when deriving default family`() {
+        val familyId = LsiSymbolId.type("demo.KBusinessError")
+        val entry = LsiEnumEntry(
+            id = LsiSymbolId("${familyId.value}#FAILED"),
+            name = "FAILED",
+            ownerId = familyId,
+            origin = SYNTHETIC_ORIGIN,
+        )
+        val family = type(
+            qualifiedName = familyId.requireTypeQualifiedName(),
+            kind = LsiTypeDeclarationKind.ENUM,
+            annotations = listOf(errorFamily("")),
+            enumEntries = listOf(entry),
+        )
+
+        val schema = ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(family)))
+
+        assertEquals("KBUSINESS", schema.families.single().family)
+    }
+
+    @Test
     fun `rejects invalid family and fields`() {
         val nonEnum = type(
             qualifiedName = "demo.InvalidError",

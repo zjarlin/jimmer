@@ -39,6 +39,7 @@ private fun emptyClientDependencies(): ClientPrecompileDependencies {
     return ClientPrecompileDependencies(
         immutableSchema = JimmerImmutableSchema(emptyList()),
         errorSchema = ErrorPrecompiledSchema(emptyList()),
+        definitionDocumentationByTypeId = emptyMap(),
     )
 }
 

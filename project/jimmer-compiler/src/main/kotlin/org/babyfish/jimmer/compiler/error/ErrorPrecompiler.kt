@@ -218,23 +218,23 @@ private fun String.toCamelName(upperHead: Boolean): String {
 
 private fun String.toUpperSnake(): String {
     val result = StringBuilder(length + 8)
-    forEachIndexed { index, character ->
+    var previousLowerCaseOrDigit = false
+    for (character in this) {
         if (character == '_') {
             if (result.isNotEmpty() && result.last() != '_') {
                 result.append('_')
             }
-            return@forEachIndexed
+            previousLowerCaseOrDigit = false
+            continue
         }
-        val previous = getOrNull(index - 1)
-        val next = getOrNull(index + 1)
-        val boundary = character.isUpperCase() && index > 0 && previous != '_' &&
-            (previous?.isLowerCase() == true || previous?.isDigit() == true || next?.isLowerCase() == true)
-        if (boundary && result.isNotEmpty() && result.last() != '_') {
+        val lowerCaseOrDigit = character.isLowerCase() || character.isDigit()
+        if (previousLowerCaseOrDigit && !lowerCaseOrDigit) {
             result.append('_')
         }
+        previousLowerCaseOrDigit = lowerCaseOrDigit
         result.append(character.uppercaseChar())
     }
-    return result.toString().trim('_')
+    return result.toString()
 }
 
 private fun String?.normalizedDocumentation(): String? {

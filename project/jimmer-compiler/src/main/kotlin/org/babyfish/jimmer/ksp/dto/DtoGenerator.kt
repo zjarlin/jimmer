@@ -46,6 +46,7 @@ class DtoGenerator private constructor(
     private val polymorphicSuperInterfaceName: TypeName? = null,
     private val polymorphicBranch: Boolean = false,
     private val polymorphicBranchKind: DtoPolymorphicBranch.Kind? = null,
+    private val polymorphicBranchOrder: Int = -1,
 ) {
     private val root: DtoGenerator = parent?.root ?: this
 
@@ -166,7 +167,8 @@ class DtoGenerator private constructor(
                         addAnnotation(
                             AnnotationSpec
                                 .builder(GENERATED_POLYMORPHIC_DTO_BRANCH_CLASS_NAME)
-                                .addMember("%T::class", polymorphicSuperInterfaceName!!)
+                                .addMember("value = %T::class", polymorphicSuperInterfaceName!!)
+                                .addMember("order = %L", polymorphicBranchOrder)
                                 .build()
                         )
                     }
@@ -600,17 +602,19 @@ class DtoGenerator private constructor(
                 }
                 .build()
         )
-        polymorphism.defaultBranch?.let {
-            generatePolymorphicBranch(it, getDtoClassName())
+        var branchOrder = 0
+        polymorphism.defaultBranch?.let { branch ->
+            generatePolymorphicBranch(branch, getDtoClassName(), branchOrder++)
         }
         for (branch in polymorphism.typeBranches) {
-            generatePolymorphicBranch(branch, getDtoClassName())
+            generatePolymorphicBranch(branch, getDtoClassName(), branchOrder++)
         }
     }
 
     private fun generatePolymorphicBranch(
         branch: DtoPolymorphicBranch<ImmutableType, ImmutableProp>,
         superInterfaceName: TypeName,
+        branchOrder: Int,
     ) {
         DtoGenerator(
             ctx,
@@ -622,7 +626,8 @@ class DtoGenerator private constructor(
             branch.className,
             superInterfaceName,
             true,
-            branch.kind
+            branch.kind,
+            branchOrder,
         ).generate(emptyList())
     }
 

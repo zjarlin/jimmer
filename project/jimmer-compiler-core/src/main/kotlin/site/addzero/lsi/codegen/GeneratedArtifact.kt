@@ -17,6 +17,14 @@ enum class ArtifactAggregationMode {
     AGGREGATING
 }
 
+/**
+ * 控制源码首次提交给平台 filer 的时机。
+ */
+enum class ArtifactEmissionMode {
+    IMMEDIATE,
+    STABLE,
+}
+
 data class GeneratedArtifactKey(
     val kind: ArtifactKind,
     val path: String
@@ -39,6 +47,7 @@ data class GeneratedArtifact(
     val path: String,
     val content: String,
     val aggregationMode: ArtifactAggregationMode,
+    val emissionMode: ArtifactEmissionMode = ArtifactEmissionMode.IMMEDIATE,
     val originatingSymbols: Set<LsiSymbolId> = emptySet(),
     val originatingSources: Set<LsiSource> = emptySet(),
 ) {
@@ -55,6 +64,15 @@ data class GeneratedArtifact(
                 "Isolating generated artifact requires exactly one originating symbol: $path"
             }
         }
+        require(emissionMode != ArtifactEmissionMode.STABLE || kind.isSource) {
+            "Stable generated artifact must be a source artifact: $path"
+        }
+        require(
+            emissionMode != ArtifactEmissionMode.STABLE ||
+                aggregationMode == ArtifactAggregationMode.AGGREGATING
+        ) {
+            "Stable generated artifact must be aggregating: $path"
+        }
     }
 
     companion object {
@@ -64,6 +82,7 @@ data class GeneratedArtifact(
             path: String,
             content: String,
             aggregationMode: ArtifactAggregationMode,
+            emissionMode: ArtifactEmissionMode = ArtifactEmissionMode.IMMEDIATE,
             originatingSymbols: Set<LsiSymbolId> = emptySet(),
             originatingSources: Set<LsiSource> = emptySet(),
         ): GeneratedArtifact = GeneratedArtifact(
@@ -71,6 +90,7 @@ data class GeneratedArtifact(
             path = normalizePath(path),
             content = content,
             aggregationMode = aggregationMode,
+            emissionMode = emissionMode,
             originatingSymbols = originatingSymbols.toSortedSet(),
             originatingSources = originatingSources.toSortedSet(),
         )
@@ -80,6 +100,7 @@ data class GeneratedArtifact(
             qualifiedName: String,
             content: String,
             aggregationMode: ArtifactAggregationMode,
+            emissionMode: ArtifactEmissionMode = ArtifactEmissionMode.IMMEDIATE,
             originatingSymbols: Set<LsiSymbolId>,
             originatingSources: Set<LsiSource> = emptySet(),
         ): GeneratedArtifact {
@@ -91,7 +112,15 @@ data class GeneratedArtifact(
                 ArtifactKind.RESOURCE -> error("Resource artifact cannot be created as source")
             }
             val path = qualifiedName.replace('.', '/') + ".$extension"
-            return create(kind, path, content, aggregationMode, originatingSymbols, originatingSources)
+            return create(
+                kind = kind,
+                path = path,
+                content = content,
+                aggregationMode = aggregationMode,
+                emissionMode = emissionMode,
+                originatingSymbols = originatingSymbols,
+                originatingSources = originatingSources,
+            )
         }
 
         private fun normalizePath(path: String): String {

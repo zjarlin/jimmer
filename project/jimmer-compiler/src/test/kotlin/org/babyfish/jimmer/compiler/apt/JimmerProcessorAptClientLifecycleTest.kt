@@ -97,8 +97,28 @@ class JimmerProcessorAptClientLifecycleTest {
             package demo;
 
             import org.babyfish.jimmer.sql.EnableDtoGeneration;
+            import org.babyfish.jimmer.sql.Discriminator;
+            import org.babyfish.jimmer.sql.DiscriminatorValue;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.Inheritance;
+            import org.babyfish.jimmer.sql.InheritanceType;
 
             @interface GenerateApi {}
+
+            @Entity
+            @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+            interface Root {
+                @Id
+                long id();
+
+                @Discriminator
+                String type();
+            }
+
+            @Entity
+            @DiscriminatorValue("SPECIAL")
+            interface SpecialRoot extends Root {}
 
             @EnableDtoGeneration
             @GenerateApi

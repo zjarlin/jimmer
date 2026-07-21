@@ -10,6 +10,7 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
+import com.google.devtools.ksp.symbol.Origin
 import com.google.devtools.ksp.validate
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import site.addzero.lsi.core.LsiSymbolId
@@ -47,7 +48,7 @@ internal fun Resolver.toKspLsiRoundSymbols(
     for ((declaration, file) in allRoots) {
         if (declaration.validate()) {
             allValidRoots += declaration to file
-        } else {
+        } else if (declaration.origin == Origin.KOTLIN) {
             invalidRoots += declaration
         }
     }
@@ -60,7 +61,9 @@ internal fun Resolver.toKspLsiRoundSymbols(
         currentSourceFiles = currentSourceFiles,
         allValidFileScopes = fileScopePlan.validScopes,
         currentValidFileScopes = fileScopePlan.validScopesFor(currentFileScopeSourcePaths),
-        invalidFileAnnotationScopes = fileScopePlan.invalidScopes,
+        invalidFileAnnotationScopes = fileScopePlan.invalidScopes.filter { scope ->
+            scope.file.origin == Origin.KOTLIN
+        },
     )
 }
 

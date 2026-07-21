@@ -17,6 +17,8 @@ import org.babyfish.jimmer.compiler.error.ErrorPrecompileOptions
 import org.babyfish.jimmer.compiler.error.ErrorPrecompileException
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiler
+import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
+import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompileException
@@ -38,7 +40,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
     override val descriptor = JimmerCompilerFeatureDescriptor(
         id = CLIENT_FEATURE_ID,
-        dependsOn = setOf(ERROR_FEATURE_ID, IMMUTABLE_FEATURE_ID),
+        dependsOn = setOf(DTO_FEATURE_ID, ERROR_FEATURE_ID, IMMUTABLE_FEATURE_ID),
     )
 
     override fun requestTypeSeeds(context: JimmerCompilerTypeSeedContext): Collection<LsiTypeSeed> {
@@ -100,6 +102,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             dependencies = ClientPrecompileDependencies(
                 immutableSchema = dependencies.immutableSchema,
                 errorSchema = dependencies.errorSchema,
+                definitionDocumentationByTypeId = dependencies.definitionDocumentationByTypeId,
             ),
         )
         val deferred = outcome.unresolvedRootTypeIds.isNotEmpty() &&
@@ -123,6 +126,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             failures = outcome.failures,
             immutableDependencyFingerprint = dependencies.immutableFingerprint,
             errorDependencyFingerprint = dependencies.errorFingerprint,
+            dtoDependencyFingerprint = dependencies.dtoFingerprint,
         )
         val unavailableRootTypeIds = state.unresolvedRootTypeIds + state.invalidRootTypeIds
         return JimmerCompilerFeaturePrecompileResult(
@@ -200,6 +204,7 @@ internal data class JimmerClientCompilerFeatureState(
     val failures: List<ClientCompilerFailure>,
     val immutableDependencyFingerprint: String,
     val errorDependencyFingerprint: String,
+    val dtoDependencyFingerprint: String,
     override val fingerprint: String = buildString {
         append(status.name)
         append(':')
@@ -227,6 +232,8 @@ internal data class JimmerClientCompilerFeatureState(
         append(immutableDependencyFingerprint)
         append(':')
         append(errorDependencyFingerprint)
+        append(':')
+        append(dtoDependencyFingerprint)
     },
 ) : JimmerCompilerFeatureState {
 
@@ -268,6 +275,8 @@ private data class ClientDependencies(
     val errorFingerprint: String,
     val immutableSchema: JimmerImmutableSchema,
     val errorSchema: ErrorPrecompiledSchema,
+    val definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
+    val dtoFingerprint: String,
 )
 
 private data class ClientPrecompileOutcome(
@@ -291,6 +300,7 @@ private fun disabledClientState(
         failures = emptyList(),
         immutableDependencyFingerprint = dependencies.immutableFingerprint,
         errorDependencyFingerprint = dependencies.errorFingerprint,
+        dtoDependencyFingerprint = dependencies.dtoFingerprint,
     )
 }
 
@@ -305,12 +315,19 @@ private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependen
     ) {
         "Client feature requires error compiler state"
     }
+    val dtoState = requireNotNull(
+        dependencyStates[DTO_FEATURE_ID] as? JimmerDtoCompilerFeatureState
+    ) {
+        "Client feature requires DTO compiler state"
+    }
     val status = when {
         immutableState.status == JimmerImmutableCompilerFeatureStatus.INVALID ||
-            errorState.status == ErrorCompilerFeatureStatus.INVALID -> {
+            errorState.status == ErrorCompilerFeatureStatus.INVALID ||
+            dtoState.status in DTO_INVALID_STATUSES -> {
             JimmerClientCompilerDependencyStatus.INVALID
         }
-        immutableState.status == JimmerImmutableCompilerFeatureStatus.DEFERRED -> {
+        immutableState.status == JimmerImmutableCompilerFeatureStatus.DEFERRED ||
+            dtoState.status in DTO_DEFERRED_STATUSES -> {
             JimmerClientCompilerDependencyStatus.DEFERRED
         }
         else -> JimmerClientCompilerDependencyStatus.RESOLVED
@@ -321,6 +338,8 @@ private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependen
         errorFingerprint = errorState.fingerprint,
         immutableSchema = immutableState.schema,
         errorSchema = errorState.schema,
+        definitionDocumentationByTypeId = dtoState.schema.toClientDefinitionDocumentation(immutableState.schema),
+        dtoFingerprint = dtoState.fingerprint,
     )
 }
 
@@ -352,6 +371,7 @@ private fun CompilerRound.previewClientDependencies(): ClientPrecompileDependenc
     return ClientPrecompileDependencies(
         immutableSchema = immutableSchema,
         errorSchema = errorSchema,
+        definitionDocumentationByTypeId = emptyMap(),
     )
 }
 
@@ -511,12 +531,24 @@ private fun StringBuilder.appendIds(ids: Set<LsiSymbolId>) {
 }
 
 private const val CLIENT_FEATURE_ID = "client"
+private const val DTO_FEATURE_ID = "dto"
 private const val ERROR_FEATURE_ID = "error"
 private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val IGNORE_RESOURCE_GENERATION_OPTION = "jimmer.buddy.ignoreResourceGeneration"
 private const val CLIENT_RESOURCE_PATH = "META-INF/jimmer/client"
 
 private val EMPTY_SCHEMA = ClientPrecompiledSchema(emptyList(), emptyList())
+
+private val DTO_DEFERRED_STATUSES = setOf(
+    JimmerDtoCompilerFeatureStatus.PENDING,
+    JimmerDtoCompilerFeatureStatus.DEFERRED,
+    JimmerDtoCompilerFeatureStatus.DEPENDENCY_DEFERRED,
+)
+
+private val DTO_INVALID_STATUSES = setOf(
+    JimmerDtoCompilerFeatureStatus.INVALID,
+    JimmerDtoCompilerFeatureStatus.DEPENDENCY_INVALID,
+)
 private val ENABLE_IMPLICIT_API_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.client.EnableImplicitApi")
 private val KOTLIN_METADATA_ANNOTATION = LsiSymbolId.type("kotlin.Metadata")

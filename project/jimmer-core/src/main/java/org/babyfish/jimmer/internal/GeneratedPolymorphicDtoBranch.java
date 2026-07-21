@@ -13,4 +13,6 @@ import java.lang.annotation.Target;
 public @interface GeneratedPolymorphicDtoBranch {
 
     Class<?> value();
+
+    int order();
 }

@@ -206,6 +206,7 @@ class ClientExceptionMetadataPrecompilerTest {
             dependencies = ClientPrecompileDependencies(
                 immutableSchema = JimmerImmutableSchema(emptyList()),
                 errorSchema = ErrorPrecompiledSchema(emptyList()),
+                definitionDocumentationByTypeId = emptyMap(),
             ),
         )
         return schema.services.single().operations.single()

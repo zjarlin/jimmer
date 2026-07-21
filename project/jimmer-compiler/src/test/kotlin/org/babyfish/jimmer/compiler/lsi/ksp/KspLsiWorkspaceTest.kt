@@ -64,6 +64,43 @@ class KspLsiWorkspaceTest {
     }
 
     @Test
+    fun `freezes type parameter use site nullability`() {
+        val sourceFile = file("/workspace/src/main/kotlin/demo/Page.kt")
+        lateinit var owner: KSClassDeclaration
+        val parameter = typeParameter(
+            name = "E",
+            parent = { owner },
+            bounds = { emptyList() },
+        )
+        owner = classDeclaration(
+            qualifiedName = "demo.Page",
+            classKind = ClassKind.INTERFACE,
+            file = sourceFile,
+            typeParameters = { listOf(parameter) },
+        )
+        val context = KspLsiTypeContext(resolver())
+        val bareType = type(
+            declaration = parameter,
+            nullability = Nullability.NULLABLE,
+            markedNullable = false,
+        )
+        val explicitNullableType = type(
+            declaration = parameter,
+            nullability = Nullability.NULLABLE,
+            markedNullable = true,
+        )
+
+        assertEquals(
+            LsiNullability.NON_NULL,
+            assertIs<LsiTypeParameterRef>(context.toLsiType(typeReference(bareType))).nullability,
+        )
+        assertEquals(
+            LsiNullability.NULLABLE,
+            assertIs<LsiTypeParameterRef>(context.toLsiType(typeReference(explicitNullableType))).nullability,
+        )
+    }
+
+    @Test
     fun `freezes description after direct doc string`() {
         val sourceFile = file("/workspace/src/main/kotlin/demo/DocumentedModels.kt")
         val descriptionType = classDeclaration(
@@ -1936,6 +1973,7 @@ class KspLsiWorkspaceTest {
         arguments: List<KSTypeArgument> = emptyList(),
         nullability: Nullability = Nullability.NOT_NULL,
         error: Boolean = false,
+        markedNullable: Boolean = nullability == Nullability.NULLABLE,
     ): KSType {
         lateinit var type: KSType
         type = proxy("KSType(${declaration.simpleName.asString()})") { method, methodArguments ->
@@ -1944,15 +1982,15 @@ class KspLsiWorkspaceTest {
                 "getArguments" -> arguments
                 "getNullability" -> nullability
                 "getAnnotations" -> emptySequence<KSAnnotation>()
-                "isMarkedNullable" -> nullability == Nullability.NULLABLE
+                "isMarkedNullable" -> markedNullable
                 "isError" -> error
                 "isFunctionType", "isSuspendFunctionType" -> false
-                "makeNullable" -> type(declaration, arguments, Nullability.NULLABLE, error)
-                "makeNotNullable" -> type(declaration, arguments, Nullability.NOT_NULL, error)
+                "makeNullable" -> type(declaration, arguments, Nullability.NULLABLE, error, true)
+                "makeNotNullable" -> type(declaration, arguments, Nullability.NOT_NULL, error, false)
                 "replace" -> {
                     @Suppress("UNCHECKED_CAST")
                     val replacementArguments = methodArguments[0] as List<KSTypeArgument>
-                    type(declaration, replacementArguments, nullability, error)
+                    type(declaration, replacementArguments, nullability, error, markedNullable)
                 }
                 "starProjection" -> type
                 else -> defaultValue(method.returnType)

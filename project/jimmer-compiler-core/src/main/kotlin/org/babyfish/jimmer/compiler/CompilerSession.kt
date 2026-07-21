@@ -1,7 +1,11 @@
 package org.babyfish.jimmer.compiler
 
 import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactEmissionMode
+import site.addzero.lsi.codegen.ArtifactRegistration
 import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.codegen.GeneratedArtifactConflictException
+import site.addzero.lsi.codegen.GeneratedArtifactKey
 import site.addzero.lsi.codegen.GeneratedArtifactSet
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
@@ -185,6 +189,13 @@ class FinalRoundIsolatingArtifactException(
         artifacts.joinToString { artifact -> artifact.path },
 )
 
+class PendingStableSourceArtifactsException(
+    val artifacts: List<GeneratedArtifact>,
+) : IllegalStateException(
+    "Compiler session reached the final round before stable source artifacts converged: " +
+        artifacts.joinToString { artifact -> artifact.path },
+)
+
 /**
  * 在真实 APT/KSP 轮次之间保存纯 LSI 状态，并在每轮执行预编译固定点。
  */
@@ -199,6 +210,8 @@ class CompilerSession(
         .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.classpathTypeIds }
 
     private val artifactSet = GeneratedArtifactSet()
+
+    private val stableArtifactCandidates = linkedMapOf<GeneratedArtifactKey, StableArtifactCandidate>()
 
     private val roundResults = mutableListOf<CompilerRoundResult>()
 
@@ -218,13 +231,58 @@ class CompilerSession(
         val collections = collect(sessionSnapshot, round)
         val fixedPoint = precompile(sessionSnapshot, round, collections)
         val featureResults = render(sessionSnapshot, round, collections, fixedPoint.results)
+        val roundArtifactSet = GeneratedArtifactSet()
         val stagedArtifactSet = GeneratedArtifactSet(artifactSet.snapshot())
+        val stagedStableCandidates = LinkedHashMap(stableArtifactCandidates)
         val newArtifacts = mutableListOf<GeneratedArtifact>()
         val diagnostics = mutableListOf<LsiDiagnostic>()
         for ((featureId, result) in featureResults) {
             validateFinalRoundOutput(round, featureId, result)
-            newArtifacts += stagedArtifactSet.registerAll(result.artifacts)
+            roundArtifactSet.registerAll(result.artifacts)
             diagnostics += result.diagnostics
+        }
+        if (round.isFinal && stagedStableCandidates.isNotEmpty()) {
+            throw PendingStableSourceArtifactsException(
+                stagedStableCandidates.values
+                    .map(StableArtifactCandidate::artifact)
+                    .sortedBy(GeneratedArtifact::key),
+            )
+        }
+        val currentStableKeys = mutableSetOf<GeneratedArtifactKey>()
+        for (artifact in roundArtifactSet.snapshot()) {
+            when (artifact.emissionMode) {
+                ArtifactEmissionMode.IMMEDIATE -> {
+                    if (stagedArtifactSet.register(artifact) == ArtifactRegistration.ADDED) {
+                        newArtifacts += artifact
+                    }
+                }
+                ArtifactEmissionMode.STABLE -> {
+                    currentStableKeys += artifact.key
+                    val emitted = stagedArtifactSet[artifact.key]
+                    if (emitted != null) {
+                        if (emitted != artifact) {
+                            throw GeneratedArtifactConflictException(emitted, artifact)
+                        }
+                        stagedStableCandidates.remove(artifact.key)
+                        continue
+                    }
+                    val candidate = stagedStableCandidates[artifact.key]
+                    if (
+                        candidate != null &&
+                        candidate.roundNumber == round.number - 1 &&
+                        candidate.artifact == artifact
+                    ) {
+                        stagedArtifactSet.register(artifact)
+                        stagedStableCandidates.remove(artifact.key)
+                        newArtifacts += artifact
+                    } else {
+                        stagedStableCandidates[artifact.key] = StableArtifactCandidate(artifact, round.number)
+                    }
+                }
+            }
+        }
+        if (!round.isFinal) {
+            stagedStableCandidates.keys.retainAll(currentStableKeys)
         }
 
         val roundResult = CompilerRoundResult(
@@ -235,6 +293,8 @@ class CompilerSession(
             diagnostics = diagnostics.toList(),
         )
         artifactSet.registerAll(newArtifacts)
+        stableArtifactCandidates.clear()
+        stableArtifactCandidates.putAll(stagedStableCandidates)
         roundResults += roundResult
         finalRoundCompleted = round.isFinal
         return roundResult
@@ -255,6 +315,11 @@ class CompilerSession(
     fun snapshot(): CompilerSessionSnapshot = CompilerSessionSnapshot(id, roundResults.toList())
 
     fun artifacts(): List<GeneratedArtifact> = artifactSet.snapshot()
+
+    fun pendingStableSourceOriginatingSymbols(): Set<LsiSymbolId> {
+        return stableArtifactCandidates.values
+            .flatMapTo(sortedSetOf()) { candidate -> candidate.artifact.originatingSymbols }
+    }
 
     private fun collect(
         session: CompilerSessionSnapshot,
@@ -368,5 +433,10 @@ class CompilerSession(
     private data class FixedPointResult(
         val iterations: Int,
         val results: Map<String, JimmerCompilerFeaturePrecompileResult>,
+    )
+
+    private data class StableArtifactCandidate(
+        val artifact: GeneratedArtifact,
+        val roundNumber: Int,
     )
 }

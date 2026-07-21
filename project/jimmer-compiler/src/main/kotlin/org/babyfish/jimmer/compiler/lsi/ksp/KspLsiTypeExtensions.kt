@@ -340,7 +340,7 @@ internal class KspLsiTypeContext(
         return if (parameterId != null) {
             LsiTypeParameterRef(
                 parameterId = parameterId,
-                nullability = type.nullability.toLsiNullability(),
+                nullability = type.toLsiTypeParameterNullability(),
                 annotations = annotations,
             )
         } else {
@@ -558,6 +558,14 @@ private fun Nullability.toLsiNullability(): LsiNullability {
         Nullability.NULLABLE -> LsiNullability.NULLABLE
         Nullability.NOT_NULL -> LsiNullability.NON_NULL
         Nullability.PLATFORM -> LsiNullability.PLATFORM
+    }
+}
+
+private fun KSType.toLsiTypeParameterNullability(): LsiNullability {
+    return when {
+        isMarkedNullable -> LsiNullability.NULLABLE
+        nullability == Nullability.PLATFORM -> LsiNullability.PLATFORM
+        else -> LsiNullability.NON_NULL
     }
 }
 

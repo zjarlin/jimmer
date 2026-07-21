@@ -12,6 +12,7 @@ class GeneratedArtifactConflictException(
     "Conflicting generated artifact '${incoming.path}' for ${incoming.kind}: " +
         "contentChanged=${existing.content != incoming.content}, " +
         "aggregation=${existing.aggregationMode}->${incoming.aggregationMode}, " +
+        "emission=${existing.emissionMode}->${incoming.emissionMode}, " +
         "symbols=${existing.originatingSymbols}->${incoming.originatingSymbols}, " +
         "sources=${existing.originatingSources}->${incoming.originatingSources}"
 )
@@ -46,6 +47,8 @@ class GeneratedArtifactSet(
     }
 
     fun snapshot(): List<GeneratedArtifact> = artifacts.values.sortedBy(GeneratedArtifact::key)
+
+    operator fun get(key: GeneratedArtifactKey): GeneratedArtifact? = artifacts[key]
 
     val size: Int
         get() = artifacts.size

@@ -53,6 +53,8 @@ public class DtoGenerator {
 
     private final DtoPolymorphicBranch.Kind polymorphicBranchKind;
 
+    private final int polymorphicBranchOrder;
+
     private final Set<String> interfaceMethodNames;
 
     private TypeSpec.Builder typeBuilder;
@@ -72,7 +74,7 @@ public class DtoGenerator {
             DtoGenerator parent,
             String innerClassName
     ) {
-        this(ctx, docMetadata, dtoType, parent, innerClassName, null, false, null);
+        this(ctx, docMetadata, dtoType, parent, innerClassName, null, false, null, -1);
     }
 
     private DtoGenerator(
@@ -83,7 +85,8 @@ public class DtoGenerator {
             String innerClassName,
             @Nullable TypeName polymorphicSuperInterfaceName,
             boolean polymorphicBranch,
-            DtoPolymorphicBranch.Kind polymorphicBranchKind
+            DtoPolymorphicBranch.Kind polymorphicBranchKind,
+            int polymorphicBranchOrder
     ) {
         if ((parent == null) != (innerClassName == null)) {
             throw new IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same");
@@ -98,6 +101,7 @@ public class DtoGenerator {
         this.polymorphicSuperInterfaceName = polymorphicSuperInterfaceName;
         this.polymorphicBranch = polymorphicBranch;
         this.polymorphicBranchKind = polymorphicBranchKind;
+        this.polymorphicBranchOrder = polymorphicBranchOrder;
         this.interfaceMethodNames = DtoInterfaces.abstractMethodNames(ctx, dtoType);
     }
 
@@ -116,6 +120,7 @@ public class DtoGenerator {
                     AnnotationSpec
                             .builder(Constants.GENERATED_POLYMORPHIC_DTO_BRANCH_CLASS_NAME)
                             .addMember("value", "$T.class", polymorphicSuperInterfaceName)
+                            .addMember("order", "$L", polymorphicBranchOrder)
                             .build()
             );
         }
@@ -299,12 +304,13 @@ public class DtoGenerator {
 
         addPolymorphicMetadata(polymorphism);
         ClassName superInterfaceName = getDtoClassName();
+        int branchOrder = 0;
         DtoPolymorphicBranch<ImmutableType, ImmutableProp> defaultBranch = polymorphism.getDefaultBranch();
         if (defaultBranch != null) {
-            generatePolymorphicBranch(defaultBranch, superInterfaceName);
+            generatePolymorphicBranch(defaultBranch, superInterfaceName, branchOrder++);
         }
         for (DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch : polymorphism.getTypeBranches()) {
-            generatePolymorphicBranch(branch, superInterfaceName);
+            generatePolymorphicBranch(branch, superInterfaceName, branchOrder++);
         }
 
         if (innerClassName != null) {
@@ -335,7 +341,8 @@ public class DtoGenerator {
 
     private void generatePolymorphicBranch(
             DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch,
-            TypeName superInterfaceName
+            TypeName superInterfaceName,
+            int branchOrder
     ) {
         new DtoGenerator(
                 ctx,
@@ -345,7 +352,8 @@ public class DtoGenerator {
                 branch.getClassName(),
                 superInterfaceName,
                 true,
-                branch.getKind()
+                branch.getKind(),
+                branchOrder
         ).generate();
     }
 

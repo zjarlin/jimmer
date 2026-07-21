@@ -62,11 +62,15 @@ internal class JimmerImmutableFetcherMetadata(
     }
 
     fun aggregationMode(type: JimmerImmutableType): ArtifactAggregationMode {
-        return if (strictTypeBranches(type).isEmpty()) {
-            ArtifactAggregationMode.ISOLATING
-        } else {
+        return if (branchDependent(type)) {
             ArtifactAggregationMode.AGGREGATING
+        } else {
+            ArtifactAggregationMode.ISOLATING
         }
+    }
+
+    fun branchDependent(type: JimmerImmutableType): Boolean {
+        return type.kind == JimmerImmutableTypeKind.ENTITY && type.inheritanceRootTypeId != null
     }
 
     fun originatingSymbols(type: JimmerImmutableType): Set<LsiSymbolId> {

@@ -2287,3 +2287,9 @@ create table endorsement(
         foreign key(author_id)
             references author(id)
 );
+
+create table default_override_entity(
+    id bigint not null,
+    overridden_status integer not null,
+    constraint pk_default_override_entity primary key(id)
+);

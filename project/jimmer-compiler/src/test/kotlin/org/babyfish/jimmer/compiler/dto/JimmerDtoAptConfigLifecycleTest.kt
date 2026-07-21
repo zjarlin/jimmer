@@ -28,7 +28,7 @@ import site.addzero.lsi.core.LsiSymbolId
 class JimmerDtoAptConfigLifecycleTest {
 
     @Test
-    fun `real apt defers config until another processor generates its table type`() {
+    fun `real apt defers config until immutable query generates its table type`() {
         val projectDir = createTempDirectory(prefix = "jimmer-dto-apt-config-lifecycle").toFile()
         val sourceDir = projectDir.resolve("src/main/java")
         val classesDir = projectDir.resolve("build/classes")
@@ -71,7 +71,6 @@ class JimmerDtoAptConfigLifecycleTest {
             task.setProcessors(
                 listOf(
                     LifecycleDriverProcessor(capture),
-                    AuthorTableGeneratingProcessor(),
                 )
             )
             task.call()
@@ -91,7 +90,17 @@ class JimmerDtoAptConfigLifecycleTest {
         val secondRound = capture.round(1)
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, secondRound.status)
         assertEquals(
-            setOf(FILTER_ID, AUTHOR_TABLE_ID, AUTHOR_FETCHER_ID, BOOK_FETCHER_ID),
+            setOf(
+                FILTER_ID,
+                AUTHOR_FETCHER_ID,
+                AUTHOR_PROPS_ID,
+                AUTHOR_TABLE_ID,
+                AUTHOR_TABLE_EX_ID,
+                BOOK_FETCHER_ID,
+                BOOK_PROPS_ID,
+                BOOK_TABLE_ID,
+                BOOK_TABLE_EX_ID,
+            ),
             secondRound.currentRootTypeIds,
         )
         assertTrue(secondRound.unresolvedSymbols.isEmpty())
@@ -155,28 +164,6 @@ class JimmerDtoAptConfigLifecycleTest {
         }
     }
 
-    private class AuthorTableGeneratingProcessor : AbstractProcessor() {
-        private var generated = false
-
-        override fun getSupportedAnnotationTypes(): Set<String> = setOf("*")
-
-        override fun getSupportedSourceVersion(): SourceVersion = SourceVersion.latestSupported()
-
-        override fun process(
-            annotations: Set<TypeElement>,
-            roundEnvironment: RoundEnvironment,
-        ): Boolean {
-            if (generated || roundEnvironment.processingOver()) {
-                return false
-            }
-            processingEnv.filer.createSourceFile(AUTHOR_TABLE_ID.requireTypeQualifiedName()).openWriter().use { writer ->
-                writer.write(AUTHOR_TABLE_SOURCE)
-            }
-            generated = true
-            return false
-        }
-    }
-
     private class LifecycleCapture {
         private val rounds = linkedMapOf<Pair<Int, Boolean>, CapturedRound>()
 
@@ -227,8 +214,13 @@ class JimmerDtoAptConfigLifecycleTest {
     private companion object {
         val AUTHOR_ID: LsiSymbolId = LsiSymbolId.type("demo.Author")
         val AUTHOR_FETCHER_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorFetcher")
+        val AUTHOR_PROPS_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorProps")
         val AUTHOR_TABLE_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorTable")
+        val AUTHOR_TABLE_EX_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorTableEx")
         val BOOK_FETCHER_ID: LsiSymbolId = LsiSymbolId.type("demo.BookFetcher")
+        val BOOK_PROPS_ID: LsiSymbolId = LsiSymbolId.type("demo.BookProps")
+        val BOOK_TABLE_ID: LsiSymbolId = LsiSymbolId.type("demo.BookTable")
+        val BOOK_TABLE_EX_ID: LsiSymbolId = LsiSymbolId.type("demo.BookTableEx")
         val FILTER_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorFilter")
 
         val DTO_SOURCE = """
@@ -274,14 +266,6 @@ class JimmerDtoAptConfigLifecycleTest {
                 @Override
                 public void apply(FieldFilterArgs<AuthorTable> args) {}
             }
-        """.trimIndent()
-
-        val AUTHOR_TABLE_SOURCE = """
-            package demo;
-
-            import org.babyfish.jimmer.sql.ast.table.Table;
-
-            public interface AuthorTable extends Table<Author> {}
         """.trimIndent()
     }
 }

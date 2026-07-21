@@ -25,6 +25,7 @@ import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
 import site.addzero.lsi.codegen.ArtifactKind
+import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
@@ -91,6 +92,11 @@ private class FetcherRenderContext(
             qualifiedName = qualifiedFileName,
             content = fileSpec.toString(),
             aggregationMode = metadata.aggregationMode(type),
+            emissionMode = if (metadata.branchDependent(type)) {
+                ArtifactEmissionMode.STABLE
+            } else {
+                ArtifactEmissionMode.IMMEDIATE
+            },
             originatingSymbols = originatingSymbols,
             originatingSources = workspace.originatingSources(originatingSymbols),
         )

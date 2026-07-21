@@ -79,14 +79,19 @@ class LsiWorkspace(
     fun contains(id: LsiSymbolId): Boolean = id in declarationMap || id in annotationScopeMap
 
     /**
-     * 合并真实编译轮快照；同一符号以较新轮冻结结果为准。
+     * 合并真实编译轮快照；被当前轮完整重冻的类型先淘汰旧声明子树。
      */
-    fun merge(newer: LsiWorkspace): LsiWorkspace {
+    fun merge(
+        newer: LsiWorkspace,
+        refreshedTypeIds: Set<LsiSymbolId> = emptySet(),
+    ): LsiWorkspace {
+        refreshedTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
         if (
             newer.declarations.isEmpty() &&
             newer.sources.isEmpty() &&
             newer.typeHierarchy.isEmpty() &&
-            newer.annotationScopes.isEmpty()
+            newer.annotationScopes.isEmpty() &&
+            refreshedTypeIds.isEmpty()
         ) {
             return this
         }
@@ -98,15 +103,35 @@ class LsiWorkspace(
         ) {
             return newer
         }
-        val mergedDeclarations = declarations.associateByTo(linkedMapOf(), LsiDeclaration::id)
+        val refreshedDeclarationTypeIds = declarations.expandedRefreshedTypeIds(refreshedTypeIds)
+        val refreshedSourcePaths = buildSet {
+            declarations.asSequence()
+                .filter { declaration -> declaration.belongsToAny(refreshedDeclarationTypeIds) }
+                .mapNotNull { declaration -> declaration.origin.source?.path }
+                .toCollection(this)
+            newer.declarations.asSequence()
+                .filter { declaration -> declaration.belongsToAny(refreshedTypeIds) }
+                .mapNotNull { declaration -> declaration.origin.source?.path }
+                .toCollection(this)
+        }
+        val mergedDeclarations = declarations
+            .asSequence()
+            .filterNot { declaration -> declaration.belongsToAny(refreshedDeclarationTypeIds) }
+            .associateByTo(linkedMapOf(), LsiDeclaration::id)
         newer.declarations.forEach { declaration ->
             mergedDeclarations[declaration.id] = declaration
         }
-        val mergedAnnotationScopes = annotationScopes.associateByTo(linkedMapOf(), LsiAnnotationScope::id)
+        val mergedAnnotationScopes = annotationScopes
+            .asSequence()
+            .filterNot { scope -> scope.origin.source?.path in refreshedSourcePaths }
+            .associateByTo(linkedMapOf(), LsiAnnotationScope::id)
         newer.annotationScopes.forEach { annotationScope ->
             mergedAnnotationScopes[annotationScope.id] = annotationScope
         }
-        val mergedTypeHierarchy = typeHierarchy.associateByTo(linkedMapOf(), LsiTypeHierarchyEntry::id)
+        val mergedTypeHierarchy = typeHierarchy
+            .asSequence()
+            .filterNot { entry -> entry.id in refreshedDeclarationTypeIds }
+            .associateByTo(linkedMapOf(), LsiTypeHierarchyEntry::id)
         newer.typeHierarchy.forEach { entry ->
             mergedTypeHierarchy[entry.id] = entry
         }
@@ -137,4 +162,27 @@ class LsiWorkspace(
     companion object {
         val EMPTY: LsiWorkspace = LsiWorkspace()
     }
+}
+
+private fun LsiDeclaration.belongsToAny(typeIds: Set<LsiSymbolId>): Boolean {
+    return typeIds.any { typeId ->
+        id == typeId || id.value.startsWith("${typeId.value}/")
+    }
+}
+
+private fun Collection<LsiDeclaration>.expandedRefreshedTypeIds(
+    refreshedTypeIds: Set<LsiSymbolId>,
+): Set<LsiSymbolId> {
+    val expandedTypeIds = refreshedTypeIds.toMutableSet()
+    val nestedTypes = filterIsInstance<LsiTypeDeclaration>()
+    var changed: Boolean
+    do {
+        changed = false
+        nestedTypes.forEach { type ->
+            if (type.enclosingTypeId in expandedTypeIds && expandedTypeIds.add(type.id)) {
+                changed = true
+            }
+        }
+    } while (changed)
+    return expandedTypeIds
 }

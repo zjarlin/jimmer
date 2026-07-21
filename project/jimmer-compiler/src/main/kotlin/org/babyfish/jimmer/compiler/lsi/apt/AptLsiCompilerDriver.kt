@@ -146,15 +146,12 @@ class AptLsiCompilerDriver(
                 fallbackSourceKind = currentRoundFallbackSourceKind(),
             )
         }
-        var currentFrontendDeferred = if (isFinal) {
-            javacErrorRaised || latestActiveRoundDeferred
-        } else {
-            javacErrorRaised || currentWorkspace.containsUnresolvedTypes()
-        }
+        var currentFrontendDeferred = javacErrorRaised || (isFinal && latestActiveRoundDeferred)
         inputResources = inputResources + inputResourceReader.read(inputResourcePaths)
         val currentRootTypeIds = currentRoundSymbols.rootTypes
             .mapTo(sortedSetOf()) { type -> LsiSymbolId.type(type.qualifiedName.toString()) }
-        workspace = previousWorkspace.merge(roundWorkspace)
+        val refreshedTypeIds = currentWorkspace.refreshedTypeIds(currentRootTypeIds)
+        workspace = previousWorkspace.merge(roundWorkspace, refreshedTypeIds)
         if (!isFinal) {
             workspace = resolveLsiTypeSeedFixedPoint(
                 initialWorkspace = workspace,
@@ -169,22 +166,29 @@ class AptLsiCompilerDriver(
                     )
                 },
                 freezeWorkspace = { requestedSeeds ->
-                    previousWorkspace.merge(
-                        currentRoundSymbols.rootTypes.toLsiWorkspace(
-                            processingEnvironment = processingEnvironment,
-                            frontendOptions = frontendOptions,
-                            packageElements = currentRoundSymbols.packageElements,
-                            additionalSeeds = documentSeeds + requestedSeeds,
-                            sourceRootTypes = currentRoundSymbols.sourceRootTypes,
-                            sourcePackageElements = currentRoundSymbols.sourcePackageElements,
-                            knownSourceRootTypes = knownSourceRootTypes,
-                            fallbackSourceKind = currentRoundFallbackSourceKind(),
-                        )
+                    val refreshedWorkspace = currentRoundSymbols.rootTypes.toLsiWorkspace(
+                        processingEnvironment = processingEnvironment,
+                        frontendOptions = frontendOptions,
+                        packageElements = currentRoundSymbols.packageElements,
+                        additionalSeeds = documentSeeds + requestedSeeds,
+                        sourceRootTypes = currentRoundSymbols.sourceRootTypes,
+                        sourcePackageElements = currentRoundSymbols.sourcePackageElements,
+                        knownSourceRootTypes = knownSourceRootTypes,
+                        fallbackSourceKind = currentRoundFallbackSourceKind(),
                     )
+                    previousWorkspace.merge(refreshedWorkspace, refreshedTypeIds)
                 },
             ).workspace
-            currentFrontendDeferred = javacErrorRaised || workspace.containsUnresolvedTypes()
-            latestActiveRoundDeferred = currentFrontendDeferred
+            val currentSourcePaths = currentWorkspace.declarations
+                .mapNotNullTo(hashSetOf()) { declaration -> declaration.origin.source?.path }
+            val compilerGeneratedSourcePaths = session.artifacts()
+                .asSequence()
+                .filter { artifact -> artifact.kind.isSource }
+                .mapTo(hashSetOf()) { artifact -> artifact.path }
+            currentFrontendDeferred = javacErrorRaised || workspace.containsUnresolvedTypes(
+                currentSourcePaths = currentSourcePaths,
+                compilerGeneratedSourcePaths = compilerGeneratedSourcePaths,
+            )
         }
         val roundResult = session.execute(
             compilerRound(
@@ -195,10 +199,25 @@ class AptLsiCompilerDriver(
                 frontendDeferred = currentFrontendDeferred,
             )
         )
+        if (!isFinal) {
+            latestActiveRoundDeferred = currentFrontendDeferred || roundResult.unresolvedSymbols.isNotEmpty()
+        }
         lastRoundResult = roundResult
         nextRoundNumber++
-        pendingTypeIds = roundResult.unresolvedSymbols
-            .mapNotNullTo(linkedSetOf()) { symbolId -> symbolId.rootTypeIdOrNull() }
+        pendingTypeIds = buildSet {
+            roundResult.unresolvedSymbols.mapNotNullTo(this) { symbolId ->
+                symbolId.rootTypeIdOrNull()
+            }
+            session.pendingStableSourceOriginatingSymbols().mapNotNullTo(this) { symbolId ->
+                symbolId.rootTypeIdOrNull()
+            }
+            currentWorkspace.declarations
+                .asSequence()
+                .filter(LsiDeclaration::containsUnresolvedTypes)
+                .mapNotNull { declaration -> declaration.id.rootTypeIdOrNull() }
+                .filter { typeId -> typeId in refreshedTypeIds }
+                .toCollection(this)
+        }
         roundResult.diagnostics.forEach { diagnostic ->
             emitDiagnostic(diagnostic, currentRoundSymbols)
         }
@@ -308,25 +327,59 @@ private fun LsiWorkspace.knownSourceRootTypes(): Map<String, LsiSource> {
         .toMap()
 }
 
-private fun LsiWorkspace.containsUnresolvedTypes(): Boolean {
-    return declarations.any { declaration ->
-        when (declaration) {
-            is LsiTypeDeclaration -> declaration.superTypes.any(LsiTypeRef::containsUnresolvedType) ||
-                declaration.typeParameters.any { parameter ->
-                    parameter.upperBounds.any(LsiTypeRef::containsUnresolvedType)
-                }
-            is LsiField -> declaration.type.containsUnresolvedType()
-            is LsiProperty -> declaration.type.containsUnresolvedType()
-            is LsiFunction -> declaration.returnType.containsUnresolvedType() ||
-                declaration.receiverType?.containsUnresolvedType() == true ||
-                declaration.parameters.any { parameter -> parameter.type.containsUnresolvedType() } ||
-                declaration.thrownTypes.any(LsiTypeRef::containsUnresolvedType)
-            is LsiConstructor -> declaration.parameters.any { parameter ->
-                parameter.type.containsUnresolvedType()
-            } || declaration.thrownTypes.any(LsiTypeRef::containsUnresolvedType)
-            is LsiParameter -> declaration.type.containsUnresolvedType()
-            else -> false
+private fun LsiWorkspace.refreshedTypeIds(
+    currentRootTypeIds: Set<LsiSymbolId>,
+): Set<LsiSymbolId> {
+    val currentRootSources = currentRootTypeIds.mapNotNullTo(hashSetOf()) { typeId ->
+        (this[typeId] as? LsiTypeDeclaration)?.origin?.source
+    }
+    return declarationsOfType<LsiTypeDeclaration>()
+        .asSequence()
+        .filter { declaration ->
+            declaration.id in currentRootTypeIds || declaration.origin.source in currentRootSources
         }
+        .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
+}
+
+private fun LsiDeclaration.containsUnresolvedTypes(): Boolean {
+    return when (this) {
+        is LsiTypeDeclaration -> superTypes.any(LsiTypeRef::containsUnresolvedType) ||
+            typeParameters.any { parameter ->
+                parameter.upperBounds.any(LsiTypeRef::containsUnresolvedType)
+            }
+        is LsiField -> type.containsUnresolvedType()
+        is LsiProperty -> type.containsUnresolvedType()
+        is LsiFunction -> returnType.containsUnresolvedType() ||
+            receiverType?.containsUnresolvedType() == true ||
+            parameters.any { parameter -> parameter.type.containsUnresolvedType() } ||
+            thrownTypes.any(LsiTypeRef::containsUnresolvedType)
+        is LsiConstructor -> parameters.any { parameter ->
+            parameter.type.containsUnresolvedType()
+        } || thrownTypes.any(LsiTypeRef::containsUnresolvedType)
+        is LsiParameter -> type.containsUnresolvedType()
+        else -> false
+    }
+}
+
+private fun LsiWorkspace.containsUnresolvedTypes(
+    currentSourcePaths: Set<String>,
+    compilerGeneratedSourcePaths: Set<String>,
+): Boolean {
+    return declarations.any { declaration ->
+        if (!declaration.containsUnresolvedTypes()) {
+            return@any false
+        }
+        val source = declaration.origin.source ?: return@any false
+        source.path in currentSourcePaths && !source.isCompilerGenerated(compilerGeneratedSourcePaths)
+    }
+}
+
+private fun LsiSource.isCompilerGenerated(generatedSourcePaths: Set<String>): Boolean {
+    if (kind != LsiSourceKind.GENERATED) {
+        return false
+    }
+    return generatedSourcePaths.any { generatedPath ->
+        path == generatedPath || path.endsWith("/$generatedPath")
     }
 }
 

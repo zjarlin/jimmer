@@ -17,6 +17,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
@@ -131,6 +132,35 @@ class AptGeneratedArtifactWriterTest {
 
         assertTrue(filer.sourceCalls.isEmpty())
         assertTrue(filer.resourceCalls.isEmpty())
+    }
+
+    @Test
+    fun `stable source requires all originating sources in current round`() {
+        val filer = CapturingFiler()
+        val writer = AptGeneratedArtifactWriter(filer)
+        val firstId = LsiSymbolId.type("demo.First")
+        val secondId = LsiSymbolId.type("demo.Second")
+        val firstSource = LsiSource.of("/workspace/First.java", LsiLanguage.JAVA)
+        val secondSource = LsiSource.of("/workspace/Second.java", LsiLanguage.JAVA)
+        val artifact = GeneratedArtifact.source(
+            kind = ArtifactKind.JAVA_SOURCE,
+            qualifiedName = "demo.RootTable",
+            content = "package demo; public class RootTable {}",
+            aggregationMode = ArtifactAggregationMode.AGGREGATING,
+            emissionMode = ArtifactEmissionMode.STABLE,
+            originatingSymbols = setOf(firstId, secondId),
+            originatingSources = setOf(firstSource, secondSource),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            writer.write(
+                artifact,
+                mapOf(firstId to element("First")),
+                mapOf(firstId to firstSource),
+            )
+        }
+
+        assertTrue(filer.sourceCalls.isEmpty())
     }
 
     private fun element(label: String): Element {

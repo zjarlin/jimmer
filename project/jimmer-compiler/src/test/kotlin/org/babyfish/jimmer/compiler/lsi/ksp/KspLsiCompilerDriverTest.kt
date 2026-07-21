@@ -539,6 +539,51 @@ class KspLsiCompilerDriverTest {
         )
     }
 
+    @Test
+    fun `does not defer invalid java roots owned by apt`() {
+        lateinit var kotlinFile: KSFile
+        lateinit var javaFile: KSFile
+        val validKotlinRoot = classDeclaration(
+            qualifiedName = "demo.KotlinService",
+            file = { kotlinFile },
+            valid = true,
+        )
+        val invalidJavaRoot = classDeclaration(
+            qualifiedName = "demo.JavaService",
+            file = { javaFile },
+            valid = false,
+            origin = Origin.JAVA,
+        )
+        kotlinFile = file(listOf(validKotlinRoot))
+        javaFile = file(
+            declarations = listOf(invalidJavaRoot),
+            path = "/workspace/src/main/java/demo/JavaService.java",
+            origin = Origin.JAVA,
+        )
+        val provider = FileScopeFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-java-root-ownership-test",
+        )
+
+        val deferred = driver.process(
+            resolver(
+                allFiles = listOf(kotlinFile, javaFile),
+                newFiles = listOf(kotlinFile, javaFile),
+            ),
+        )
+
+        assertTrue(deferred.isEmpty())
+        assertFalse(provider.rounds.single().round.frontendDeferred)
+        assertFalse(driver.finish().round.frontendDeferred)
+    }
+
     private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
         override val descriptor = JimmerCompilerFeatureDescriptor(
             id = "ksp-driver-test",
@@ -774,6 +819,7 @@ class KspLsiCompilerDriverTest {
         path: String = "/workspace/src/main/kotlin/demo/Models.kt",
         packageName: String = "demo",
         annotations: Sequence<KSAnnotation> = emptySequence(),
+        origin: Origin = Origin.KOTLIN,
     ): KSFile {
         return proxy(KSFile::class.java, "KSFile($path)") { method, _ ->
             when (method.name) {
@@ -782,7 +828,7 @@ class KspLsiCompilerDriverTest {
                 "getFilePath" -> path
                 "getDeclarations" -> declarations.asSequence()
                 "getAnnotations" -> annotations
-                "getOrigin" -> Origin.KOTLIN
+                "getOrigin" -> origin
                 "getLocation" -> FileLocation(path, 1)
                 "getParent" -> null
                 "accept" -> true

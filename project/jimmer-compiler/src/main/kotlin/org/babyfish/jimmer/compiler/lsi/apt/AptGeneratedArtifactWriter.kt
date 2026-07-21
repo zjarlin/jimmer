@@ -5,6 +5,7 @@ import javax.annotation.processing.Filer
 import javax.lang.model.element.Element
 import javax.tools.StandardLocation
 import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiSource
@@ -52,11 +53,20 @@ class AptGeneratedArtifactWriter(
             .sorted()
             .mapNotNull(currentRoundElements::get)
             .distinct()
+        val representedSourcePaths = originatingSymbols
+            .mapNotNull(currentRoundSources::get)
+            .mapTo(hashSetOf(), LsiSource::path)
+        val unmatchedSources = originatingSources.filterNot { source -> source.path in representedSourcePaths }
+        if (emissionMode == ArtifactEmissionMode.STABLE) {
+            require(unmatchedSources.isEmpty()) {
+                "APT stable artifact cannot depend on non-current sources: $path; " +
+                    unmatchedSources.joinToString { source -> source.path }
+            }
+            require(elements.isNotEmpty()) {
+                "APT stable artifact requires current-round originating elements: $path"
+            }
+        }
         if (aggregationMode == ArtifactAggregationMode.ISOLATING) {
-            val representedSourcePaths = originatingSymbols
-                .mapNotNull(currentRoundSources::get)
-                .mapTo(hashSetOf(), LsiSource::path)
-            val unmatchedSources = originatingSources.filterNot { source -> source.path in representedSourcePaths }
             require(unmatchedSources.isEmpty()) {
                 "APT isolating artifact cannot depend on non-APT sources: $path; " +
                     unmatchedSources.joinToString { source -> source.path }

@@ -16,8 +16,10 @@ import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableEmbeddableJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableFetcherJavaRenderer
+import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableQueryJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableEmbeddableKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableFetcherKotlinRenderer
+import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableQueryKotlinRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
@@ -70,7 +72,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }
         return try {
             val schema = precompiler.compile(context.round.workspace, semanticRootTypeIds)
-            JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(currentTypeIds)
+            JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(targetTypeIds)
             JimmerCompilerFeaturePrecompileResult(
                 state = JimmerImmutableCompilerFeatureState(
                     schema = schema,
@@ -103,26 +105,34 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             return JimmerCompilerFeatureRenderResult()
         }
         val fetcherMetadata = JimmerImmutableFetcherMetadata(state.schema)
-        val fetcherTypes = fetcherMetadata.generatedTypes(state.currentTypeIds)
-        val embeddableMetadata = JimmerImmutableEmbeddableMetadata(state.schema, context.round.workspace)
-        val embeddableTypes = embeddableMetadata.generatedTypes(state.currentTypeIds)
+        val fetcherTypes = fetcherMetadata.generatedTypes(state.targetTypeIds)
+        val queryMetadata = JimmerImmutableQueryMetadata(state.schema, context.round.workspace)
+        val embeddableTypes = queryMetadata.generatedEmbeddableTypes(state.currentTypeIds)
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> {
                 val fetcherRenderer = JimmerImmutableFetcherJavaRenderer()
                 val embeddableRenderer = JimmerImmutableEmbeddableJavaRenderer()
+                val queryRenderer = JimmerImmutableQueryJavaRenderer()
+                val queryTypes = queryMetadata.generatedPropsTypes(state.targetTypeIds)
                 fetcherTypes.map { type ->
                     fetcherRenderer.render(state.schema, type, context.round.workspace)
                 } + embeddableTypes.flatMap { type ->
                     embeddableRenderer.render(state.schema, type, context.round.workspace)
+                } + queryTypes.flatMap { type ->
+                    queryRenderer.render(state.schema, type, context.round.workspace)
                 }
             }
             CompilerPlatform.KSP -> {
                 val fetcherRenderer = JimmerImmutableFetcherKotlinRenderer()
                 val embeddableRenderer = JimmerImmutableEmbeddableKotlinRenderer()
+                val queryRenderer = JimmerImmutableQueryKotlinRenderer()
+                val queryTypes = queryMetadata.generatedQueryTypes(state.targetTypeIds)
                 fetcherTypes.map { type ->
                     fetcherRenderer.render(state.schema, type, context.round.workspace)
                 } + embeddableTypes.map { type ->
                     embeddableRenderer.render(state.schema, type, context.round.workspace)
+                } + queryTypes.map { type ->
+                    queryRenderer.render(state.schema, type, context.round.workspace)
                 }
             }
             CompilerPlatform.UNKNOWN -> emptyList()
@@ -289,6 +299,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             unresolvedSymbols = unresolvedTypeIds,
         )
     }
+
 }
 
 internal enum class JimmerImmutableCompilerFeatureStatus {

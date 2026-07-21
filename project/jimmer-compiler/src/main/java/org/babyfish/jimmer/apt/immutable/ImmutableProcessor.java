@@ -3,7 +3,7 @@ package org.babyfish.jimmer.apt.immutable;
 import org.babyfish.jimmer.Immutable;
 import org.babyfish.jimmer.apt.Context;
 import org.babyfish.jimmer.apt.MetaException;
-import org.babyfish.jimmer.apt.immutable.generator.*;
+import org.babyfish.jimmer.apt.immutable.generator.DraftGenerator;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.sql.Embeddable;
 import org.babyfish.jimmer.sql.Entity;
@@ -75,25 +75,9 @@ public class ImmutableProcessor {
                     context,
                     immutableType
             ).generate();
-            if (immutableType.getTypeElement().getTypeParameters().isEmpty() && !immutableType.isEmbeddable()) {
-                new PropsGenerator(
-                        context,
-                        immutableType
-                ).generate();
-            }
             messager.printMessage(Diagnostic.Kind.NOTE, "Immutable: " + immutableType.getQualifiedName());
             if (immutableType.isEntity()) {
                 messager.printMessage(Diagnostic.Kind.NOTE, "Entity: " + immutableType.getQualifiedName());
-                new TableGenerator(
-                        context,
-                        immutableType,
-                        false
-                ).generate();
-                new TableGenerator(
-                        context,
-                        immutableType,
-                        true
-                ).generate();
             } else if (immutableType.isEmbeddable()) {
                 messager.printMessage(Diagnostic.Kind.NOTE, "Embeddable: " + immutableType.getQualifiedName());
             }

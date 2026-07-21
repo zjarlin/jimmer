@@ -12,6 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
@@ -19,6 +20,7 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
+import org.babyfish.jimmer.compiler.client.toClientDefinitionDocumentation
 import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
 import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
 import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
@@ -232,10 +234,9 @@ class JimmerDtoRenderGraphTest {
             "DTO client documentation\n@param name DTO name documentation\n",
             rootType.documentation,
         )
-        assertEquals(
-            "DTO name documentation",
-            rootProps.single { prop -> prop.name == "name" }.documentation,
-        )
+        val nameProp = rootProps.single { prop -> prop.name == "name" } as JimmerDtoBaseProp
+        assertEquals("DTO name documentation", nameProp.documentation)
+        assertEquals("DTO name documentation", nameProp.dtoDocumentation)
         assertEquals(
             "Store documentation\n@param name Store type name documentation\n",
             nestedType.documentation,
@@ -247,10 +248,17 @@ class JimmerDtoRenderGraphTest {
                 .single { prop -> prop.name == "name" }
                 .documentation,
         )
-        assertEquals(
-            "Store name documentation\n",
-            rootProps.single { prop -> prop.name == "storeName" }.documentation,
+        val storeNameProp = rootProps.single { prop -> prop.name == "storeName" } as JimmerDtoBaseProp
+        assertEquals("Store name documentation\n", storeNameProp.documentation)
+        assertNull(storeNameProp.dtoDocumentation)
+        val rootTypeName = assertNotNull(rootType.name)
+        val rootTypeId = LsiSymbolId.type(
+            if (rootType.packageName.isEmpty()) rootTypeName else "${rootType.packageName}.$rootTypeName"
         )
+        val clientDocumentation = outcome.schema.toClientDefinitionDocumentation(fixture.schema)
+            .getValue(rootTypeId)
+        assertEquals("DTO name documentation", clientDocumentation.properties.getValue("name"))
+        assertEquals("Store name documentation", clientDocumentation.properties.getValue("storeName"))
         assertTrue(rootType.hiddenFlatPropIds.isNotEmpty())
         assertTrue(rootProps.any { prop -> prop.name == "storeId" })
         assertTrue(rootProps.any { prop -> prop.name == "storeName" })

@@ -11,8 +11,8 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableEmbeddableMetadata
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
@@ -44,7 +44,7 @@ private class EmbeddableRenderContext(
     private val workspace: LsiWorkspace,
 ) {
 
-    private val metadata = JimmerImmutableEmbeddableMetadata(schema, workspace)
+    private val metadata = JimmerImmutableQueryMetadata(schema, workspace)
 
     private val modelClass = ClassName.bestGuess(type.qualifiedName)
 

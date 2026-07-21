@@ -141,6 +141,7 @@ internal class JimmerDtoRenderGraphFreezer(
         ownerTypeId: JimmerDtoTypeId,
         path: String,
     ): JimmerDtoBaseProp {
+        val dtoDocumentation = ownerType.dtoDocumentation(prop)
         val nextPropId = prop.nextProp?.let { nextProp ->
             freezeProp(nextProp, ownerType, ownerTypeId, "$path/next:${nextProp.name}")
         }
@@ -167,7 +168,7 @@ internal class JimmerDtoRenderGraphFreezer(
             annotations = prop.annotations.map { annotation ->
                 annotation.toRenderAnnotation(prop.declaringFile)
             },
-            documentation = ownerType.effectiveDocumentation(prop),
+            documentation = ownerType.effectiveDocumentation(prop, dtoDocumentation),
             aliasLocation = location(prop.declaringFile, prop.aliasLine, prop.aliasColumn),
             baseLocation = location(prop.declaringFile, prop.baseLine, prop.baseColumn),
             baseProps = prop.basePropMap.entries.map { (name, baseProp) ->
@@ -188,6 +189,7 @@ internal class JimmerDtoRenderGraphFreezer(
             likeOptions = prop.likeOptions
                 .sortedBy(LikeOption::name)
                 .mapTo(linkedSetOf()) { option -> option.toRenderLikeOption() },
+            dtoDocumentation = dtoDocumentation,
         )
     }
 
@@ -464,17 +466,18 @@ private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(): St
 private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
     prop: AbstractProp,
 ): String? {
-    Doc.parse(prop.doc)?.toString()?.let { documentation -> return documentation }
+    return effectiveDocumentation(prop, dtoDocumentation(prop))
+}
+
+private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
+    prop: AbstractProp,
+    dtoDocumentation: String?,
+): String? {
+    dtoDocumentation?.let { documentation -> return documentation }
     val baseProp = (prop as? DtoProp<*, *>)
         ?.castBaseProp()
         ?.toTailProp()
         ?.baseProp
-    val parameterName = prop.alias ?: baseProp?.name
-    if (parameterName != null) {
-        Doc.parse(doc)?.parameterValueMap?.get(parameterName)?.let { documentation ->
-            return documentation
-        }
-    }
     baseProp?.immutableProp?.documentation?.let(Doc::parse)?.toString()?.let { documentation ->
         return documentation
     }
@@ -483,6 +486,18 @@ private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
             ?.parameterValueMap
             ?.get(immutableProp.name)
     }
+}
+
+private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.dtoDocumentation(
+    prop: AbstractProp,
+): String? {
+    Doc.parse(prop.doc)?.toString()?.let { documentation -> return documentation }
+    val baseProp = (prop as? DtoProp<*, *>)
+        ?.castBaseProp()
+        ?.toTailProp()
+        ?.baseProp
+    val parameterName = prop.alias ?: baseProp?.name ?: return null
+    return Doc.parse(doc)?.parameterValueMap?.get(parameterName)
 }
 
 @Suppress("UNCHECKED_CAST")

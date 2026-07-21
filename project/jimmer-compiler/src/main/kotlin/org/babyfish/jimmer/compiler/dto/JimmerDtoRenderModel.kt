@@ -250,6 +250,7 @@ internal data class JimmerDtoBaseProp(
     val config: JimmerDtoPropConfig?,
     val recursive: Boolean,
     val likeOptions: Set<JimmerDtoLikeOption>,
+    val dtoDocumentation: String? = null,
 ) : JimmerDtoProp {
     init {
         require(baseProps.isNotEmpty()) { "DTO base property must reference at least one immutable property" }

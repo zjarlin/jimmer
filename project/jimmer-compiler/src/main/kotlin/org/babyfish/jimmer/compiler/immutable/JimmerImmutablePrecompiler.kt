@@ -396,7 +396,10 @@ class JimmerImmutablePrecompiler {
                         )
                     }
                     val converter = if (view is JimmerImmutableView.Id) {
-                        prop.converter ?: view.targetIdPropId
+                        prop.converter ?: propsById[view.basePropId]
+                            ?.declaringTypeId
+                            ?.let(typesById::get)
+                            ?.idPropId
                             ?.let(propsById::get)
                             ?.converter
                             ?.forIdView(prop)

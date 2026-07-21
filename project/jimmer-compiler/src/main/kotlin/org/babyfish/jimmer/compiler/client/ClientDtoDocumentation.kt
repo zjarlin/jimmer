@@ -1,0 +1,48 @@
+package org.babyfish.jimmer.compiler.client
+
+import org.babyfish.jimmer.compiler.dto.JimmerDtoBaseProp
+import org.babyfish.jimmer.compiler.dto.JimmerDtoPrecompiledSchema
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import site.addzero.lsi.core.LsiSymbolId
+
+internal fun JimmerDtoPrecompiledSchema.toClientDefinitionDocumentation(
+    immutableSchema: JimmerImmutableSchema,
+): Map<LsiSymbolId, ClientDefinitionDocumentation> {
+    val documentationByTypeId = linkedMapOf<LsiSymbolId, ClientDefinitionDocumentation>()
+    documents.forEach { document ->
+        val graph = document.renderGraph
+        graph.rootTypeIds.forEach { rootTypeId ->
+            val type = graph.typesById.getValue(rootTypeId)
+            val typeName = type.name ?: return@forEach
+            val qualifiedName = if (type.packageName.isEmpty()) {
+                typeName
+            } else {
+                "${type.packageName}.$typeName"
+            }
+            val propertyDocumentation = type.propIds.mapNotNull { propId ->
+                val prop = graph.propsById.getValue(propId)
+                val documentation = if (prop is JimmerDtoBaseProp) {
+                    prop.dtoDocumentation ?: run {
+                        val tailProp = graph.propsById.getValue(prop.tailPropId) as JimmerDtoBaseProp
+                        tailProp.baseProps.firstNotNullOfOrNull { binding ->
+                            immutableSchema.propsById[binding.propId]?.documentation
+                        }
+                    }
+                } else {
+                    prop.documentation
+                }
+                documentation?.let { value -> prop.name to value }
+            }.toMap()
+            val documentation = ClientDefinitionDocumentation(
+                type = type.documentation,
+                properties = propertyDocumentation,
+            )
+            val typeId = LsiSymbolId.type(qualifiedName)
+            val previous = documentationByTypeId.putIfAbsent(typeId, documentation)
+            require(previous == null || previous == documentation) {
+                "DTO client documentation conflicts for '${typeId.value}'"
+            }
+        }
+    }
+    return documentationByTypeId
+}
