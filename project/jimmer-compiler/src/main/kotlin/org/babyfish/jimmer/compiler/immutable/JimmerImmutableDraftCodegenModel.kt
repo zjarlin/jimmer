@@ -133,6 +133,7 @@ internal data class JimmerImmutableDraftPropPlan(
     val nullable: Boolean,
     val list: Boolean,
     val association: Boolean,
+    val immutableReference: Boolean,
     val genericTarget: Boolean,
     val genericSourceTarget: Boolean,
     val languageFormula: Boolean,
@@ -171,9 +172,9 @@ internal data class JimmerImmutableDraftPropPlan(
             "Immutable draft primitive flag must match its LSI type: ${propId.value}"
         }
         require(runtimeProp.valueCategory == when {
-            list && association -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST
+            list && immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST
             list -> JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST
-            association -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE
+            immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE
             else -> JimmerImmutableDraftRuntimeValueCategory.SCALAR
         }) {
             "Immutable draft runtime value category must match property shape: ${propId.value}"

@@ -15,6 +15,7 @@ import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -117,9 +118,27 @@ class JimmerProcessorProviderLifecycleTest {
         assertFalse(result.generatedResourceFile("META-INF/jimmer/client").exists())
     }
 
+    @Test
+    fun `main provider fails when another ksp provider creates the same draft source`() {
+        val exception = assertFails {
+            compileKsp(
+                source = VALID_ENTITY_SOURCE,
+                providersBeforeJimmer = listOf(CollidingSourceDraftProvider()),
+            )
+        }
+
+        val causes = exception.causes().toList()
+        val causeText = causes.joinToString("\n") { cause ->
+            "${cause::class.qualifiedName}: ${cause.message.orEmpty()}"
+        }
+        assertTrue(causes.any { cause -> cause is FileAlreadyExistsException }, causeText)
+        assertTrue(causes.any { cause -> cause.message.orEmpty().contains("SourceDraft.kt") }, causeText)
+    }
+
     private fun compileKsp(
         source: String,
         dtoSource: String? = null,
+        providersBeforeJimmer: List<SymbolProcessorProvider> = emptyList(),
         additionalProviders: List<SymbolProcessorProvider> = emptyList(),
     ): KspCompilationResult {
         val projectDir = createTempDirectory(prefix = "jimmer-main-ksp-lifecycle").toFile()
@@ -154,7 +173,7 @@ class JimmerProcessorProviderLifecycleTest {
             jvmTarget = "17"
             jdkHome = File(System.getProperty("java.home"))
         }.build()
-        val providers = listOf(CapturingMainProvider(capture)) + additionalProviders
+        val providers = providersBeforeJimmer + CapturingMainProvider(capture) + additionalProviders
         val exitCode = KotlinSymbolProcessing(configuration, providers, logger).execute()
         return KspCompilationResult(
             exitCode = exitCode,
@@ -193,6 +212,30 @@ class JimmerProcessorProviderLifecycleTest {
 
                 override fun onError() {
                     delegate.onError()
+                }
+            }
+        }
+    }
+
+    private class CollidingSourceDraftProvider : SymbolProcessorProvider {
+        override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
+            return object : SymbolProcessor {
+                private var generated = false
+
+                override fun process(resolver: Resolver): List<KSAnnotated> {
+                    if (generated) {
+                        return emptyList()
+                    }
+                    val sourceFile = resolver.getAllFiles().firstOrNull() ?: return emptyList()
+                    environment.codeGenerator.createNewFileByPath(
+                        dependencies = Dependencies(aggregating = false, sourceFile),
+                        path = "demo/SourceDraft",
+                        extensionName = "kt",
+                    ).bufferedWriter().use { writer ->
+                        writer.write("package demo\ninterface SourceDraft")
+                    }
+                    generated = true
+                    return emptyList()
                 }
             }
         }
@@ -320,6 +363,8 @@ class JimmerProcessorProviderLifecycleTest {
             "$round=${capture.newDeclarationNames.sorted()} deferred=${capture.deferredNames.sorted()}"
         }
     }
+
+    private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this, Throwable::cause)
 
     private data class CapturedRound(
         val newDeclarationNames: Set<String>,

@@ -2,6 +2,8 @@ package org.babyfish.jimmer.compiler.apt
 
 import java.nio.charset.StandardCharsets
 import javax.annotation.processing.AbstractProcessor
+import javax.annotation.processing.FilerException
+import javax.annotation.processing.Processor
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.SourceVersion
 import javax.lang.model.element.TypeElement
@@ -13,6 +15,7 @@ import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertTrue
 
 class JimmerProcessorAptLifecycleTest {
@@ -73,10 +76,21 @@ class JimmerProcessorAptLifecycleTest {
         }
     }
 
+    @Test
+    fun `main processor fails when another apt processor creates the same draft source`() {
+        val exception = assertFails {
+            compile(processorsBeforeJimmer = listOf(CollidingBookDraftProcessor()))
+        }
+
+        assertTrue(exception.causes().any { cause -> cause is FilerException })
+        assertTrue(exception.causes().any { cause -> cause.message.orEmpty().contains("demo.BookDraft") })
+    }
+
     private fun compile(
         dtoSource: String? = null,
         generatedTypeName: String = "demo.Book",
         generatedSource: String = BOOK_SOURCE,
+        processorsBeforeJimmer: List<Processor> = emptyList(),
     ): AptCompilationResult {
         val projectDir = createTempDirectory(prefix = "jimmer-compiler-lifecycle").toFile()
         val sourceDir = projectDir.resolve("src/main/java")
@@ -114,8 +128,7 @@ class JimmerProcessorAptLifecycleTest {
             task.setProcessors(
                 listOf(
                     SourceGeneratingProcessor(roundCapture, generatedTypeName, generatedSource),
-                    JimmerProcessor(),
-                ),
+                ) + processorsBeforeJimmer + JimmerProcessor(),
             )
             task.call()
         }
@@ -143,6 +156,32 @@ class JimmerProcessorAptLifecycleTest {
             }
             processingEnv.filer.createSourceFile(generatedTypeName).openWriter().use { writer ->
                 writer.write(generatedSource)
+            }
+            generated = true
+            return false
+        }
+    }
+
+    private class CollidingBookDraftProcessor : AbstractProcessor() {
+        private var generated = false
+
+        override fun getSupportedAnnotationTypes(): Set<String> = setOf("*")
+
+        override fun getSupportedSourceVersion(): SourceVersion = SourceVersion.latestSupported()
+
+        override fun process(
+            annotations: Set<TypeElement>,
+            roundEnvironment: RoundEnvironment,
+        ): Boolean {
+            if (generated || roundEnvironment.processingOver()) {
+                return false
+            }
+            val book = roundEnvironment.rootElements
+                .filterIsInstance<TypeElement>()
+                .firstOrNull { type -> type.qualifiedName.contentEquals("demo.Book") }
+                ?: return false
+            processingEnv.filer.createSourceFile("demo.BookDraft", book).openWriter().use { writer ->
+                writer.write("package demo; public interface BookDraft {}")
             }
             generated = true
             return false
@@ -193,6 +232,8 @@ class JimmerProcessorAptLifecycleTest {
             "${diagnostic.kind} $source:$position ${diagnostic.getMessage(null)}"
         }
     }
+
+    private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this, Throwable::cause)
 
     private companion object {
         val ANCHOR_SOURCE = """

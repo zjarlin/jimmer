@@ -40,7 +40,7 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                 type.versionPropId?.value.orEmpty(),
                 type.logicalDeletedPropId?.value.orEmpty(),
                 type.requiresVisibilityState.toString(),
-                type.customValidations.validationText(),
+                type.customValidations.validationText(includePlatformSurface),
                 type.artifactOriginatingSymbols.sorted().joinToString(",") { symbolId -> symbolId.value },
                 if (includePlatformSurface) {
                     type.dependencySymbols.sorted().joinToString(",") { symbolId -> symbolId.value }
@@ -90,6 +90,7 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                     prop.nullable.toString(),
                     prop.list.toString(),
                     prop.association.toString(),
+                    prop.immutableReference.toString(),
                     prop.genericTarget.toString(),
                     prop.genericSourceTarget.toString(),
                     prop.languageFormula.toString(),
@@ -106,7 +107,7 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                     },
                     if (includePlatformSurface) prop.associatedId?.name.orEmpty() else "",
                     prop.associatedId?.targetIdPropId?.value.orEmpty(),
-                    prop.validationPlan.validationText(),
+                    prop.validationPlan.validationText(includePlatformSurface),
                     if (includePlatformSurface) {
                         prop.annotationPlan.builderMethodAnnotations.annotationText(true)
                     } else {
@@ -153,10 +154,14 @@ private fun site.addzero.lsi.model.LsiTypeRef.typeText(includePlatformSurface: B
     return if (includePlatformSurface) stableSignature() else normalizedTypeSignature()
 }
 
-private fun List<JimmerValidation>.validationText(): String {
+private fun List<JimmerValidation>.validationText(includePlatformSurface: Boolean): String {
     return joinToString(";") { validation ->
         buildString {
             append(validation.annotationTypeId.value)
+            if (includePlatformSurface) {
+                append('@')
+                append(validation.sourceAnnotationUseSiteTarget?.name.orEmpty())
+            }
             append('(')
             append(validation.validatorTypeIds.joinToString(",") { typeId -> typeId.value })
             append(')')
@@ -166,7 +171,7 @@ private fun List<JimmerValidation>.validationText(): String {
     }
 }
 
-private fun JimmerImmutableDraftValidationPlan.validationText(): String {
+private fun JimmerImmutableDraftValidationPlan.validationText(includePlatformSurface: Boolean): String {
     return buildString {
         requiredNullCheck?.let { required ->
             append("required(")
@@ -225,6 +230,10 @@ private fun JimmerImmutableDraftValidationPlan.validationText(): String {
                 is JimmerImmutableDraftValidationStep.CustomValidator -> {
                     append("custom:")
                     append(step.annotationTypeId.value)
+                    if (includePlatformSurface) {
+                        append('@')
+                        append(step.sourceAnnotationUseSiteTarget?.name.orEmpty())
+                    }
                     append('(')
                     append(step.validatorTypeIds.joinToString(",") { typeId -> typeId.value })
                     append(")=")
@@ -234,6 +243,10 @@ private fun JimmerImmutableDraftValidationPlan.validationText(): String {
             if (step is JimmerImmutableDraftValidationStep.BuiltIn) {
                 append('@')
                 append(step.sourceAnnotationTypeId.value)
+                if (includePlatformSurface) {
+                    append('@')
+                    append(step.sourceAnnotationUseSiteTarget?.name.orEmpty())
+                }
                 append('(')
                 append(step.failure.exceptionTypeId.value)
                 append(':')

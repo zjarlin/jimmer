@@ -20,6 +20,7 @@ import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.WildcardTypeName
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
@@ -82,16 +83,58 @@ internal fun LsiTypeParameter.toKotlinTypeVariableName(): TypeVariableName {
 }
 
 internal fun LsiAnnotation.toKotlinAnnotationSpec(): AnnotationSpec {
+    return toKotlinAnnotationSpec(
+        orderedArguments = arguments.toSortedMap().entries,
+        includeDefaultArguments = false,
+    )
+}
+
+internal fun LsiAnnotation.toLegacyKotlinAnnotationSpecWithDefaults(): AnnotationSpec {
+    val preferredOrder = legacyKotlinAnnotationArgumentOrder()
+    val orderedArguments = arguments.entries.sortedWith(
+        compareBy<Map.Entry<String, LsiAnnotationArgument>> { entry ->
+            preferredOrder.indexOf(entry.key).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE
+        }
+            .thenBy { entry -> if (entry.value.isExplicit) 0 else 1 }
+            .thenBy(Map.Entry<String, LsiAnnotationArgument>::key),
+    )
+    return toKotlinAnnotationSpec(
+        orderedArguments = orderedArguments,
+        includeDefaultArguments = true,
+    )
+}
+
+private fun LsiAnnotation.toKotlinAnnotationSpec(
+    orderedArguments: Iterable<Map.Entry<String, LsiAnnotationArgument>>,
+    includeDefaultArguments: Boolean,
+): AnnotationSpec {
     return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
         .apply {
             useSiteTarget?.toPoetUseSiteTarget()?.let(::useSiteTarget)
-            arguments.toSortedMap().forEach { (name, argument) ->
-                if (argument.isExplicit) {
-                    addMember("%L = %L", name, argument.value.toKotlinAnnotationValue())
+            orderedArguments.forEach { (name, argument) ->
+                if (includeDefaultArguments || argument.isExplicit) {
+                    addMember(
+                        "%L = %L",
+                        name,
+                        argument.value.toKotlinAnnotationValue(
+                            useArrayOfSyntax = includeDefaultArguments,
+                        ),
+                    )
                 }
             }
         }
         .build()
+}
+
+private fun LsiAnnotation.legacyKotlinAnnotationArgumentOrder(): List<String> {
+    return when (type.requireTypeQualifiedName().substringAfterLast('.')) {
+        "Size" -> listOf("min", "max", "message", "groups", "payload")
+        "Pattern" -> listOf("regexp", "message", "flags", "groups", "payload")
+        "Min", "Max" -> listOf("value", "message", "groups", "payload")
+        "DecimalMin", "DecimalMax" -> listOf("value", "inclusive", "message", "groups", "payload")
+        "Digits" -> listOf("integer", "fraction", "message", "groups", "payload")
+        else -> listOf("message", "groups", "payload")
+    }
 }
 
 private fun LsiPrimitiveKind.toKotlinTypeName(): TypeName {
@@ -171,7 +214,9 @@ private fun LsiPrimitiveKind.toKotlinPrimitiveArrayTypeName(): TypeName? {
     return ClassName("kotlin", simpleName)
 }
 
-private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
+private fun LsiAnnotationValue.toKotlinAnnotationValue(
+    useArrayOfSyntax: Boolean = false,
+): CodeBlock {
     return when (this) {
         is LsiAnnotationValue.BooleanValue -> CodeBlock.of("%L", value)
         is LsiAnnotationValue.ByteValue -> CodeBlock.of("%L", value)
@@ -193,16 +238,16 @@ private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
             annotation.toKotlinAnnotationSpec(),
         )
         is LsiAnnotationValue.ArrayValue -> CodeBlock.builder()
-            .add("[")
+            .add(if (useArrayOfSyntax) "arrayOf(" else "[")
             .apply {
                 elements.forEachIndexed { index, element ->
                     if (index != 0) {
                         add(", ")
                     }
-                    add("%L", element.toKotlinAnnotationValue())
+                    add("%L", element.toKotlinAnnotationValue(useArrayOfSyntax))
                 }
             }
-            .add("]")
+            .add(if (useArrayOfSyntax) ")" else "]")
             .build()
     }
 }

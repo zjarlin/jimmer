@@ -6,7 +6,6 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
-import org.babyfish.jimmer.compiler.immutable.immutableGenerationReady
 import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
@@ -16,8 +15,6 @@ import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.GeneratorException
 import org.babyfish.jimmer.ksp.MetaException
 import org.babyfish.jimmer.ksp.dto.DtoProcessor
-import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
-import java.util.regex.Pattern
 
 class JimmerProcessorProvider : SymbolProcessorProvider {
 
@@ -53,12 +50,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
             private val dtoMutable =
                 environment.options["jimmer.dto.mutable"]?.trim() == "true"
 
-            private val excludedUserAnnotationPrefixes =
-                environment.options["jimmer.excludedUserAnnotationPrefixes"]
-                    ?.trim()
-                    ?.let { SEPARATOR.split(it).toList() }
-                    ?: emptyList()
-
             private var dtoGenerated = false
 
             override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -85,15 +76,7 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
             ) {
                 try {
                     val context = Context(resolver, environment)
-                    val processedDeclarations = if (lsiRoundResult.immutableGenerationReady()) {
-                        ImmutableProcessor(
-                            context,
-                            excludedUserAnnotationPrefixes,
-                        ).process()
-                    } else {
-                        emptyList()
-                    }
-                    var generated = lsiRoundResult.generatedSources || processedDeclarations.isNotEmpty()
+                    var generated = lsiRoundResult.generatedSources
                     if (generated) {
                         return
                     }
@@ -154,8 +137,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
     }
 
     companion object {
-
-        private val SEPARATOR = Pattern.compile("\\s+|\\s*[,;]\\s*")
 
         private fun isTest(path: String): Boolean {
             val testIndex = path.indexOf("/src/test/")

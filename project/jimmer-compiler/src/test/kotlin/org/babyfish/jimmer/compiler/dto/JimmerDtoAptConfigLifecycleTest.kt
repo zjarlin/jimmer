@@ -92,10 +92,12 @@ class JimmerDtoAptConfigLifecycleTest {
         assertEquals(
             setOf(
                 FILTER_ID,
+                AUTHOR_DRAFT_ID,
                 AUTHOR_FETCHER_ID,
                 AUTHOR_PROPS_ID,
                 AUTHOR_TABLE_ID,
                 AUTHOR_TABLE_EX_ID,
+                BOOK_DRAFT_ID,
                 BOOK_FETCHER_ID,
                 BOOK_PROPS_ID,
                 BOOK_TABLE_ID,
@@ -213,10 +215,12 @@ class JimmerDtoAptConfigLifecycleTest {
 
     private companion object {
         val AUTHOR_ID: LsiSymbolId = LsiSymbolId.type("demo.Author")
+        val AUTHOR_DRAFT_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorDraft")
         val AUTHOR_FETCHER_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorFetcher")
         val AUTHOR_PROPS_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorProps")
         val AUTHOR_TABLE_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorTable")
         val AUTHOR_TABLE_EX_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorTableEx")
+        val BOOK_DRAFT_ID: LsiSymbolId = LsiSymbolId.type("demo.BookDraft")
         val BOOK_FETCHER_ID: LsiSymbolId = LsiSymbolId.type("demo.BookFetcher")
         val BOOK_PROPS_ID: LsiSymbolId = LsiSymbolId.type("demo.BookProps")
         val BOOK_TABLE_ID: LsiSymbolId = LsiSymbolId.type("demo.BookTable")

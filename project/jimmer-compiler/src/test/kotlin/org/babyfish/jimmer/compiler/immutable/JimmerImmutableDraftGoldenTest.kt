@@ -50,6 +50,28 @@ class JimmerImmutableDraftGoldenTest {
         assertGoldens("ksp/validation", compileKsp(VALIDATION_KSP_FIXTURE))
     }
 
+    @Test
+    fun `apt immutable reference draft matches golden`() {
+        assertGoldens("apt/reference", compileApt(REFERENCE_APT_FIXTURE))
+    }
+
+    @Test
+    fun `ksp immutable reference draft matches golden`() {
+        assertGoldens("ksp/reference", compileKsp(REFERENCE_KSP_FIXTURE))
+    }
+
+    @Test
+    fun `ksp executes only property custom validators`() {
+        val generated = compileKsp(CUSTOM_VALIDATION_USE_SITE_KSP_FIXTURE)
+            .getValue("CustomValidationModelDraft.kt")
+            .toString(StandardCharsets.UTF_8)
+
+        assertEquals(
+            1,
+            Regex("SharedConstraint::class\\.java").findAll(generated).count(),
+        )
+    }
+
     private fun compileApt(fixture: DraftFixture): Map<String, ByteArray> {
         val projectDir = createTempDirectory(prefix = "jimmer-draft-apt-golden").toFile()
         val sourceDir = projectDir.resolve("src/main/java/demo")
@@ -414,6 +436,139 @@ class JimmerImmutableDraftGoldenTest {
                 """.trimIndent(),
             ),
             generatedFiles = listOf("ValidatedDraftModelDraft.kt"),
+        )
+
+        val REFERENCE_APT_FIXTURE = DraftFixture(
+            sources = linkedMapOf(
+                "Address.java" to """
+                    package demo;
+
+                    import org.babyfish.jimmer.sql.Embeddable;
+
+                    @Embeddable
+                    public interface Address {
+                        String city();
+                    }
+                """.trimIndent(),
+                "Contact.java" to """
+                    package demo;
+
+                    import org.babyfish.jimmer.Immutable;
+
+                    @Immutable
+                    public interface Contact {
+                        String label();
+                    }
+                """.trimIndent(),
+                "ReferenceModel.java" to """
+                    package demo;
+
+                    import java.util.List;
+                    import org.babyfish.jimmer.Immutable;
+
+                    @Immutable
+                    public interface ReferenceModel {
+                        Address address();
+
+                        Contact contact();
+
+                        List<Contact> previousContacts();
+
+                        List<String> aliases();
+                    }
+                """.trimIndent(),
+            ),
+            generatedFiles = listOf(
+                "AddressDraft.java",
+                "ContactDraft.java",
+                "ReferenceModelDraft.java",
+            ),
+        )
+
+        val REFERENCE_KSP_FIXTURE = DraftFixture(
+            sources = linkedMapOf(
+                "Address.kt" to """
+                    package demo
+
+                    import org.babyfish.jimmer.sql.Embeddable
+
+                    @Embeddable
+                    interface Address {
+                        val city: String
+                    }
+                """.trimIndent(),
+                "Contact.kt" to """
+                    package demo
+
+                    import org.babyfish.jimmer.Immutable
+
+                    @Immutable
+                    interface Contact {
+                        val label: String
+                    }
+                """.trimIndent(),
+                "ReferenceModel.kt" to """
+                    package demo
+
+                    import org.babyfish.jimmer.Immutable
+
+                    @Immutable
+                    interface ReferenceModel {
+                        val address: Address
+
+                        val contact: Contact
+
+                        val previousContacts: List<Contact>
+
+                        val aliases: List<String?>
+                    }
+                """.trimIndent(),
+            ),
+            generatedFiles = listOf(
+                "AddressDraft.kt",
+                "ContactDraft.kt",
+                "ReferenceModelDraft.kt",
+            ),
+        )
+
+        val CUSTOM_VALIDATION_USE_SITE_KSP_FIXTURE = DraftFixture(
+            sources = linkedMapOf(
+                "SharedConstraint.kt" to """
+                    package demo
+
+                    import javax.validation.Constraint
+
+                    @Retention(AnnotationRetention.RUNTIME)
+                    @Target(AnnotationTarget.PROPERTY, AnnotationTarget.PROPERTY_GETTER)
+                    @Constraint(validatedBy = [SharedConstraintValidator::class])
+                    annotation class SharedConstraint(
+                        val message: String,
+                    )
+                """.trimIndent(),
+                "SharedConstraintValidator.kt" to """
+                    package demo
+
+                    import javax.validation.ConstraintValidator
+                    import javax.validation.ConstraintValidatorContext
+
+                    class SharedConstraintValidator : ConstraintValidator<SharedConstraint, String> {
+                        override fun isValid(value: String?, context: ConstraintValidatorContext?): Boolean = true
+                    }
+                """.trimIndent(),
+                "CustomValidationModel.kt" to """
+                    package demo
+
+                    import org.babyfish.jimmer.Immutable
+
+                    @Immutable
+                    interface CustomValidationModel {
+                        @SharedConstraint(message = "property")
+                        @get:SharedConstraint(message = "getter")
+                        val value: String
+                    }
+                """.trimIndent(),
+            ),
+            generatedFiles = listOf("CustomValidationModelDraft.kt"),
         )
 
         fun runtimeClasspath(): List<File> {

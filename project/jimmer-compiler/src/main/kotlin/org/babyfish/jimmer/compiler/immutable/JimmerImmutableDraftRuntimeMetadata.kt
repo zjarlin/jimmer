@@ -48,6 +48,7 @@ internal enum class JimmerImmutableDraftRuntimeValueCategory {
 
 internal fun JimmerImmutableProp.compileDraftRuntimeProp(
     elementType: LsiTypeRef,
+    immutableReference: Boolean,
 ): JimmerImmutableDraftRuntimeProp {
     val key = annotations.any { annotation ->
         annotation.type == KEY_ANNOTATION_TYPE_ID || annotation.type == KEYS_ANNOTATION_TYPE_ID
@@ -58,15 +59,15 @@ internal fun JimmerImmutableProp.compileDraftRuntimeProp(
         primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> {
             JimmerImmutableDraftRuntimePropKind.LOGICAL_DELETED
         }
-        key && association -> JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE
+        key && immutableReference -> JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE
         key -> JimmerImmutableDraftRuntimePropKind.KEY_SCALAR
         associationKind.hasRuntimeAnnotation -> JimmerImmutableDraftRuntimePropKind.ASSOCIATION
         else -> JimmerImmutableDraftRuntimePropKind.VALUE
     }
     val valueCategory = when {
-        list && association -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST
+        list && immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST
         list -> JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST
-        association -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE
+        immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE
         else -> JimmerImmutableDraftRuntimeValueCategory.SCALAR
     }
     val associationAnnotationTypeId = when (kind) {

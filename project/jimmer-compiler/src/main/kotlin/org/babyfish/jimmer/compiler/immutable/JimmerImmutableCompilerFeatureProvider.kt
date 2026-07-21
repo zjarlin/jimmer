@@ -3,7 +3,6 @@ package org.babyfish.jimmer.compiler.immutable
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
@@ -15,9 +14,11 @@ import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableEmbeddableJavaRenderer
+import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableDraftJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableFetcherJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableQueryJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableEmbeddableKotlinRenderer
+import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableDraftKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableFetcherKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableQueryKotlinRenderer
 import site.addzero.lsi.core.LsiLanguage
@@ -115,15 +116,20 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }
         val fetcherMetadata = JimmerImmutableFetcherMetadata(state.schema)
         val fetcherTypes = fetcherMetadata.generatedTypes(state.targetTypeIds)
+        val draftArtifactMetadata = JimmerImmutableDraftArtifactMetadata(state.draftCodegenSchema)
+        val draftTypes = draftArtifactMetadata.generatedTypes(state.currentTypeIds)
         val queryMetadata = JimmerImmutableQueryMetadata(state.schema, context.round.workspace)
         val embeddableTypes = queryMetadata.generatedEmbeddableTypes(state.currentTypeIds)
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> {
+                val draftRenderer = JimmerImmutableDraftJavaRenderer()
                 val fetcherRenderer = JimmerImmutableFetcherJavaRenderer()
                 val embeddableRenderer = JimmerImmutableEmbeddableJavaRenderer()
                 val queryRenderer = JimmerImmutableQueryJavaRenderer()
                 val queryTypes = queryMetadata.generatedPropsTypes(state.targetTypeIds)
-                fetcherTypes.map { type ->
+                draftTypes.map { type ->
+                    draftRenderer.render(state.draftCodegenSchema, type)
+                } + fetcherTypes.map { type ->
                     fetcherRenderer.render(state.schema, type, context.round.workspace)
                 } + embeddableTypes.flatMap { type ->
                     embeddableRenderer.render(state.schema, type, context.round.workspace)
@@ -132,11 +138,14 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 }
             }
             CompilerPlatform.KSP -> {
+                val draftRenderer = JimmerImmutableDraftKotlinRenderer()
                 val fetcherRenderer = JimmerImmutableFetcherKotlinRenderer()
                 val embeddableRenderer = JimmerImmutableEmbeddableKotlinRenderer()
                 val queryRenderer = JimmerImmutableQueryKotlinRenderer()
                 val queryTypes = queryMetadata.generatedQueryTypes(state.targetTypeIds)
-                fetcherTypes.map { type ->
+                draftTypes.map { type ->
+                    draftRenderer.render(state.draftCodegenSchema, type)
+                } + fetcherTypes.map { type ->
                     fetcherRenderer.render(state.schema, type, context.round.workspace)
                 } + embeddableTypes.map { type ->
                     embeddableRenderer.render(state.schema, type, context.round.workspace)
@@ -378,12 +387,6 @@ internal data class JimmerImmutableCompilerFeatureState(
             "Resolved immutable state cannot contain unresolved roots"
         }
     }
-}
-
-internal fun CompilerRoundResult.immutableGenerationReady(): Boolean {
-    val state = featureResults[JIMMER_IMMUTABLE_FEATURE_ID]?.state as? JimmerImmutableCompilerFeatureState
-        ?: return false
-    return state.status == JimmerImmutableCompilerFeatureStatus.RESOLVED
 }
 
 private fun LsiWorkspace.immutableTargetTypeIds(

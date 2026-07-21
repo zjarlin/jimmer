@@ -2,6 +2,7 @@ package org.babyfish.jimmer.compiler.immutable
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiTypeRef
 
@@ -645,6 +646,7 @@ data class JimmerValidation(
     val annotationTypeId: LsiSymbolId,
     val validatorTypeIds: List<LsiSymbolId>,
     val message: String,
+    val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
 )
 
 data class JimmerConverter(

@@ -2383,6 +2383,7 @@ private fun LsiResolvedProperty.validations(workspace: LsiWorkspace): List<Jimme
             annotationTypeId = annotation.type,
             validatorTypeIds = validatorTypeIds.sorted(),
             message = annotation.stringValue("message").orEmpty(),
+            sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
         )
     }.sortedBy(JimmerValidation::annotationTypeId)
 }

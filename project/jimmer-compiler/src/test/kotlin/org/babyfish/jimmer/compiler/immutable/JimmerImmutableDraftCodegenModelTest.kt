@@ -3,6 +3,7 @@ package org.babyfish.jimmer.compiler.immutable
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -24,6 +25,9 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
+import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.model.LsiTypeParameter
+import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableDraftCodegenModelTest {
@@ -71,6 +75,7 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals(VALID_BOOK, titleValidation.annotationTypeId)
         assertEquals(listOf(VALIDATOR), titleValidation.validatorTypeIds)
         assertEquals("invalid title", titleValidation.message)
+        assertEquals(null, titleValidation.sourceAnnotationUseSiteTarget)
         assertEquals(
             listOf(
                 JimmerImmutableDraftValidationStep.NotBlank::class,
@@ -213,7 +218,126 @@ class JimmerImmutableDraftCodegenModelTest {
             JimmerImmutableDraftCodegenOptions.DEFAULT,
         )
         assertEquals(draftSchema.normalizedSnapshot(), getterValidationDraftSchema.normalizedSnapshot())
-        assertEquals(draftSchema.fingerprint(), getterValidationDraftSchema.fingerprint())
+        assertNotEquals(draftSchema.fingerprint(), getterValidationDraftSchema.fingerprint())
+    }
+
+    @Test
+    fun `distinguishes immutable references from scalar values and preserves nullable list elements`() {
+        val addressCity = LsiSymbolId.property(ADDRESS, "city")
+        val address = LsiSymbolId.property(REFERENCE_MODEL, "address")
+        val aliases = LsiSymbolId.property(REFERENCE_MODEL, "aliases")
+        val workspace = LsiWorkspace(
+            sources = listOf(SOURCE),
+            declarations = listOf(
+                immutableType(
+                    id = ADDRESS,
+                    memberIds = listOf(addressCity),
+                    marker = EMBEDDABLE,
+                ),
+                property(
+                    id = addressCity,
+                    ownerId = ADDRESS,
+                    type = LsiDeclaredType(STRING),
+                    getterName = "city",
+                ),
+                immutableType(
+                    id = REFERENCE_MODEL,
+                    memberIds = listOf(address, aliases),
+                    marker = IMMUTABLE,
+                ),
+                property(
+                    id = address,
+                    ownerId = REFERENCE_MODEL,
+                    type = LsiDeclaredType(ADDRESS),
+                    getterName = "address",
+                ),
+                property(
+                    id = aliases,
+                    ownerId = REFERENCE_MODEL,
+                    type = LsiDeclaredType(
+                        declarationId = LIST,
+                        arguments = listOf(
+                            LsiTypeArgument.invariant(
+                                LsiDeclaredType(STRING, nullability = LsiNullability.NULLABLE)
+                            )
+                        ),
+                    ),
+                    getterName = "aliases",
+                ),
+            ),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+            schema,
+            workspace,
+            JimmerImmutableDraftCodegenOptions.DEFAULT,
+        )
+        val type = draftSchema.typesById.getValue(REFERENCE_MODEL)
+
+        val addressPlan = type.propsById.getValue(address)
+        assertFalse(addressPlan.association)
+        assertTrue(addressPlan.immutableReference)
+        assertTrue(addressPlan.autoCreateSupported)
+        assertTrue(addressPlan.referenceMutationSupported)
+        assertEquals(JimmerImmutableDraftRuntimeValueCategory.REFERENCE, addressPlan.runtimeProp.valueCategory)
+
+        val aliasesPlan = type.propsById.getValue(aliases)
+        assertFalse(aliasesPlan.association)
+        assertFalse(aliasesPlan.immutableReference)
+        assertEquals(JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST, aliasesPlan.runtimeProp.valueCategory)
+        assertEquals(LsiNullability.NULLABLE, aliasesPlan.elementType.nullability)
+    }
+
+    @Test
+    fun `distinguishes generic scalar values from generic associations`() {
+        val parameterId = LsiSymbolId.typeParameter(GENERIC_BASE, "T")
+        val scalar = LsiSymbolId.property(GENERIC_BASE, "scalar")
+        val reference = LsiSymbolId.property(GENERIC_BASE, "reference")
+        val workspace = LsiWorkspace(
+            sources = listOf(SOURCE),
+            declarations = listOf(
+                immutableType(
+                    id = GENERIC_BASE,
+                    memberIds = listOf(scalar, reference),
+                    marker = MAPPED_SUPERCLASS,
+                    typeParameters = listOf(LsiTypeParameter(parameterId, "T")),
+                ),
+                property(
+                    id = scalar,
+                    ownerId = GENERIC_BASE,
+                    type = LsiTypeParameterRef(parameterId),
+                    getterName = "scalar",
+                ),
+                property(
+                    id = reference,
+                    ownerId = GENERIC_BASE,
+                    type = LsiTypeParameterRef(parameterId),
+                    getterName = "reference",
+                    annotations = listOf(LsiAnnotation(MANY_TO_ONE)),
+                ),
+            ),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+            schema,
+            workspace,
+            JimmerImmutableDraftCodegenOptions.DEFAULT,
+        )
+        val type = draftSchema.typesById.getValue(GENERIC_BASE)
+
+        val scalarPlan = type.propsById.getValue(scalar)
+        assertTrue(scalarPlan.genericTarget)
+        assertFalse(scalarPlan.association)
+        assertFalse(scalarPlan.immutableReference)
+        assertFalse(scalarPlan.autoCreateSupported)
+        assertEquals(JimmerImmutableDraftRuntimeValueCategory.SCALAR, scalarPlan.runtimeProp.valueCategory)
+
+        val referencePlan = type.propsById.getValue(reference)
+        assertTrue(referencePlan.genericTarget)
+        assertTrue(referencePlan.association)
+        assertTrue(referencePlan.immutableReference)
+        assertFalse(referencePlan.autoCreateSupported)
+        assertEquals(JimmerImmutableDraftRuntimeValueCategory.REFERENCE, referencePlan.runtimeProp.valueCategory)
     }
 
     @Test
@@ -348,6 +472,7 @@ class JimmerImmutableDraftCodegenModelTest {
         marker: LsiSymbolId = ENTITY,
         origin: LsiOrigin = ORIGIN,
         superTypes: List<LsiDeclaredType> = emptyList(),
+        typeParameters: List<LsiTypeParameter> = emptyList(),
     ): LsiTypeDeclaration {
         val qualifiedName = id.requireTypeQualifiedName()
         return LsiTypeDeclaration(
@@ -355,6 +480,7 @@ class JimmerImmutableDraftCodegenModelTest {
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,
             kind = LsiTypeDeclarationKind.INTERFACE,
+            typeParameters = typeParameters,
             superTypes = superTypes,
             memberIds = memberIds,
             annotations = listOf(LsiAnnotation(marker)) + annotations,
@@ -511,12 +637,18 @@ class JimmerImmutableDraftCodegenModelTest {
         val BASE_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, BASE_SOURCE)
         val BASE_ID = LsiSymbolId.type("demo.BaseId")
         val AUTHOR = LsiSymbolId.type("demo.Author")
+        val ADDRESS = LsiSymbolId.type("demo.Address")
         val BOOK = LsiSymbolId.type("demo.Book")
+        val REFERENCE_MODEL = LsiSymbolId.type("demo.ReferenceModel")
+        val GENERIC_BASE = LsiSymbolId.type("demo.GenericBase")
         val VALID_BOOK = LsiSymbolId.type("demo.ValidBook")
         val VALIDATOR = LsiSymbolId.type("demo.ValidBookValidator")
         val STRING = LsiSymbolId.type("java.lang.String")
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
+        val IMMUTABLE = LsiSymbolId.type("org.babyfish.jimmer.Immutable")
+        val EMBEDDABLE = LsiSymbolId.type("org.babyfish.jimmer.sql.Embeddable")
         val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
+        val LIST = LsiSymbolId.type("java.util.List")
         val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         val MANY_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
         val KEY = LsiSymbolId.type("org.babyfish.jimmer.sql.Key")

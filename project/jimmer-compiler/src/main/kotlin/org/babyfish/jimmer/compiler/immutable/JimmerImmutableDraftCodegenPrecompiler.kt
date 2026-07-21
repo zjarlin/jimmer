@@ -299,6 +299,8 @@ private data class JimmerImmutableDraftSlotAssignment(
         val targetIdPropId = prop.targetTypeId
             ?.let(schema.typesById::get)
             ?.idPropId
+        val immutableReference = prop.association ||
+            prop.targetTypeId?.let(schema.typesById::containsKey) == true
         val codegenName = declaration.codegenName(prop)
         val associatedIdName = StringUtil.identifier(codegenName, "Id")
         val associatedId = if (
@@ -328,12 +330,12 @@ private data class JimmerImmutableDraftSlotAssignment(
         val writable = !languageFormula &&
             prop.primaryMapping != JimmerImmutablePrimaryMapping.DISCRIMINATOR &&
             manyToManyView == null
-        val autoCreateSupported = (prop.association || prop.list) &&
+        val autoCreateSupported = (immutableReference || prop.list) &&
             !prop.genericTarget &&
             manyToManyView == null &&
             prop.formulaKind == JimmerFormulaKind.NONE &&
             prop.primaryMapping != JimmerImmutablePrimaryMapping.DISCRIMINATOR
-        val referenceMutationSupported = prop.association &&
+        val referenceMutationSupported = immutableReference &&
             !prop.genericTarget &&
             manyToManyView == null &&
             prop.formulaKind == JimmerFormulaKind.NONE &&
@@ -375,13 +377,14 @@ private data class JimmerImmutableDraftSlotAssignment(
             },
             type = prop.type,
             elementType = elementType,
-            runtimeProp = prop.compileDraftRuntimeProp(elementType),
+            runtimeProp = prop.compileDraftRuntimeProp(elementType, immutableReference),
             targetTypeId = prop.targetTypeId,
             targetIdPropId = targetIdPropId,
             primitive = primitive,
             nullable = prop.nullable,
             list = prop.list,
             association = prop.association,
+            immutableReference = immutableReference,
             genericTarget = prop.genericTarget,
             genericSourceTarget = prop.genericSourceTarget(workspace, role, ownerType.kind),
             languageFormula = languageFormula,
@@ -541,6 +544,7 @@ private fun List<LsiAnnotation>.customValidations(workspace: LsiWorkspace): List
             annotationTypeId = annotation.type,
             validatorTypeIds = validatorTypeIds,
             message = (annotation.arguments["message"]?.value as? LsiAnnotationValue.StringValue)?.value.orEmpty(),
+            sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
         )
     }
 }

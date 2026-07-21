@@ -9,6 +9,7 @@ import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeVariableName
 import com.squareup.javapoet.WildcardTypeName
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -77,9 +78,19 @@ internal fun LsiTypeParameter.toJavaTypeVariableName(): TypeVariableName {
 }
 
 internal fun LsiAnnotation.toJavaAnnotationSpec(): AnnotationSpec {
+    return toJavaAnnotationSpec(arguments.toSortedMap().entries)
+}
+
+internal fun LsiAnnotation.toJavaAnnotationSpecPreservingArgumentOrder(): AnnotationSpec {
+    return toJavaAnnotationSpec(arguments.entries)
+}
+
+private fun LsiAnnotation.toJavaAnnotationSpec(
+    orderedArguments: Iterable<Map.Entry<String, LsiAnnotationArgument>>,
+): AnnotationSpec {
     return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
         .apply {
-            arguments.toSortedMap().forEach { (name, argument) ->
+            orderedArguments.forEach { (name, argument) ->
                 if (argument.isExplicit) {
                     addMember(name, "\$L", argument.value.toJavaAnnotationValue())
                 }
