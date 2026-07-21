@@ -94,17 +94,9 @@ public class ImmutableProcessor {
                         immutableType,
                         true
                 ).generate();
-                new FetcherGenerator(
-                        context,
-                        immutableType
-                ).generate();
             } else if (immutableType.isEmbeddable()) {
                 messager.printMessage(Diagnostic.Kind.NOTE, "Embeddable: " + immutableType.getQualifiedName());
                 new PropExpressionGenerator(
-                        context,
-                        immutableType
-                ).generate();
-                new FetcherGenerator(
                         context,
                         immutableType
                 ).generate();

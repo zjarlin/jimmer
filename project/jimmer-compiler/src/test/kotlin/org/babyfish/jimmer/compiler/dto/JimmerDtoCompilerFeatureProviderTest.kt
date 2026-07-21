@@ -1671,11 +1671,16 @@ class JimmerDtoCompilerFeatureProviderTest {
 
     private fun bookAndAuthorWorkspace(language: LsiLanguage): LsiWorkspace {
         val workspace = immutableWorkspace(language)
-        val source = workspace.sources.single()
-        val origin = LsiOrigin(LsiOriginKind.SOURCE, source)
+        val bookSource = workspace.sources.single()
+        val authorSource = LsiSource.of(
+            path = "demo/Author.${bookSource.path.substringAfterLast('.')}",
+            language = bookSource.language,
+            kind = bookSource.kind,
+        )
+        val origin = LsiOrigin(LsiOriginKind.SOURCE, authorSource)
         val authorIdPropId = LsiSymbolId.property(AUTHOR_ID, "id")
         return LsiWorkspace(
-            sources = workspace.sources,
+            sources = workspace.sources + authorSource,
             declarations = workspace.declarations + listOf(
                 LsiTypeDeclaration(
                     id = AUTHOR_ID,

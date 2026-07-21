@@ -90,7 +90,10 @@ class JimmerDtoAptConfigLifecycleTest {
 
         val secondRound = capture.round(1)
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, secondRound.status)
-        assertEquals(setOf(FILTER_ID, AUTHOR_TABLE_ID), secondRound.currentRootTypeIds)
+        assertEquals(
+            setOf(FILTER_ID, AUTHOR_TABLE_ID, AUTHOR_FETCHER_ID, BOOK_FETCHER_ID),
+            secondRound.currentRootTypeIds,
+        )
         assertTrue(secondRound.unresolvedSymbols.isEmpty())
         assertTrue(secondRound.diagnosticCodes.isEmpty())
         assertEquals(FILTER_ID, secondRound.contract?.implementationTypeId)
@@ -223,7 +226,9 @@ class JimmerDtoAptConfigLifecycleTest {
 
     private companion object {
         val AUTHOR_ID: LsiSymbolId = LsiSymbolId.type("demo.Author")
+        val AUTHOR_FETCHER_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorFetcher")
         val AUTHOR_TABLE_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorTable")
+        val BOOK_FETCHER_ID: LsiSymbolId = LsiSymbolId.type("demo.BookFetcher")
         val FILTER_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorFilter")
 
         val DTO_SOURCE = """

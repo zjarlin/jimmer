@@ -12,7 +12,6 @@ import org.babyfish.jimmer.ksp.GeneratorException
 import org.babyfish.jimmer.ksp.annotation
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.immutable.generator.DraftGenerator
-import org.babyfish.jimmer.ksp.immutable.generator.FetcherGenerator
 import org.babyfish.jimmer.ksp.immutable.generator.PropsGenerator
 import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
@@ -96,10 +95,6 @@ class ImmutableProcessor(
                 val sqlClassDeclaration = sqlClassDeclarations[0]
                 if (sqlClassDeclaration.typeParameters.isEmpty()) {
                     PropsGenerator(ctx.environment.codeGenerator, ctx, file, sqlClassDeclaration)
-                        .generate()
-                }
-                if (sqlClassDeclaration.annotation(Entity::class) !== null || sqlClassDeclaration.annotation(Embeddable::class) !== null) {
-                    FetcherGenerator(ctx.environment.codeGenerator, ctx, file, sqlClassDeclaration)
                         .generate()
                 }
             }

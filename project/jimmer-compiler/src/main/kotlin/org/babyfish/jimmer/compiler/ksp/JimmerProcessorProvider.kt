@@ -6,6 +6,7 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
+import org.babyfish.jimmer.compiler.immutable.immutableGenerationReady
 import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
@@ -84,10 +85,14 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
             ) {
                 try {
                     val context = Context(resolver, environment)
-                    val processedDeclarations = ImmutableProcessor(
-                        context,
-                        excludedUserAnnotationPrefixes,
-                    ).process()
+                    val processedDeclarations = if (lsiRoundResult.immutableGenerationReady()) {
+                        ImmutableProcessor(
+                            context,
+                            excludedUserAnnotationPrefixes,
+                        ).process()
+                    } else {
+                        emptyList()
+                    }
                     var generated = lsiRoundResult.generatedSources || processedDeclarations.isNotEmpty()
                     if (generated) {
                         return

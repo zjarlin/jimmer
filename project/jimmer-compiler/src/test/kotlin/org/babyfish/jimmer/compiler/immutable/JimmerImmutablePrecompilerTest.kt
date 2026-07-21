@@ -8,6 +8,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -1255,6 +1256,55 @@ class JimmerImmutablePrecompilerTest {
             },
         )
         assertNotEquals(aptSchema.fingerprint(), changedDocumentation.fingerprint())
+    }
+
+    @Test
+    fun `rejects forType property when inheritance fetcher has strict branches`() {
+        val workspace = inheritanceWorkspace(LsiLanguage.KOTLIN)
+        val rootId = LsiSymbolId.type("demo.Account")
+        val conflictProp = property(
+            ownerId = rootId,
+            name = "forType",
+            type = LsiDeclaredType(STRING_TYPE),
+            origin = (workspace[rootId] as LsiTypeDeclaration).origin,
+        )
+        val declarations = workspace.declarations.map { declaration ->
+            val type = declaration as? LsiTypeDeclaration ?: return@map declaration
+            if (type.id == rootId) {
+                type.copy(memberIds = type.memberIds + conflictProp.id)
+            } else {
+                type
+            }
+        } + conflictProp
+        val schema = compileFixture(
+            LsiWorkspace(
+                sources = workspace.sources,
+                declarations = declarations,
+                typeHierarchy = workspace.typeHierarchy,
+                annotationScopes = workspace.annotationScopes,
+            )
+        )
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(setOf(rootId))
+        }
+
+        assertEquals(conflictProp.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("Illegal property name 'forType'"))
+    }
+
+    @Test
+    fun `inheritance fetcher aggregates strict branch origins`() {
+        val schema = compileFixture(inheritanceWorkspace(LsiLanguage.KOTLIN))
+        val metadata = JimmerImmutableFetcherMetadata(schema)
+        val rootId = LsiSymbolId.type("demo.Account")
+        val childId = LsiSymbolId.type("demo.AdminAccount")
+        val root = schema.typesById.getValue(rootId)
+        val child = schema.typesById.getValue(childId)
+
+        assertEquals(ArtifactAggregationMode.AGGREGATING, metadata.aggregationMode(root))
+        assertEquals(setOf(rootId, childId), metadata.originatingSymbols(root))
+        assertEquals(ArtifactAggregationMode.ISOLATING, metadata.aggregationMode(child))
+        assertEquals(setOf(childId), metadata.originatingSymbols(child))
     }
 
     @Test

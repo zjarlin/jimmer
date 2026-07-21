@@ -7,6 +7,7 @@ import org.babyfish.jimmer.apt.dto.DtoProcessor
 import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
+import org.babyfish.jimmer.compiler.immutable.immutableGenerationReady
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
@@ -138,7 +139,7 @@ class JimmerProcessor : AbstractProcessor() {
         try {
             val lsiRoundResult = lsiDriver.process(roundEnv)
             var generated = lsiRoundResult.generatedSources
-            if (!roundEnv.processingOver()) {
+            if (!roundEnv.processingOver() && lsiRoundResult.immutableGenerationReady()) {
                 val immutableTypeElements = ImmutableProcessor(context, messager).process(roundEnv).keys
                 generated = generated || immutableTypeElements.isNotEmpty()
             }

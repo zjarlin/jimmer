@@ -3,14 +3,19 @@ package org.babyfish.jimmer.compiler.immutable
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
+import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
+import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
+import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableFetcherJavaRenderer
+import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableFetcherKotlinRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
@@ -21,7 +26,7 @@ import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor("immutable")
+    override val descriptor = JimmerCompilerFeatureDescriptor(JIMMER_IMMUTABLE_FEATURE_ID)
 
     override fun precompile(
         context: JimmerCompilerPrecompileContext,
@@ -35,6 +40,18 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val currentTypeIds = context.round.currentRootTypeIds
             .filterTo(sortedSetOf(), targetTypeIds::contains)
         val precompiler = JimmerImmutablePrecompiler()
+        try {
+            validateSourceLayout(context.round, currentTypeIds)
+        } catch (exception: JimmerImmutablePrecompileException) {
+            return failedResult(
+                context = context,
+                precompiler = precompiler,
+                targetTypeIds = targetTypeIds,
+                semanticRootTypeIds = semanticRootTypeIds,
+                currentTypeIds = currentTypeIds,
+                exception = exception,
+            )
+        }
         val unresolvedTypeIds = precompiler.unresolvedTargetTypeIds(
             workspace = context.round.workspace,
             targetTypeIds = semanticRootTypeIds,
@@ -51,6 +68,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }
         return try {
             val schema = precompiler.compile(context.round.workspace, semanticRootTypeIds)
+            JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(currentTypeIds)
             JimmerCompilerFeaturePrecompileResult(
                 state = JimmerImmutableCompilerFeatureState(
                     schema = schema,
@@ -70,6 +88,57 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 exception = exception,
             )
         }
+    }
+
+    override fun render(
+        context: JimmerCompilerRenderContext,
+    ): JimmerCompilerFeatureRenderResult {
+        if (context.round.isFinal) {
+            return JimmerCompilerFeatureRenderResult()
+        }
+        val state = context.state as JimmerImmutableCompilerFeatureState
+        if (state.status != JimmerImmutableCompilerFeatureStatus.RESOLVED) {
+            return JimmerCompilerFeatureRenderResult()
+        }
+        val metadata = JimmerImmutableFetcherMetadata(state.schema)
+        val types = metadata.generatedTypes(state.currentTypeIds)
+        val artifacts = when (context.round.platform) {
+            CompilerPlatform.APT -> {
+                val renderer = JimmerImmutableFetcherJavaRenderer()
+                types.map { type -> renderer.render(state.schema, type, context.round.workspace) }
+            }
+            CompilerPlatform.KSP -> {
+                val renderer = JimmerImmutableFetcherKotlinRenderer()
+                types.map { type -> renderer.render(state.schema, type, context.round.workspace) }
+            }
+            CompilerPlatform.UNKNOWN -> emptyList()
+        }
+        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+    }
+
+    private fun validateSourceLayout(
+        round: CompilerRound,
+        currentTypeIds: Set<LsiSymbolId>,
+    ) {
+        if (round.platform != CompilerPlatform.KSP) {
+            return
+        }
+        val typesBySource = currentTypeIds
+            .mapNotNull { typeId -> round.workspace[typeId] as? LsiTypeDeclaration }
+            .mapNotNull { type -> type.origin.source?.let { source -> source to type } }
+            .groupBy(
+                keySelector = { (source, _) -> source },
+                valueTransform = { (_, type) -> type },
+            )
+        val conflict = typesBySource.entries
+            .firstOrNull { (_, types) -> types.size > 1 }
+            ?: return
+        val conflictingTypes = conflict.value.sortedBy(LsiTypeDeclaration::qualifiedName)
+        throw JimmerImmutablePrecompileException(
+            declarationId = conflictingTypes.first().id,
+            message = "Source '${conflict.key.path}' declares several Jimmer immutable types: " +
+                conflictingTypes.joinToString { type -> type.qualifiedName },
+        )
     }
 
     private fun unresolvedResult(
@@ -254,6 +323,12 @@ internal data class JimmerImmutableCompilerFeatureState(
     }
 }
 
+internal fun CompilerRoundResult.immutableGenerationReady(): Boolean {
+    val state = featureResults[JIMMER_IMMUTABLE_FEATURE_ID]?.state as? JimmerImmutableCompilerFeatureState
+        ?: return false
+    return state.status == JimmerImmutableCompilerFeatureStatus.RESOLVED
+}
+
 private fun LsiWorkspace.immutableTargetTypeIds(
     platform: CompilerPlatform,
     sourceFilter: JimmerCompilerSourceFilter,
@@ -342,3 +417,5 @@ private val COMPILATION_ORIGIN_KINDS = setOf(
 )
 
 private val KOTLIN_METADATA = LsiSymbolId.type("kotlin.Metadata")
+
+private const val JIMMER_IMMUTABLE_FEATURE_ID = "immutable"

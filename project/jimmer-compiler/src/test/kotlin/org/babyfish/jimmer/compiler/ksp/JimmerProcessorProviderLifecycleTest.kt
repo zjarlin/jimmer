@@ -27,6 +27,7 @@ class JimmerProcessorProviderLifecycleTest {
         assertEquals(KotlinSymbolProcessing.ExitCode.OK, result.exitCode, result.logger.text())
         assertTrue(result.capture.rounds.first().deferredNames.isEmpty())
         assertTrue(result.generatedKotlinFile("demo/SourceDraft.kt").isFile)
+        assertTrue(result.generatedKotlinFile("demo/SourceFetcher.kt").isFile)
     }
 
     @Test
@@ -52,6 +53,15 @@ class JimmerProcessorProviderLifecycleTest {
     }
 
     @Test
+    fun `main provider rejects several immutable types in one kotlin source`() {
+        val result = compileKsp(source = MULTIPLE_ENTITY_SOURCE)
+
+        assertEquals(KotlinSymbolProcessing.ExitCode.PROCESSING_ERROR, result.exitCode)
+        assertTrue(result.logger.text().contains("declares several Jimmer immutable types"))
+        assertFalse(result.generatedKotlinFile("demo/SourceFetcher.kt").exists())
+    }
+
+    @Test
     fun `main provider processes entities and implicit api generated in a later real round`() {
         val result = compileKsp(
             source = "package demo\nfun anchor() = Unit",
@@ -69,6 +79,7 @@ class JimmerProcessorProviderLifecycleTest {
         val generatedEntityRound = result.capture.rounds[generatedEntityRoundIndex]
         assertTrue(generatedEntityRound.deferredNames.isEmpty())
         assertTrue(result.generatedKotlinFile("demo/GeneratedModelAndApiDraft.kt").isFile)
+        assertTrue(result.generatedKotlinFile("demo/GeneratedModelAndApiFetcher.kt").isFile)
         val clientFile = result.generatedResourceFile("META-INF/jimmer/client")
         assertTrue(clientFile.isFile)
         assertTrue(clientFile.readText().contains("\"typeName\" : \"demo.GeneratedApi\""))
@@ -362,6 +373,25 @@ class JimmerProcessorProviderLifecycleTest {
         val DTO_SOURCE = """
             BookView {
                 id
+            }
+        """.trimIndent()
+
+        val MULTIPLE_ENTITY_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+
+            @Entity
+            interface FirstBook {
+                @Id
+                val id: Long
+            }
+
+            @Entity
+            interface SecondBook {
+                @Id
+                val id: Long
             }
         """.trimIndent()
 
