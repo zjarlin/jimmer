@@ -29,10 +29,14 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
     @get:Input
     abstract val allowedPoetFileSuffixes: SetProperty<String>
 
+    @get:Input
+    abstract val forbiddenRelativePaths: SetProperty<String>
+
     init {
         allowedPlatformPathSegments.convention(emptySet())
         allowedPoetPathSegments.convention(emptySet())
         allowedPoetFileSuffixes.convention(emptySet())
+        forbiddenRelativePaths.convention(emptySet())
     }
 
     @TaskAction
@@ -41,10 +45,14 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
         val platformSegments = allowedPlatformPathSegments.get()
         val poetSegments = allowedPoetPathSegments.get()
         val poetFileSuffixes = allowedPoetFileSuffixes.get()
+        val forbiddenPaths = forbiddenRelativePaths.get()
         val violations = sourceFiles.files
             .sortedBy { file -> file.invariantSeparatorsPath }
             .flatMap { file ->
                 val relativePath = file.relativeTo(baseDirectoryFile).invariantSeparatorsPath
+                if (relativePath in forbiddenPaths) {
+                    return@flatMap listOf("$relativePath: forbidden compiler service entry")
+                }
                 val pathSegments = relativePath.split('/')
                 val platformBoundary = pathSegments.any(platformSegments::contains)
                 val rendererBoundary = pathSegments.any(poetSegments::contains) ||
