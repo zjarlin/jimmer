@@ -49,14 +49,14 @@ class AptGeneratedArtifactWriter(
         currentRoundElements: Map<LsiSymbolId, Element>,
         currentRoundSources: Map<LsiSymbolId, LsiSource>,
     ): Array<Element> {
-        val elements = originatingSymbols
+        val elements = dependencySymbols
             .sorted()
             .mapNotNull(currentRoundElements::get)
             .distinct()
-        val representedSourcePaths = originatingSymbols
+        val representedSourcePaths = dependencySymbols
             .mapNotNull(currentRoundSources::get)
             .mapTo(hashSetOf(), LsiSource::path)
-        val unmatchedSources = originatingSources.filterNot { source -> source.path in representedSourcePaths }
+        val unmatchedSources = dependencySources.filterNot { source -> source.path in representedSourcePaths }
         if (emissionMode == ArtifactEmissionMode.STABLE) {
             require(unmatchedSources.isEmpty()) {
                 "APT stable artifact cannot depend on non-current sources: $path; " +

@@ -19,8 +19,10 @@ import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableJacksonFamily
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
@@ -193,7 +195,10 @@ class JimmerModuleCompilerFeatureProviderTest {
         val brokenId = LsiSymbolId.type("demo.Broken")
         val deferredDependency = JimmerImmutableCompilerFeatureState(
             schema = JimmerImmutableSchema(emptyList()),
-            draftCodegenSchema = JimmerImmutableDraftCodegenSchema(emptyList()),
+            draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
+                jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
+                types = emptyList(),
+            ),
             targetTypeIds = setOf(brokenId),
             semanticRootTypeIds = setOf(brokenId),
             currentTypeIds = setOf(brokenId),
@@ -415,7 +420,11 @@ class JimmerModuleCompilerFeatureProviderTest {
         val workspace = workspace(LsiLanguage.JAVA, qualifiedName)
         return JimmerImmutableCompilerFeatureState(
             schema = schema,
-            draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(schema, workspace),
+            draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+                schema,
+                workspace,
+                JimmerImmutableDraftCodegenOptions.DEFAULT,
+            ),
             targetTypeIds = setOf(typeId),
             semanticRootTypeIds = setOf(typeId),
             currentTypeIds = setOf(typeId),

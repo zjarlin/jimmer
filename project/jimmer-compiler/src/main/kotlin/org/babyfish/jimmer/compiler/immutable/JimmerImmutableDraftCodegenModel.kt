@@ -3,13 +3,13 @@ package org.babyfish.jimmer.compiler.immutable
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiVisibility
 
 internal data class JimmerImmutableDraftCodegenSchema(
+    val jacksonFamily: JimmerImmutableJacksonFamily,
     val types: List<JimmerImmutableDraftTypePlan>,
 ) {
 
@@ -42,7 +42,6 @@ internal data class JimmerImmutableDraftTypePlan(
     val idPropId: LsiSymbolId?,
     val versionPropId: LsiSymbolId?,
     val logicalDeletedPropId: LsiSymbolId?,
-    val validationAnnotations: List<LsiAnnotation>,
     val customValidations: List<JimmerValidation>,
     val artifactOriginatingSymbols: Set<LsiSymbolId>,
     val artifactOriginatingSources: List<LsiSource>,
@@ -112,6 +111,7 @@ internal data class JimmerImmutableDraftPropPlan(
     val name: String,
     val codegenName: String,
     val sourceGetterName: String,
+    val documentation: String?,
     val sourceDocumentation: String?,
     val accessorStyle: JimmerImmutableDraftAccessorStyle,
     val slotName: String,
@@ -119,11 +119,14 @@ internal data class JimmerImmutableDraftPropPlan(
     val javaBeanGetterName: String,
     val javaApplierName: String,
     val javaAdderByName: String,
+    val annotationPlan: JimmerImmutableDraftAnnotationPlan,
     val valueFieldName: String?,
     val loadedStateFieldName: String?,
-    val deeperPropIdName: String?,
+    val javaDeeperPropIdName: String?,
+    val kotlinDeeperPropIdName: String?,
     val type: LsiTypeRef,
     val elementType: LsiTypeRef,
+    val runtimeProp: JimmerImmutableDraftRuntimeProp,
     val targetTypeId: LsiSymbolId?,
     val targetIdPropId: LsiSymbolId?,
     val primitive: Boolean,
@@ -143,9 +146,19 @@ internal data class JimmerImmutableDraftPropPlan(
     val manyToManyDeeperPropId: LsiSymbolId?,
     val formulaDependencyPaths: List<List<LsiSymbolId>>,
     val associatedId: JimmerImmutableAssociatedIdContract?,
-    val validationAnnotations: List<LsiAnnotation>,
-    val customValidations: List<JimmerValidation>,
+    val validationPlan: JimmerImmutableDraftValidationPlan,
 ) {
+
+    fun javaPatternFieldName(index: Int): String {
+        require(index >= 0) { "Immutable Java pattern index cannot be negative: $index" }
+        return "__${codegenName.legacyUpper()}_PATTER${index.patternFieldSuffix()}"
+    }
+
+    fun kotlinPatternFieldName(index: Int): String {
+        require(index >= 0) { "Immutable Kotlin pattern index cannot be negative: $index" }
+        return "__${name.legacyUpper()}_PATTERN${index.patternFieldSuffix()}"
+    }
+
     init {
         require(slotIndex >= 0) { "Immutable draft slot cannot be negative: ${propId.value}" }
         require(metadataSlotIndex == null || metadataSlotIndex == slotIndex) {
@@ -156,6 +169,20 @@ internal data class JimmerImmutableDraftPropPlan(
         }
         require(primitive == (type is site.addzero.lsi.model.LsiPrimitiveType && !type.boxed)) {
             "Immutable draft primitive flag must match its LSI type: ${propId.value}"
+        }
+        require(runtimeProp.valueCategory == when {
+            list && association -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST
+            list -> JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST
+            association -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE
+            else -> JimmerImmutableDraftRuntimeValueCategory.SCALAR
+        }) {
+            "Immutable draft runtime value category must match property shape: ${propId.value}"
+        }
+        require(validationPlan.propId == propId) {
+            "Immutable draft validation plan must belong to its property: ${propId.value}"
+        }
+        require((validationPlan.requiredNullCheck != null) == (!nullable && !primitive)) {
+            "Immutable draft required-null validation must match property nullability: ${propId.value}"
         }
         require(!genericTarget || targetTypeId == null) {
             "Immutable draft generic target cannot have concrete target type: ${propId.value}"
@@ -178,8 +205,17 @@ internal data class JimmerImmutableDraftPropPlan(
         require(loadedStateFieldName == if (valueState.hasLoadedState) "__${codegenName}Loaded" else null) {
             "Immutable draft loaded-state field name must match loaded state: ${propId.value}"
         }
-        require(deeperPropIdName == if (manyToManyBasePropId != null) "DEEPER_PROP_ID_${slotName.removePrefix("SLOT_")}" else null) {
-            "Immutable draft deeper property id name must match many-to-many view: ${propId.value}"
+        val expectedJavaDeeperPropIdName = manyToManyBasePropId?.let {
+            "DEEPER_PROP_ID_${slotName.removePrefix("SLOT_")}"
+        }
+        val expectedKotlinDeeperPropIdName = manyToManyBasePropId?.let {
+            "DEEP_PROP_ID_${name.legacyUpper()}"
+        }
+        require(javaDeeperPropIdName == expectedJavaDeeperPropIdName) {
+            "Immutable Java deeper property id name must match many-to-many view: ${propId.value}"
+        }
+        require(kotlinDeeperPropIdName == expectedKotlinDeeperPropIdName) {
+            "Immutable Kotlin deeper property id name must match many-to-many view: ${propId.value}"
         }
     }
 }
@@ -215,3 +251,23 @@ internal enum class JimmerImmutableDraftValueState(
     VALUE_ONLY(true, false),
     VALUE_AND_LOADED(true, true),
 }
+
+internal fun String.legacyUpper(): String {
+    var previousUpper = true
+    return buildString {
+        for (character in this@legacyUpper) {
+            val upper = character.isUpperCase()
+            if (upper) {
+                if (!previousUpper) {
+                    append('_')
+                }
+                append(character)
+            } else {
+                append(character.uppercaseChar())
+            }
+            previousUpper = upper
+        }
+    }
+}
+
+private fun Int.patternFieldSuffix(): String = if (this == 0) "" else "_$this"

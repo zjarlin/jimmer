@@ -576,10 +576,21 @@ class JimmerImmutableFrontendParityTest {
         val kspDraftSchema = assertNotNull(ksp.draftCodegenSchema)
         assertEquals(aptDraftSchema.normalizedSnapshot(), kspDraftSchema.normalizedSnapshot())
 
+        val genericPlan = aptDraftSchema.typesById.getValue(LsiSymbolId.type("demo.GenericCodeBase"))
+        val genericCode = genericPlan.propsBySlot.single { prop -> prop.name == "code" }
+        assertEquals(
+            LsiDeclaredType(LsiSymbolId.type("java.lang.Object")),
+            genericCode.runtimeProp.metadataElementType,
+        )
+
         val mappedPlan = aptDraftSchema.typesById.getValue(LsiSymbolId.type("demo.StringCodeBase"))
         val mappedCode = mappedPlan.propsBySlot.single { prop -> prop.name == "code" }
         val mappedLabel = mappedPlan.propsBySlot.single { prop -> prop.name == "label" }
         assertFalse(mappedCode.genericSourceTarget)
+        assertEquals(
+            LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
+            mappedCode.runtimeProp.metadataElementType,
+        )
         assertEquals(listOf(mappedLabel.propId), mappedPlan.kotlinDraftPropIds)
         assertNull(mappedCode.metadataSlotIndex)
         assertNull(mappedLabel.metadataSlotIndex)
@@ -2207,6 +2218,7 @@ class JimmerImmutableFrontendParityTest {
                 draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
                     schema = requireNotNull(schema),
                     workspace = workspace,
+                    options = JimmerImmutableDraftCodegenOptions.DEFAULT,
                 )
             } catch (exception: JimmerImmutablePrecompileException) {
                 diagnostic = exception.message

@@ -75,6 +75,10 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             val draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema = schema,
                 workspace = context.round.workspace,
+                options = JimmerImmutableDraftCodegenOptions.from(
+                    compilerOptions = context.round.options,
+                    workspace = context.round.workspace,
+                ),
             )
             JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(targetTypeIds)
             JimmerCompilerFeaturePrecompileResult(
@@ -185,6 +189,10 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             schema to JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema = schema,
                 workspace = context.round.workspace,
+                options = JimmerImmutableDraftCodegenOptions.from(
+                    compilerOptions = context.round.options,
+                    workspace = context.round.workspace,
+                ),
             )
         } catch (exception: JimmerImmutablePrecompileException) {
             return failedResult(
@@ -268,7 +276,10 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         return JimmerCompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = JimmerImmutableSchema(emptyList()),
-                draftCodegenSchema = JimmerImmutableDraftCodegenSchema(emptyList()),
+                draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
+                    jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
+                    types = emptyList(),
+                ),
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -300,7 +311,10 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         return JimmerCompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = JimmerImmutableSchema(emptyList()),
-                draftCodegenSchema = JimmerImmutableDraftCodegenSchema(emptyList()),
+                draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
+                    jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
+                    types = emptyList(),
+                ),
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,

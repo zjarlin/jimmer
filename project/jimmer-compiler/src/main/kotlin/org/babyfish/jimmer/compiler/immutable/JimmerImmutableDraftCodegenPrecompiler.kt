@@ -23,6 +23,7 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
     fun compile(
         schema: JimmerImmutableSchema,
         workspace: LsiWorkspace,
+        options: JimmerImmutableDraftCodegenOptions,
     ): JimmerImmutableDraftCodegenSchema {
         val compiledTypes = mutableMapOf<LsiSymbolId, JimmerImmutableDraftTypePlan>()
 
@@ -131,6 +132,7 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                     schema = schema,
                     workspace = workspace,
                     baseDependencyPropIds = baseDependencyPropIds,
+                    options = options,
                 )
             }
             val runtimeDeclaredPropIds = propPlans
@@ -187,6 +189,8 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                 includeDependency(plan.sourceDeclaringTypeId)
                 includeDependency(plan.runtimeOwnerTypeId)
                 plan.type.referencedTypeIds().forEach(::includeDependency)
+                plan.runtimeProp.metadataElementType.referencedTypeIds().forEach(::includeDependency)
+                plan.runtimeProp.associationAnnotationTypeId?.let(::includeDependency)
                 plan.targetTypeId?.let(::includeDependency)
                 plan.targetIdPropId?.let(::includeSemanticProp)
                 plan.idViewBasePropId?.let(::includeSemanticProp)
@@ -194,12 +198,17 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                 plan.manyToManyDeeperPropId?.let(::includeSemanticProp)
                 plan.formulaDependencyPaths.flatten().forEach(::includeSemanticProp)
                 plan.associatedId?.targetIdPropId?.let(::includeSemanticProp)
-                plan.validationAnnotations.forEach { annotation ->
-                    annotation.referencedTypeIds().forEach(::includeDependency)
-                }
-                plan.customValidations.forEach { validation ->
-                    includeDependency(validation.annotationTypeId)
-                    validation.validatorTypeIds.forEach(::includeDependency)
+                plan.validationPlan.steps.forEach { step ->
+                    when (step) {
+                        is JimmerImmutableDraftValidationStep.BuiltIn -> {
+                            includeDependency(step.sourceAnnotationTypeId)
+                            includeDependency(step.failure.exceptionTypeId)
+                        }
+                        is JimmerImmutableDraftValidationStep.CustomValidator -> {
+                            includeDependency(step.annotationTypeId)
+                            step.validatorTypeIds.forEach(::includeDependency)
+                        }
+                    }
                 }
                 val semanticProp = schema.propsById.getValue(plan.propId)
                 semanticProp.annotations.forEach { annotation ->
@@ -242,7 +251,6 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                 idPropId = type.idPropId,
                 versionPropId = type.versionPropId,
                 logicalDeletedPropId = type.logicalDeletedPropId,
-                validationAnnotations = validationAnnotations,
                 customValidations = customValidations,
                 artifactOriginatingSymbols = setOf(type.id),
                 artifactOriginatingSources = listOfNotNull(declaration.origin.source),
@@ -253,6 +261,7 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
 
         schema.types.forEach { type -> compileType(type.id) }
         return JimmerImmutableDraftCodegenSchema(
+            jacksonFamily = options.jacksonFamily,
             types = compiledTypes.values.sortedBy(JimmerImmutableDraftTypePlan::typeId),
         )
     }
@@ -269,6 +278,7 @@ private data class JimmerImmutableDraftSlotAssignment(
         schema: JimmerImmutableSchema,
         workspace: LsiWorkspace,
         baseDependencyPropIds: Set<LsiSymbolId>,
+        options: JimmerImmutableDraftCodegenOptions,
     ): JimmerImmutableDraftPropPlan {
         val declaration = workspace[prop.declarationId] as? LsiProperty
             ?: throw JimmerImmutablePrecompileException(
@@ -308,7 +318,13 @@ private data class JimmerImmutableDraftSlotAssignment(
         val javaSetterName = "set$javaMethodSuffix"
         val javaBeanGetterName = declaration.javaBeanGetterName(accessorStyle, primitive)
         val slotName = "SLOT_${codegenName.legacyUpper()}"
-        val validationAnnotations = prop.annotations.constraintAnnotations(workspace)
+        val elementType = prop.elementType()
+        val annotationPlan = JimmerImmutableDraftAnnotationProjector().project(
+            effectiveAnnotations = prop.annotations,
+            workspace = workspace,
+            excludedUserAnnotationPrefixes = options.excludedUserAnnotationPrefixes,
+        )
+        val validationPlan = JimmerImmutableDraftValidationPrecompiler().compile(prop, workspace)
         val writable = !languageFormula &&
             prop.primaryMapping != JimmerImmutablePrimaryMapping.DISCRIMINATOR &&
             manyToManyView == null
@@ -336,6 +352,7 @@ private data class JimmerImmutableDraftSlotAssignment(
             name = prop.name,
             codegenName = codegenName,
             sourceGetterName = declaration.getterName,
+            documentation = prop.documentation,
             sourceDocumentation = declaration.sourceDocumentation,
             accessorStyle = accessorStyle,
             slotName = slotName,
@@ -343,15 +360,22 @@ private data class JimmerImmutableDraftSlotAssignment(
             javaBeanGetterName = javaBeanGetterName,
             javaApplierName = "apply$javaMethodSuffix",
             javaAdderByName = "addInto$javaMethodSuffix",
+            annotationPlan = annotationPlan,
             valueFieldName = if (valueState.hasValue) "__${codegenName}Value" else null,
             loadedStateFieldName = if (valueState.hasLoadedState) "__${codegenName}Loaded" else null,
-            deeperPropIdName = if (manyToManyView != null) {
+            javaDeeperPropIdName = if (manyToManyView != null) {
                 "DEEPER_PROP_ID_${slotName.removePrefix("SLOT_")}"
             } else {
                 null
             },
+            kotlinDeeperPropIdName = if (manyToManyView != null) {
+                "DEEP_PROP_ID_${prop.name.legacyUpper()}"
+            } else {
+                null
+            },
             type = prop.type,
-            elementType = prop.elementType(),
+            elementType = elementType,
+            runtimeProp = prop.compileDraftRuntimeProp(elementType),
             targetTypeId = prop.targetTypeId,
             targetIdPropId = targetIdPropId,
             primitive = primitive,
@@ -373,8 +397,7 @@ private data class JimmerImmutableDraftSlotAssignment(
             manyToManyDeeperPropId = manyToManyView?.deeperPropId,
             formulaDependencyPaths = prop.formulaDependencies.map(JimmerFormulaDependency::propIds),
             associatedId = associatedId,
-            validationAnnotations = validationAnnotations,
-            customValidations = prop.validations,
+            validationPlan = validationPlan,
         )
     }
 }
@@ -524,24 +547,6 @@ private fun List<LsiAnnotation>.customValidations(workspace: LsiWorkspace): List
 
 private fun LsiSource.baseName(): String {
     return path.substringAfterLast('/').substringBeforeLast('.', missingDelimiterValue = path.substringAfterLast('/'))
-}
-
-private fun String.legacyUpper(): String {
-    var previousUpper = true
-    return buildString {
-        for (character in this@legacyUpper) {
-            val upper = character.isUpperCase()
-            if (upper) {
-                if (!previousUpper) {
-                    append('_')
-                }
-                append(character)
-            } else {
-                append(character.uppercaseChar())
-            }
-            previousUpper = upper
-        }
-    }
 }
 
 private fun LsiAnnotation.referencedTypeIds(): Set<LsiSymbolId> {

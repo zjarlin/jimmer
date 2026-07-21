@@ -24,6 +24,40 @@ import site.addzero.lsi.core.LsiSymbolId
 class KspGeneratedArtifactWriterTest {
 
     @Test
+    fun `writes transitive dependency files separately from artifact origin`() {
+        val codeGenerator = CapturingCodeGenerator()
+        val writer = KspGeneratedArtifactWriter(codeGenerator)
+        val childId = LsiSymbolId.type("demo.Child")
+        val baseId = LsiSymbolId.type("demo.Base")
+        val childFile = file("/workspace/Child.kt")
+        val baseFile = file("/workspace/Base.kt")
+
+        writer.write(
+            GeneratedArtifact.source(
+                kind = ArtifactKind.KOTLIN_SOURCE,
+                qualifiedName = "demo.ChildDraft",
+                content = "package demo\ninterface ChildDraft",
+                aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                originatingSymbols = setOf(childId),
+                originatingSources = setOf(LsiSource.of(childFile.filePath, LsiLanguage.KOTLIN)),
+                dependencySymbols = setOf(childId, baseId),
+                dependencySources = setOf(
+                    LsiSource.of(childFile.filePath, LsiLanguage.KOTLIN),
+                    LsiSource.of(baseFile.filePath, LsiLanguage.KOTLIN),
+                ),
+            ),
+            currentRoundFiles = mapOf(childId to childFile, baseId to baseFile),
+            currentRoundSourceFiles = listOf(childFile, baseFile),
+        )
+
+        val dependencies = codeGenerator.calls.single().dependencies
+        assertTrue(dependencies.aggregating)
+        assertEquals(2, dependencies.originatingFiles.size)
+        assertSame(baseFile, dependencies.originatingFiles[0])
+        assertSame(childFile, dependencies.originatingFiles[1])
+    }
+
+    @Test
     fun `writes kotlin source and resource with incremental dependencies`() {
         val codeGenerator = CapturingCodeGenerator()
         val writer = KspGeneratedArtifactWriter(codeGenerator)

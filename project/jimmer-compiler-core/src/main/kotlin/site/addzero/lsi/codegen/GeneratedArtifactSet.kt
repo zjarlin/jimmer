@@ -14,7 +14,9 @@ class GeneratedArtifactConflictException(
         "aggregation=${existing.aggregationMode}->${incoming.aggregationMode}, " +
         "emission=${existing.emissionMode}->${incoming.emissionMode}, " +
         "symbols=${existing.originatingSymbols}->${incoming.originatingSymbols}, " +
-        "sources=${existing.originatingSources}->${incoming.originatingSources}"
+        "sources=${existing.originatingSources}->${incoming.originatingSources}, " +
+        "dependencySymbols=${existing.dependencySymbols}->${incoming.dependencySymbols}, " +
+        "dependencySources=${existing.dependencySources}->${incoming.dependencySources}"
 )
 
 /**

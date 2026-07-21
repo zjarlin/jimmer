@@ -2,6 +2,7 @@ package org.babyfish.jimmer.compiler.immutable
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -30,7 +31,11 @@ class JimmerImmutableDraftCodegenModelTest {
     fun `freezes accessor storage associated id and validation plans`() {
         val workspace = workspace(activeGetterName = "isActive")
         val schema = JimmerImmutablePrecompiler().compile(workspace)
-        val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(schema, workspace)
+        val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+            schema,
+            workspace,
+            JimmerImmutableDraftCodegenOptions.DEFAULT,
+        )
         val book = draftSchema.typesById.getValue(BOOK)
 
         val id = book.propsById.getValue(LsiSymbolId.property(BOOK, "id"))
@@ -44,6 +49,9 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals("__idValue", id.valueFieldName)
         assertEquals("__idLoaded", id.loadedStateFieldName)
         assertEquals(JimmerImmutableDraftValueState.VALUE_AND_LOADED, id.valueState)
+        assertEquals(JimmerImmutableDraftRuntimePropKind.ID, id.runtimeProp.kind)
+        assertEquals(JimmerImmutableDraftRuntimeValueCategory.SCALAR, id.runtimeProp.valueCategory)
+        assertEquals(LsiPrimitiveType(LsiPrimitiveKind.LONG), id.runtimeProp.metadataElementType)
 
         val active = book.propsById.getValue(LsiSymbolId.property(BOOK, "active"))
         assertEquals(JimmerImmutableDraftAccessorStyle.JAVA_BEAN_IS, active.accessorStyle)
@@ -55,10 +63,48 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals(JimmerImmutableDraftAccessorStyle.JAVA_BARE, title.accessorStyle)
         assertEquals("setTitle", title.javaSetterName)
         assertEquals("getTitle", title.javaBeanGetterName)
+        assertEquals("Title documentation", title.documentation)
+        assertEquals("Title source documentation", title.sourceDocumentation)
         assertEquals(JimmerImmutableDraftValueState.VALUE_AND_LOADED, title.valueState)
-        assertEquals(listOf(VALID_BOOK), title.validationAnnotations.map(LsiAnnotation::type))
-        assertEquals(listOf(VALIDATOR), title.customValidations.single().validatorTypeIds)
-        assertEquals("invalid title", title.customValidations.single().message)
+        val titleValidation = title.validationPlan.customValidatorSteps.single()
+        assertEquals(VALID_BOOK, titleValidation.annotationTypeId)
+        assertEquals(listOf(VALIDATOR), titleValidation.validatorTypeIds)
+        assertEquals("invalid title", titleValidation.message)
+        assertEquals(
+            listOf(
+                JimmerImmutableDraftValidationStep.NotBlank::class,
+                JimmerImmutableDraftValidationStep.Size::class,
+                JimmerImmutableDraftValidationStep.Size::class,
+                JimmerImmutableDraftValidationStep.Pattern::class,
+            ),
+            title.validationPlan.builtInSteps.map { step -> step::class },
+        )
+        assertEquals(null, title.validationPlan.requiredNullCheck)
+        val pattern = title.validationPlan.builtInSteps
+            .filterIsInstance<JimmerImmutableDraftValidationStep.Pattern>()
+            .single()
+        assertEquals("[A-Z].+", pattern.regexp)
+        assertEquals(listOf(JimmerImmutableDraftPatternFlag.CASE_INSENSITIVE), pattern.flags)
+        assertEquals(2, pattern.flagMask)
+        assertEquals("__TITLE_PATTER", title.javaPatternFieldName(pattern.index))
+        assertEquals("__TITLE_PATTERN", title.kotlinPatternFieldName(pattern.index))
+        assertTrue(pattern.failure.skipWhenNull)
+        assertEquals(
+            LsiSymbolId.type("jakarta.validation.ValidationException"),
+            pattern.failure.exceptionTypeId,
+        )
+        assertEquals(
+            listOf(
+                VALID_BOOK,
+                LsiSymbolId.type("jakarta.validation.constraints.NotBlank"),
+                LsiSymbolId.type("jakarta.validation.constraints.Size"),
+                LsiSymbolId.type("jakarta.validation.constraints.Pattern"),
+            ),
+            title.annotationPlan.builderMethodAnnotations.map(LsiAnnotation::type),
+        )
+        assertTrue(title.annotationPlan.builderMethodAnnotations.all { annotation ->
+            annotation.useSiteTarget == null
+        })
 
         val boxedEnabled = book.propsById.getValue(LsiSymbolId.property(BOOK, "enabled"))
         assertEquals("enabled", boxedEnabled.name)
@@ -74,6 +120,7 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals("setURL", url.javaSetterName)
         assertEquals("getURL", url.javaBeanGetterName)
         assertEquals("SLOT_U_RL", url.slotName)
+        assertNotNull(url.validationPlan.requiredNullCheck)
 
         val snakeName = book.propsById.getValue(LsiSymbolId.property(BOOK, "first_name"))
         assertEquals("SLOT_FIRST_NAME", snakeName.slotName)
@@ -84,8 +131,14 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals(LsiSymbolId.property(AUTHOR, "id"), associatedId.targetIdPropId)
         assertTrue(author.autoCreateSupported)
         assertTrue(author.referenceMutationSupported)
+        assertEquals(JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE, author.runtimeProp.kind)
+        assertEquals(
+            JimmerImmutableDraftRuntimeValueCategory.REFERENCE,
+            author.runtimeProp.valueCategory,
+        )
+        assertEquals(MANY_TO_ONE, author.runtimeProp.associationAnnotationTypeId)
+        assertEquals(LsiDeclaredType(AUTHOR), author.runtimeProp.metadataElementType)
 
-        assertEquals(listOf(VALID_BOOK), book.validationAnnotations.map(LsiAnnotation::type))
         assertEquals(listOf(VALIDATOR), book.customValidations.single().validatorTypeIds)
         assertEquals("invalid book", book.customValidations.single().message)
         assertEquals(setOf(BOOK), book.artifactOriginatingSymbols)
@@ -96,6 +149,24 @@ class JimmerImmutableDraftCodegenModelTest {
         assertTrue(VALID_BOOK in book.dependencySymbols)
         assertTrue(VALIDATOR in book.dependencySymbols)
         assertTrue(BASE_SOURCE in book.dependencySources)
+        val excludedAnnotationSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+            schema,
+            workspace,
+            JimmerImmutableDraftCodegenOptions.DEFAULT.copy(
+                excludedUserAnnotationPrefixes = listOf("demo.Valid"),
+            ),
+        )
+        val excludedTitle = excludedAnnotationSchema.typesById.getValue(BOOK)
+            .propsById
+            .getValue(LsiSymbolId.property(BOOK, "title"))
+        assertTrue(excludedTitle.annotationPlan.builderMethodAnnotations.none { annotation ->
+            annotation.type == VALID_BOOK
+        })
+        assertTrue(excludedTitle.annotationPlan.beanBridgeMethodAnnotations.none { annotation ->
+            annotation.type == VALID_BOOK
+        })
+        assertEquals(VALID_BOOK, excludedTitle.validationPlan.customValidatorSteps.single().annotationTypeId)
+        assertNotEquals(draftSchema.fingerprint(), excludedAnnotationSchema.fingerprint())
         assertEquals(
             draftSchema.fingerprint(),
             JimmerImmutableDraftCodegenPrecompiler()
@@ -107,6 +178,7 @@ class JimmerImmutableDraftCodegenModelTest {
                         typeHierarchy = workspace.typeHierarchy,
                         annotationScopes = workspace.annotationScopes,
                     ),
+                    JimmerImmutableDraftCodegenOptions.DEFAULT,
                 )
                 .fingerprint(),
         )
@@ -116,6 +188,7 @@ class JimmerImmutableDraftCodegenModelTest {
         val alternateDraftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             alternateSchema,
             alternateWorkspace,
+            JimmerImmutableDraftCodegenOptions.DEFAULT,
         )
         assertEquals(draftSchema.normalizedSnapshot(), alternateDraftSchema.normalizedSnapshot())
         assertNotEquals(draftSchema.fingerprint(), alternateDraftSchema.fingerprint())
@@ -128,14 +201,43 @@ class JimmerImmutableDraftCodegenModelTest {
         val getterValidationDraftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             getterValidationSchema,
             getterValidationWorkspace,
+            JimmerImmutableDraftCodegenOptions.DEFAULT,
         )
         assertEquals(draftSchema.normalizedSnapshot(), getterValidationDraftSchema.normalizedSnapshot())
-        assertNotEquals(draftSchema.fingerprint(), getterValidationDraftSchema.fingerprint())
+        assertEquals(draftSchema.fingerprint(), getterValidationDraftSchema.fingerprint())
+    }
+
+    @Test
+    fun `rejects invalid built-in validation contracts before rendering`() {
+        val workspace = workspace(
+            activeGetterName = "isActive",
+            titleBuiltIns = listOf(
+                builtInValidation(
+                    name = "Size",
+                    arguments = mapOf(
+                        "min" to LsiAnnotationValue.IntValue(10),
+                        "max" to LsiAnnotationValue.IntValue(2),
+                    ),
+                )
+            ),
+        )
+        val schema = JimmerImmutablePrecompiler().compile(workspace)
+
+        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+            JimmerImmutableDraftCodegenPrecompiler().compile(
+                schema,
+                workspace,
+                JimmerImmutableDraftCodegenOptions.DEFAULT,
+            )
+        }
+
+        assertTrue(exception.message.orEmpty().contains("no valid length"))
     }
 
     private fun workspace(
         activeGetterName: String,
         validationUseSiteTarget: LsiAnnotationUseSiteTarget? = null,
+        titleBuiltIns: List<LsiAnnotation> = defaultTitleBuiltIns(),
     ): LsiWorkspace {
         val baseId = LsiSymbolId.property(BASE_ID, "id")
         val bookId = LsiSymbolId.property(BOOK, "id")
@@ -147,6 +249,9 @@ class JimmerImmutableDraftCodegenModelTest {
         val author = LsiSymbolId.property(BOOK, "author")
         val declarations = listOf(
             annotationType(),
+            builtInAnnotationType("NotBlank"),
+            builtInAnnotationType("Size"),
+            builtInAnnotationType("Pattern"),
             immutableType(
                 id = BASE_ID,
                 memberIds = listOf(baseId),
@@ -176,7 +281,11 @@ class JimmerImmutableDraftCodegenModelTest {
                 ownerId = BOOK,
                 type = LsiDeclaredType(STRING, nullability = LsiNullability.NULLABLE),
                 getterName = "title",
-                annotations = listOf(validation("invalid title", validationUseSiteTarget)),
+                documentation = "Title documentation",
+                sourceDocumentation = "Title source documentation",
+                annotations = listOf(
+                    validation("invalid title", validationUseSiteTarget),
+                ) + titleBuiltIns,
             ),
             property(
                 id = active,
@@ -207,7 +316,7 @@ class JimmerImmutableDraftCodegenModelTest {
                 ownerId = BOOK,
                 type = LsiDeclaredType(AUTHOR),
                 getterName = "author",
-                annotations = listOf(LsiAnnotation(MANY_TO_ONE)),
+                annotations = listOf(LsiAnnotation(MANY_TO_ONE), LsiAnnotation(KEY)),
             ),
             property(
                 id = bookId,
@@ -251,6 +360,8 @@ class JimmerImmutableDraftCodegenModelTest {
         getterName: String,
         annotations: List<LsiAnnotation> = emptyList(),
         origin: LsiOrigin = ORIGIN,
+        documentation: String? = null,
+        sourceDocumentation: String? = null,
     ): LsiProperty {
         return LsiProperty(
             id = id,
@@ -259,6 +370,8 @@ class JimmerImmutableDraftCodegenModelTest {
             type = type,
             getterName = getterName,
             annotations = annotations,
+            documentation = documentation,
+            sourceDocumentation = sourceDocumentation,
             origin = origin,
         )
     }
@@ -288,6 +401,28 @@ class JimmerImmutableDraftCodegenModelTest {
         )
     }
 
+    private fun builtInAnnotationType(name: String): LsiTypeDeclaration {
+        val typeId = LsiSymbolId.type("jakarta.validation.constraints.$name")
+        return LsiTypeDeclaration(
+            id = typeId,
+            name = name,
+            qualifiedName = typeId.requireTypeQualifiedName(),
+            kind = LsiTypeDeclarationKind.ANNOTATION,
+            annotations = listOf(
+                LsiAnnotation(
+                    type = JAKARTA_CONSTRAINT,
+                    arguments = mapOf(
+                        "validatedBy" to LsiAnnotationArgument(
+                            value = LsiAnnotationValue.ArrayValue(emptyList()),
+                            origin = LsiAnnotationArgumentOrigin.DEFAULT,
+                        )
+                    ),
+                )
+            ),
+            origin = ORIGIN,
+        )
+    }
+
     private fun validation(
         message: String,
         useSiteTarget: LsiAnnotationUseSiteTarget? = null,
@@ -301,6 +436,62 @@ class JimmerImmutableDraftCodegenModelTest {
                 )
             ),
             useSiteTarget = useSiteTarget,
+        )
+    }
+
+    private fun builtInValidation(
+        name: String,
+        arguments: Map<String, LsiAnnotationValue> = emptyMap(),
+    ): LsiAnnotation {
+        return LsiAnnotation(
+            type = LsiSymbolId.type("jakarta.validation.constraints.$name"),
+            arguments = buildMap {
+                put(
+                    "message",
+                    LsiAnnotationArgument(
+                        value = LsiAnnotationValue.StringValue(
+                            "{jakarta.validation.constraints.$name.message}"
+                        ),
+                        origin = LsiAnnotationArgumentOrigin.DEFAULT,
+                    ),
+                )
+                arguments.forEach { (argumentName, value) ->
+                    put(
+                        argumentName,
+                        LsiAnnotationArgument(
+                            value = value,
+                            origin = LsiAnnotationArgumentOrigin.EXPLICIT,
+                        ),
+                    )
+                }
+            },
+        )
+    }
+
+    private fun defaultTitleBuiltIns(): List<LsiAnnotation> {
+        return listOf(
+            builtInValidation("NotBlank"),
+            builtInValidation(
+                name = "Size",
+                arguments = mapOf(
+                    "min" to LsiAnnotationValue.IntValue(2),
+                    "max" to LsiAnnotationValue.IntValue(64),
+                ),
+            ),
+            builtInValidation(
+                name = "Pattern",
+                arguments = mapOf(
+                    "regexp" to LsiAnnotationValue.StringValue("[A-Z].+"),
+                    "flags" to LsiAnnotationValue.ArrayValue(
+                        listOf(
+                            LsiAnnotationValue.EnumValue(
+                                enumType = PATTERN_FLAG,
+                                entryName = "CASE_INSENSITIVE",
+                            )
+                        )
+                    ),
+                ),
+            ),
         )
     }
 
@@ -319,6 +510,8 @@ class JimmerImmutableDraftCodegenModelTest {
         val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
         val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         val MANY_TO_ONE = LsiSymbolId.type("org.babyfish.jimmer.sql.ManyToOne")
+        val KEY = LsiSymbolId.type("org.babyfish.jimmer.sql.Key")
         val JAKARTA_CONSTRAINT = LsiSymbolId.type("jakarta.validation.Constraint")
+        val PATTERN_FLAG = LsiSymbolId.type("jakarta.validation.constraints.Pattern.Flag")
     }
 }

@@ -269,6 +269,7 @@ class CompilerSessionTest {
         val secondTypeId = LsiSymbolId.type("example.SpecialBook")
         val source = generatedSource("stable", ArtifactEmissionMode.STABLE).copy(
             originatingSymbols = setOf(firstTypeId, secondTypeId),
+            dependencySymbols = setOf(firstTypeId, secondTypeId),
         )
         val session = CompilerSession(
             "stable-source-origins",

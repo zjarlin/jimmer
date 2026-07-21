@@ -21,6 +21,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
 import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
 import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
@@ -281,6 +282,7 @@ class JimmerDtoReusableIntegrationTest {
             draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema = IMMUTABLE_SCHEMA,
                 workspace = workspace,
+                options = JimmerImmutableDraftCodegenOptions.DEFAULT,
             ),
             targetTypeIds = setOf(BOOK_TYPE_ID, STORE_TYPE_ID),
             semanticRootTypeIds = setOf(BOOK_TYPE_ID, STORE_TYPE_ID),

@@ -50,6 +50,8 @@ data class GeneratedArtifact(
     val emissionMode: ArtifactEmissionMode = ArtifactEmissionMode.IMMEDIATE,
     val originatingSymbols: Set<LsiSymbolId> = emptySet(),
     val originatingSources: Set<LsiSource> = emptySet(),
+    val dependencySymbols: Set<LsiSymbolId> = originatingSymbols,
+    val dependencySources: Set<LsiSource> = originatingSources,
 ) {
     val key: GeneratedArtifactKey
         get() = GeneratedArtifactKey(kind, path)
@@ -63,6 +65,12 @@ data class GeneratedArtifact(
             require(originatingSymbols.size == 1) {
                 "Isolating generated artifact requires exactly one originating symbol: $path"
             }
+        }
+        require(dependencySymbols.containsAll(originatingSymbols)) {
+            "Generated artifact dependencies must contain all originating symbols: $path"
+        }
+        require(dependencySources.containsAll(originatingSources)) {
+            "Generated artifact dependencies must contain all originating sources: $path"
         }
         require(emissionMode != ArtifactEmissionMode.STABLE || kind.isSource) {
             "Stable generated artifact must be a source artifact: $path"
@@ -85,6 +93,8 @@ data class GeneratedArtifact(
             emissionMode: ArtifactEmissionMode = ArtifactEmissionMode.IMMEDIATE,
             originatingSymbols: Set<LsiSymbolId> = emptySet(),
             originatingSources: Set<LsiSource> = emptySet(),
+            dependencySymbols: Set<LsiSymbolId> = originatingSymbols,
+            dependencySources: Set<LsiSource> = originatingSources,
         ): GeneratedArtifact = GeneratedArtifact(
             kind = kind,
             path = normalizePath(path),
@@ -93,6 +103,8 @@ data class GeneratedArtifact(
             emissionMode = emissionMode,
             originatingSymbols = originatingSymbols.toSortedSet(),
             originatingSources = originatingSources.toSortedSet(),
+            dependencySymbols = dependencySymbols.toSortedSet(),
+            dependencySources = dependencySources.toSortedSet(),
         )
 
         fun source(
@@ -103,6 +115,8 @@ data class GeneratedArtifact(
             emissionMode: ArtifactEmissionMode = ArtifactEmissionMode.IMMEDIATE,
             originatingSymbols: Set<LsiSymbolId>,
             originatingSources: Set<LsiSource> = emptySet(),
+            dependencySymbols: Set<LsiSymbolId> = originatingSymbols,
+            dependencySources: Set<LsiSource> = originatingSources,
         ): GeneratedArtifact {
             require(kind.isSource) { "Source artifact must use JAVA_SOURCE or KOTLIN_SOURCE" }
             require(qualifiedName.isNotBlank()) { "Generated source qualified name cannot be blank" }
@@ -120,6 +134,8 @@ data class GeneratedArtifact(
                 emissionMode = emissionMode,
                 originatingSymbols = originatingSymbols,
                 originatingSources = originatingSources,
+                dependencySymbols = dependencySymbols,
+                dependencySources = dependencySources,
             )
         }
 

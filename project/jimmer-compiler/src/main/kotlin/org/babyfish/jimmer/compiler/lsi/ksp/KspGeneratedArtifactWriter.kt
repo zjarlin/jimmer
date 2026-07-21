@@ -56,9 +56,9 @@ class KspGeneratedArtifactWriter(
             LsiSource.of(file.filePath).path
         }
         val files = linkedSetOf<KSFile>()
-        originatingSymbols.sorted().mapNotNullTo(files, currentRoundFiles::get)
-        originatingSources.sorted().mapNotNullTo(files) { source -> filesBySourcePath[source.path] }
-        val unmatchedSources = originatingSources.filterNot { source -> source.path in filesBySourcePath }
+        dependencySymbols.sorted().mapNotNullTo(files, currentRoundFiles::get)
+        dependencySources.sorted().mapNotNullTo(files) { source -> filesBySourcePath[source.path] }
+        val unmatchedSources = dependencySources.filterNot { source -> source.path in filesBySourcePath }
         if (aggregationMode == ArtifactAggregationMode.ISOLATING) {
             require(unmatchedSources.isEmpty()) {
                 "KSP isolating artifact cannot depend on non-KSP sources: $path; " +

@@ -19,6 +19,7 @@ internal fun JimmerImmutableDraftCodegenSchema.fingerprint(): String {
 
 private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: Boolean): String {
     return buildString {
+        appendDraftRecord("draft-schema", jacksonFamily.name)
         types.sortedBy(JimmerImmutableDraftTypePlan::typeId).forEach { type ->
             appendDraftRecord(
                 "draft-type",
@@ -39,7 +40,6 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                 type.versionPropId?.value.orEmpty(),
                 type.logicalDeletedPropId?.value.orEmpty(),
                 type.requiresVisibilityState.toString(),
-                type.validationAnnotations.annotationText(includePlatformSurface),
                 type.customValidations.validationText(),
                 type.artifactOriginatingSymbols.sorted().joinToString(",") { symbolId -> symbolId.value },
                 if (includePlatformSurface) {
@@ -80,6 +80,10 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                     prop.name,
                     prop.type.typeText(includePlatformSurface),
                     prop.elementType.typeText(includePlatformSurface),
+                    prop.runtimeProp.kind.name,
+                    prop.runtimeProp.valueCategory.name,
+                    prop.runtimeProp.associationAnnotationTypeId?.value.orEmpty(),
+                    prop.runtimeProp.metadataElementType.typeText(includePlatformSurface),
                     prop.targetTypeId?.value.orEmpty(),
                     prop.targetIdPropId?.value.orEmpty(),
                     prop.primitive.toString(),
@@ -102,16 +106,27 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                     },
                     if (includePlatformSurface) prop.associatedId?.name.orEmpty() else "",
                     prop.associatedId?.targetIdPropId?.value.orEmpty(),
-                    prop.validationAnnotations.annotationText(includePlatformSurface),
-                    prop.customValidations.validationText(),
+                    prop.validationPlan.validationText(),
+                    if (includePlatformSurface) {
+                        prop.annotationPlan.builderMethodAnnotations.annotationText(true)
+                    } else {
+                        ""
+                    },
+                    if (includePlatformSurface) {
+                        prop.annotationPlan.beanBridgeMethodAnnotations.annotationText(true)
+                    } else {
+                        ""
+                    },
                     if (includePlatformSurface) prop.codegenName else "",
                     if (includePlatformSurface) prop.slotName else "",
                     if (includePlatformSurface) prop.javaApplierName else "",
                     if (includePlatformSurface) prop.javaAdderByName else "",
                     if (includePlatformSurface) prop.valueFieldName.orEmpty() else "",
                     if (includePlatformSurface) prop.loadedStateFieldName.orEmpty() else "",
-                    if (includePlatformSurface) prop.deeperPropIdName.orEmpty() else "",
+                    if (includePlatformSurface) prop.javaDeeperPropIdName.orEmpty() else "",
+                    if (includePlatformSurface) prop.kotlinDeeperPropIdName.orEmpty() else "",
                     if (includePlatformSurface) prop.sourceGetterName else "",
+                    if (includePlatformSurface) prop.documentation.orEmpty() else "",
                     if (includePlatformSurface) prop.sourceDocumentation.orEmpty() else "",
                     if (includePlatformSurface) prop.accessorStyle.name else "",
                     if (includePlatformSurface) prop.javaSetterName else "",
@@ -147,6 +162,91 @@ private fun List<JimmerValidation>.validationText(): String {
             append(')')
             append('=')
             append(validation.message)
+        }
+    }
+}
+
+private fun JimmerImmutableDraftValidationPlan.validationText(): String {
+    return buildString {
+        requiredNullCheck?.let { required ->
+            append("required(")
+            append(required.message)
+            append(");")
+        }
+        steps.forEach { step ->
+            when (step) {
+                is JimmerImmutableDraftValidationStep.NotEmpty -> append("not-empty")
+                is JimmerImmutableDraftValidationStep.NotBlank -> append("not-blank")
+                is JimmerImmutableDraftValidationStep.Size -> {
+                    append("size:")
+                    append(step.measure.name)
+                    append(':')
+                    append(step.comparison.name)
+                    append(':')
+                    append(step.limit)
+                }
+                is JimmerImmutableDraftValidationStep.NumericBound -> {
+                    append("numeric:")
+                    append(step.target.name)
+                    append(':')
+                    append(step.comparison.name)
+                    append(':')
+                    append(step.bound)
+                }
+                is JimmerImmutableDraftValidationStep.Email -> append("email")
+                is JimmerImmutableDraftValidationStep.Pattern -> {
+                    append("pattern:")
+                    append(step.index)
+                    append(':')
+                    append(step.regexp)
+                    append(':')
+                    append(step.flags.joinToString(",", transform = JimmerImmutableDraftPatternFlag::name))
+                    append(':')
+                    append(step.flagMask)
+                }
+                is JimmerImmutableDraftValidationStep.Assert -> {
+                    append("assert:")
+                    append(step.expected)
+                }
+                is JimmerImmutableDraftValidationStep.Digits -> {
+                    append("digits:")
+                    append(step.target.name)
+                    append(':')
+                    append(step.component.name)
+                    append(':')
+                    append(step.limit)
+                }
+                is JimmerImmutableDraftValidationStep.Temporal -> {
+                    append("temporal:")
+                    append(step.target.name)
+                    append(':')
+                    append(step.constraint.name)
+                }
+                is JimmerImmutableDraftValidationStep.CustomValidator -> {
+                    append("custom:")
+                    append(step.annotationTypeId.value)
+                    append('(')
+                    append(step.validatorTypeIds.joinToString(",") { typeId -> typeId.value })
+                    append(")=")
+                    append(step.message)
+                }
+            }
+            if (step is JimmerImmutableDraftValidationStep.BuiltIn) {
+                append('@')
+                append(step.sourceAnnotationTypeId.value)
+                append('(')
+                append(step.failure.exceptionTypeId.value)
+                append(':')
+                append(step.failure.declaredMessage)
+                append(':')
+                append(step.failure.defaultMessage)
+                append(':')
+                append(step.failure.skipWhenNull)
+                append(':')
+                append(step.failure.usesDefaultMessage)
+                append(')')
+            }
+            append(';')
         }
     }
 }

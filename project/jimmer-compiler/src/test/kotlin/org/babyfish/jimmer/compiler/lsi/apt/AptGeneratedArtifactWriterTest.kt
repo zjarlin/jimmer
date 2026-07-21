@@ -27,6 +27,38 @@ import site.addzero.lsi.core.LsiSymbolId
 class AptGeneratedArtifactWriterTest {
 
     @Test
+    fun `writes transitive dependency elements separately from artifact origin`() {
+        val filer = CapturingFiler()
+        val writer = AptGeneratedArtifactWriter(filer)
+        val childId = LsiSymbolId.type("demo.Child")
+        val baseId = LsiSymbolId.type("demo.Base")
+        val childElement = element("Child")
+        val baseElement = element("Base")
+        val childSource = LsiSource.of("/workspace/Child.java", LsiLanguage.JAVA)
+        val baseSource = LsiSource.of("/workspace/Base.java", LsiLanguage.JAVA)
+
+        writer.write(
+            GeneratedArtifact.source(
+                kind = ArtifactKind.JAVA_SOURCE,
+                qualifiedName = "demo.ChildDraft",
+                content = "package demo; public interface ChildDraft {}",
+                aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                originatingSymbols = setOf(childId),
+                originatingSources = setOf(childSource),
+                dependencySymbols = setOf(childId, baseId),
+                dependencySources = setOf(childSource, baseSource),
+            ),
+            currentRoundElements = mapOf(childId to childElement, baseId to baseElement),
+            currentRoundSources = mapOf(childId to childSource, baseId to baseSource),
+        )
+
+        val call = filer.sourceCalls.single()
+        assertEquals(2, call.originatingElements.size)
+        assertSame(baseElement, call.originatingElements[0])
+        assertSame(childElement, call.originatingElements[1])
+    }
+
+    @Test
     fun `writes java source and resource with current round elements`() {
         val filer = CapturingFiler()
         val writer = AptGeneratedArtifactWriter(filer)

@@ -77,22 +77,49 @@ class GeneratedArtifactSetTest {
     }
 
     @Test
-    fun `产物保留确定排序的源码依赖`() {
+    fun `产物分别保留确定排序的来源和依赖`() {
+        val dependencyId = LsiSymbolId.type("example.BaseBook")
+        val source = LsiSource.of("src/main/java/example/Book.java")
+        val dependencySources = linkedSetOf(
+            LsiSource.of("src/main/java/example/Z.java"),
+            source,
+            LsiSource.of("src/main/java/example/A.java"),
+        )
         val artifact = GeneratedArtifact.source(
             kind = ArtifactKind.JAVA_SOURCE,
             qualifiedName = "example.BookDraft",
             content = "package example; class BookDraft {}",
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(sourceId),
-            originatingSources = linkedSetOf(
-                LsiSource.of("src/main/java/example/Z.java"),
-                LsiSource.of("src/main/java/example/A.java"),
-            ),
+            originatingSources = setOf(source),
+            dependencySymbols = linkedSetOf(sourceId, dependencyId),
+            dependencySources = dependencySources,
         )
 
+        assertEquals(listOf(sourceId), artifact.originatingSymbols.toList())
+        assertEquals(listOf(source.path), artifact.originatingSources.map(LsiSource::path))
+        assertEquals(listOf(dependencyId, sourceId), artifact.dependencySymbols.toList())
         assertEquals(
-            listOf("src/main/java/example/A.java", "src/main/java/example/Z.java"),
-            artifact.originatingSources.map(LsiSource::path),
+            listOf(
+                "src/main/java/example/A.java",
+                "src/main/java/example/Book.java",
+                "src/main/java/example/Z.java",
+            ),
+            artifact.dependencySources.map(LsiSource::path),
         )
+    }
+
+    @Test
+    fun `产物依赖必须覆盖所有来源`() {
+        assertFailsWith<IllegalArgumentException> {
+            GeneratedArtifact.source(
+                kind = ArtifactKind.JAVA_SOURCE,
+                qualifiedName = "example.BookDraft",
+                content = "package example; class BookDraft {}",
+                aggregationMode = ArtifactAggregationMode.ISOLATING,
+                originatingSymbols = setOf(sourceId),
+                dependencySymbols = emptySet(),
+            )
+        }
     }
 }
