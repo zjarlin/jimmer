@@ -14,7 +14,9 @@ import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
+import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableEmbeddableJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableFetcherJavaRenderer
+import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableEmbeddableKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableFetcherKotlinRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
@@ -100,16 +102,28 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         if (state.status != JimmerImmutableCompilerFeatureStatus.RESOLVED) {
             return JimmerCompilerFeatureRenderResult()
         }
-        val metadata = JimmerImmutableFetcherMetadata(state.schema)
-        val types = metadata.generatedTypes(state.currentTypeIds)
+        val fetcherMetadata = JimmerImmutableFetcherMetadata(state.schema)
+        val fetcherTypes = fetcherMetadata.generatedTypes(state.currentTypeIds)
+        val embeddableMetadata = JimmerImmutableEmbeddableMetadata(state.schema, context.round.workspace)
+        val embeddableTypes = embeddableMetadata.generatedTypes(state.currentTypeIds)
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> {
-                val renderer = JimmerImmutableFetcherJavaRenderer()
-                types.map { type -> renderer.render(state.schema, type, context.round.workspace) }
+                val fetcherRenderer = JimmerImmutableFetcherJavaRenderer()
+                val embeddableRenderer = JimmerImmutableEmbeddableJavaRenderer()
+                fetcherTypes.map { type ->
+                    fetcherRenderer.render(state.schema, type, context.round.workspace)
+                } + embeddableTypes.flatMap { type ->
+                    embeddableRenderer.render(state.schema, type, context.round.workspace)
+                }
             }
             CompilerPlatform.KSP -> {
-                val renderer = JimmerImmutableFetcherKotlinRenderer()
-                types.map { type -> renderer.render(state.schema, type, context.round.workspace) }
+                val fetcherRenderer = JimmerImmutableFetcherKotlinRenderer()
+                val embeddableRenderer = JimmerImmutableEmbeddableKotlinRenderer()
+                fetcherTypes.map { type ->
+                    fetcherRenderer.render(state.schema, type, context.round.workspace)
+                } + embeddableTypes.map { type ->
+                    embeddableRenderer.render(state.schema, type, context.round.workspace)
+                }
             }
             CompilerPlatform.UNKNOWN -> emptyList()
         }

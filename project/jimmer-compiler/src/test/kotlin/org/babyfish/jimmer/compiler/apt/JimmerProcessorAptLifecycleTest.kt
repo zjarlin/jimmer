@@ -12,6 +12,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class JimmerProcessorAptLifecycleTest {
@@ -47,7 +48,36 @@ class JimmerProcessorAptLifecycleTest {
         )
     }
 
-    private fun compile(dtoSource: String? = null): AptCompilationResult {
+    @Test
+    fun `main processor generates embeddable query artifacts once after the first round`() {
+        val result = compile(
+            generatedTypeName = "demo.Location",
+            generatedSource = LOCATION_SOURCE,
+        )
+
+        assertTrue(result.success, result.diagnostics.errorMessage())
+        assertTrue(
+            result.diagnostics.diagnostics.none { diagnostic -> diagnostic.kind == Diagnostic.Kind.ERROR },
+            result.diagnostics.errorMessage(),
+        )
+        assertTrue(
+            result.roundCapture.roundOf("demo.Anchor") < result.roundCapture.roundOf("demo.Location"),
+            result.roundCapture.toString(),
+        )
+        listOf(
+            "LocationProps.java",
+            "LocationPropExpression.java",
+        ).forEach { name ->
+            assertTrue(result.generatedDir.resolve("demo/$name").isFile, "Missing generated source: demo/$name")
+            assertEquals(1, result.generatedSourcesNamed(name).size, "Generated source must be unique: $name")
+        }
+    }
+
+    private fun compile(
+        dtoSource: String? = null,
+        generatedTypeName: String = "demo.Book",
+        generatedSource: String = BOOK_SOURCE,
+    ): AptCompilationResult {
         val projectDir = createTempDirectory(prefix = "jimmer-apt-lifecycle").toFile()
         val sourceDir = projectDir.resolve("src/main/java")
         val classesDir = projectDir.resolve("build/classes").apply { mkdirs() }
@@ -81,14 +111,21 @@ class JimmerProcessorAptLifecycleTest {
                 null,
                 fileManager.getJavaFileObjects(anchorFile),
             )
-            task.setProcessors(listOf(BookGeneratingProcessor(roundCapture), JimmerProcessor()))
+            task.setProcessors(
+                listOf(
+                    SourceGeneratingProcessor(roundCapture, generatedTypeName, generatedSource),
+                    JimmerProcessor(),
+                ),
+            )
             task.call()
         }
         return AptCompilationResult(success, diagnostics, generatedDir, roundCapture)
     }
 
-    private class BookGeneratingProcessor(
+    private class SourceGeneratingProcessor(
         private val roundCapture: RoundCapture,
+        private val generatedTypeName: String,
+        private val generatedSource: String,
     ) : AbstractProcessor() {
         private var generated = false
 
@@ -104,8 +141,8 @@ class JimmerProcessorAptLifecycleTest {
             if (generated || roundEnvironment.processingOver()) {
                 return false
             }
-            processingEnv.filer.createSourceFile("demo.Book").openWriter().use { writer ->
-                writer.write(BOOK_SOURCE)
+            processingEnv.filer.createSourceFile(generatedTypeName).openWriter().use { writer ->
+                writer.write(generatedSource)
             }
             generated = true
             return false
@@ -137,7 +174,13 @@ class JimmerProcessorAptLifecycleTest {
         val diagnostics: DiagnosticCollector<JavaFileObject>,
         val generatedDir: java.io.File,
         val roundCapture: RoundCapture,
-    )
+    ) {
+        fun generatedSourcesNamed(name: String): List<java.io.File> {
+            return generatedDir.walkTopDown()
+                .filter { file -> file.isFile && file.name == name }
+                .toList()
+        }
+    }
 
     private fun DiagnosticCollector<JavaFileObject>.errorMessage(): String {
         return diagnostics.joinToString(separator = "\n") { diagnostic ->
@@ -173,6 +216,21 @@ class JimmerProcessorAptLifecycleTest {
                 long id();
 
                 String name();
+            }
+        """.trimIndent()
+
+        val LOCATION_SOURCE = """
+            package demo;
+
+            import org.babyfish.jimmer.sql.Embeddable;
+            import org.jspecify.annotations.Nullable;
+
+            @Embeddable
+            public interface Location {
+                String city();
+
+                @Nullable
+                Integer zipCode();
             }
         """.trimIndent()
 

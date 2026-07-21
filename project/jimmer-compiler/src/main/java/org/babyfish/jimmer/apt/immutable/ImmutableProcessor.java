@@ -75,7 +75,7 @@ public class ImmutableProcessor {
                     context,
                     immutableType
             ).generate();
-            if (immutableType.getTypeElement().getTypeParameters().isEmpty()) {
+            if (immutableType.getTypeElement().getTypeParameters().isEmpty() && !immutableType.isEmbeddable()) {
                 new PropsGenerator(
                         context,
                         immutableType
@@ -96,10 +96,6 @@ public class ImmutableProcessor {
                 ).generate();
             } else if (immutableType.isEmbeddable()) {
                 messager.printMessage(Diagnostic.Kind.NOTE, "Embeddable: " + immutableType.getQualifiedName());
-                new PropExpressionGenerator(
-                        context,
-                        immutableType
-                ).generate();
             }
         }
     }

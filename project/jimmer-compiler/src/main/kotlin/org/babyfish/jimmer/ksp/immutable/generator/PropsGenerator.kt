@@ -15,7 +15,6 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import org.babyfish.jimmer.ksp.util.suppressAllAnnotation
-import org.babyfish.jimmer.sql.Embeddable
 import java.io.OutputStreamWriter
 
 class PropsGenerator(
@@ -48,38 +47,29 @@ class PropsGenerator(
                     addAnnotation(suppressAllAnnotation())
                     val type = ctx.typeOf(modelClassDeclaration)
                     addAnnotation(generatedAnnotation(type))
-                    if (modelClassDeclaration.annotation(Embeddable::class) != null) {
-                        for (prop in type.properties.values) {
-                            addEmbeddableProp(type, prop, false)
-                            addEmbeddableProp(type, prop, true)
-                        }
-                    } else {
-                        for (prop in type.properties.values) {
-                            addProp(type, prop, nonNullTable = true, outerJoin = false, isTableEx = false)
-                            addProp(type, prop, nonNullTable = false, outerJoin = false, isTableEx = false)
-                            addProp(type, prop, nonNullTable = true, outerJoin = true, isTableEx = false)
-                            addProp(type, prop, nonNullTable = false, outerJoin = true, isTableEx = false)
-                            addProp(type, prop, nonNullTable = true, outerJoin = false, isTableEx = true)
-                            addProp(type, prop, nonNullTable = false, outerJoin = false, isTableEx = true)
-                            addProp(type, prop, nonNullTable = true, outerJoin = true, isTableEx = true)
-                            addProp(type, prop, nonNullTable = false, outerJoin = true, isTableEx = true)
-                            addIdProp(type, prop, type.getIdPropName(prop.name), nonNullTable = true, isTableEx = false)
-                            addIdProp(
-                                type,
-                                prop,
-                                type.getIdPropName(prop.name),
-                                nonNullTable = false,
-                                isTableEx = false
-                            )
-                            addIdProp(type, prop, type.getIdPropName(prop.name), nonNullTable = true, isTableEx = true)
-                            addIdProp(type, prop, type.getIdPropName(prop.name), nonNullTable = false, isTableEx = true)
-                        }
+                    for (prop in type.properties.values) {
+                        addProp(type, prop, nonNullTable = true, outerJoin = false, isTableEx = false)
+                        addProp(type, prop, nonNullTable = false, outerJoin = false, isTableEx = false)
+                        addProp(type, prop, nonNullTable = true, outerJoin = true, isTableEx = false)
+                        addProp(type, prop, nonNullTable = false, outerJoin = true, isTableEx = false)
+                        addProp(type, prop, nonNullTable = true, outerJoin = false, isTableEx = true)
+                        addProp(type, prop, nonNullTable = false, outerJoin = false, isTableEx = true)
+                        addProp(type, prop, nonNullTable = true, outerJoin = true, isTableEx = true)
+                        addProp(type, prop, nonNullTable = false, outerJoin = true, isTableEx = true)
+                        addIdProp(type, prop, type.getIdPropName(prop.name), nonNullTable = true, isTableEx = false)
+                        addIdProp(
+                            type,
+                            prop,
+                            type.getIdPropName(prop.name),
+                            nonNullTable = false,
+                            isTableEx = false
+                        )
+                        addIdProp(type, prop, type.getIdPropName(prop.name), nonNullTable = true, isTableEx = true)
+                        addIdProp(type, prop, type.getIdPropName(prop.name), nonNullTable = false, isTableEx = true)
                     }
                     if (type.isEntity) {
                         addRemoteId(type, false)
                         addRemoteId(type, true)
-                    }
-                    if (type.isEntity || type.isEmbeddable) {
                         addFetchByFun(type, false)
                         addFetchByFun(type, true)
                     }
@@ -302,71 +292,6 @@ class PropsGenerator(
         )
     }
 
-    private fun FileSpec.Builder.addEmbeddableProp(type: ImmutableType, prop: ImmutableProp, nullable: Boolean) {
-        if (!nullable && prop.isNullable) {
-            return
-        }
-        val receiverTypeName = if (prop.isNullable) {
-            K_EMBEDDED_PROP_EXPRESSION.parameterizedBy(
-                modelClassDeclaration.className()
-            )
-        } else {
-            (if (nullable) K_NULLABLE_EMBEDDED_PROP_EXPRESSION else K_NON_NULL_EMBEDDED_PROP_EXPRESSION).parameterizedBy(
-                modelClassDeclaration.className()
-            )
-        }
-        val returnTypeName = if (prop.isEmbedded) {
-            if (nullable) {
-                K_NULLABLE_EMBEDDED_PROP_EXPRESSION.parameterizedBy(
-                    prop.typeName(overrideNullable = false)
-                )
-            } else {
-                K_NON_NULL_EMBEDDED_PROP_EXPRESSION.parameterizedBy(
-                    prop.typeName(overrideNullable = false)
-                )
-            }
-        } else {
-            if (nullable) {
-                K_NULLABLE_PROP_EXPRESSION.parameterizedBy(
-                    prop.typeName(overrideNullable = false)
-                )
-            } else {
-                K_NON_NULL_PROP_EXPRESSION.parameterizedBy(
-                    prop.typeName(overrideNullable = false)
-                )
-            }
-        }
-        addProperty(
-            PropertySpec
-                .builder(prop.name, returnTypeName)
-                .receiver(receiverTypeName)
-                .getter(
-                    FunSpec
-                        .getterBuilder()
-                        .addAnnotation(generatedAnnotation(type))
-                        .apply {
-                            if (prop.isEmbedded || !nullable || prop.isNullable) {
-                                addStatement(
-                                    "return get<%T>(%T.%L.unwrap()) as %T",
-                                    prop.typeName(overrideNullable = false),
-                                    type.propsClassName,
-                                    StringUtil.snake(prop.name, SnakeCase.UPPER),
-                                    returnTypeName
-                                )
-                            } else {
-                                addStatement(
-                                    "return get(%T.%L.unwrap())",
-                                    type.propsClassName,
-                                    StringUtil.snake(prop.name, SnakeCase.UPPER)
-                                )
-                            }
-                        }
-                        .build()
-                )
-                .build()
-        )
-    }
-
     private fun FileSpec.Builder.addRemoteId(type: ImmutableType, nullable: Boolean) {
         val returnTypeName =
             if (nullable) {
@@ -410,18 +335,10 @@ class PropsGenerator(
                 .builder("fetchBy")
                 .addAnnotation(generatedAnnotation(type))
                 .receiver(
-                    if (type.isEmbeddable) {
-                        if (nullable) {
-                            K_NULLABLE_EMBEDDED_PROP_EXPRESSION
-                        } else {
-                            K_NON_NULL_EMBEDDED_PROP_EXPRESSION
-                        }
+                    if (nullable) {
+                        K_NULLABLE_TABLE_CLASS_NAME
                     } else {
-                        if (nullable) {
-                            K_NULLABLE_TABLE_CLASS_NAME
-                        } else {
-                            K_NON_NULL_TABLE_CLASS_NAME
-                        }
+                        K_NON_NULL_TABLE_CLASS_NAME
                     }.parameterizedBy(type.className)
                 )
                 .addParameter(

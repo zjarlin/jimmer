@@ -86,6 +86,24 @@ class JimmerProcessorProviderLifecycleTest {
     }
 
     @Test
+    fun `main provider generates embeddable props once after the first round`() {
+        val result = compileKsp(
+            source = "package demo\nfun anchor() = Unit",
+            additionalProviders = listOf(LaterEmbeddableProvider()),
+        )
+
+        assertEquals(KotlinSymbolProcessing.ExitCode.OK, result.exitCode, result.logger.text())
+        val generatedEmbeddableRoundIndex = result.capture.rounds.indexOfFirst { round ->
+            round.newDeclarationNames.contains("demo.Location")
+        }
+        assertTrue(generatedEmbeddableRoundIndex > 0, result.capture.toString())
+        assertTrue(result.capture.rounds[generatedEmbeddableRoundIndex].deferredNames.isEmpty())
+        val outputName = "GeneratedEmbeddableProps.kt"
+        assertTrue(result.generatedKotlinFile("demo/$outputName").isFile)
+        assertEquals(1, result.generatedKotlinFilesNamed(outputName).size)
+    }
+
+    @Test
     fun `main provider drops early resource snapshot when a later round is invalid`() {
         val result = compileKsp(
             source = "package demo\nfun anchor() = Unit",
@@ -238,6 +256,31 @@ class JimmerProcessorProviderLifecycleTest {
         }
     }
 
+    private class LaterEmbeddableProvider : SymbolProcessorProvider {
+        override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
+            return object : SymbolProcessor {
+                private var generated = false
+
+                override fun process(resolver: Resolver): List<KSAnnotated> {
+                    if (generated) {
+                        return emptyList()
+                    }
+                    val sourceFiles = resolver.getAllFiles().toList().toTypedArray()
+                    environment.codeGenerator.createNewFile(
+                        dependencies = Dependencies(aggregating = true, *sourceFiles),
+                        packageName = "demo",
+                        fileName = "GeneratedEmbeddable",
+                        extensionName = "kt",
+                    ).bufferedWriter().use { writer ->
+                        writer.write(GENERATED_EMBEDDABLE_SOURCE)
+                    }
+                    generated = true
+                    return emptyList()
+                }
+            }
+        }
+    }
+
     private class CapturingKspLogger : KSPLogger {
         private val messages = mutableListOf<String>()
 
@@ -291,6 +334,12 @@ class JimmerProcessorProviderLifecycleTest {
         val resourceOutputDir: File,
     ) {
         fun generatedKotlinFile(path: String): File = kotlinOutputDir.resolve(path)
+
+        fun generatedKotlinFilesNamed(name: String): List<File> {
+            return kotlinOutputDir.walkTopDown()
+                .filter { file -> file.isFile && file.name == name }
+                .toList()
+        }
 
         fun generatedResourceFile(path: String): File = resourceOutputDir.resolve(path)
     }
@@ -367,6 +416,19 @@ class JimmerProcessorProviderLifecycleTest {
             interface LaterBrokenBook {
                 @Id
                 val id: MissingId
+            }
+        """.trimIndent()
+
+        val GENERATED_EMBEDDABLE_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Embeddable
+
+            @Embeddable
+            interface Location {
+                val city: String
+
+                val zipCode: Int?
             }
         """.trimIndent()
 

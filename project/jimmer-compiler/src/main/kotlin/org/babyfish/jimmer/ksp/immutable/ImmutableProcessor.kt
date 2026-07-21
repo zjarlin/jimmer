@@ -88,8 +88,7 @@ class ImmutableProcessor(
             }
             val sqlClassDeclarations = classDeclarations.filter {
                 it.annotation(Entity::class) !== null ||
-                        it.annotation(MappedSuperclass::class) !== null ||
-                        it.annotation(Embeddable::class) != null
+                        it.annotation(MappedSuperclass::class) !== null
             }
             if (sqlClassDeclarations.isNotEmpty()) {
                 val sqlClassDeclaration = sqlClassDeclarations[0]

@@ -14,6 +14,7 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeArgument
 
 class LsiKotlinPoetTest {
 
@@ -82,6 +83,23 @@ class LsiKotlinPoetTest {
             LsiDeclaredType(site.addzero.lsi.core.LsiSymbolId.type("java.lang.String"))
                 .toKotlinTypeName()
                 .toString(),
+        )
+    }
+
+    @Test
+    fun `renders java collection identities as kotlin read only collections`() {
+        val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val mapType = LsiDeclaredType(
+            declarationId = LsiSymbolId.type("java.util.Map"),
+            arguments = listOf(
+                LsiTypeArgument.invariant(stringType),
+                LsiTypeArgument.invariant(stringType),
+            ),
+        )
+
+        assertEquals(
+            "kotlin.collections.Map<kotlin.String, kotlin.String>",
+            mapType.toKotlinTypeName().toString(),
         )
     }
 
