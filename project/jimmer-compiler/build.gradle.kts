@@ -1,3 +1,5 @@
+import org.babyfish.jimmer.build.VerifyCompilerArchitecture
+
 plugins {
     `kotlin-publish-convention`
     `dokka-convention`
@@ -33,4 +35,21 @@ tasks.test {
     useJUnit()
     forkEvery = 1
     maxParallelForks = 1
+}
+
+val verifySharedCompilerArchitecture by tasks.registering(VerifyCompilerArchitecture::class) {
+    group = "verification"
+    description = "Verifies that shared compiler code stays outside platform and Poet boundaries"
+
+    baseDirectory.set(layout.projectDirectory)
+    sourceFiles.from(fileTree("src/main/kotlin/org/babyfish/jimmer/compiler") {
+        include("**/*.kt")
+    })
+    allowedPlatformPathSegments.set(setOf("apt", "ksp"))
+    allowedPoetPathSegments.set(setOf("render"))
+    allowedPoetFileSuffixes.set(setOf("Renderer.kt"))
+}
+
+tasks.named("check") {
+    dependsOn(verifySharedCompilerArchitecture)
 }

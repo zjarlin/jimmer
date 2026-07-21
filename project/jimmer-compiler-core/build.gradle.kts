@@ -1,3 +1,5 @@
+import org.babyfish.jimmer.build.VerifyCompilerArchitecture
+
 plugins {
     `kotlin-convention`
 }
@@ -5,4 +7,18 @@ plugins {
 dependencies {
     implementation(libs.kotlin.stdlib)
     testImplementation(libs.kotlin.test)
+}
+
+val verifyLsiArchitecture by tasks.registering(VerifyCompilerArchitecture::class) {
+    group = "verification"
+    description = "Verifies that compiler core remains platform and renderer independent"
+
+    baseDirectory.set(layout.projectDirectory)
+    sourceFiles.from(fileTree("src/main") {
+        include("**/*.kt", "**/*.java")
+    })
+}
+
+tasks.named("check") {
+    dependsOn(verifyLsiArchitecture)
 }
