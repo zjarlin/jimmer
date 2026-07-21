@@ -1,0 +1,228 @@
+package org.babyfish.jimmer.compiler.immutable
+
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiTypeParameter
+import site.addzero.lsi.model.stableSignature
+
+internal fun JimmerImmutableDraftCodegenSchema.normalizedSnapshot(): String {
+    return snapshot(includePlatformSurface = false)
+}
+
+internal fun JimmerImmutableDraftCodegenSchema.fingerprint(): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    val bytes = digest.digest(snapshot(includePlatformSurface = true).toByteArray(StandardCharsets.UTF_8))
+    return bytes.joinToString("") { byte -> "%02x".format(byte) }
+}
+
+private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: Boolean): String {
+    return buildString {
+        types.sortedBy(JimmerImmutableDraftTypePlan::typeId).forEach { type ->
+            appendDraftRecord(
+                "draft-type",
+                type.typeId.value,
+                type.qualifiedName,
+                type.kind.name,
+                if (includePlatformSurface) type.visibility.name else "",
+                type.typeParameters.joinToString(",", transform = LsiTypeParameter::snapshotText),
+                type.selfType.typeText(includePlatformSurface),
+                type.directSuperTypes.joinToString(",") { superType ->
+                    superType.typeText(includePlatformSurface)
+                },
+                type.primarySuperTypeId?.value.orEmpty(),
+                type.runtimeDeclaredPropIds.joinToString(",") { propId -> propId.value },
+                type.runtimeRedefinedPropIds.joinToString(",") { propId -> propId.value },
+                type.kotlinDraftPropIds.joinToString(",") { propId -> propId.value },
+                type.idPropId?.value.orEmpty(),
+                type.versionPropId?.value.orEmpty(),
+                type.logicalDeletedPropId?.value.orEmpty(),
+                type.requiresVisibilityState.toString(),
+                type.validationAnnotations.annotationText(includePlatformSurface),
+                type.customValidations.validationText(),
+                type.artifactOriginatingSymbols.sorted().joinToString(",") { symbolId -> symbolId.value },
+                if (includePlatformSurface) {
+                    type.dependencySymbols.sorted().joinToString(",") { symbolId -> symbolId.value }
+                } else {
+                    ""
+                },
+                if (includePlatformSurface) type.sourceLanguage.name else "",
+                if (includePlatformSurface) type.sourcePath.orEmpty() else "",
+                if (includePlatformSurface) type.sourceBaseName.orEmpty() else "",
+                if (includePlatformSurface) {
+                    type.artifactOriginatingSources.joinToString(",") { source ->
+                        "${source.path}:${source.language.name}:${source.kind.name}"
+                    }
+                } else {
+                    ""
+                },
+                if (includePlatformSurface) {
+                    type.dependencySources.joinToString(",") { source ->
+                        "${source.path}:${source.language.name}:${source.kind.name}"
+                    }
+                } else {
+                    ""
+                },
+            )
+            type.propsBySlot.forEach { prop ->
+                appendDraftRecord(
+                    "draft-prop",
+                    type.typeId.value,
+                    prop.propId.value,
+                    prop.declarationId.value,
+                    prop.lineageRootId.value,
+                    prop.sourceDeclaringTypeId.value,
+                    prop.runtimeOwnerTypeId.value,
+                    prop.slotIndex.toString(),
+                    prop.metadataSlotIndex?.toString().orEmpty(),
+                    prop.role.name,
+                    prop.name,
+                    prop.type.typeText(includePlatformSurface),
+                    prop.elementType.typeText(includePlatformSurface),
+                    prop.targetTypeId?.value.orEmpty(),
+                    prop.targetIdPropId?.value.orEmpty(),
+                    prop.primitive.toString(),
+                    prop.nullable.toString(),
+                    prop.list.toString(),
+                    prop.association.toString(),
+                    prop.genericTarget.toString(),
+                    prop.genericSourceTarget.toString(),
+                    prop.languageFormula.toString(),
+                    prop.valueState.name,
+                    prop.visibilityControllable.toString(),
+                    prop.writable.toString(),
+                    prop.autoCreateSupported.toString(),
+                    prop.referenceMutationSupported.toString(),
+                    prop.idViewBasePropId?.value.orEmpty(),
+                    prop.manyToManyBasePropId?.value.orEmpty(),
+                    prop.manyToManyDeeperPropId?.value.orEmpty(),
+                    prop.formulaDependencyPaths.joinToString(";") { path ->
+                        path.joinToString(",") { propId -> propId.value }
+                    },
+                    if (includePlatformSurface) prop.associatedId?.name.orEmpty() else "",
+                    prop.associatedId?.targetIdPropId?.value.orEmpty(),
+                    prop.validationAnnotations.annotationText(includePlatformSurface),
+                    prop.customValidations.validationText(),
+                    if (includePlatformSurface) prop.codegenName else "",
+                    if (includePlatformSurface) prop.slotName else "",
+                    if (includePlatformSurface) prop.javaApplierName else "",
+                    if (includePlatformSurface) prop.javaAdderByName else "",
+                    if (includePlatformSurface) prop.valueFieldName.orEmpty() else "",
+                    if (includePlatformSurface) prop.loadedStateFieldName.orEmpty() else "",
+                    if (includePlatformSurface) prop.deeperPropIdName.orEmpty() else "",
+                    if (includePlatformSurface) prop.sourceGetterName else "",
+                    if (includePlatformSurface) prop.sourceDocumentation.orEmpty() else "",
+                    if (includePlatformSurface) prop.accessorStyle.name else "",
+                    if (includePlatformSurface) prop.javaSetterName else "",
+                    if (includePlatformSurface) prop.javaBeanGetterName else "",
+                )
+            }
+        }
+    }
+}
+
+private fun LsiTypeParameter.snapshotText(): String {
+    return buildString {
+        append(id.value)
+        append(':')
+        append(name)
+        append(':')
+        append(variance.name)
+        append(':')
+        append(upperBounds.joinToString("&") { bound -> bound.normalizedTypeSignature() })
+    }
+}
+
+private fun site.addzero.lsi.model.LsiTypeRef.typeText(includePlatformSurface: Boolean): String {
+    return if (includePlatformSurface) stableSignature() else normalizedTypeSignature()
+}
+
+private fun List<JimmerValidation>.validationText(): String {
+    return joinToString(";") { validation ->
+        buildString {
+            append(validation.annotationTypeId.value)
+            append('(')
+            append(validation.validatorTypeIds.joinToString(",") { typeId -> typeId.value })
+            append(')')
+            append('=')
+            append(validation.message)
+        }
+    }
+}
+
+private fun List<LsiAnnotation>.annotationText(includePlatformSurface: Boolean): String {
+    return joinToString(";") { annotation -> annotation.annotationText(includePlatformSurface) }
+}
+
+private fun LsiAnnotation.annotationText(includePlatformSurface: Boolean): String {
+    return buildString {
+        append(type.value)
+        if (includePlatformSurface) {
+            append('@')
+            append(useSiteTarget?.name.orEmpty())
+        }
+        append('(')
+        append(arguments.toSortedMap().entries.joinToString(",") { (name, argument) ->
+            buildString {
+                append(name)
+                if (includePlatformSurface) {
+                    append('@')
+                    append(argument.origin.name)
+                }
+                append('=')
+                append(argument.value.annotationValueText(includePlatformSurface))
+            }
+        })
+        append(')')
+    }
+}
+
+private fun LsiAnnotationValue.annotationValueText(includePlatformSurface: Boolean): String {
+    return when (this) {
+        is LsiAnnotationValue.BooleanValue -> "boolean:$value"
+        is LsiAnnotationValue.ByteValue -> "byte:$value"
+        is LsiAnnotationValue.ShortValue -> "short:$value"
+        is LsiAnnotationValue.IntValue -> "int:$value"
+        is LsiAnnotationValue.LongValue -> "long:$value"
+        is LsiAnnotationValue.FloatValue -> "float:$value"
+        is LsiAnnotationValue.DoubleValue -> "double:$value"
+        is LsiAnnotationValue.CharValue -> "char:${value.code}"
+        is LsiAnnotationValue.StringValue -> "string:$value"
+        is LsiAnnotationValue.EnumValue -> "enum:${enumType.value}:$entryName"
+        is LsiAnnotationValue.ClassValue -> "class:${type.normalizedTypeSignature()}"
+        is LsiAnnotationValue.NestedAnnotationValue -> {
+            "annotation:${annotation.annotationText(includePlatformSurface)}"
+        }
+        is LsiAnnotationValue.ArrayValue -> elements.joinToString(",", "array:[", "]") { element ->
+            element.annotationValueText(includePlatformSurface)
+        }
+    }
+}
+
+private fun StringBuilder.appendDraftRecord(
+    kind: String,
+    vararg fields: String,
+) {
+    append(kind)
+    fields.forEach { field ->
+        append('|')
+        append(field.escapeDraftSnapshotField())
+    }
+    append('\n')
+}
+
+private fun String.escapeDraftSnapshotField(): String {
+    return buildString {
+        for (character in this@escapeDraftSnapshotField) {
+            when (character) {
+                '\\' -> append("\\\\")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '|' -> append("\\|")
+                ',' -> append("\\,")
+                else -> append(character)
+            }
+        }
+    }
+}

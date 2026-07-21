@@ -19,6 +19,8 @@ import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
@@ -191,6 +193,7 @@ class JimmerModuleCompilerFeatureProviderTest {
         val brokenId = LsiSymbolId.type("demo.Broken")
         val deferredDependency = JimmerImmutableCompilerFeatureState(
             schema = JimmerImmutableSchema(emptyList()),
+            draftCodegenSchema = JimmerImmutableDraftCodegenSchema(emptyList()),
             targetTypeIds = setOf(brokenId),
             semanticRootTypeIds = setOf(brokenId),
             currentTypeIds = setOf(brokenId),
@@ -383,33 +386,36 @@ class JimmerModuleCompilerFeatureProviderTest {
     private fun resolvedDependencyState(qualifiedName: String): JimmerImmutableCompilerFeatureState {
         val typeId = LsiSymbolId.type(qualifiedName)
         val props = completeEntityProps(typeId)
-        return JimmerImmutableCompilerFeatureState(
-            schema = JimmerImmutableSchema(
-                listOf(
-                    JimmerImmutableType(
-                        id = typeId,
-                        qualifiedName = qualifiedName,
-                        kind = JimmerImmutableTypeKind.ENTITY,
-                        documentation = null,
-                        annotations = emptyList(),
-                        typeParameterIds = emptyList(),
-                        superTypeIds = emptyList(),
-                        props = props,
-                        primarySuperTypeId = null,
-                        inheritanceRootTypeId = null,
-                        inheritanceStrategy = null,
-                        joinedTableDissociateAction = null,
-                        instantiable = true,
-                        discriminatorValue = null,
-                        discriminatorPropId = null,
-                        idPropId = props.single().id,
-                        versionPropId = null,
-                        logicalDeletedPropId = null,
-                        acrossMicroServices = false,
-                        microServiceName = "",
-                    )
+        val schema = JimmerImmutableSchema(
+            listOf(
+                JimmerImmutableType(
+                    id = typeId,
+                    qualifiedName = qualifiedName,
+                    kind = JimmerImmutableTypeKind.ENTITY,
+                    documentation = null,
+                    annotations = emptyList(),
+                    typeParameterIds = emptyList(),
+                    superTypeIds = emptyList(),
+                    props = props,
+                    primarySuperTypeId = null,
+                    inheritanceRootTypeId = null,
+                    inheritanceStrategy = null,
+                    joinedTableDissociateAction = null,
+                    instantiable = true,
+                    discriminatorValue = null,
+                    discriminatorPropId = null,
+                    idPropId = props.single().id,
+                    versionPropId = null,
+                    logicalDeletedPropId = null,
+                    acrossMicroServices = false,
+                    microServiceName = "",
                 )
-            ),
+            )
+        )
+        val workspace = workspace(LsiLanguage.JAVA, qualifiedName)
+        return JimmerImmutableCompilerFeatureState(
+            schema = schema,
+            draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(schema, workspace),
             targetTypeIds = setOf(typeId),
             semanticRootTypeIds = setOf(typeId),
             currentTypeIds = setOf(typeId),

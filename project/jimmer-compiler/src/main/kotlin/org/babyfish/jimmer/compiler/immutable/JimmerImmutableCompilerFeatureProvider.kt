@@ -72,10 +72,15 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }
         return try {
             val schema = precompiler.compile(context.round.workspace, semanticRootTypeIds)
+            val draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+                schema = schema,
+                workspace = context.round.workspace,
+            )
             JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(targetTypeIds)
             JimmerCompilerFeaturePrecompileResult(
                 state = JimmerImmutableCompilerFeatureState(
                     schema = schema,
+                    draftCodegenSchema = draftCodegenSchema,
                     targetTypeIds = targetTypeIds,
                     semanticRootTypeIds = semanticRootTypeIds,
                     currentTypeIds = currentTypeIds,
@@ -175,8 +180,12 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     ): JimmerCompilerFeaturePrecompileResult {
         val deferred = context.round.platform == CompilerPlatform.APT && !context.round.isFinal
         val resolvedTypeIds = semanticRootTypeIds - unresolvedTypeIds
-        val schema = try {
-            precompiler.compile(context.round.workspace, resolvedTypeIds)
+        val (schema, draftCodegenSchema) = try {
+            val schema = precompiler.compile(context.round.workspace, resolvedTypeIds)
+            schema to JimmerImmutableDraftCodegenPrecompiler().compile(
+                schema = schema,
+                workspace = context.round.workspace,
+            )
         } catch (exception: JimmerImmutablePrecompileException) {
             return failedResult(
                 context = context,
@@ -191,6 +200,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         return JimmerCompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = schema,
+                draftCodegenSchema = draftCodegenSchema,
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -258,6 +268,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         return JimmerCompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = JimmerImmutableSchema(emptyList()),
+                draftCodegenSchema = JimmerImmutableDraftCodegenSchema(emptyList()),
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -289,6 +300,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         return JimmerCompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = JimmerImmutableSchema(emptyList()),
+                draftCodegenSchema = JimmerImmutableDraftCodegenSchema(emptyList()),
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -310,6 +322,7 @@ internal enum class JimmerImmutableCompilerFeatureStatus {
 
 internal data class JimmerImmutableCompilerFeatureState(
     val schema: JimmerImmutableSchema,
+    val draftCodegenSchema: JimmerImmutableDraftCodegenSchema,
     val targetTypeIds: Set<LsiSymbolId>,
     val semanticRootTypeIds: Set<LsiSymbolId>,
     val currentTypeIds: Set<LsiSymbolId>,
@@ -320,6 +333,8 @@ internal data class JimmerImmutableCompilerFeatureState(
         append(status.name)
         append(':')
         append(schema.fingerprint())
+        append(':')
+        append(draftCodegenSchema.fingerprint())
         append(':')
         append(targetTypeIds.sorted().joinToString(",") { typeId -> typeId.value })
         append(':')
@@ -333,6 +348,9 @@ internal data class JimmerImmutableCompilerFeatureState(
     },
 ) : JimmerCompilerFeatureState {
     init {
+        require(draftCodegenSchema.typesById.keys == schema.typesById.keys) {
+            "Immutable draft codegen types must match immutable semantic types"
+        }
         require(currentTypeIds.all(targetTypeIds::contains)) {
             "Current immutable type ids must be part of all target type ids"
         }

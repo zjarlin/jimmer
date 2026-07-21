@@ -21,6 +21,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
 import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
 import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
@@ -277,6 +278,10 @@ class JimmerDtoReusableIntegrationTest {
         )
         val immutableState = JimmerImmutableCompilerFeatureState(
             schema = IMMUTABLE_SCHEMA,
+            draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+                schema = IMMUTABLE_SCHEMA,
+                workspace = workspace,
+            ),
             targetTypeIds = setOf(BOOK_TYPE_ID, STORE_TYPE_ID),
             semanticRootTypeIds = setOf(BOOK_TYPE_ID, STORE_TYPE_ID),
             currentTypeIds = currentTypeIds,
@@ -302,16 +307,33 @@ class JimmerDtoReusableIntegrationTest {
             kind = LsiTypeDeclarationKind.INTERFACE,
             origin = modelOrigin,
             annotations = listOf(LsiAnnotation(ENTITY_ANNOTATION_TYPE_ID)),
+            memberIds = IMMUTABLE_SCHEMA.typesById.getValue(BOOK_TYPE_ID)
+                .props
+                .map(JimmerImmutableProp::id),
         )
         val store = typeDeclaration(
             id = STORE_TYPE_ID,
             kind = LsiTypeDeclarationKind.INTERFACE,
             origin = modelOrigin,
             annotations = listOf(LsiAnnotation(ENTITY_ANNOTATION_TYPE_ID)),
+            memberIds = IMMUTABLE_SCHEMA.typesById.getValue(STORE_TYPE_ID)
+                .props
+                .map(JimmerImmutableProp::id),
         )
+        val properties = IMMUTABLE_SCHEMA.types.flatMap { type ->
+            type.props.map { prop ->
+                site.addzero.lsi.model.LsiProperty(
+                    id = prop.declarationId,
+                    name = prop.name,
+                    ownerId = type.id,
+                    type = prop.type,
+                    origin = modelOrigin,
+                )
+            }
+        }
         return LsiWorkspace(
             sources = listOf(modelSource),
-            declarations = listOf(book, store) + externalDeclarations,
+            declarations = listOf(book, store) + properties + externalDeclarations,
         )
     }
 
@@ -338,6 +360,7 @@ class JimmerDtoReusableIntegrationTest {
         origin: LsiOrigin,
         annotations: List<LsiAnnotation> = emptyList(),
         superTypes: List<LsiTypeRef> = emptyList(),
+        memberIds: List<LsiSymbolId> = emptyList(),
     ): LsiTypeDeclaration {
         val qualifiedName = id.requireTypeQualifiedName()
         return LsiTypeDeclaration(
@@ -347,6 +370,7 @@ class JimmerDtoReusableIntegrationTest {
             kind = kind,
             modality = LsiModality.ABSTRACT,
             superTypes = superTypes,
+            memberIds = memberIds,
             annotations = annotations,
             origin = origin,
         )

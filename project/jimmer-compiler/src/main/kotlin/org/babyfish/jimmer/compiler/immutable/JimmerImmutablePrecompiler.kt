@@ -2866,7 +2866,7 @@ private fun LsiAnnotation.typedStringValue(
         )
 }
 
-private fun LsiAnnotation.classTypeIds(name: String): List<LsiSymbolId> {
+internal fun LsiAnnotation.classTypeIds(name: String): List<LsiSymbolId> {
     return when (val value = arguments[name]?.value) {
         is LsiAnnotationValue.ClassValue -> listOfNotNull((value.type as? LsiDeclaredType)?.declarationId)
         is LsiAnnotationValue.ArrayValue -> value.elements.mapNotNull { element ->

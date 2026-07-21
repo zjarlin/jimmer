@@ -95,6 +95,10 @@ class JimmerImmutableFrontendParityTest {
         val kspSchema = assertNotNull(ksp.schema)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        assertEquals(
+            assertNotNull(apt.draftCodegenSchema).normalizedSnapshot(),
+            assertNotNull(ksp.draftCodegenSchema).normalizedSnapshot(),
+        )
 
         val root = aptSchema.types.single { type -> type.qualifiedName == "demo.Asset" }
         assertEquals(JimmerInheritanceStrategy.JOINED, root.inheritanceStrategy)
@@ -468,6 +472,12 @@ class JimmerImmutableFrontendParityTest {
         val kspSchema = assertNotNull(ksp.schema)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        val aptDraftSchema = assertNotNull(apt.draftCodegenSchema)
+        val kspDraftSchema = assertNotNull(ksp.draftCodegenSchema)
+        assertEquals(
+            aptDraftSchema.normalizedSnapshot(),
+            kspDraftSchema.normalizedSnapshot(),
+        )
 
         val aptStatus = aptSchema.types
             .single { type -> type.qualifiedName == "demo.OverrideEntity" }
@@ -491,6 +501,165 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == DEFAULT })
         assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == COLUMN })
         assertFalse(aptStatus.annotations.any { annotation -> annotation.type == JAVA_OVERRIDE })
+
+        val draftType = aptDraftSchema.typesById.getValue(LsiSymbolId.type("demo.OverrideEntity"))
+        val statusPlan = draftType.propsById.getValue(aptStatus.id)
+        val idPlan = draftType.propsById.getValue(
+            aptSchema.typesById.getValue(draftType.typeId).idPropId!!,
+        )
+        assertEquals(0, statusPlan.slotIndex)
+        assertEquals(JimmerImmutableDraftPropRole.REDEFINED, statusPlan.role)
+        assertTrue(statusPlan.genericSourceTarget)
+        assertEquals(JimmerImmutableDraftValueState.VALUE_ONLY, statusPlan.valueState)
+        assertEquals(1, idPlan.slotIndex)
+        assertEquals(JimmerImmutableDraftPropRole.DECLARED, idPlan.role)
+        assertEquals(listOf(statusPlan.propId), draftType.runtimeRedefinedPropIds)
+        assertEquals(listOf(idPlan.propId), draftType.runtimeDeclaredPropIds)
+    }
+
+    @Test
+    fun `generic mapped superclass draft property is rebound only by concrete entity`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface GenericCodeBase<T extends CharSequence> {
+                    T getCode();
+                }
+
+                @MappedSuperclass
+                interface StringCodeBase extends GenericCodeBase<String> {
+                    String getLabel();
+                }
+
+                @Entity
+                interface GenericCodeEntity extends StringCodeBase {
+                    @Id
+                    long getId();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface GenericCodeBase<T : CharSequence> {
+                    val code: T
+                }
+
+                @MappedSuperclass
+                interface StringCodeBase : GenericCodeBase<String> {
+                    val label: String
+                }
+
+                @Entity
+                interface GenericCodeEntity : StringCodeBase {
+                    @Id
+                    val id: Long
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptDraftSchema = assertNotNull(apt.draftCodegenSchema)
+        val kspDraftSchema = assertNotNull(ksp.draftCodegenSchema)
+        assertEquals(aptDraftSchema.normalizedSnapshot(), kspDraftSchema.normalizedSnapshot())
+
+        val mappedPlan = aptDraftSchema.typesById.getValue(LsiSymbolId.type("demo.StringCodeBase"))
+        val mappedCode = mappedPlan.propsBySlot.single { prop -> prop.name == "code" }
+        val mappedLabel = mappedPlan.propsBySlot.single { prop -> prop.name == "label" }
+        assertFalse(mappedCode.genericSourceTarget)
+        assertEquals(listOf(mappedLabel.propId), mappedPlan.kotlinDraftPropIds)
+        assertNull(mappedCode.metadataSlotIndex)
+        assertNull(mappedLabel.metadataSlotIndex)
+
+        val entityPlan = aptDraftSchema.typesById.getValue(LsiSymbolId.type("demo.GenericCodeEntity"))
+        val entityCode = entityPlan.propsBySlot.single { prop -> prop.name == "code" }
+        val entityLabel = entityPlan.propsBySlot.single { prop -> prop.name == "label" }
+        val entityId = entityPlan.propsBySlot.single { prop -> prop.name == "id" }
+        assertTrue(entityCode.genericSourceTarget)
+        assertEquals(listOf(entityId.propId, entityCode.propId), entityPlan.kotlinDraftPropIds)
+        assertEquals(0, entityCode.slotIndex)
+        assertEquals(1, entityLabel.slotIndex)
+        assertEquals(2, entityId.slotIndex)
+        assertEquals(0, entityCode.metadataSlotIndex)
+        assertEquals(1, entityLabel.metadataSlotIndex)
+        assertEquals(2, entityId.metadataSlotIndex)
+    }
+
+    @Test
+    fun `draft plan preserves legacy java accessor identifiers without polluting semantic parity`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.jetbrains.annotations.Nullable;
+
+                @Entity
+                interface AccessorEntity {
+                    @Id
+                    long getId();
+
+                    @Nullable
+                    Boolean isActive();
+
+                    String getURL();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface AccessorEntity {
+                    @Id
+                    val id: Long
+
+                    val active: Boolean?
+
+                    val URL: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.diagnostic)
+        assertNull(ksp.diagnostic)
+        val aptDraftSchema = assertNotNull(apt.draftCodegenSchema)
+        val kspDraftSchema = assertNotNull(ksp.draftCodegenSchema)
+        assertEquals(aptDraftSchema.normalizedSnapshot(), kspDraftSchema.normalizedSnapshot())
+
+        val typeId = LsiSymbolId.type("demo.AccessorEntity")
+        val aptPlan = aptDraftSchema.typesById.getValue(typeId)
+        val kspPlan = kspDraftSchema.typesById.getValue(typeId)
+        val aptActive = aptPlan.propsById.getValue(LsiSymbolId.property(typeId, "active"))
+        val kspActive = kspPlan.propsById.getValue(LsiSymbolId.property(typeId, "active"))
+        assertEquals("isActive", aptActive.codegenName)
+        assertEquals("setIsActive", aptActive.javaSetterName)
+        assertEquals("getIsActive", aptActive.javaBeanGetterName)
+        assertEquals("active", kspActive.codegenName)
+
+        val aptUrl = aptPlan.propsById.getValue(LsiSymbolId.property(typeId, "URL"))
+        val kspUrl = kspPlan.propsById.getValue(LsiSymbolId.property(typeId, "URL"))
+        assertEquals("uRL", aptUrl.codegenName)
+        assertEquals("SLOT_U_RL", aptUrl.slotName)
+        assertEquals("URL", kspUrl.codegenName)
     }
 
     @Test
@@ -1311,6 +1480,10 @@ class JimmerImmutableFrontendParityTest {
         val kspSchema = assertNotNull(ksp.schema)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        assertEquals(
+            assertNotNull(apt.draftCodegenSchema).normalizedSnapshot(),
+            assertNotNull(ksp.draftCodegenSchema).normalizedSnapshot(),
+        )
         val aptBaseChildren = aptSchema.types.single { type -> type.qualifiedName == "demo.Base" }
             .props.single { prop -> prop.name == "children" }
         val aptNode = aptSchema.types.single { type -> type.qualifiedName == "demo.Node" }
@@ -1509,6 +1682,10 @@ class JimmerImmutableFrontendParityTest {
         val kspSchema = assertNotNull(ksp.schema)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
+        assertEquals(
+            assertNotNull(apt.draftCodegenSchema).normalizedSnapshot(),
+            assertNotNull(ksp.draftCodegenSchema).normalizedSnapshot(),
+        )
 
         val employeeTypeId = LsiSymbolId.type("demo.Employee")
         val departmentTypeId = LsiSymbolId.type("demo.Department")
@@ -2015,6 +2192,9 @@ class JimmerImmutableFrontendParityTest {
         var schema: JimmerImmutableSchema? = null
             private set
 
+        var draftCodegenSchema: JimmerImmutableDraftCodegenSchema? = null
+            private set
+
         var diagnostic: String? = null
             private set
 
@@ -2024,6 +2204,10 @@ class JimmerImmutableFrontendParityTest {
         fun freeze(workspace: LsiWorkspace) {
             try {
                 schema = JimmerImmutablePrecompiler().compile(workspace)
+                draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
+                    schema = requireNotNull(schema),
+                    workspace = workspace,
+                )
             } catch (exception: JimmerImmutablePrecompileException) {
                 diagnostic = exception.message
             }
@@ -2032,7 +2216,7 @@ class JimmerImmutableFrontendParityTest {
 
         fun result(): FrontendResult {
             check(completed) { "Frontend did not freeze an LSI workspace" }
-            return FrontendResult(schema, diagnostic)
+            return FrontendResult(schema, draftCodegenSchema, diagnostic)
         }
     }
 
@@ -2065,6 +2249,7 @@ class JimmerImmutableFrontendParityTest {
 
     private data class FrontendResult(
         val schema: JimmerImmutableSchema?,
+        val draftCodegenSchema: JimmerImmutableDraftCodegenSchema?,
         val diagnostic: String?,
     )
 
