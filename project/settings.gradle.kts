@@ -3,6 +3,7 @@ include(
     "jimmer-bom",
     "jimmer-core",
     "jimmer-mapstruct-apt",
+    "lsi-core",
     "jimmer-compiler-core",
     "jimmer-compiler",
     "jimmer-sql",

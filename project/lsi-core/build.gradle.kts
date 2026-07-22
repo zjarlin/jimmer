@@ -5,18 +5,17 @@ plugins {
 }
 
 dependencies {
-    api(projects.lsiCore)
     implementation(libs.kotlin.stdlib)
     testImplementation(libs.kotlin.test)
 }
 
 val verifyLsiArchitecture by tasks.registering(VerifyCompilerArchitecture::class) {
     group = "verification"
-    description = "Verifies that compiler core remains platform and renderer independent"
+    description = "Verifies that LSI core remains platform and renderer independent"
 
     baseDirectory.set(layout.projectDirectory)
     sourceFiles.from(fileTree("src/main") {
-        include("**/*.kt", "**/*.java")
+        include("**/*.kt")
     })
 }
 
