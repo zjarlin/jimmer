@@ -1,7 +1,7 @@
 import org.babyfish.jimmer.build.VerifyCompilerArchitecture
 
 plugins {
-    `kotlin-convention`
+    `kotlin-publish-convention`
 }
 
 dependencies {
