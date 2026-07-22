@@ -17,6 +17,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeParameter
 
 class LsiPoetModelTest {
 
@@ -261,6 +262,37 @@ class LsiPoetModelTest {
                 fileName = " order-itemFetcher",
                 fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
                 members = listOf(LsiPoetType("OrderFetcher", LsiPoetTypeKind.CLASS)),
+            )
+        }
+    }
+
+    @Test
+    fun `models reified parameters only on inline functions`() {
+        val parameterId = LsiSymbolId.typeParameter(
+            LsiSymbolId.type("demo.QueryExtensions"),
+            "S",
+        )
+        val parameter = LsiTypeParameter(parameterId, "S")
+        val function = LsiPoetFunction(
+            name = "query",
+            modifiers = setOf(LsiPoetModifier.INLINE),
+            typeParameters = listOf(parameter),
+            reifiedTypeParameterIds = setOf(parameterId),
+        )
+
+        assertEquals(setOf(parameterId), function.reifiedTypeParameterIds)
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetFunction(
+                name = "query",
+                typeParameters = listOf(parameter),
+                reifiedTypeParameterIds = setOf(parameterId),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetFunction(
+                name = "query",
+                modifiers = setOf(LsiPoetModifier.INLINE),
+                reifiedTypeParameterIds = setOf(parameterId),
             )
         }
     }

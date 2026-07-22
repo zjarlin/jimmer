@@ -1,6 +1,7 @@
 package site.addzero.lsi.poet
 
 import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeRef
 
@@ -24,7 +25,6 @@ enum class LsiPoetModifier {
     INLINE,
     NOINLINE,
     CROSSINLINE,
-    REIFIED,
     TAILREC,
     SUSPEND,
     OPERATOR,
@@ -217,6 +217,10 @@ data class LsiPoetFunction(
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
     val typeParameters: List<LsiTypeParameter> = emptyList(),
+    /**
+     * 仅对 Kotlin 源码生效的具体化类型参数。
+     */
+    val reifiedTypeParameterIds: Set<LsiSymbolId> = emptySet(),
     val receiverType: LsiTypeRef? = null,
     val parameters: List<LsiPoetParameter> = emptyList(),
     val returnType: LsiTypeRef? = null,
@@ -227,6 +231,12 @@ data class LsiPoetFunction(
         requirePoetDeclarationName(name, nameStyle, "function")
         require(typeParameters.map(LsiTypeParameter::id).distinct().size == typeParameters.size) {
             "LSI Poet function type parameters cannot have duplicate ids: $name"
+        }
+        require(typeParameters.map(LsiTypeParameter::id).containsAll(reifiedTypeParameterIds)) {
+            "LSI Poet reified type parameters must be declared by the function: $name"
+        }
+        require(reifiedTypeParameterIds.isEmpty() || LsiPoetModifier.INLINE in modifiers) {
+            "LSI Poet reified type parameters require an inline function: $name"
         }
         require(parameters.map(LsiPoetParameter::name).distinct().size == parameters.size) {
             "LSI Poet function parameters cannot have duplicate names: $name"

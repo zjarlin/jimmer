@@ -94,7 +94,9 @@ private fun LsiTypeRef.toKotlinTypeName(referenceContext: Boolean): TypeName {
     }
 }
 
-internal fun LsiTypeParameter.toKotlinTypeVariableName(): TypeVariableName {
+internal fun LsiTypeParameter.toKotlinTypeVariableName(
+    reified: Boolean = false,
+): TypeVariableName {
     val varianceModifier = when (variance) {
         LsiVariance.INVARIANT -> null
         LsiVariance.IN -> KModifier.IN
@@ -103,6 +105,7 @@ internal fun LsiTypeParameter.toKotlinTypeVariableName(): TypeVariableName {
     }
     val bounds = upperBounds.map(LsiTypeRef::toKotlinTypeName).toTypedArray()
     return TypeVariableName(name, *bounds, variance = varianceModifier)
+        .copy(reified = reified)
 }
 
 internal fun LsiAnnotation.toKotlinCoreAnnotationSpec(): AnnotationSpec {

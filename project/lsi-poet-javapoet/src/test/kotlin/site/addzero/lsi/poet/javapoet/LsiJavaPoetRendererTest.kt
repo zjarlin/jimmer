@@ -380,6 +380,27 @@ class LsiJavaPoetRendererTest {
         assertContains(importException.message.orEmpty(), "explicit imports")
     }
 
+    @Test
+    fun `rejects reified type parameters`() {
+        val parameterId = LsiSymbolId.typeParameter(
+            LsiSymbolId.type("demo.generated.Reified"),
+            "S",
+        )
+        val function = LsiPoetFunction(
+            name = "query",
+            modifiers = setOf(LsiPoetModifier.INLINE),
+            typeParameters = listOf(LsiTypeParameter(parameterId, "S")),
+            reifiedTypeParameterIds = setOf(parameterId),
+            returnType = LsiTypeParameterRef(parameterId),
+        )
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(function, "Reified"))
+        }
+
+        assertContains(exception.message.orEmpty(), "reified type parameters")
+    }
+
     private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {
         val type = if (member is LsiPoetType) member else {
             LsiPoetType(fileName, LsiPoetTypeKind.CLASS, members = listOf(member))

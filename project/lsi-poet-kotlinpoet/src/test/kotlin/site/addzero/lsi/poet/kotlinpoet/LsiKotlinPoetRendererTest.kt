@@ -15,6 +15,8 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeParameter
+import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetAnnotation
@@ -349,6 +351,44 @@ class LsiKotlinPoetRendererTest {
 
         assertEquals("demo/generated/order-item.partFetcher.kt", generated.path)
         assertContains(generated.content, "public class OrderFetcher")
+    }
+
+    @Test
+    fun `renders inline reified type parameters exactly`() {
+        val parameterId = LsiSymbolId.typeParameter(
+            LsiSymbolId.type("demo.generated.QueryExtensions"),
+            "S",
+        )
+        val function = LsiPoetFunction(
+            name = "query",
+            modifiers = setOf(LsiPoetModifier.INLINE),
+            typeParameters = listOf(
+                LsiTypeParameter(
+                    id = parameterId,
+                    name = "S",
+                    upperBounds = listOf(stringType),
+                )
+            ),
+            reifiedTypeParameterIds = setOf(parameterId),
+            returnType = LsiTypeParameterRef(parameterId),
+            body = LsiPoetCodeBlock.build {
+                returnValue { text("error(\"unused\")") }
+            },
+        )
+        val artifact = LsiPoetArtifact(
+            file = LsiPoetFile(
+                language = LsiLanguage.KOTLIN,
+                packageName = "demo.generated",
+                fileName = "QueryExtensions",
+                members = listOf(function),
+            ),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact).content
+
+        assertContains(content, "public inline fun <reified S : String> query(): S = error(\"unused\")")
     }
 
     private fun artifact(type: LsiPoetType, fileName: String): LsiPoetArtifact {

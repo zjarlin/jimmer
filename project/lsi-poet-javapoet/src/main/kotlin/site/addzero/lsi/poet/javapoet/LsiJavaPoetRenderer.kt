@@ -159,6 +159,9 @@ private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
     require(receiverType == null) {
         "JavaPoet renderer cannot emit an extension receiver: $name"
     }
+    require(reifiedTypeParameterIds.isEmpty()) {
+        "JavaPoet renderer cannot emit reified type parameters: $name"
+    }
     val builder = MethodSpec.methodBuilder(name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.FUNCTION))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
@@ -308,7 +311,6 @@ private fun LsiPoetModifier.toJavaModifier(context: JavaModifierContext): Modifi
         LsiPoetModifier.INLINE,
         LsiPoetModifier.NOINLINE,
         LsiPoetModifier.CROSSINLINE,
-        LsiPoetModifier.REIFIED,
         LsiPoetModifier.TAILREC,
         LsiPoetModifier.SUSPEND,
         LsiPoetModifier.OPERATOR,

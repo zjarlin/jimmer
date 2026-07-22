@@ -168,7 +168,13 @@ private fun LsiPoetFunction.toKotlinFunction(): FunSpec {
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.FUNCTION))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addKdoc("%L", value) }
-    typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toKotlinTypeVariableName()) }
+    typeParameters.forEach { parameter ->
+        builder.addTypeVariable(
+            parameter.toKotlinTypeVariableName(
+                reified = parameter.id in reifiedTypeParameterIds,
+            )
+        )
+    }
     receiverType?.let { type -> builder.receiver(type.toKotlinTypeName()) }
     parameters.forEach { parameter -> builder.addParameter(parameter.toKotlinParameter()) }
     returnType?.let { type -> builder.returns(type.toKotlinTypeName()) }
@@ -341,7 +347,6 @@ private fun LsiPoetModifier.toKotlinModifier(context: KotlinModifierContext): KM
         LsiPoetModifier.NATIVE,
         LsiPoetModifier.TRANSIENT,
         LsiPoetModifier.VOLATILE,
-        LsiPoetModifier.REIFIED,
         -> error("KotlinPoet renderer cannot emit modifier $this for $context")
     }
     require(isAllowedInKotlin(context)) {
