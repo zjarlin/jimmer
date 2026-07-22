@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.tuple
 
-import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.classifyArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiArrayType
@@ -38,7 +38,9 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
         TypedTuplePlatform.KOTLIN -> LsiLanguage.KOTLIN
     }
     val originatingSymbols = setOf(id)
+    val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencies.symbolIds.toSet()
+    val dependencySources = workspace.originatingSources(dependencySymbols)
     return LsiPoetArtifact(
         file = LsiPoetFile(
             language = language,
@@ -46,11 +48,15 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
             fileName = mapperSimpleName,
             members = listOf(mapperType()),
         ),
-        aggregationMode = ArtifactAggregationMode.ISOLATING,
+        aggregationMode = classifyArtifactAggregationMode(
+            originatingSymbols = originatingSymbols,
+            originatingSources = originatingSources,
+            dependencySources = dependencySources,
+        ),
         originatingSymbols = originatingSymbols,
-        originatingSources = workspace.originatingSources(originatingSymbols),
+        originatingSources = originatingSources,
         dependencySymbols = dependencySymbols,
-        dependencySources = workspace.originatingSources(dependencySymbols),
+        dependencySources = dependencySources,
     )
 }
 

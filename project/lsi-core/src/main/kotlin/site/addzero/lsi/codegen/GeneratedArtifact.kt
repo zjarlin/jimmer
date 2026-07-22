@@ -18,6 +18,25 @@ enum class ArtifactAggregationMode {
 }
 
 /**
+ * 根据完整来源集合判定增量产物类型，跨源语义依赖不能声明为 isolating。
+ */
+fun classifyArtifactAggregationMode(
+    originatingSymbols: Set<LsiSymbolId>,
+    originatingSources: Set<LsiSource>,
+    dependencySources: Set<LsiSource>,
+): ArtifactAggregationMode {
+    if (originatingSymbols.size != 1 || originatingSources.size != 1) {
+        return ArtifactAggregationMode.AGGREGATING
+    }
+    val originatingPath = originatingSources.single().path
+    return if (dependencySources.all { source -> source.path == originatingPath }) {
+        ArtifactAggregationMode.ISOLATING
+    } else {
+        ArtifactAggregationMode.AGGREGATING
+    }
+}
+
+/**
  * 控制源码首次提交给平台 filer 的时机。
  */
 enum class ArtifactEmissionMode {

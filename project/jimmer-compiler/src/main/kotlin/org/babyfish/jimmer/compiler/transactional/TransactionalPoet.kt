@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.transactional
 
-import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.classifyArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
@@ -45,7 +45,9 @@ internal fun TransactionalPrecompiledSchema.toLsiPoetArtifacts(
 
 private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtifact {
     val originatingSymbols = setOf(id)
+    val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencySymbols()
+    val dependencySources = workspace.originatingSources(dependencySymbols)
     return LsiPoetArtifact(
         file = LsiPoetFile(
             language = platformLanguage,
@@ -58,11 +60,15 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
             },
             members = listOf(toLsiPoetType(workspace)),
         ),
-        aggregationMode = ArtifactAggregationMode.ISOLATING,
+        aggregationMode = classifyArtifactAggregationMode(
+            originatingSymbols = originatingSymbols,
+            originatingSources = originatingSources,
+            dependencySources = dependencySources,
+        ),
         originatingSymbols = originatingSymbols,
-        originatingSources = workspace.originatingSources(originatingSymbols),
+        originatingSources = originatingSources,
         dependencySymbols = dependencySymbols,
-        dependencySources = workspace.originatingSources(dependencySymbols),
+        dependencySources = dependencySources,
     )
 }
 
