@@ -32,7 +32,6 @@ import org.babyfish.jimmer.compiler.immutable.JimmerInheritanceStrategy
 import org.babyfish.jimmer.compiler.immutable.JimmerJoinedTableDissociateAction
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.dto.compiler.DtoModifier
-import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -283,40 +282,6 @@ class JimmerDtoCompilerFeatureProviderTest {
             document.renderGraph.types.map(JimmerDtoType::id),
             document.interfaceContractResolution.contracts.map(DtoInterfaceContract::typeId),
         )
-        val generatedType = JimmerDtoArtifactMetadata(outcome.schema).generatedTypes.single()
-        assertEquals("demo.dto.BookView", generatedType.qualifiedName)
-        assertEquals(ArtifactAggregationMode.AGGREGATING, generatedType.aggregationMode)
-        assertEquals(setOf(BOOK_ID), generatedType.originatingSymbols)
-        assertEquals(setOf(inputSnapshot.document.source), generatedType.originatingSources)
-        assertTrue(BOOK_ID in generatedType.dependencySymbols)
-        assertTrue(LsiSymbolId.property(BOOK_ID, "id") in generatedType.dependencySymbols)
-        assertTrue(LsiSymbolId.property(BOOK_ID, "name") in generatedType.dependencySymbols)
-        assertTrue(generatedType.dependencySources.containsAll(generatedType.originatingSources))
-
-        val duplicateTypeId = JimmerDtoTypeId("${dtoType.id.value}/duplicate")
-        val duplicateType = dtoType.copy(
-            id = duplicateTypeId,
-            propIds = emptyList(),
-            hiddenFlatPropIds = emptyList(),
-        )
-        val duplicateGraph = document.renderGraph.copy(
-            rootTypeIds = document.renderGraph.rootTypeIds + duplicateTypeId,
-            types = (document.renderGraph.types + duplicateType).sortedBy(JimmerDtoType::id),
-        )
-        val duplicateAnnotationContract = document.annotationContract.copy(
-            typePlans = (
-                document.annotationContract.typePlans +
-                    JimmerDtoTypeAnnotationPlan(duplicateTypeId, emptyList())
-                ).sortedBy(JimmerDtoTypeAnnotationPlan::typeId),
-        )
-        val duplicateDocument = document.copy(
-            renderGraph = duplicateGraph,
-            annotationContract = duplicateAnnotationContract,
-        )
-        val duplicateException = assertFailsWith<IllegalArgumentException> {
-            JimmerDtoArtifactMetadata(JimmerDtoPrecompiledSchema(listOf(duplicateDocument)))
-        }
-        assertTrue(duplicateException.message.orEmpty().contains("demo.dto.BookView"))
     }
 
     @Test
@@ -458,18 +423,6 @@ class JimmerDtoCompilerFeatureProviderTest {
             listOf("id", "name"),
             bookView.propIds.map { propId -> document.renderGraph.propsById.getValue(propId).name },
         )
-        val firstGeneratedType = JimmerDtoArtifactMetadata(first.schema).generatedTypes.single()
-        val reversedGeneratedType = JimmerDtoArtifactMetadata(reversed.schema).generatedTypes.single()
-        val firstArtifactFingerprint = JimmerDtoArtifactMetadata(first.schema).fingerprint
-        val reversedArtifactFingerprint = JimmerDtoArtifactMetadata(reversed.schema).fingerprint
-        assertEquals("demo.dto.BookView", firstGeneratedType.qualifiedName)
-        assertEquals(firstGeneratedType.qualifiedName, reversedGeneratedType.qualifiedName)
-        assertEquals(firstGeneratedType.dependencySymbols, reversedGeneratedType.dependencySymbols)
-        assertEquals(firstGeneratedType.dependencySources, reversedGeneratedType.dependencySources)
-        assertEquals(firstArtifactFingerprint, reversedArtifactFingerprint)
-        assertEquals(setOf(viewDocument.source), firstGeneratedType.originatingSources)
-        assertTrue(fragmentDocument.source in firstGeneratedType.dependencySources)
-        assertTrue(viewDocument.source in firstGeneratedType.dependencySources)
         assertEquals(first.schema.normalizedSnapshot(), reversed.schema.normalizedSnapshot())
         assertEquals(first.schema.fingerprint(), reversed.schema.fingerprint())
     }

@@ -119,7 +119,6 @@ internal data class JimmerDtoCompilerFeatureState(
     val status: JimmerDtoCompilerFeatureStatus,
     val dependencyStatus: JimmerDtoCompilerDependencyStatus,
     val schema: JimmerDtoPrecompiledSchema,
-    val artifactMetadata: JimmerDtoArtifactMetadata = JimmerDtoArtifactMetadata(schema),
     val unresolvedDocuments: List<JimmerDtoUnresolvedDocument>,
     val failures: List<JimmerDtoCompilerFailure>,
     val defaultNullableInputModifier: DtoModifier,
@@ -136,8 +135,6 @@ internal data class JimmerDtoCompilerFeatureState(
         append(rendererOptions.fingerprint)
         append(':')
         appendEffectiveKspMutableByRootTypeId(effectiveKspMutableByRootTypeId)
-        append(':')
-        append(artifactMetadata.fingerprint)
         append(':')
         append(schema.fingerprint())
         unresolvedDocuments.forEach { document ->
