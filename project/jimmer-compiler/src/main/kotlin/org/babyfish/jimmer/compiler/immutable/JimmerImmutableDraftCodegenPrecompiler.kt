@@ -12,7 +12,6 @@ import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
-import site.addzero.lsi.jimmer.TransientResolver
 import site.addzero.lsi.jimmer.classTypeIds
 import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.core.LsiLanguage
@@ -20,9 +19,7 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -30,7 +27,6 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
 internal class JimmerImmutableDraftCodegenPrecompiler {
@@ -162,86 +158,6 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
             }
             val validationAnnotations = declaration.annotations.constraintAnnotations(workspace)
             val customValidations = validationAnnotations.customValidations(workspace)
-            val dependencySymbols = linkedSetOf<LsiSymbolId>()
-
-            fun includeDependency(symbolId: LsiSymbolId) {
-                if (!dependencySymbols.add(symbolId)) {
-                    return
-                }
-                workspace[symbolId]?.origin?.originatingSymbols?.forEach(::includeDependency)
-            }
-
-            fun includeSemanticProp(propId: LsiSymbolId) {
-                includeDependency(propId)
-                val semanticProp = schema.propsById[propId] ?: return
-                includeDependency(semanticProp.declarationId)
-                includeDependency(semanticProp.declaringTypeId)
-                semanticProp.overrideChain.forEach(::includeDependency)
-            }
-
-            includeDependency(type.id)
-            declaration.annotations.forEach { annotation ->
-                annotation.referencedTypeIds().forEach(::includeDependency)
-            }
-            declaration.typeParameters.forEach { parameter ->
-                parameter.upperBounds.forEach { bound ->
-                    bound.referencedTypeIds().forEach(::includeDependency)
-                }
-            }
-            directSuperTypes.forEach { superType ->
-                superType.referencedTypeIds().forEach(::includeDependency)
-            }
-            listOfNotNull(type.idPropId, type.versionPropId, type.logicalDeletedPropId)
-                .forEach(::includeSemanticProp)
-            customValidations.forEach { validation ->
-                includeDependency(validation.annotationTypeId)
-                validation.validatorTypeIds.forEach(::includeDependency)
-            }
-            propPlans.forEach { plan ->
-                includeSemanticProp(plan.propId)
-                includeDependency(plan.declarationId)
-                includeSemanticProp(plan.lineageRootId)
-                includeDependency(plan.sourceDeclaringTypeId)
-                includeDependency(plan.runtimeOwnerTypeId)
-                plan.type.referencedTypeIds().forEach(::includeDependency)
-                plan.runtimeProp.metadataElementType.referencedTypeIds().forEach(::includeDependency)
-                plan.runtimeProp.associationAnnotationTypeId?.let(::includeDependency)
-                plan.targetTypeId?.let(::includeDependency)
-                plan.targetIdPropId?.let(::includeSemanticProp)
-                plan.idViewBasePropId?.let(::includeSemanticProp)
-                plan.manyToManyBasePropId?.let(::includeSemanticProp)
-                plan.manyToManyDeeperPropId?.let(::includeSemanticProp)
-                plan.formulaDependencyPaths.flatten().forEach(::includeSemanticProp)
-                plan.associatedId?.targetIdPropId?.let(::includeSemanticProp)
-                plan.validationPlan.steps.forEach { step ->
-                    when (step) {
-                        is JimmerImmutableDraftValidationStep.BuiltIn -> {
-                            includeDependency(step.sourceAnnotationTypeId)
-                            includeDependency(step.failure.exceptionTypeId)
-                        }
-                        is JimmerImmutableDraftValidationStep.CustomValidator -> {
-                            includeDependency(step.annotationTypeId)
-                            step.validatorTypeIds.forEach(::includeDependency)
-                        }
-                    }
-                }
-                val semanticProp = schema.propsById.getValue(plan.propId)
-                semanticProp.annotations.forEach { annotation ->
-                    annotation.referencedTypeIds().forEach(::includeDependency)
-                }
-                semanticProp.converter?.let { converter ->
-                    includeDependency(converter.converterTypeId)
-                    converter.sourceType?.referencedTypeIds()?.forEach(::includeDependency)
-                    converter.targetType?.referencedTypeIds()?.forEach(::includeDependency)
-                }
-                (semanticProp.transientResolver as? TransientResolver.Type)
-                    ?.typeId
-                    ?.let(::includeDependency)
-            }
-            val dependencySources = dependencySymbols
-                .mapNotNull { symbolId -> workspace[symbolId]?.origin?.source }
-                .distinct()
-                .sorted()
             return JimmerImmutableDraftTypePlan(
                 typeId = type.id,
                 qualifiedName = type.qualifiedName,
@@ -267,10 +183,6 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                 versionPropId = type.versionPropId,
                 logicalDeletedPropId = type.logicalDeletedPropId,
                 customValidations = customValidations,
-                artifactOriginatingSymbols = setOf(type.id),
-                artifactOriginatingSources = listOfNotNull(declaration.origin.source),
-                dependencySymbols = dependencySymbols,
-                dependencySources = dependencySources,
             ).also { plan -> compiledTypes[typeId] = plan }
         }
 
@@ -568,58 +480,6 @@ private fun List<LsiAnnotation>.customValidations(workspace: LsiWorkspace): List
 
 private fun LsiSource.baseName(): String {
     return path.substringAfterLast('/').substringBeforeLast('.', missingDelimiterValue = path.substringAfterLast('/'))
-}
-
-private fun LsiAnnotation.referencedTypeIds(): Set<LsiSymbolId> {
-    return buildSet {
-        add(type)
-        arguments.values.forEach { argument -> addAll(argument.value.referencedTypeIds()) }
-    }
-}
-
-private fun LsiAnnotationValue.referencedTypeIds(): Set<LsiSymbolId> {
-    return when (this) {
-        is LsiAnnotationValue.ClassValue -> type.referencedTypeIds()
-        is LsiAnnotationValue.EnumValue -> setOf(enumType)
-        is LsiAnnotationValue.NestedAnnotationValue -> annotation.referencedTypeIds()
-        is LsiAnnotationValue.ArrayValue -> elements.flatMapTo(linkedSetOf()) { element ->
-            element.referencedTypeIds()
-        }
-        is LsiAnnotationValue.BooleanValue,
-        is LsiAnnotationValue.ByteValue,
-        is LsiAnnotationValue.ShortValue,
-        is LsiAnnotationValue.IntValue,
-        is LsiAnnotationValue.LongValue,
-        is LsiAnnotationValue.FloatValue,
-        is LsiAnnotationValue.DoubleValue,
-        is LsiAnnotationValue.CharValue,
-        is LsiAnnotationValue.StringValue,
-        -> emptySet()
-    }
-}
-
-private fun LsiTypeRef.referencedTypeIds(): Set<LsiSymbolId> {
-    return buildSet {
-        annotations.forEach { annotation -> addAll(annotation.referencedTypeIds()) }
-        when (this@referencedTypeIds) {
-            is LsiDeclaredType -> {
-                add(declarationId)
-                arguments.forEach { argument ->
-                    argument.type?.referencedTypeIds()?.let(::addAll)
-                }
-            }
-            is LsiArrayType -> addAll(elementType.referencedTypeIds())
-            is LsiFunctionType -> {
-                receiverType?.referencedTypeIds()?.let(::addAll)
-                parameterTypes.forEach { parameterType -> addAll(parameterType.referencedTypeIds()) }
-                addAll(returnType.referencedTypeIds())
-            }
-            is LsiTypeParameterRef -> add(parameterId)
-            is LsiPrimitiveType,
-            is LsiUnresolvedType,
-            -> Unit
-        }
-    }
 }
 
 private val CONSTRAINT_ANNOTATIONS = setOf(

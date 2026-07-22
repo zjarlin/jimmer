@@ -14,7 +14,6 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
@@ -149,17 +148,16 @@ class JimmerImmutableDraftCodegenModelTest {
 
         assertEquals(listOf(VALIDATOR), book.customValidations.single().validatorTypeIds)
         assertEquals("invalid book", book.customValidations.single().message)
-        assertEquals(setOf(BOOK), book.artifactOriginatingSymbols)
-        assertEquals(listOf(SOURCE), book.artifactOriginatingSources)
-        assertTrue(AUTHOR in book.dependencySymbols)
-        assertTrue(LsiSymbolId.property(AUTHOR, "id") in book.dependencySymbols)
-        assertTrue(LsiSymbolId.property(BASE_ID, "id") in book.dependencySymbols)
-        assertTrue(VALID_BOOK in book.dependencySymbols)
-        assertTrue(VALIDATOR in book.dependencySymbols)
-        assertTrue(BASE_SOURCE in book.dependencySources)
+        val javaArtifact = schema.toDraftPoetArtifacts(
+            draftSchema = draftSchema,
+            types = listOf(book),
+            language = LsiLanguage.JAVA,
+            workspace = workspace,
+        ).single()
+        assertTrue(javaArtifact.dependencySymbols.containsAll(setOf(VALID_BOOK, VALIDATOR)))
+        assertTrue(VALIDATOR_SOURCE in javaArtifact.dependencySources)
         assertEquals("demo.BookDraft", book.javaDraftQualifiedName())
         assertEquals("demo.ModelsDraft", book.kotlinDraftQualifiedFileName())
-        assertEquals(ArtifactAggregationMode.AGGREGATING, book.draftArtifactAggregationMode())
         assertEquals(
             listOf(AUTHOR, BASE_ID, BOOK),
             draftSchema.generatedDraftTypes(setOf(BOOK, BASE_ID, AUTHOR)).map { type -> type.typeId },
@@ -383,6 +381,7 @@ class JimmerImmutableDraftCodegenModelTest {
         val author = LsiSymbolId.property(BOOK, "author")
         val declarations = listOf(
             annotationType(),
+            validatorType(),
             builtInAnnotationType("NotBlank"),
             builtInAnnotationType("Size"),
             builtInAnnotationType("Pattern"),
@@ -461,7 +460,7 @@ class JimmerImmutableDraftCodegenModelTest {
             ),
         )
         return LsiWorkspace(
-            sources = listOf(SOURCE, BASE_SOURCE),
+            sources = listOf(SOURCE, BASE_SOURCE, VALIDATOR_SOURCE),
             declarations = declarations,
         )
     }
@@ -534,6 +533,16 @@ class JimmerImmutableDraftCodegenModelTest {
                 )
             ),
             origin = ORIGIN,
+        )
+    }
+
+    private fun validatorType(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
+            id = VALIDATOR,
+            name = "ValidBookValidator",
+            qualifiedName = "demo.ValidBookValidator",
+            kind = LsiTypeDeclarationKind.CLASS,
+            origin = VALIDATOR_ORIGIN,
         )
     }
 
@@ -634,8 +643,13 @@ class JimmerImmutableDraftCodegenModelTest {
     private companion object {
         val SOURCE = LsiSource.of("src/main/java/demo/Models.java", LsiLanguage.JAVA)
         val BASE_SOURCE = LsiSource.of("src/main/java/demo/BaseId.java", LsiLanguage.JAVA)
+        val VALIDATOR_SOURCE = LsiSource.of(
+            "src/main/java/demo/ValidBookValidator.java",
+            LsiLanguage.JAVA,
+        )
         val ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, SOURCE)
         val BASE_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, BASE_SOURCE)
+        val VALIDATOR_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, VALIDATOR_SOURCE)
         val BASE_ID = LsiSymbolId.type("demo.BaseId")
         val AUTHOR = LsiSymbolId.type("demo.Author")
         val ADDRESS = LsiSymbolId.type("demo.Address")

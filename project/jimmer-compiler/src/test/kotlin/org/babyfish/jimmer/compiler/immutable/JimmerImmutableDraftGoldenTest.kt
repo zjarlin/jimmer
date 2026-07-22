@@ -104,6 +104,7 @@ class JimmerImmutableDraftGoldenTest {
             task.setProcessors(listOf(JimmerProcessor()))
             assertTrue(task.call(), diagnostics.toErrorMessage())
         }
+        assertDraftFileSet(generatedDir.resolve("demo"), fixture.generatedFiles, ".java", "APT")
         return fixture.generatedFiles.associateWith { name ->
             val generatedFile = generatedDir.resolve("demo/$name")
             assertTrue(generatedFile.isFile, "APT Draft output is missing: ${generatedFile.absolutePath}")
@@ -145,11 +146,33 @@ class JimmerImmutableDraftGoldenTest {
             logger,
         ).execute()
         assertEquals(KotlinSymbolProcessing.ExitCode.OK, exitCode, logger.text())
+        assertDraftFileSet(kotlinOutputDir.resolve("demo"), fixture.generatedFiles, ".kt", "KSP")
         return fixture.generatedFiles.associateWith { name ->
             val generatedFile = kotlinOutputDir.resolve("demo/$name")
             assertTrue(generatedFile.isFile, "KSP Draft output is missing: ${generatedFile.absolutePath}")
             generatedFile.readBytes()
         }
+    }
+
+    private fun assertDraftFileSet(
+        packageDir: File,
+        expectedFiles: List<String>,
+        extension: String,
+        platform: String,
+    ) {
+        val actualFiles = packageDir.listFiles()
+            .orEmpty()
+            .asSequence()
+            .filter(File::isFile)
+            .map(File::getName)
+            .filter { name -> name.endsWith("Draft$extension") }
+            .sorted()
+            .toList()
+        assertEquals(
+            expectedFiles.sorted(),
+            actualFiles,
+            "$platform generated an unexpected immutable Draft file set",
+        )
     }
 
     private fun assertGoldens(

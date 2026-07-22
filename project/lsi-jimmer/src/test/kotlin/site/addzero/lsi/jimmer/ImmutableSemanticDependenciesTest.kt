@@ -24,6 +24,26 @@ import site.addzero.lsi.model.LsiWorkspace
 class ImmutableSemanticDependenciesTest {
 
     @Test
+    fun `custom validation dependencies include annotation and validator types`() {
+        val annotationTypeId = typeId("demo.ValidBook")
+        val validatorTypeId = typeId("demo.ValidBookValidator")
+        val dependencies = sortedSetOf<LsiSymbolId>()
+
+        dependencies.collectImmutableValidationDependencies(
+            listOf(
+                ImmutableValidation(
+                    annotationTypeId = annotationTypeId,
+                    validatorTypeIds = listOf(validatorTypeId),
+                    message = "invalid book",
+                    sourceAnnotationUseSiteTarget = null,
+                )
+            )
+        )
+
+        assertEquals(setOf(annotationTypeId, validatorTypeId), dependencies)
+    }
+
+    @Test
     fun `type parameter upper bounds and direct super references contribute workspace dependencies`() {
         val genericId = typeId("demo.GenericRecord")
         val parameterId = LsiSymbolId.typeParameter(genericId, "T")

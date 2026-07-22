@@ -43,29 +43,9 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                 type.logicalDeletedPropId?.value.orEmpty(),
                 type.requiresVisibilityState.toString(),
                 type.customValidations.validationText(includePlatformSurface),
-                type.artifactOriginatingSymbols.sorted().joinToString(",") { symbolId -> symbolId.value },
-                if (includePlatformSurface) {
-                    type.dependencySymbols.sorted().joinToString(",") { symbolId -> symbolId.value }
-                } else {
-                    ""
-                },
                 if (includePlatformSurface) type.sourceLanguage.name else "",
                 if (includePlatformSurface) type.sourcePath.orEmpty() else "",
                 if (includePlatformSurface) type.sourceBaseName.orEmpty() else "",
-                if (includePlatformSurface) {
-                    type.artifactOriginatingSources.joinToString(",") { source ->
-                        "${source.path}:${source.language.name}:${source.kind.name}"
-                    }
-                } else {
-                    ""
-                },
-                if (includePlatformSurface) {
-                    type.dependencySources.joinToString(",") { source ->
-                        "${source.path}:${source.language.name}:${source.kind.name}"
-                    }
-                } else {
-                    ""
-                },
             )
             type.propsBySlot.forEach { prop ->
                 appendDraftRecord(

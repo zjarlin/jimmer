@@ -111,14 +111,23 @@ fun MutableSet<LsiSymbolId>.collectImmutablePropDependencies(
             null,
             -> Unit
         }
-        prop.validations.forEach { validation ->
-            add(validation.annotationTypeId)
-            addAll(validation.validatorTypeIds)
-        }
+        collectImmutableValidationDependencies(prop.validations)
         prop.converter?.let { converter ->
             add(converter.converterTypeId)
             converter.sourceType?.let(::collectTypeRefDependencies)
             converter.targetType?.let(::collectTypeRefDependencies)
         }
+    }
+}
+
+/**
+ * 将校验注解及其实际 validator 类型追加到稳定依赖集合。
+ */
+fun MutableSet<LsiSymbolId>.collectImmutableValidationDependencies(
+    validations: Collection<ImmutableValidation>,
+) {
+    validations.forEach { validation ->
+        add(validation.annotationTypeId)
+        addAll(validation.validatorTypeIds)
     }
 }

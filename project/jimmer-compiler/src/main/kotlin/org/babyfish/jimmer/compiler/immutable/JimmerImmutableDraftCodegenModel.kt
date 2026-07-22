@@ -3,7 +3,6 @@ package org.babyfish.jimmer.compiler.immutable
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.core.LsiLanguage
-import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeParameter
@@ -45,10 +44,6 @@ internal data class JimmerImmutableDraftTypePlan(
     val versionPropId: LsiSymbolId?,
     val logicalDeletedPropId: LsiSymbolId?,
     val customValidations: List<ImmutableValidation>,
-    val artifactOriginatingSymbols: Set<LsiSymbolId>,
-    val artifactOriginatingSources: List<LsiSource>,
-    val dependencySymbols: Set<LsiSymbolId>,
-    val dependencySources: List<LsiSource>,
 ) {
 
     val propsById: Map<LsiSymbolId, JimmerImmutableDraftPropPlan> =
@@ -88,15 +83,6 @@ internal data class JimmerImmutableDraftTypePlan(
             superType.declarationId == primarySuperTypeId
         }) {
             "Immutable draft primary super type must be direct: ${typeId.value}"
-        }
-        require(artifactOriginatingSymbols == setOf(typeId)) {
-            "Immutable draft artifact must originate from exactly its owner type: ${typeId.value}"
-        }
-        require(artifactOriginatingSources.size <= 1) {
-            "Immutable draft isolating artifact cannot have multiple originating sources: ${typeId.value}"
-        }
-        require(typeId in dependencySymbols) {
-            "Immutable draft dependencies must contain their owner type: ${typeId.value}"
         }
     }
 }

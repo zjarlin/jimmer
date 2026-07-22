@@ -1,9 +1,6 @@
 package org.babyfish.jimmer.compiler.immutable
 
 import site.addzero.lsi.codegen.ArtifactAggregationMode
-import site.addzero.lsi.codegen.classifyArtifactAggregationMode
-import site.addzero.lsi.core.LsiSource
-import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
@@ -28,19 +25,6 @@ internal fun JimmerImmutableDraftTypePlan.kotlinDraftQualifiedFileName(): String
     }}Draft"
     val packageName = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
     return if (packageName.isEmpty()) fileName else "$packageName.$fileName"
-}
-
-internal fun JimmerImmutableDraftTypePlan.draftArtifactAggregationMode(): ArtifactAggregationMode {
-    return classifyArtifactAggregationMode(
-        originatingSymbols = artifactOriginatingSymbols,
-        originatingSources = artifactOriginatingSources.toSet(),
-        dependencySources = draftArtifactDependencySources(),
-    )
-}
-
-internal fun JimmerImmutableDraftTypePlan.draftArtifactDependencySources(): Set<LsiSource> {
-    return dependencySources
-        .filterTo(sortedSetOf()) { source -> source.kind != LsiSourceKind.BINARY }
 }
 
 internal fun ImmutableSchema.isBranchDependent(type: ImmutableType): Boolean {

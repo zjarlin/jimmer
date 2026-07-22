@@ -13,8 +13,6 @@ import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
-import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableDraftJavaRenderer
-import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableDraftKotlinRenderer
 import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.fingerprint
@@ -115,12 +113,14 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val embeddableTypes = state.schema.generatedEmbeddableTypes(state.currentTypeIds)
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> {
-                val draftRenderer = JimmerImmutableDraftJavaRenderer()
                 val sharedRenderer: LsiPoetRenderer = LsiJavaPoetRenderer()
                 val queryTypes = state.schema.generatedPropsTypes(state.targetTypeIds)
-                draftTypes.map { type ->
-                    draftRenderer.render(state.draftCodegenSchema, type)
-                } + state.schema.toFetcherPoetArtifacts(
+                state.schema.toDraftPoetArtifacts(
+                    draftSchema = state.draftCodegenSchema,
+                    types = draftTypes,
+                    language = LsiLanguage.JAVA,
+                    workspace = context.round.workspace,
+                ).map(sharedRenderer::render) + state.schema.toFetcherPoetArtifacts(
                     types = fetcherTypes,
                     language = LsiLanguage.JAVA,
                     workspace = context.round.workspace,
@@ -135,12 +135,14 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 ).map(sharedRenderer::render)
             }
             CompilerPlatform.KSP -> {
-                val draftRenderer = JimmerImmutableDraftKotlinRenderer()
                 val sharedRenderer: LsiPoetRenderer = LsiKotlinPoetRenderer()
                 val queryTypes = state.schema.generatedQueryTypes(state.targetTypeIds)
-                draftTypes.map { type ->
-                    draftRenderer.render(state.draftCodegenSchema, type)
-                } + state.schema.toFetcherPoetArtifacts(
+                state.schema.toDraftPoetArtifacts(
+                    draftSchema = state.draftCodegenSchema,
+                    types = draftTypes,
+                    language = LsiLanguage.KOTLIN,
+                    workspace = context.round.workspace,
+                ).map(sharedRenderer::render) + state.schema.toFetcherPoetArtifacts(
                     types = fetcherTypes,
                     language = LsiLanguage.KOTLIN,
                     workspace = context.round.workspace,
