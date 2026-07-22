@@ -52,7 +52,7 @@ private fun LsiTypeRef.toKotlinTypeName(referenceContext: Boolean): TypeName {
         is LsiPrimitiveType -> toKotlinPrimitiveTypeName(referenceContext)
         is LsiDeclaredType -> {
             val qualifiedName = declarationId.requireTypeQualifiedName()
-            val rawType = KOTLIN_TYPES[qualifiedName] ?: ClassName.bestGuess(qualifiedName)
+            val rawType = KOTLIN_TYPES[qualifiedName] ?: qualifiedName.toKotlinClassName()
             if (arguments.isEmpty()) {
                 rawType
             } else {
@@ -110,7 +110,7 @@ internal fun LsiTypeParameter.toKotlinTypeVariableName(
 }
 
 internal fun LsiAnnotation.toKotlinCoreAnnotationSpec(): AnnotationSpec {
-    return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
+    return AnnotationSpec.builder(type.requireTypeQualifiedName().toKotlinClassName())
         .apply {
             useSiteTarget?.toPoetUseSiteTarget()?.let(::useSiteTarget)
             arguments.toSortedMap().forEach { (name, argument) ->
@@ -127,7 +127,7 @@ internal fun LsiAnnotation.toKotlinCoreAnnotationSpec(): AnnotationSpec {
 }
 
 internal fun LsiPoetAnnotation.toKotlinSourceAnnotationSpec(): AnnotationSpec {
-    return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
+    return AnnotationSpec.builder(type.requireTypeQualifiedName().toKotlinClassName())
         .apply {
             useSiteTarget?.toPoetUseSiteTarget()?.let(::useSiteTarget)
             arguments.forEach { argument ->
@@ -237,7 +237,7 @@ private fun LsiAnnotationValue.toKotlinCoreAnnotationValue(): CodeBlock {
         is LsiAnnotationValue.StringValue -> CodeBlock.of("%S", value)
         is LsiAnnotationValue.EnumValue -> CodeBlock.of(
             "%T.%L",
-            ClassName.bestGuess(enumType.requireTypeQualifiedName()),
+            enumType.requireTypeQualifiedName().toKotlinClassName(),
             entryName,
         )
         is LsiAnnotationValue.ClassValue -> type.toKotlinClassLiteral()
@@ -270,7 +270,7 @@ private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(): CodeBlock {
         is LsiPoetAnnotationValue.StringValue -> CodeBlock.of("%S", value)
         is LsiPoetAnnotationValue.EnumValue -> CodeBlock.of(
             "%T.%L",
-            ClassName.bestGuess(enumType.requireTypeQualifiedName()),
+            enumType.requireTypeQualifiedName().toKotlinClassName(),
             entryName,
         )
         is LsiPoetAnnotationValue.ClassValue -> type.toKotlinClassLiteral()
@@ -305,7 +305,7 @@ private fun LsiAnnotation.toKotlinNestedCoreAnnotationValue(): CodeBlock {
         "Nested Kotlin annotation value cannot declare a use-site target: $type"
     }
     return CodeBlock.builder()
-        .add("%T(", ClassName.bestGuess(type.requireTypeQualifiedName()))
+        .add("%T(", type.requireTypeQualifiedName().toKotlinClassName())
         .apply {
             arguments
                 .asSequence()
@@ -327,7 +327,7 @@ private fun LsiPoetAnnotation.toKotlinNestedSourceAnnotationValue(): CodeBlock {
         "Nested Kotlin annotation value cannot declare a use-site target: $type"
     }
     return CodeBlock.builder()
-        .add("%T(", ClassName.bestGuess(type.requireTypeQualifiedName()))
+        .add("%T(", type.requireTypeQualifiedName().toKotlinClassName())
         .apply {
             arguments.forEachIndexed { index, argument ->
                 if (index != 0) {
@@ -384,6 +384,23 @@ private fun LsiAnnotationUseSiteTarget.toPoetUseSiteTarget(): AnnotationSpec.Use
             "KotlinPoet renderer cannot emit the Kotlin ALL annotation use-site target"
         )
     }
+}
+
+/**
+ * 按稳定 JVM 名称拆分包和嵌套类型，并保留需要由 KotlinPoet 转义的源码段。
+ */
+private fun String.toKotlinClassName(): ClassName {
+    val segments = split('.')
+    val classIndex = segments.indexOfFirst { segment ->
+        segment.isNotEmpty() && !Character.isLowerCase(segment.codePointAt(0))
+    }
+    require(classIndex >= 0) { "Kotlin type name has no declaration segment: '$this'" }
+    val packageName = segments.take(classIndex).joinToString(".")
+    val simpleNames = segments.drop(classIndex)
+    require(simpleNames.all(String::isNotEmpty)) {
+        "Kotlin type name contains an empty declaration segment: '$this'"
+    }
+    return ClassName(packageName, simpleNames)
 }
 
 private fun Char.toCharacterLiteral(): String {

@@ -20,6 +20,18 @@ import site.addzero.lsi.model.LsiPrimitiveType
 class KotlinPoetTypesTest {
 
     @Test
+    fun `preserves escaped nested declaration segments from stable type ids`() {
+        val type = LsiDeclaredType(
+            LsiSymbolId.type("demo.ModelDraft.\$.DraftImpl"),
+        )
+
+        assertEquals(
+            ClassName("demo", "ModelDraft", "\$", "DraftImpl"),
+            type.toKotlinTypeName(),
+        )
+    }
+
+    @Test
     fun `converts the complete LSI function type to a Kotlin lambda type`() {
         val functionType = LsiFunctionType(
             returnType = LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN),
