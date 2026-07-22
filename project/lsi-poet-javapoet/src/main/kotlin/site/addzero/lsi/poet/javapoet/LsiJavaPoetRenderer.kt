@@ -221,6 +221,10 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
             is LsiPoetCodePart.Statement -> builder.addStatement("\$L", part.value.toJavaCodeBlock())
             is LsiPoetCodePart.StringLiteral -> builder.add("\$S", part.value)
             is LsiPoetCodePart.Text -> builder.add("\$L", part.value)
+            is LsiPoetCodePart.TopLevelMember -> error(
+                "JavaPoet renderer cannot emit a Kotlin top-level member reference: " +
+                    "${part.packageName}.${part.simpleName}"
+            )
             is LsiPoetCodePart.Type -> builder.add("\$T", part.value.toJavaTypeName())
             LsiPoetCodePart.Unindent -> builder.unindent()
         }

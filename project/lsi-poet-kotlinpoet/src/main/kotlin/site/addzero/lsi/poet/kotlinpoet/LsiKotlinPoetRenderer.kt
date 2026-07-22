@@ -5,6 +5,7 @@ import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.MemberName
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
@@ -246,6 +247,10 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
             is LsiPoetCodePart.Statement -> builder.addStatement("%L", part.value.toKotlinCodeBlock())
             is LsiPoetCodePart.StringLiteral -> builder.add("%S", part.value)
             is LsiPoetCodePart.Text -> builder.add("%L", part.value)
+            is LsiPoetCodePart.TopLevelMember -> builder.add(
+                "%M",
+                MemberName(part.packageName, part.simpleName, part.extension),
+            )
             is LsiPoetCodePart.Type -> builder.add("%T", part.value.toKotlinTypeName())
             LsiPoetCodePart.Unindent -> builder.unindent()
         }

@@ -10,6 +10,27 @@ sealed interface LsiPoetCodePart {
 
     data class Type(val value: LsiTypeRef) : LsiPoetCodePart
 
+    /**
+     * 指向 Kotlin 包级声明，由 KotlinPoet 负责导入和关键字转义。
+     */
+    data class TopLevelMember(
+        val packageName: String,
+        val simpleName: String,
+        val extension: Boolean,
+    ) : LsiPoetCodePart {
+        init {
+            require(packageName == packageName.trim()) {
+                "LSI Poet top-level member package name cannot have surrounding whitespace: '$packageName'"
+            }
+            require(packageName.isEmpty() || packageName.isQualifiedJvmName()) {
+                "LSI Poet top-level member package name must be a qualified JVM name: '$packageName'"
+            }
+            require(simpleName.isJvmIdentifier()) {
+                "LSI Poet top-level member simple name must be a JVM identifier: '$simpleName'"
+            }
+        }
+    }
+
     data class Name(val value: String) : LsiPoetCodePart {
         init {
             require(value.isNotBlank()) { "LSI Poet name cannot be blank" }
@@ -131,6 +152,14 @@ class LsiPoetCodeBuilder internal constructor() {
         parts += LsiPoetCodePart.Type(value)
     }
 
+    fun topLevelMember(
+        packageName: String,
+        simpleName: String,
+        extension: Boolean,
+    ) {
+        parts += LsiPoetCodePart.TopLevelMember(packageName, simpleName, extension)
+    }
+
     fun name(value: String) {
         parts += LsiPoetCodePart.Name(value)
     }
@@ -216,4 +245,15 @@ class LsiPoetCodeBuilder internal constructor() {
     }
 
     fun build(): LsiPoetCodeBlock = LsiPoetCodeBlock(parts.toList())
+}
+
+private fun String.isQualifiedJvmName(): Boolean {
+    return split('.').all(String::isJvmIdentifier)
+}
+
+private fun String.isJvmIdentifier(): Boolean {
+    if (isEmpty() || !Character.isJavaIdentifierStart(first())) {
+        return false
+    }
+    return drop(1).all(Character::isJavaIdentifierPart)
 }
