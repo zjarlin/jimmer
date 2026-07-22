@@ -6,6 +6,10 @@ import java.lang.reflect.Proxy
 import java.net.URI
 import javax.annotation.processing.Filer
 import javax.lang.model.element.Element
+import javax.lang.model.element.ElementKind
+import javax.lang.model.element.Name
+import javax.lang.model.element.TypeElement
+import javax.lang.model.element.TypeParameterElement
 import javax.tools.FileObject
 import javax.tools.JavaFileManager
 import javax.tools.JavaFileObject
@@ -86,6 +90,47 @@ class AptGeneratedArtifactWriterTest {
         assertEquals(2, call.originatingElements.size)
         assertSame(baseElement, call.originatingElements[0])
         assertSame(childElement, call.originatingElements[1])
+    }
+
+    @Test
+    fun `normalizes aggregating member and type parameter dependencies to top level types`() {
+        val filer = CapturingFiler()
+        val writer = AptGeneratedArtifactWriter(filer)
+        val rootId = LsiSymbolId.type("demo.Root")
+        val propertyId = LsiSymbolId.property(rootId, "value")
+        val typeParameterId = LsiSymbolId.typeParameter(rootId, "T")
+        val rootElement = element("demo.Root")
+        val propertyElement = enclosedElement("value", rootElement)
+        val typeParameterElement = enclosedTypeParameter("T", rootElement)
+        val source = LsiSource.of("/workspace/Root.java", LsiLanguage.JAVA)
+
+        writer.write(
+            GeneratedArtifact.source(
+                kind = ArtifactKind.JAVA_SOURCE,
+                qualifiedName = "demo.RootTable",
+                content = "package demo; public class RootTable {}",
+                aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                originatingSymbols = setOf(rootId),
+                originatingSources = setOf(source),
+                dependencySymbols = setOf(typeParameterId, propertyId, rootId),
+                dependencySources = setOf(source),
+            ),
+            currentRoundElements = mapOf(
+                rootId to rootElement,
+                propertyId to propertyElement,
+                typeParameterId to typeParameterElement,
+            ),
+            currentRoundSources = mapOf(
+                rootId to source,
+                propertyId to source,
+                typeParameterId to source,
+            ),
+        )
+
+        val originatingElements = filer.sourceCalls.single().originatingElements
+        assertEquals(1, originatingElements.size)
+        assertSame(rootElement, originatingElements.single())
+        assertTrue(originatingElements.single() is TypeElement)
     }
 
     @Test
@@ -225,20 +270,59 @@ class AptGeneratedArtifactWriterTest {
         assertTrue(filer.sourceCalls.isEmpty())
     }
 
-    private fun element(label: String): Element {
+    private fun element(label: String): TypeElement {
+        return proxyElement(TypeElement::class.java, label, enclosingElement = null)
+    }
+
+    private fun enclosedElement(
+        label: String,
+        enclosingElement: Element,
+    ): Element {
+        return proxyElement(Element::class.java, label, enclosingElement)
+    }
+
+    private fun enclosedTypeParameter(
+        label: String,
+        enclosingElement: Element,
+    ): TypeParameterElement {
+        return proxyElement(TypeParameterElement::class.java, label, enclosingElement)
+    }
+
+    private fun <T : Element> proxyElement(
+        elementType: Class<T>,
+        label: String,
+        enclosingElement: Element?,
+    ): T {
         lateinit var instance: Any
         instance = Proxy.newProxyInstance(
-            Element::class.java.classLoader,
-            arrayOf(Element::class.java),
+            elementType.classLoader,
+            arrayOf(elementType),
         ) { _, method, arguments ->
             when (method.name) {
                 "equals" -> instance === arguments?.firstOrNull()
+                "getEnclosingElement" -> enclosingElement
+                "getKind" -> when (elementType) {
+                    TypeElement::class.java -> ElementKind.INTERFACE
+                    TypeParameterElement::class.java -> ElementKind.TYPE_PARAMETER
+                    else -> ElementKind.FIELD
+                }
+                "getQualifiedName",
+                "getSimpleName",
+                -> TestName(label)
                 "hashCode" -> System.identityHashCode(instance)
                 "toString" -> label
                 else -> null
             }
         }
-        return instance as Element
+        return elementType.cast(instance)
+    }
+
+    private data class TestName(
+        private val value: String,
+    ) : Name, CharSequence by value {
+        override fun contentEquals(cs: CharSequence): Boolean = value.contentEquals(cs)
+
+        override fun toString(): String = value
     }
 
     private class CapturingFiler : Filer {

@@ -38,6 +38,7 @@ import javax.tools.StandardLocation
     "org.springframework.web.bind.annotation.RestController",
     "org.babyfish.jimmer.sql.transaction.Tx",
     "org.babyfish.jimmer.sql.TypedTuple",
+    "org.babyfish.jimmer.internal.GeneratedBy",
 )
 class JimmerProcessor : AbstractProcessor() {
 

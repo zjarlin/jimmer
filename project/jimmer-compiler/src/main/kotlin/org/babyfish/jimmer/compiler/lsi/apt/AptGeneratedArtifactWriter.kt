@@ -3,6 +3,7 @@ package org.babyfish.jimmer.compiler.lsi.apt
 import java.nio.charset.StandardCharsets
 import javax.annotation.processing.Filer
 import javax.lang.model.element.Element
+import javax.lang.model.element.TypeElement
 import javax.tools.StandardLocation
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactEmissionMode
@@ -49,14 +50,8 @@ class AptGeneratedArtifactWriter(
         currentRoundElements: Map<LsiSymbolId, Element>,
         currentRoundSources: Map<LsiSymbolId, LsiSource>,
     ): Array<Element> {
-        val dependencyElements = dependencySymbols
-            .sorted()
-            .mapNotNull(currentRoundElements::get)
-            .distinct()
-        val originatingElements = originatingSymbols
-            .sorted()
-            .mapNotNull(currentRoundElements::get)
-            .distinct()
+        val dependencyElements = dependencySymbols.toTopLevelTypeElements(currentRoundElements)
+        val originatingElements = originatingSymbols.toTopLevelTypeElements(currentRoundElements)
         val representedSourcePaths = dependencySymbols
             .mapNotNull(currentRoundSources::get)
             .mapTo(hashSetOf(), LsiSource::path)
@@ -90,6 +85,29 @@ class AptGeneratedArtifactWriter(
             return originatingElements.toTypedArray()
         }
         return dependencyElements.toTypedArray()
+    }
+
+    private fun Collection<LsiSymbolId>.toTopLevelTypeElements(
+        currentRoundElements: Map<LsiSymbolId, Element>,
+    ): List<TypeElement> {
+        return asSequence()
+            .mapNotNull(currentRoundElements::get)
+            .mapNotNull { element -> element.topLevelTypeElement() }
+            .distinctBy { element -> element.qualifiedName.toString() }
+            .sortedBy { element -> element.qualifiedName.toString() }
+            .toList()
+    }
+
+    private fun Element.topLevelTypeElement(): TypeElement? {
+        var current: Element? = this
+        var topLevelType: TypeElement? = null
+        while (current != null) {
+            if (current is TypeElement) {
+                topLevelType = current
+            }
+            current = current.enclosingElement
+        }
+        return topLevelType
     }
 
     private fun GeneratedArtifact.javaQualifiedName(): String {
