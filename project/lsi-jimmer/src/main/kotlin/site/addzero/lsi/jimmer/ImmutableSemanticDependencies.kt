@@ -1,16 +1,9 @@
 package site.addzero.lsi.jimmer
 
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.collectAnnotationDependencies
+import site.addzero.lsi.model.collectTypeRefDependencies
 
 /**
  * 收集不可变类型层级及其属性闭包依赖的全部稳定符号。
@@ -127,55 +120,5 @@ fun MutableSet<LsiSymbolId>.collectImmutablePropDependencies(
             converter.sourceType?.let(::collectTypeRefDependencies)
             converter.targetType?.let(::collectTypeRefDependencies)
         }
-    }
-}
-
-/**
- * 将类型引用中的声明和类型使用注解依赖追加到目标集合。
- */
-fun MutableSet<LsiSymbolId>.collectTypeRefDependencies(type: LsiTypeRef) {
-    type.annotations.forEach(::collectAnnotationDependencies)
-    when (type) {
-        is LsiArrayType -> collectTypeRefDependencies(type.elementType)
-        is LsiDeclaredType -> {
-            add(type.declarationId)
-            type.arguments.forEach { argument -> argument.type?.let(::collectTypeRefDependencies) }
-        }
-        is LsiFunctionType -> {
-            type.receiverType?.let(::collectTypeRefDependencies)
-            type.parameterTypes.forEach(::collectTypeRefDependencies)
-            collectTypeRefDependencies(type.returnType)
-        }
-        is LsiPrimitiveType,
-        is LsiTypeParameterRef,
-        is LsiUnresolvedType,
-        -> Unit
-    }
-}
-
-/**
- * 将结构化注解值中的类型、枚举及嵌套注解依赖追加到目标集合。
- */
-fun MutableSet<LsiSymbolId>.collectAnnotationDependencies(annotation: LsiAnnotation) {
-    add(annotation.type)
-    annotation.arguments.values.forEach { argument -> collectAnnotationValueDependencies(argument.value) }
-}
-
-private fun MutableSet<LsiSymbolId>.collectAnnotationValueDependencies(value: LsiAnnotationValue) {
-    when (value) {
-        is LsiAnnotationValue.ArrayValue -> value.elements.forEach(::collectAnnotationValueDependencies)
-        is LsiAnnotationValue.ClassValue -> collectTypeRefDependencies(value.type)
-        is LsiAnnotationValue.EnumValue -> add(value.enumType)
-        is LsiAnnotationValue.NestedAnnotationValue -> collectAnnotationDependencies(value.annotation)
-        is LsiAnnotationValue.BooleanValue,
-        is LsiAnnotationValue.ByteValue,
-        is LsiAnnotationValue.ShortValue,
-        is LsiAnnotationValue.IntValue,
-        is LsiAnnotationValue.LongValue,
-        is LsiAnnotationValue.FloatValue,
-        is LsiAnnotationValue.DoubleValue,
-        is LsiAnnotationValue.CharValue,
-        is LsiAnnotationValue.StringValue,
-        -> Unit
     }
 }
