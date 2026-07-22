@@ -23,7 +23,6 @@ import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.WildcardTypeName
 import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
@@ -36,6 +35,9 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
+import site.addzero.lsi.poet.LsiPoetAnnotation
+import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationValue
 
 internal fun LsiTypeRef.toKotlinTypeName(): TypeName {
     return toKotlinTypeName(referenceContext = false)
@@ -74,7 +76,7 @@ private fun LsiTypeRef.toKotlinTypeName(referenceContext: Boolean): TypeName {
         )
     }
     val nullableTypeName = typeName.copy(nullable = nullability == LsiNullability.NULLABLE)
-    val annotationSpecs = annotations.map(LsiAnnotation::toKotlinAnnotationSpec)
+    val annotationSpecs = annotations.map(LsiAnnotation::toKotlinCoreAnnotationSpec)
     return if (annotationSpecs.isEmpty()) {
         nullableTypeName
     } else {
@@ -93,7 +95,7 @@ internal fun LsiTypeParameter.toKotlinTypeVariableName(): TypeVariableName {
     return TypeVariableName(name, *bounds, variance = varianceModifier)
 }
 
-internal fun LsiAnnotation.toKotlinAnnotationSpec(): AnnotationSpec {
+internal fun LsiAnnotation.toKotlinCoreAnnotationSpec(): AnnotationSpec {
     return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
         .apply {
             useSiteTarget?.toPoetUseSiteTarget()?.let(::useSiteTarget)
@@ -102,7 +104,28 @@ internal fun LsiAnnotation.toKotlinAnnotationSpec(): AnnotationSpec {
                     addMember(
                         "%L = %L",
                         name,
-                        argument.value.toKotlinAnnotationValue(),
+                        argument.value.toKotlinCoreAnnotationValue(),
+                    )
+                }
+            }
+        }
+        .build()
+}
+
+internal fun LsiPoetAnnotation.toKotlinSourceAnnotationSpec(): AnnotationSpec {
+    return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
+        .apply {
+            useSiteTarget?.toPoetUseSiteTarget()?.let(::useSiteTarget)
+            arguments.forEach { argument ->
+                when (argument) {
+                    is LsiPoetAnnotationArgument.Named -> addMember(
+                        "%L = %L",
+                        argument.name,
+                        argument.value.toKotlinSourceAnnotationValue(),
+                    )
+                    is LsiPoetAnnotationArgument.Positional -> addMember(
+                        "%L",
+                        argument.value.toKotlinSourceAnnotationValue(),
                     )
                 }
             }
@@ -187,7 +210,7 @@ private fun LsiPrimitiveKind.toKotlinPrimitiveArrayTypeName(): TypeName? {
     return ClassName("kotlin", simpleName)
 }
 
-private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
+private fun LsiAnnotationValue.toKotlinCoreAnnotationValue(): CodeBlock {
     return when (this) {
         is LsiAnnotationValue.BooleanValue -> CodeBlock.of("%L", value)
         is LsiAnnotationValue.ByteValue -> CodeBlock.of("%L", value)
@@ -204,10 +227,7 @@ private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
             entryName,
         )
         is LsiAnnotationValue.ClassValue -> type.toKotlinClassLiteral()
-        is LsiAnnotationValue.NestedAnnotationValue -> CodeBlock.of(
-            "%L",
-            annotation.toKotlinAnnotationSpec(),
-        )
+        is LsiAnnotationValue.NestedAnnotationValue -> annotation.toKotlinNestedCoreAnnotationValue()
         is LsiAnnotationValue.ArrayValue -> CodeBlock.builder()
             .add("[")
             .apply {
@@ -215,12 +235,95 @@ private fun LsiAnnotationValue.toKotlinAnnotationValue(): CodeBlock {
                     if (index != 0) {
                         add(", ")
                     }
-                    add("%L", element.toKotlinAnnotationValue())
+                    add("%L", element.toKotlinCoreAnnotationValue())
                 }
             }
             .add("]")
             .build()
     }
+}
+
+private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(): CodeBlock {
+    return when (this) {
+        is LsiPoetAnnotationValue.BooleanValue -> CodeBlock.of("%L", value)
+        is LsiPoetAnnotationValue.ByteValue -> CodeBlock.of("%L", value)
+        is LsiPoetAnnotationValue.ShortValue -> CodeBlock.of("%L", value)
+        is LsiPoetAnnotationValue.IntValue -> CodeBlock.of("%L", value)
+        is LsiPoetAnnotationValue.LongValue -> CodeBlock.of("%LL", value)
+        is LsiPoetAnnotationValue.FloatValue -> CodeBlock.of("%LF", value)
+        is LsiPoetAnnotationValue.DoubleValue -> CodeBlock.of("%L", value)
+        is LsiPoetAnnotationValue.CharValue -> CodeBlock.of("%L", value.toCharacterLiteral())
+        is LsiPoetAnnotationValue.StringValue -> CodeBlock.of("%S", value)
+        is LsiPoetAnnotationValue.EnumValue -> CodeBlock.of(
+            "%T.%L",
+            ClassName.bestGuess(enumType.requireTypeQualifiedName()),
+            entryName,
+        )
+        is LsiPoetAnnotationValue.ClassValue -> type.toKotlinClassLiteral()
+        is LsiPoetAnnotationValue.NestedAnnotationValue -> annotation.toKotlinNestedSourceAnnotationValue()
+        is LsiPoetAnnotationValue.ArrayValue -> CodeBlock.builder()
+            .add("[")
+            .apply {
+                elements.forEachIndexed { index, element ->
+                    if (index != 0) {
+                        add(", ")
+                    }
+                    add("%L", element.toKotlinSourceAnnotationValue())
+                }
+            }
+            .add("]")
+            .build()
+    }
+}
+
+private fun LsiAnnotation.toKotlinNestedCoreAnnotationValue(): CodeBlock {
+    require(useSiteTarget == null) {
+        "Nested Kotlin annotation value cannot declare a use-site target: $type"
+    }
+    return CodeBlock.builder()
+        .add("%T(", ClassName.bestGuess(type.requireTypeQualifiedName()))
+        .apply {
+            arguments
+                .asSequence()
+                .filter { (_, argument) -> argument.isExplicit }
+                .sortedBy { (name, _) -> name }
+                .forEachIndexed { index, (name, argument) ->
+                    if (index != 0) {
+                        add(", ")
+                    }
+                    add("%L = %L", name, argument.value.toKotlinCoreAnnotationValue())
+                }
+        }
+        .add(")")
+        .build()
+}
+
+private fun LsiPoetAnnotation.toKotlinNestedSourceAnnotationValue(): CodeBlock {
+    require(useSiteTarget == null) {
+        "Nested Kotlin annotation value cannot declare a use-site target: $type"
+    }
+    return CodeBlock.builder()
+        .add("%T(", ClassName.bestGuess(type.requireTypeQualifiedName()))
+        .apply {
+            arguments.forEachIndexed { index, argument ->
+                if (index != 0) {
+                    add(", ")
+                }
+                when (argument) {
+                    is LsiPoetAnnotationArgument.Named -> add(
+                        "%L = %L",
+                        argument.name,
+                        argument.value.toKotlinSourceAnnotationValue(),
+                    )
+                    is LsiPoetAnnotationArgument.Positional -> add(
+                        "%L",
+                        argument.value.toKotlinSourceAnnotationValue(),
+                    )
+                }
+            }
+        }
+        .add(")")
+        .build()
 }
 
 private fun LsiTypeRef.toKotlinClassLiteral(): CodeBlock {

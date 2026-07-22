@@ -42,7 +42,9 @@ class LsiKotlinPoetRenderer : LsiPoetRenderer {
         val builder = FileSpec.builder(file.packageName, file.fileName)
             .indent("    ")
         file.headerComment?.let { comment -> builder.addFileComment("%L", comment) }
-        file.annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+        file.annotations.forEach { annotation ->
+            builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec())
+        }
         file.members.forEach { member -> builder.addKotlinTopLevelMember(member) }
         return artifact.generatedArtifact(builder.build().toString())
     }
@@ -73,7 +75,7 @@ private fun LsiPoetType.toKotlinTypeSpec(): TypeSpec {
         LsiPoetTypeKind.RECORD -> error("KotlinPoet renderer cannot emit a Java record type: $name")
     }
     builder.addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.TYPE))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addKdoc("%L", value) }
     typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toKotlinTypeVariableName()) }
     primaryConstructor?.let { constructor -> builder.primaryConstructor(constructor.toKotlinConstructor(primary = true)) }
@@ -100,7 +102,9 @@ private fun TypeSpec.Builder.addKotlinEnumConstant(constant: LsiPoetEnumConstant
         require(type.primaryConstructor == null && type.enumConstants.isEmpty()) {
             "Kotlin enum constant anonymous type cannot declare constructors or enum constants: ${constant.name}"
         }
-        type.annotations.forEach { annotation -> anonymousBuilder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+        type.annotations.forEach { annotation ->
+            anonymousBuilder.addAnnotation(annotation.toKotlinSourceAnnotationSpec())
+        }
         type.superInterfaces.forEach { superType -> anonymousBuilder.addSuperinterface(superType.toKotlinTypeName()) }
         type.members.forEach { member -> anonymousBuilder.addKotlinMember(member) }
     }
@@ -139,7 +143,7 @@ private fun LsiPoetConstructor.toKotlinConstructor(primary: Boolean): FunSpec {
     }
     val builder = FunSpec.constructorBuilder()
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.CONSTRUCTOR))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addKdoc("%L", value) }
     parameters.forEach { parameter -> builder.addParameter(parameter.toKotlinParameter()) }
     builder.addThrownTypes(thrownTypes)
@@ -157,7 +161,7 @@ private fun LsiPoetConstructor.toKotlinConstructor(primary: Boolean): FunSpec {
 private fun LsiPoetFunction.toKotlinFunction(): FunSpec {
     val builder = FunSpec.builder(name)
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.FUNCTION))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addKdoc("%L", value) }
     typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toKotlinTypeVariableName()) }
     receiverType?.let { type -> builder.receiver(type.toKotlinTypeName()) }
@@ -171,7 +175,7 @@ private fun LsiPoetFunction.toKotlinFunction(): FunSpec {
 private fun LsiPoetParameter.toKotlinParameter(): ParameterSpec {
     val builder = ParameterSpec.builder(name, type.toKotlinTypeName())
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.PARAMETER))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     defaultValue?.let { value -> builder.defaultValue(value.toKotlinCodeBlock()) }
     return builder.build()
 }
@@ -180,7 +184,7 @@ private fun LsiPoetProperty.toKotlinProperty(): PropertySpec {
     val builder = PropertySpec.builder(name, type.toKotlinTypeName())
         .mutable(mutable)
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.PROPERTY))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addKdoc("%L", value) }
     receiverType?.let { type -> builder.receiver(type.toKotlinTypeName()) }
     initializer?.let { value -> builder.initializer(value.toKotlinCodeBlock()) }
@@ -195,7 +199,7 @@ private fun LsiPoetAccessor.toKotlinGetter(): FunSpec {
     }
     val builder = FunSpec.getterBuilder()
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.ACCESSOR))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     builder.addCode(body.toKotlinCodeBlock())
     return builder.build()
 }
@@ -203,13 +207,15 @@ private fun LsiPoetAccessor.toKotlinGetter(): FunSpec {
 private fun LsiPoetAccessor.toKotlinSetter(type: LsiTypeRef): FunSpec {
     val parameter = ParameterSpec.builder("value", type.toKotlinTypeName())
         .apply {
-            parameterAnnotations.forEach { annotation -> addAnnotation(annotation.toKotlinAnnotationSpec()) }
+            parameterAnnotations.forEach { annotation ->
+                addAnnotation(annotation.toKotlinSourceAnnotationSpec())
+            }
         }
         .build()
     val builder = FunSpec.setterBuilder()
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.ACCESSOR))
         .addParameter(parameter)
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
     builder.addCode(body.toKotlinCodeBlock())
     return builder.build()
 }

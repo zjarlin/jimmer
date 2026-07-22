@@ -1,7 +1,6 @@
 package site.addzero.lsi.poet
 
 import site.addzero.lsi.core.LsiLanguage
-import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeRef
 
@@ -49,7 +48,7 @@ enum class LsiPoetTypeKind {
 }
 
 sealed interface LsiPoetMember {
-    val annotations: List<LsiAnnotation>
+    val annotations: List<LsiPoetAnnotation>
     val modifiers: Set<LsiPoetModifier>
     val documentation: String?
 }
@@ -58,7 +57,7 @@ data class LsiPoetFile(
     val language: LsiLanguage,
     val packageName: String,
     val fileName: String,
-    val annotations: List<LsiAnnotation> = emptyList(),
+    val annotations: List<LsiPoetAnnotation> = emptyList(),
     val members: List<LsiPoetMember>,
     val headerComment: String? = null,
 ) {
@@ -82,7 +81,7 @@ data class LsiPoetFile(
 data class LsiPoetType(
     val name: String,
     val kind: LsiPoetTypeKind,
-    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
     val typeParameters: List<LsiTypeParameter> = emptyList(),
@@ -130,7 +129,7 @@ data class LsiPoetEnumConstant(
 }
 
 data class LsiPoetConstructor(
-    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
     val typeParameters: List<LsiTypeParameter> = emptyList(),
@@ -164,7 +163,7 @@ enum class LsiPoetDelegationTarget {
 
 data class LsiPoetFunction(
     val name: String,
-    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
     val typeParameters: List<LsiTypeParameter> = emptyList(),
@@ -191,7 +190,7 @@ data class LsiPoetFunction(
 data class LsiPoetParameter(
     val name: String,
     val type: LsiTypeRef,
-    val annotations: List<LsiAnnotation> = emptyList(),
+    val annotations: List<LsiPoetAnnotation> = emptyList(),
     val modifiers: Set<LsiPoetModifier> = emptySet(),
     val defaultValue: LsiPoetCodeBlock? = null,
 ) {
@@ -206,7 +205,7 @@ data class LsiPoetParameter(
 data class LsiPoetField(
     val name: String,
     val type: LsiTypeRef,
-    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
     val initializer: LsiPoetCodeBlock? = null,
@@ -220,7 +219,7 @@ data class LsiPoetProperty(
     val name: String,
     val type: LsiTypeRef,
     val mutable: Boolean,
-    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
     val initializer: LsiPoetCodeBlock? = null,
@@ -237,16 +236,16 @@ data class LsiPoetProperty(
 }
 
 data class LsiPoetAccessor(
-    val annotations: List<LsiAnnotation> = emptyList(),
+    val annotations: List<LsiPoetAnnotation> = emptyList(),
     val modifiers: Set<LsiPoetModifier> = emptySet(),
-    val parameterAnnotations: List<LsiAnnotation> = emptyList(),
+    val parameterAnnotations: List<LsiPoetAnnotation> = emptyList(),
     val body: LsiPoetCodeBlock = LsiPoetCodeBlock.EMPTY,
 )
 
 data class LsiPoetInitializerBlock(
     val static: Boolean,
     val body: LsiPoetCodeBlock,
-    override val annotations: List<LsiAnnotation> = emptyList(),
+    override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val documentation: String? = null,
 ) : LsiPoetMember {
     override val modifiers: Set<LsiPoetModifier> = if (static) {

@@ -9,6 +9,10 @@ import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
+import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -134,5 +138,82 @@ class LsiPoetModelTest {
                 ),
             )
         }
+    }
+
+    @Test
+    fun `lowers only explicit annotation arguments in deterministic order`() {
+        val nested = LsiAnnotation(
+            type = LsiSymbolId.type("demo.Nested"),
+            arguments = linkedMapOf(
+                "zeta" to argument("ignored", LsiAnnotationArgumentOrigin.DEFAULT),
+                "beta" to argument("second", LsiAnnotationArgumentOrigin.EXPLICIT),
+                "alpha" to argument("first", LsiAnnotationArgumentOrigin.EXPLICIT),
+            ),
+        )
+        val annotation = LsiAnnotation(
+            type = LsiSymbolId.type("demo.Container"),
+            arguments = linkedMapOf(
+                "optional" to argument("ignored", LsiAnnotationArgumentOrigin.DEFAULT),
+                "nested" to LsiAnnotationArgument(
+                    value = LsiAnnotationValue.NestedAnnotationValue(nested),
+                    origin = LsiAnnotationArgumentOrigin.EXPLICIT,
+                ),
+                "label" to argument("container", LsiAnnotationArgumentOrigin.EXPLICIT),
+            ),
+        )
+
+        val lowered = annotation.toLsiPoetAnnotation()
+
+        val namedArguments = lowered.arguments.filterIsInstance<LsiPoetAnnotationArgument.Named>()
+        assertEquals(listOf("label", "nested"), namedArguments.map { argument -> argument.name })
+        val nestedValue = namedArguments.last().value as LsiPoetAnnotationValue.NestedAnnotationValue
+        assertEquals(
+            listOf("alpha", "beta"),
+            nestedValue.annotation.arguments
+                .filterIsInstance<LsiPoetAnnotationArgument.Named>()
+                .map { argument -> argument.name },
+        )
+    }
+
+    @Test
+    fun `models positional arguments before named arguments`() {
+        val annotation = LsiPoetAnnotation(
+            type = LsiSymbolId.type("kotlin.Suppress"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(LsiPoetAnnotationValue.StringValue("first")),
+                LsiPoetAnnotationArgument.Positional(LsiPoetAnnotationValue.StringValue("second")),
+                LsiPoetAnnotationArgument.Named(
+                    name = "level",
+                    value = LsiPoetAnnotationValue.StringValue("warning"),
+                ),
+            ),
+        )
+
+        assertTrue(annotation.arguments[0] is LsiPoetAnnotationArgument.Positional)
+        assertEquals("level", (annotation.arguments[2] as LsiPoetAnnotationArgument.Named).name)
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetAnnotation(
+                type = annotation.type,
+                arguments = listOf(
+                    LsiPoetAnnotationArgument.Named(
+                        name = "level",
+                        value = LsiPoetAnnotationValue.StringValue("warning"),
+                    ),
+                    LsiPoetAnnotationArgument.Positional(
+                        LsiPoetAnnotationValue.StringValue("late")
+                    ),
+                ),
+            )
+        }
+    }
+
+    private fun argument(
+        value: String,
+        origin: LsiAnnotationArgumentOrigin,
+    ): LsiAnnotationArgument {
+        return LsiAnnotationArgument(
+            value = LsiAnnotationValue.StringValue(value),
+            origin = origin,
+        )
     }
 }

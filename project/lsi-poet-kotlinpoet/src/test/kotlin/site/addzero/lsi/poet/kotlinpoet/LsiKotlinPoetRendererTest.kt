@@ -1,18 +1,25 @@
 package site.addzero.lsi.poet.kotlinpoet
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetAnnotation
+import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetConstructor
 import site.addzero.lsi.poet.LsiPoetField
@@ -113,6 +120,75 @@ class LsiKotlinPoetRendererTest {
             LsiKotlinPoetRenderer().render(artifact(unresolvedType, "Broken"))
         }
         assertTrue(exception.message.orEmpty().contains("unresolved"))
+    }
+
+    @Test
+    fun `renders positional file suppression without a member name`() {
+        val type = LsiPoetType(
+            name = "Suppressed",
+            kind = LsiPoetTypeKind.CLASS,
+        )
+        val artifact = LsiPoetArtifact(
+            file = LsiPoetFile(
+                language = LsiLanguage.KOTLIN,
+                packageName = "demo.generated",
+                fileName = "Suppressed",
+                annotations = listOf(
+                    LsiPoetAnnotation(
+                        type = LsiSymbolId.type("kotlin.Suppress"),
+                        arguments = listOf(
+                            LsiPoetAnnotationArgument.Positional(
+                                LsiPoetAnnotationValue.StringValue("warnings")
+                            )
+                        ),
+                        useSiteTarget = LsiAnnotationUseSiteTarget.FILE,
+                    )
+                ),
+                members = listOf(type),
+            ),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
+        )
+
+        val generated = LsiKotlinPoetRenderer().render(artifact)
+
+        assertContains(generated.content, "@file:Suppress(\"warnings\")")
+        assertFalse("value =" in generated.content)
+    }
+
+    @Test
+    fun `renders nested source annotation and core type annotation`() {
+        val nested = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.annotation.Nested"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(LsiPoetAnnotationValue.StringValue("inside"))
+            ),
+        )
+        val annotatedType = stringType.copy(
+            annotations = listOf(LsiAnnotation(LsiSymbolId.type("demo.annotation.TypeMarker")))
+        )
+        val type = LsiPoetType(
+            name = "NestedAnnotation",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Container"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "nested",
+                            value = LsiPoetAnnotationValue.NestedAnnotationValue(nested),
+                        )
+                    ),
+                )
+            ),
+            members = listOf(LsiPoetFunction(name = "value", returnType = annotatedType)),
+        )
+
+        val generated = LsiKotlinPoetRenderer().render(artifact(type, "NestedAnnotation"))
+
+        assertContains(generated.content, "@Container(nested = Nested(\"inside\"))")
+        assertFalse("@Nested(\"inside\")" in generated.content)
+        assertContains(generated.content, "fun `value`(): @TypeMarker String")
     }
 
     @Test

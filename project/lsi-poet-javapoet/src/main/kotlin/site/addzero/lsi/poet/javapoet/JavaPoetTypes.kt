@@ -11,7 +11,6 @@ import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeVariableName
 import com.squareup.javapoet.WildcardTypeName
 import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -22,6 +21,9 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
+import site.addzero.lsi.poet.LsiPoetAnnotation
+import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationValue
 
 internal fun LsiTypeRef.toJavaTypeName(): TypeName {
     val typeName = when (this) {
@@ -61,7 +63,7 @@ internal fun LsiTypeRef.toJavaTypeName(): TypeName {
             "JavaPoet renderer cannot emit unresolved LSI type: $displayName"
         )
     }
-    val annotationSpecs = annotations.map(LsiAnnotation::toJavaAnnotationSpec)
+    val annotationSpecs = annotations.map(LsiAnnotation::toJavaCoreAnnotationSpec)
     return if (annotationSpecs.isEmpty()) {
         typeName
     } else {
@@ -81,12 +83,40 @@ internal fun LsiTypeParameter.toJavaTypeVariableName(): TypeVariableName {
     }
 }
 
-internal fun LsiAnnotation.toJavaAnnotationSpec(): AnnotationSpec {
+internal fun LsiAnnotation.toJavaCoreAnnotationSpec(): AnnotationSpec {
     return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
         .apply {
             arguments.toSortedMap().forEach { (name, argument) ->
                 if (argument.isExplicit) {
-                    addMember(name, "\$L", argument.value.toJavaAnnotationValue())
+                    addMember(name, "\$L", argument.value.toJavaCoreAnnotationValue())
+                }
+            }
+        }
+        .build()
+}
+
+internal fun LsiPoetAnnotation.toJavaSourceAnnotationSpec(): AnnotationSpec {
+    val positionalArguments = arguments.filterIsInstance<LsiPoetAnnotationArgument.Positional>()
+    require(positionalArguments.size <= 1) {
+        "Java annotation cannot represent multiple positional arguments: $type"
+    }
+    require(positionalArguments.isEmpty() || arguments.size == 1) {
+        "Java annotation cannot combine positional and named arguments: $type"
+    }
+    return AnnotationSpec.builder(ClassName.bestGuess(type.requireTypeQualifiedName()))
+        .apply {
+            arguments.forEach { argument ->
+                when (argument) {
+                    is LsiPoetAnnotationArgument.Named -> addMember(
+                        argument.name,
+                        "\$L",
+                        argument.value.toJavaSourceAnnotationValue(),
+                    )
+                    is LsiPoetAnnotationArgument.Positional -> addMember(
+                        "value",
+                        "\$L",
+                        argument.value.toJavaSourceAnnotationValue(),
+                    )
                 }
             }
         }
@@ -109,7 +139,7 @@ private fun LsiPrimitiveKind.toJavaTypeName(): TypeName {
     }
 }
 
-private fun LsiAnnotationValue.toJavaAnnotationValue(): CodeBlock {
+private fun LsiAnnotationValue.toJavaCoreAnnotationValue(): CodeBlock {
     return when (this) {
         is LsiAnnotationValue.BooleanValue -> CodeBlock.of("\$L", value)
         is LsiAnnotationValue.ByteValue -> CodeBlock.of("\$L", value)
@@ -128,7 +158,7 @@ private fun LsiAnnotationValue.toJavaAnnotationValue(): CodeBlock {
         is LsiAnnotationValue.ClassValue -> CodeBlock.of("\$T.class", type.toJavaClassLiteralTypeName())
         is LsiAnnotationValue.NestedAnnotationValue -> CodeBlock.of(
             "\$L",
-            annotation.toJavaAnnotationSpec(),
+            annotation.toJavaCoreAnnotationSpec(),
         )
         is LsiAnnotationValue.ArrayValue -> CodeBlock.builder()
             .add("{")
@@ -137,7 +167,46 @@ private fun LsiAnnotationValue.toJavaAnnotationValue(): CodeBlock {
                     if (index != 0) {
                         add(", ")
                     }
-                    add("\$L", element.toJavaAnnotationValue())
+                    add("\$L", element.toJavaCoreAnnotationValue())
+                }
+            }
+            .add("}")
+            .build()
+    }
+}
+
+private fun LsiPoetAnnotationValue.toJavaSourceAnnotationValue(): CodeBlock {
+    return when (this) {
+        is LsiPoetAnnotationValue.BooleanValue -> CodeBlock.of("\$L", value)
+        is LsiPoetAnnotationValue.ByteValue -> CodeBlock.of("\$L", value)
+        is LsiPoetAnnotationValue.ShortValue -> CodeBlock.of("\$L", value)
+        is LsiPoetAnnotationValue.IntValue -> CodeBlock.of("\$L", value)
+        is LsiPoetAnnotationValue.LongValue -> CodeBlock.of("\$LL", value)
+        is LsiPoetAnnotationValue.FloatValue -> CodeBlock.of("\$Lf", value)
+        is LsiPoetAnnotationValue.DoubleValue -> CodeBlock.of("\$L", value)
+        is LsiPoetAnnotationValue.CharValue -> CodeBlock.of("\$L", value.toCharacterLiteral())
+        is LsiPoetAnnotationValue.StringValue -> CodeBlock.of("\$S", value)
+        is LsiPoetAnnotationValue.EnumValue -> CodeBlock.of(
+            "\$T.\$L",
+            ClassName.bestGuess(enumType.requireTypeQualifiedName()),
+            entryName,
+        )
+        is LsiPoetAnnotationValue.ClassValue -> CodeBlock.of(
+            "\$T.class",
+            type.toJavaClassLiteralTypeName(),
+        )
+        is LsiPoetAnnotationValue.NestedAnnotationValue -> CodeBlock.of(
+            "\$L",
+            annotation.toJavaSourceAnnotationSpec(),
+        )
+        is LsiPoetAnnotationValue.ArrayValue -> CodeBlock.builder()
+            .add("{")
+            .apply {
+                elements.forEachIndexed { index, element ->
+                    if (index != 0) {
+                        add(", ")
+                    }
+                    add("\$L", element.toJavaSourceAnnotationValue())
                 }
             }
             .add("}")

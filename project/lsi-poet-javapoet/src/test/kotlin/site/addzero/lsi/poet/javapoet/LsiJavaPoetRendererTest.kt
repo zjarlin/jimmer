@@ -1,6 +1,7 @@
 package site.addzero.lsi.poet.javapoet
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -9,12 +10,16 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetAnnotation
+import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetConstructor
 import site.addzero.lsi.poet.LsiPoetField
@@ -141,6 +146,90 @@ class LsiJavaPoetRendererTest {
             LsiJavaPoetRenderer().render(artifact(unresolvedType, "Broken"))
         }
         assertTrue(exception.message.orEmpty().contains("unresolved"))
+    }
+
+    @Test
+    fun `renders a single Java positional argument as value`() {
+        val type = LsiPoetType(
+            name = "Annotated",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Label"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Positional(
+                            LsiPoetAnnotationValue.StringValue("book")
+                        )
+                    ),
+                )
+            ),
+        )
+
+        val generated = LsiJavaPoetRenderer().render(artifact(type, "Annotated"))
+
+        assertContains(generated.content, "@Label(\"book\")")
+    }
+
+    @Test
+    fun `rejects Java positional and named argument combinations`() {
+        val type = LsiPoetType(
+            name = "InvalidAnnotation",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Label"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Positional(
+                            LsiPoetAnnotationValue.StringValue("book")
+                        ),
+                        LsiPoetAnnotationArgument.Named(
+                            name = "level",
+                            value = LsiPoetAnnotationValue.StringValue("warning"),
+                        ),
+                    ),
+                )
+            ),
+        )
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(type, "InvalidAnnotation"))
+        }
+
+        assertContains(exception.message.orEmpty(), "cannot combine positional and named")
+    }
+
+    @Test
+    fun `renders nested source annotation and core type annotation`() {
+        val nested = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.annotation.Nested"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(LsiPoetAnnotationValue.StringValue("inside"))
+            ),
+        )
+        val annotatedType = stringType.copy(
+            annotations = listOf(LsiAnnotation(LsiSymbolId.type("demo.annotation.TypeMarker")))
+        )
+        val type = LsiPoetType(
+            name = "NestedAnnotation",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Container"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "nested",
+                            value = LsiPoetAnnotationValue.NestedAnnotationValue(nested),
+                        )
+                    ),
+                )
+            ),
+            members = listOf(LsiPoetFunction(name = "value", returnType = annotatedType)),
+        )
+
+        val generated = LsiJavaPoetRenderer().render(artifact(type, "NestedAnnotation"))
+
+        assertContains(generated.content, "nested = @Nested(\"inside\")")
+        assertContains(generated.content, "@TypeMarker String value()")
     }
 
     @Test

@@ -2,12 +2,12 @@ package org.babyfish.jimmer.compiler.module
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetField
 import site.addzero.lsi.poet.LsiPoetFile
@@ -49,7 +49,7 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtif
                 LsiPoetType(
                     name = simpleName,
                     kind = LsiPoetTypeKind.INTERFACE,
-                    annotations = listOf(LsiAnnotation(GENERATED_BY_ID)),
+                    annotations = listOf(LsiPoetAnnotation(GENERATED_BY_ID)),
                     modifiers = setOf(LsiPoetModifier.PUBLIC),
                     members = typeMembers,
                 )

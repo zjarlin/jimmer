@@ -66,7 +66,7 @@ private fun LsiPoetType.toJavaTypeSpec(): TypeSpec {
         LsiPoetTypeKind.RECORD -> error("JavaPoet 1.x renderer cannot emit a record type: $name")
     }
     builder.addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.TYPE))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
     typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toJavaTypeVariableName()) }
     superClass?.let { type -> builder.superclass(type.toJavaTypeName()) }
@@ -91,7 +91,9 @@ private fun TypeSpec.Builder.addJavaEnumConstant(constant: LsiPoetEnumConstant) 
         require(type.primaryConstructor == null && type.enumConstants.isEmpty()) {
             "Java enum constant anonymous type cannot declare constructors or enum constants: ${constant.name}"
         }
-        type.annotations.forEach { annotation -> anonymousBuilder.addAnnotation(annotation.toJavaAnnotationSpec()) }
+        type.annotations.forEach { annotation ->
+            anonymousBuilder.addAnnotation(annotation.toJavaSourceAnnotationSpec())
+        }
         type.superInterfaces.forEach { superType -> anonymousBuilder.addSuperinterface(superType.toJavaTypeName()) }
         type.members.forEach { member -> anonymousBuilder.addJavaMember(member) }
     }
@@ -123,7 +125,7 @@ private fun TypeSpec.Builder.addJavaInitializer(initializer: LsiPoetInitializerB
 private fun LsiPoetConstructor.toJavaConstructor(): MethodSpec {
     val builder = MethodSpec.constructorBuilder()
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.CONSTRUCTOR))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
     typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toJavaTypeVariableName()) }
     parameters.forEach { parameter -> builder.addParameter(parameter.toJavaParameter()) }
@@ -148,7 +150,7 @@ private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
     }
     val builder = MethodSpec.methodBuilder(name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.FUNCTION))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
     if (
         LsiPoetModifier.OVERRIDE in modifiers &&
         annotations.none { annotation -> annotation.type == JAVA_LANG_OVERRIDE }
@@ -176,7 +178,7 @@ private fun LsiPoetParameter.toJavaParameter(): ParameterSpec {
     }
     val builder = ParameterSpec.builder(parameterType, name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.PARAMETER))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
     return builder.build()
 }
 
@@ -187,7 +189,7 @@ private fun LsiPoetField.toJavaField(): FieldSpec {
         javaModifiers += Modifier.FINAL
     }
     val builder = FieldSpec.builder(type.toJavaTypeName(), name, *javaModifiers.toTypedArray())
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
+    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
     initializer?.let { value -> builder.initializer(value.toJavaCodeBlock()) }
     return builder.build()
