@@ -13,6 +13,7 @@ data class LsiPoetAnnotation(
     val type: LsiSymbolId,
     val arguments: List<LsiPoetAnnotationArgument> = emptyList(),
     val useSiteTarget: LsiAnnotationUseSiteTarget? = null,
+    val argumentLayout: LsiPoetAnnotationArgumentLayout = LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT,
 ) {
     init {
         val namedArguments = arguments.filterIsInstance<LsiPoetAnnotationArgument.Named>()
@@ -29,6 +30,14 @@ data class LsiPoetAnnotation(
             }
         }
     }
+}
+
+/**
+ * 控制同一注解的参数是否作为一个不可换行的源码单元输出。
+ */
+enum class LsiPoetAnnotationArgumentLayout {
+    PLATFORM_DEFAULT,
+    SINGLE_LINE,
 }
 
 /**

@@ -100,10 +100,15 @@ enum class LsiPoetBracedExpressionCompletion {
 enum class LsiPoetTypeReferenceStyle {
     IMPORTED,
     FULLY_QUALIFIED,
+    /**
+     * 省略当前包名但保留外部类型名，例如 `BookDraft.Producer`。
+     */
+    SAME_PACKAGE_OUTER_QUALIFIED,
 }
 
 data class LsiPoetCodeBlock(
     val parts: List<LsiPoetCodePart>,
+    val indentation: LsiPoetCodeBlockIndentation = LsiPoetCodeBlockIndentation.PLATFORM_DEFAULT,
 ) {
     val isEmpty: Boolean
         get() = parts.isEmpty()
@@ -150,8 +155,24 @@ data class LsiPoetCodeBlock(
     }
 }
 
+/**
+ * 控制外围声明是否可以为多行代码块追加续行缩进。
+ */
+enum class LsiPoetCodeBlockIndentation {
+    PLATFORM_DEFAULT,
+    EXPLICIT,
+}
+
 class LsiPoetCodeBuilder internal constructor() {
     private val parts = mutableListOf<LsiPoetCodePart>()
+    private var indentation = LsiPoetCodeBlockIndentation.PLATFORM_DEFAULT
+
+    /**
+     * 表示代码块已经完整描述每一层缩进，平台不得再追加外围续行缩进。
+     */
+    fun preserveExplicitIndentation() {
+        indentation = LsiPoetCodeBlockIndentation.EXPLICIT
+    }
 
     fun text(value: String) {
         if (value.isNotEmpty()) {
@@ -255,10 +276,13 @@ class LsiPoetCodeBuilder internal constructor() {
     }
 
     fun add(block: LsiPoetCodeBlock) {
+        if (block.indentation == LsiPoetCodeBlockIndentation.EXPLICIT) {
+            indentation = LsiPoetCodeBlockIndentation.EXPLICIT
+        }
         parts += block.parts
     }
 
-    fun build(): LsiPoetCodeBlock = LsiPoetCodeBlock(parts.toList())
+    fun build(): LsiPoetCodeBlock = LsiPoetCodeBlock(parts.toList(), indentation)
 }
 
 private fun String.isQualifiedJvmName(): Boolean {

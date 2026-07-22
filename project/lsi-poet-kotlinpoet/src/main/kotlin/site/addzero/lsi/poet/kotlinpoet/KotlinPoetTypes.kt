@@ -40,6 +40,7 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
 import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 
@@ -130,14 +131,42 @@ internal fun LsiPoetAnnotation.toKotlinSourceAnnotationSpec(): AnnotationSpec {
     return AnnotationSpec.builder(type.requireTypeQualifiedName().toKotlinClassName())
         .apply {
             useSiteTarget?.toPoetUseSiteTarget()?.let(::useSiteTarget)
-            arguments.forEach { argument ->
+            when (argumentLayout) {
+                LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT -> arguments.forEach { argument ->
+                    when (argument) {
+                        is LsiPoetAnnotationArgument.Named -> addMember(
+                            "%L = %L",
+                            argument.name,
+                            argument.value.toKotlinSourceAnnotationValue(),
+                        )
+                        is LsiPoetAnnotationArgument.Positional -> addMember(
+                            "%L",
+                            argument.value.toKotlinSourceAnnotationValue(),
+                        )
+                    }
+                }
+                LsiPoetAnnotationArgumentLayout.SINGLE_LINE -> if (arguments.isNotEmpty()) {
+                    addMember(arguments.toKotlinSingleLineSourceAnnotationArguments())
+                }
+            }
+        }
+        .build()
+}
+
+private fun List<LsiPoetAnnotationArgument>.toKotlinSingleLineSourceAnnotationArguments(): CodeBlock {
+    return CodeBlock.builder()
+        .apply {
+            forEachIndexed { index, argument ->
+                if (index != 0) {
+                    add(", ")
+                }
                 when (argument) {
-                    is LsiPoetAnnotationArgument.Named -> addMember(
+                    is LsiPoetAnnotationArgument.Named -> add(
                         "%L = %L",
                         argument.name,
                         argument.value.toKotlinSourceAnnotationValue(),
                     )
-                    is LsiPoetAnnotationArgument.Positional -> addMember(
+                    is LsiPoetAnnotationArgument.Positional -> add(
                         "%L",
                         argument.value.toKotlinSourceAnnotationValue(),
                     )

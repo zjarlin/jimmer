@@ -273,6 +273,51 @@ class LsiPoetModelTest {
     }
 
     @Test
+    fun `models source layout independently from semantic types and code`() {
+        val producerType = LsiDeclaredType(LsiSymbolId.type("demo.BookDraft.Producer"))
+        val field = LsiPoetField(
+            name = "producer",
+            type = producerType,
+            typeReferenceStyle = LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED,
+        )
+        val expression = LsiPoetFunction(
+            name = "producer",
+            returnType = producerType,
+            body = LsiPoetCodeBlock.build { name("producer") },
+            bodyStyle = LsiPoetBodyStyle.EXPRESSION,
+        )
+        val explicitlyIndented = LsiPoetCodeBlock.build {
+            preserveExplicitIndentation()
+            text("Factory\n")
+            indent { text(".create()") }
+        }
+        val composedIndentation = LsiPoetCodeBlock.build {
+            text("val value = ")
+            add(explicitlyIndented)
+        }
+        val annotation = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.Ordered"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(LsiPoetAnnotationValue.StringValue("id")),
+                LsiPoetAnnotationArgument.Positional(LsiPoetAnnotationValue.StringValue("name")),
+            ),
+            argumentLayout = LsiPoetAnnotationArgumentLayout.SINGLE_LINE,
+        )
+
+        assertEquals(producerType, field.type)
+        assertEquals(LsiPoetBodyStyle.EXPRESSION, expression.bodyStyle)
+        assertEquals(LsiPoetCodeBlockIndentation.EXPLICIT, explicitlyIndented.indentation)
+        assertEquals(LsiPoetCodeBlockIndentation.EXPLICIT, composedIndentation.indentation)
+        assertEquals(LsiPoetAnnotationArgumentLayout.SINGLE_LINE, annotation.argumentLayout)
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetFunction(name = "empty", bodyStyle = LsiPoetBodyStyle.EXPRESSION)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetAccessor(bodyStyle = LsiPoetBodyStyle.EXPRESSION)
+        }
+    }
+
+    @Test
     fun `models raw Kotlin source stems without weakening Java file names`() {
         val kotlinFile = LsiPoetFile(
             language = LsiLanguage.KOTLIN,

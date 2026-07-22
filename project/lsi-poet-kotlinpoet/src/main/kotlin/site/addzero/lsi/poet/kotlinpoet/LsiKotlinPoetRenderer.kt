@@ -14,6 +14,8 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.poet.LsiPoetAccessor
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetBodyStyle
+import site.addzero.lsi.poet.LsiPoetCodeBlockIndentation
 import site.addzero.lsi.poet.LsiPoetBracedExpressionCompletion
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetCodePart
@@ -180,7 +182,10 @@ private fun LsiPoetFunction.toKotlinFunction(): FunSpec {
     parameters.forEach { parameter -> builder.addParameter(parameter.toKotlinParameter()) }
     returnType?.let { type -> builder.returns(type.toKotlinTypeName()) }
     builder.addThrownTypes(thrownTypes)
-    builder.addCode(body.toKotlinCodeBlock())
+    when (bodyStyle) {
+        LsiPoetBodyStyle.BLOCK -> builder.addCode(body.toKotlinCodeBlock())
+        LsiPoetBodyStyle.EXPRESSION -> builder.addCode("return %L", body.toKotlinCodeBlock())
+    }
     return builder.build()
 }
 
@@ -212,11 +217,17 @@ private fun LsiPoetAccessor.toKotlinGetter(): FunSpec {
     val builder = FunSpec.getterBuilder()
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.ACCESSOR))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec()) }
-    builder.addCode(body.toKotlinCodeBlock())
+    when (bodyStyle) {
+        LsiPoetBodyStyle.BLOCK -> builder.addCode(body.toKotlinCodeBlock())
+        LsiPoetBodyStyle.EXPRESSION -> builder.addCode("return %L", body.toKotlinCodeBlock())
+    }
     return builder.build()
 }
 
 private fun LsiPoetAccessor.toKotlinSetter(type: LsiTypeRef): FunSpec {
+    require(bodyStyle == LsiPoetBodyStyle.BLOCK) {
+        "KotlinPoet renderer cannot emit an expression setter body"
+    }
     val parameter = ParameterSpec.builder(setterParameterName, type.toKotlinTypeName())
         .apply {
             parameterAnnotations.forEach { annotation ->
@@ -234,6 +245,10 @@ private fun LsiPoetAccessor.toKotlinSetter(type: LsiTypeRef): FunSpec {
 
 private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
     val builder = CodeBlock.builder()
+    if (indentation == LsiPoetCodeBlockIndentation.EXPLICIT) {
+        // 空语句标记只抑制外围声明的双倍续行缩进，不产生任何源码字符。
+        builder.add("«»")
+    }
     parts.forEach { part ->
         when (part) {
             is LsiPoetCodePart.BeginControlFlow -> builder.beginControlFlow(
@@ -266,6 +281,9 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
                 LsiPoetTypeReferenceStyle.FULLY_QUALIFIED -> builder.add(
                     "%L",
                     part.value.toKotlinTypeName(),
+                )
+                LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED -> error(
+                    "Same-package outer-qualified type references are only valid for Java declarations"
                 )
             }
             LsiPoetCodePart.Unindent -> builder.unindent()

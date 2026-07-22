@@ -18,8 +18,10 @@ import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetBodyStyle
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
 import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetCodeBlock
@@ -471,6 +473,93 @@ class LsiJavaPoetRendererTest {
 
         assertContains(content, "return (java.util.List<java.lang.String>)value;")
         assertTrue("type:" !in content)
+    }
+
+    @Test
+    fun `preserves same package outer qualification in a field type`() {
+        val producerType = LsiDeclaredType(
+            LsiSymbolId.type("demo.generated.BasicBookDraft.Producer")
+        )
+        val draftType = LsiPoetType(
+            name = "BasicBookDraft",
+            kind = LsiPoetTypeKind.INTERFACE,
+            members = listOf(
+                LsiPoetField(
+                    name = "$",
+                    type = producerType,
+                    modifiers = setOf(
+                        LsiPoetModifier.PUBLIC,
+                        LsiPoetModifier.STATIC,
+                        LsiPoetModifier.FINAL,
+                    ),
+                    initializer = LsiPoetCodeBlock.build {
+                        type(producerType)
+                        text(".INSTANCE")
+                    },
+                    typeReferenceStyle = LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED,
+                ),
+                LsiPoetType(
+                    name = "Producer",
+                    kind = LsiPoetTypeKind.CLASS,
+                    modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC),
+                ),
+            ),
+        )
+
+        val content = LsiJavaPoetRenderer().render(artifact(draftType, "BasicBookDraft")).content
+
+        assertContains(content, "BasicBookDraft.Producer $ = Producer.INSTANCE;")
+        assertTrue("import demo.generated.BasicBookDraft.Producer;" !in content)
+        assertEquals(
+            LsiSymbolId.type("demo.generated.BasicBookDraft.Producer"),
+            producerType.declarationId,
+        )
+    }
+
+    @Test
+    fun `rejects expression bodies at the Java adapter boundary`() {
+        val function = LsiPoetFunction(
+            name = "message",
+            returnType = stringType,
+            body = LsiPoetCodeBlock.build { string("ok") },
+            bodyStyle = LsiPoetBodyStyle.EXPRESSION,
+        )
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(function, "Expression"))
+        }
+
+        assertContains(exception.message.orEmpty(), "expression function body")
+    }
+
+    @Test
+    fun `rejects Kotlin-only layout hints at the Java adapter boundary`() {
+        val annotationType = LsiPoetType(
+            name = "Annotated",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.Ordered"),
+                    argumentLayout = LsiPoetAnnotationArgumentLayout.SINGLE_LINE,
+                )
+            ),
+        )
+        val annotationException = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(annotationType, "Annotated"))
+        }
+        assertContains(annotationException.message.orEmpty(), "single-line annotation layout")
+
+        val explicitlyIndentedFunction = LsiPoetFunction(
+            name = "create",
+            body = LsiPoetCodeBlock.build {
+                preserveExplicitIndentation()
+                statement { text("Factory.create()") }
+            },
+        )
+        val indentationException = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(explicitlyIndentedFunction, "Indented"))
+        }
+        assertContains(indentationException.message.orEmpty(), "explicit Kotlin code indentation")
     }
 
     private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {

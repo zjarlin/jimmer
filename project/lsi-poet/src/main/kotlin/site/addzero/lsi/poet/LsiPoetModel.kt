@@ -226,6 +226,7 @@ data class LsiPoetFunction(
     val returnType: LsiTypeRef? = null,
     val thrownTypes: List<LsiTypeRef> = emptyList(),
     val body: LsiPoetCodeBlock = LsiPoetCodeBlock.EMPTY,
+    val bodyStyle: LsiPoetBodyStyle = LsiPoetBodyStyle.BLOCK,
 ) : LsiPoetMember {
     init {
         requirePoetDeclarationName(name, nameStyle, "function")
@@ -244,7 +245,18 @@ data class LsiPoetFunction(
         require(parameters.dropLast(1).none { parameter -> LsiPoetModifier.VARARG in parameter.modifiers }) {
             "LSI Poet vararg function parameter must be last: $name"
         }
+        require(bodyStyle != LsiPoetBodyStyle.EXPRESSION || !body.isEmpty) {
+            "LSI Poet expression function body cannot be empty: $name"
+        }
     }
+}
+
+/**
+ * 描述函数或访问器主体的源码结构，不把具体 Poet 的格式对象泄露到共享模型。
+ */
+enum class LsiPoetBodyStyle {
+    BLOCK,
+    EXPRESSION,
 }
 
 data class LsiPoetParameter(
@@ -270,6 +282,7 @@ data class LsiPoetField(
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
     val initializer: LsiPoetCodeBlock? = null,
+    val typeReferenceStyle: LsiPoetTypeReferenceStyle = LsiPoetTypeReferenceStyle.IMPORTED,
 ) : LsiPoetMember {
     init {
         require(name.isJvmIdentifier()) { "LSI Poet field name must be a JVM identifier: '$name'" }
@@ -304,9 +317,13 @@ data class LsiPoetAccessor(
     val setterParameterNameStyle: LsiPoetNameStyle = LsiPoetNameStyle.IDENTIFIER,
     val parameterAnnotations: List<LsiPoetAnnotation> = emptyList(),
     val body: LsiPoetCodeBlock = LsiPoetCodeBlock.EMPTY,
+    val bodyStyle: LsiPoetBodyStyle = LsiPoetBodyStyle.BLOCK,
 ) {
     init {
         requirePoetDeclarationName(setterParameterName, setterParameterNameStyle, "setter parameter")
+        require(bodyStyle != LsiPoetBodyStyle.EXPRESSION || !body.isEmpty) {
+            "LSI Poet expression accessor body cannot be empty"
+        }
     }
 }
 

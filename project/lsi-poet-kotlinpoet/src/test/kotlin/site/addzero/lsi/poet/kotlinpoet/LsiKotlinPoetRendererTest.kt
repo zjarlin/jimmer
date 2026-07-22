@@ -20,8 +20,10 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetAccessor
+import site.addzero.lsi.poet.LsiPoetBodyStyle
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
 import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetCodeBlock
@@ -486,6 +488,60 @@ class LsiKotlinPoetRendererTest {
 
         assertContains(content, "demo.`external`.External::class")
         assertTrue("import demo.external.External" !in content)
+    }
+
+    @Test
+    fun `renders explicit expression and single line layout`() {
+        val type = LsiPoetType(
+            name = "Layout",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Ordered"),
+                    arguments = listOf("dummy", "id", "name").map { value ->
+                        LsiPoetAnnotationArgument.Positional(
+                            LsiPoetAnnotationValue.StringValue(value)
+                        )
+                    },
+                    argumentLayout = LsiPoetAnnotationArgumentLayout.SINGLE_LINE,
+                )
+            ),
+            members = listOf(
+                LsiPoetProperty(
+                    name = "created",
+                    type = stringType,
+                    mutable = false,
+                    initializer = LsiPoetCodeBlock.build {
+                        preserveExplicitIndentation()
+                        text("Factory")
+                        line()
+                        indent { text(".create()") }
+                    },
+                ),
+                LsiPoetProperty(
+                    name = "missing",
+                    type = stringType,
+                    mutable = false,
+                    getter = LsiPoetAccessor(
+                        body = LsiPoetCodeBlock.build { text("throw IllegalStateException()") },
+                        bodyStyle = LsiPoetBodyStyle.EXPRESSION,
+                    ),
+                ),
+                LsiPoetFunction(
+                    name = "pick",
+                    returnType = stringType,
+                    body = LsiPoetCodeBlock.build { text("when (value) { else -> value }") },
+                    bodyStyle = LsiPoetBodyStyle.EXPRESSION,
+                ),
+            ),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact(type, "Layout")).content
+
+        assertContains(content, "@Ordered(\"dummy\", \"id\", \"name\")")
+        assertContains(content, "public val created: String = Factory\n        .create()")
+        assertContains(content, "get() = throw IllegalStateException()")
+        assertContains(content, "public fun pick(): String = when (value) { else -> value }")
     }
 
     private fun artifact(type: LsiPoetType, fileName: String): LsiPoetArtifact {

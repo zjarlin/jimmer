@@ -12,8 +12,10 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetBodyStyle
 import site.addzero.lsi.poet.LsiPoetBracedExpressionCompletion
 import site.addzero.lsi.poet.LsiPoetCodeBlock
+import site.addzero.lsi.poet.LsiPoetCodeBlockIndentation
 import site.addzero.lsi.poet.LsiPoetCodePart
 import site.addzero.lsi.poet.LsiPoetConstructor
 import site.addzero.lsi.poet.LsiPoetDelegationTarget
@@ -52,7 +54,7 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
         require(type.name == file.fileName) {
             "Java LSI Poet file name must match its top-level type: ${artifact.qualifiedFileName}"
         }
-        val javaFile = JavaFile.builder(file.packageName, type.toJavaTypeSpec())
+        val javaFile = JavaFile.builder(file.packageName, type.toJavaTypeSpec(file.packageName))
             .indent("    ")
             .apply {
                 file.headerComment?.let { comment -> addFileComment("\$L", comment) }
@@ -62,7 +64,7 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
     }
 }
 
-private fun LsiPoetType.toJavaTypeSpec(): TypeSpec {
+private fun LsiPoetType.toJavaTypeSpec(currentPackageName: String): TypeSpec {
     require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
         "JavaPoet renderer cannot emit an escaped Kotlin type name: $name"
     }
@@ -84,12 +86,15 @@ private fun LsiPoetType.toJavaTypeSpec(): TypeSpec {
         "Java superclass constructor arguments must be declared by a constructor delegation call: $name"
     }
     primaryConstructor?.let { constructor -> builder.addMethod(constructor.toJavaConstructor()) }
-    enumConstants.forEach { constant -> builder.addJavaEnumConstant(constant) }
-    members.forEach { member -> builder.addJavaMember(member) }
+    enumConstants.forEach { constant -> builder.addJavaEnumConstant(constant, currentPackageName) }
+    members.forEach { member -> builder.addJavaMember(member, currentPackageName) }
     return builder.build()
 }
 
-private fun TypeSpec.Builder.addJavaEnumConstant(constant: LsiPoetEnumConstant) {
+private fun TypeSpec.Builder.addJavaEnumConstant(
+    constant: LsiPoetEnumConstant,
+    currentPackageName: String,
+) {
     if (constant.constructorArguments.isEmpty() && constant.anonymousType == null) {
         addEnumConstant(constant.name)
         return
@@ -104,19 +109,22 @@ private fun TypeSpec.Builder.addJavaEnumConstant(constant: LsiPoetEnumConstant) 
             anonymousBuilder.addAnnotation(annotation.toJavaSourceAnnotationSpec())
         }
         type.superInterfaces.forEach { superType -> anonymousBuilder.addSuperinterface(superType.toJavaTypeName()) }
-        type.members.forEach { member -> anonymousBuilder.addJavaMember(member) }
+        type.members.forEach { member -> anonymousBuilder.addJavaMember(member, currentPackageName) }
     }
     addEnumConstant(constant.name, anonymousBuilder.build())
 }
 
-private fun TypeSpec.Builder.addJavaMember(member: LsiPoetMember) {
+private fun TypeSpec.Builder.addJavaMember(
+    member: LsiPoetMember,
+    currentPackageName: String,
+) {
     when (member) {
         is LsiPoetConstructor -> addMethod(member.toJavaConstructor())
-        is LsiPoetField -> addField(member.toJavaField())
+        is LsiPoetField -> addField(member.toJavaField(currentPackageName))
         is LsiPoetFunction -> addMethod(member.toJavaMethod())
         is LsiPoetInitializerBlock -> addJavaInitializer(member)
         is LsiPoetProperty -> error("JavaPoet renderer cannot emit a Kotlin property: ${member.name}")
-        is LsiPoetType -> addType(member.toJavaTypeSpec())
+        is LsiPoetType -> addType(member.toJavaTypeSpec(currentPackageName))
     }
 }
 
@@ -163,6 +171,9 @@ private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
     require(reifiedTypeParameterIds.isEmpty()) {
         "JavaPoet renderer cannot emit reified type parameters: $name"
     }
+    require(bodyStyle == LsiPoetBodyStyle.BLOCK) {
+        "JavaPoet renderer cannot emit an expression function body: $name"
+    }
     val builder = MethodSpec.methodBuilder(name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.FUNCTION))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
@@ -200,13 +211,17 @@ private fun LsiPoetParameter.toJavaParameter(): ParameterSpec {
     return builder.build()
 }
 
-private fun LsiPoetField.toJavaField(): FieldSpec {
+private fun LsiPoetField.toJavaField(currentPackageName: String): FieldSpec {
     val javaModifiers = modifiers.toJavaModifiers(JavaModifierContext.FIELD).toMutableSet()
     if (LsiPoetModifier.CONST in modifiers) {
         javaModifiers += Modifier.STATIC
         javaModifiers += Modifier.FINAL
     }
-    val builder = FieldSpec.builder(type.toJavaTypeName(), name, *javaModifiers.toTypedArray())
+    val builder = FieldSpec.builder(
+        type.toJavaTypeName(typeReferenceStyle, currentPackageName),
+        name,
+        *javaModifiers.toTypedArray(),
+    )
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
     initializer?.let { value -> builder.initializer(value.toJavaCodeBlock()) }
@@ -214,6 +229,9 @@ private fun LsiPoetField.toJavaField(): FieldSpec {
 }
 
 private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
+    require(indentation == LsiPoetCodeBlockIndentation.PLATFORM_DEFAULT) {
+        "JavaPoet renderer cannot honor explicit Kotlin code indentation"
+    }
     val builder = CodeBlock.builder()
     parts.forEach { part ->
         when (part) {
@@ -247,6 +265,9 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
                 LsiPoetTypeReferenceStyle.FULLY_QUALIFIED -> builder.add(
                     "\$L",
                     part.value.toJavaTypeName(),
+                )
+                LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED -> error(
+                    "Same-package outer-qualified type references require a declaration type position"
                 )
             }
             LsiPoetCodePart.Unindent -> builder.unindent()

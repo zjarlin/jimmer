@@ -24,8 +24,10 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
 import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
+import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
 internal fun LsiTypeRef.toJavaTypeName(): TypeName {
     val typeName = when (this) {
@@ -76,6 +78,62 @@ internal fun LsiTypeRef.toJavaTypeName(): TypeName {
     }
 }
 
+/**
+ * 将声明类型的源码限定方式留在 JavaPoet 边界处理，语义类型本身保持不变。
+ */
+internal fun LsiTypeRef.toJavaTypeName(
+    referenceStyle: LsiPoetTypeReferenceStyle,
+    currentPackageName: String,
+): TypeName {
+    if (referenceStyle == LsiPoetTypeReferenceStyle.IMPORTED) {
+        return toJavaTypeName()
+    }
+    val declaredType = this as? LsiDeclaredType
+        ?: error("Java declaration type reference style requires a declared type: $this")
+    val qualifiedName = declaredType.declarationId.requireTypeQualifiedName()
+    val sourceSegments = when (referenceStyle) {
+        LsiPoetTypeReferenceStyle.IMPORTED -> error("Imported Java type is handled before source qualification")
+        LsiPoetTypeReferenceStyle.FULLY_QUALIFIED -> qualifiedName.split('.')
+        LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED -> {
+            val packagePrefix = currentPackageName.takeIf(String::isNotEmpty)?.plus('.') ?: ""
+            require(qualifiedName.startsWith(packagePrefix)) {
+                "Same-package outer-qualified Java type must belong to '$currentPackageName': $qualifiedName"
+            }
+            qualifiedName.removePrefix(packagePrefix).split('.').also { simpleNames ->
+                require(simpleNames.size >= 2) {
+                    "Same-package outer-qualified Java type must be nested: $qualifiedName"
+                }
+            }
+        }
+    }
+    val rawType = ClassName.get("", sourceSegments.first(), *sourceSegments.drop(1).toTypedArray())
+    val sourceType = if (declaredType.arguments.isEmpty()) {
+        rawType
+    } else {
+        ParameterizedTypeName.get(
+            rawType,
+            *declaredType.arguments.map { argument ->
+                when (argument.variance) {
+                    LsiVariance.STAR -> WildcardTypeName.subtypeOf(Any::class.java)
+                    LsiVariance.INVARIANT -> requireNotNull(argument.type).toJavaTypeName().box()
+                    LsiVariance.IN -> WildcardTypeName.supertypeOf(
+                        requireNotNull(argument.type).toJavaTypeName().box()
+                    )
+                    LsiVariance.OUT -> WildcardTypeName.subtypeOf(
+                        requireNotNull(argument.type).toJavaTypeName().box()
+                    )
+                }
+            }.toTypedArray(),
+        )
+    }
+    val annotationSpecs = annotations.map(LsiAnnotation::toJavaCoreAnnotationSpec)
+    return if (annotationSpecs.isEmpty()) {
+        sourceType
+    } else {
+        sourceType.annotated(*annotationSpecs.toTypedArray())
+    }
+}
+
 internal fun LsiTypeParameter.toJavaTypeVariableName(): TypeVariableName {
     require(variance == LsiVariance.INVARIANT) {
         "JavaPoet renderer cannot emit declaration-site variance for type parameter: $name"
@@ -101,6 +159,9 @@ internal fun LsiAnnotation.toJavaCoreAnnotationSpec(): AnnotationSpec {
 }
 
 internal fun LsiPoetAnnotation.toJavaSourceAnnotationSpec(): AnnotationSpec {
+    require(argumentLayout == LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT) {
+        "JavaPoet renderer cannot honor a forced single-line annotation layout: $type"
+    }
     val positionalArguments = arguments.filterIsInstance<LsiPoetAnnotationArgument.Positional>()
     require(positionalArguments.size <= 1) {
         "Java annotation cannot represent multiple positional arguments: $type"
