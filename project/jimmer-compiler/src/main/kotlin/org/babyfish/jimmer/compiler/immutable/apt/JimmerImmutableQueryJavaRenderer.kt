@@ -14,10 +14,20 @@ import com.squareup.javapoet.TypeVariableName
 import com.squareup.javapoet.WildcardTypeName
 import javax.lang.model.element.Modifier
 import org.babyfish.jimmer.client.meta.Doc
+import org.babyfish.jimmer.compiler.immutable.associatedIdPropName
+import org.babyfish.jimmer.compiler.immutable.expressionKind
+import org.babyfish.jimmer.compiler.immutable.fieldName
+import org.babyfish.jimmer.compiler.immutable.isBranchDependent
+import org.babyfish.jimmer.compiler.immutable.isDsl
+import org.babyfish.jimmer.compiler.immutable.orderedProps
+import org.babyfish.jimmer.compiler.immutable.propsMethodProps
+import org.babyfish.jimmer.compiler.immutable.propsSuperTypes
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactAggregationMode
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactOriginatingSymbols
+import org.babyfish.jimmer.compiler.immutable.typedPropKind
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.ImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePropExpressionKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -25,12 +35,19 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
 import org.babyfish.jimmer.compiler.render.apt.toJavaTypeName
+import site.addzero.lsi.jimmer.isEntityAssociation
+import site.addzero.lsi.jimmer.elementTypeOrSelf
+import site.addzero.lsi.jimmer.primaryLineageOwner
+import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
+import site.addzero.lsi.jimmer.targetIdPropOf
+import site.addzero.lsi.jimmer.targetTypeOf
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.LsiTypeSystem
 
 class JimmerImmutableQueryJavaRenderer {
 
@@ -55,7 +72,7 @@ private class QueryJavaRenderContext(
     private val workspace: LsiWorkspace,
 ) {
 
-    private val metadata = JimmerImmutableQueryMetadata(schema, workspace)
+    private val typeSystem = LsiTypeSystem(workspace)
 
     private val modelClass = ClassName.bestGuess(type.qualifiedName)
 
@@ -66,24 +83,24 @@ private class QueryJavaRenderContext(
     private val tableExClass = ClassName.get(type.packageName, "${type.simpleName}TableEx")
 
     fun render(): List<GeneratedArtifact> {
-        val propsOriginatingSymbols = metadata.originatingSymbols(type)
+        val propsOriginatingSymbols = setOf(type.id)
         val artifacts = mutableListOf(
             sourceArtifact(
                 qualifiedName = propsClass.canonicalName(),
                 content = javaFile(propsType()),
-                aggregationMode = metadata.aggregationMode(),
+                aggregationMode = ArtifactAggregationMode.ISOLATING,
                 originatingSymbols = propsOriginatingSymbols,
             )
         )
         if (type.kind != ImmutableTypeKind.ENTITY) {
             return artifacts
         }
-        val tableOriginatingSymbols = metadata.queryOriginatingSymbols(type)
+        val tableOriginatingSymbols = schema.inheritanceArtifactOriginatingSymbols(type)
         artifacts += sourceArtifact(
             qualifiedName = tableClass.canonicalName(),
             content = javaFile(tableType(tableEx = false)),
-            aggregationMode = metadata.queryAggregationMode(type),
-            emissionMode = if (metadata.branchDependent(type)) {
+            aggregationMode = schema.inheritanceArtifactAggregationMode(type),
+            emissionMode = if (schema.isBranchDependent(type)) {
                 ArtifactEmissionMode.STABLE
             } else {
                 ArtifactEmissionMode.IMMEDIATE
@@ -93,7 +110,7 @@ private class QueryJavaRenderContext(
         artifacts += sourceArtifact(
             qualifiedName = tableExClass.canonicalName(),
             content = javaFile(tableType(tableEx = true)),
-            aggregationMode = metadata.aggregationMode(),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = propsOriginatingSymbols,
         )
         return artifacts
@@ -136,7 +153,7 @@ private class QueryJavaRenderContext(
                             .build()
                     )
                 }
-                val superTypes = metadata.propsSuperTypes(type)
+                val superTypes = schema.propsSuperTypes(type)
                 if (superTypes.isEmpty()) {
                     if (type.kind in SQL_QUERY_TYPE_KINDS) {
                         addSuperinterface(PROPS)
@@ -149,10 +166,10 @@ private class QueryJavaRenderContext(
                 if (type.kind == ImmutableTypeKind.ENTITY) {
                     addSuperinterface(ParameterizedTypeName.get(SELECTION, modelClass))
                 }
-                metadata.orderedProps(type).forEach { prop -> addField(typedPropField(prop)) }
+                schema.orderedProps(type).forEach { prop -> addField(typedPropField(prop)) }
                 if (type.kind in SQL_QUERY_TYPE_KINDS) {
-                    metadata.propsMethodProps(type).forEach { prop ->
-                        if (metadata.isDsl(prop, tableEx = false)) {
+                    schema.propsMethodProps(type).forEach { prop ->
+                        if (schema.isDsl(prop, workspace, tableEx = false)) {
                             addMethod(
                                 requireNotNull(
                                     propertyMethod(
@@ -179,14 +196,14 @@ private class QueryJavaRenderContext(
     }
 
     private fun typedPropField(prop: ImmutableProp): FieldSpec {
-        val kind = metadata.typedPropKind(prop)
+        val kind = schema.typedPropKind(prop)
         return FieldSpec.builder(
             ParameterizedTypeName.get(
                 kind.typedPropClassName(),
                 modelClass,
-                metadata.typedPropElementType(prop).toJavaTypeName().box(),
+                prop.elementTypeOrSelf().toJavaTypeName().box(),
             ),
-            metadata.fieldName(prop),
+            prop.fieldName(),
             Modifier.PUBLIC,
             Modifier.STATIC,
             Modifier.FINAL,
@@ -220,7 +237,7 @@ private class QueryJavaRenderContext(
                 } else {
                     superclass(ParameterizedTypeName.get(ABSTRACT_TYPED_TABLE, modelClass))
                     addSuperinterface(propsClass)
-                    if (metadata.strictTypeBranches(type).isNotEmpty()) {
+                    if (schema.strictPrimarySubtypesOf(type).isNotEmpty()) {
                         addSuperinterface(ParameterizedTypeName.get(POLYMORPHIC_TABLE, modelClass))
                     }
                 }
@@ -230,8 +247,8 @@ private class QueryJavaRenderContext(
                 addMethod(wrapperConstructor())
                 addMethod(disableJoinConstructor())
                 addMethod(baseTableOwnerConstructor())
-                metadata.orderedProps(type).forEach { prop ->
-                    if (metadata.isDsl(prop, tableEx)) {
+                schema.orderedProps(type).forEach { prop ->
+                    if (schema.isDsl(prop, workspace, tableEx)) {
                         addMethod(
                             requireNotNull(
                                 propertyMethod(
@@ -344,7 +361,7 @@ private class QueryJavaRenderContext(
         withJoinType: Boolean,
         withImplementation: Boolean,
     ): MethodSpec? {
-        val entityAssociation = metadata.isEntityAssociation(prop)
+        val entityAssociation = schema.isEntityAssociation(prop)
         if (withJoinType && !entityAssociation) {
             return null
         }
@@ -378,8 +395,8 @@ private class QueryJavaRenderContext(
         returnType: TypeName,
         withJoinType: Boolean,
     ) {
-        val runtimePropsClass = metadata.runtimePropsOwnerType(type, prop).propsClassName()
-        if (metadata.isEntityAssociation(prop)) {
+        val runtimePropsClass = schema.primaryLineageOwner(type, prop).propsClassName()
+        if (schema.isEntityAssociation(prop)) {
             addStatement("__beforeJoin()")
             if (withJoinType) {
                 beginControlFlow("if (raw != null)")
@@ -387,14 +404,14 @@ private class QueryJavaRenderContext(
                         "return new \$T(raw.joinImplementor(\$T.\$L.unwrap(), joinType))",
                         returnType,
                         runtimePropsClass,
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
                     .endControlFlow()
                     .addStatement(
                         "return new \$T(joinOperation(\$T.\$L.unwrap(), joinType))",
                         returnType,
                         runtimePropsClass,
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
             } else {
                 beginControlFlow("if (raw != null)")
@@ -402,31 +419,31 @@ private class QueryJavaRenderContext(
                         "return new \$T(raw.joinImplementor(\$T.\$L.unwrap()))",
                         returnType,
                         runtimePropsClass,
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
                     .endControlFlow()
                     .addStatement(
                         "return new \$T(joinOperation(\$T.\$L.unwrap()))",
                         returnType,
                         runtimePropsClass,
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
             }
             return
         }
-        if (metadata.targetType(prop) != null) {
+        if (schema.targetTypeOf(prop) != null) {
             addStatement(
                 "return new \$T(__get(\$T.\$L.unwrap()))",
                 returnType,
                 runtimePropsClass,
-                metadata.fieldName(prop),
+                prop.fieldName(),
             )
             return
         }
         addStatement(
             "return __get(\$T.\$L.unwrap())",
             runtimePropsClass,
-            metadata.fieldName(prop),
+            prop.fieldName(),
         )
     }
 
@@ -434,8 +451,8 @@ private class QueryJavaRenderContext(
         prop: ImmutableProp,
         tableEx: Boolean,
     ): TypeName {
-        val targetType = metadata.targetType(prop)
-        if (metadata.isEntityAssociation(prop)) {
+        val targetType = schema.targetTypeOf(prop)
+        if (schema.isEntityAssociation(prop)) {
             val target = requireNotNull(targetType) {
                 "Entity association '${prop.id.value}' must have a concrete target"
             }
@@ -448,17 +465,17 @@ private class QueryJavaRenderContext(
         if (targetType != null) {
             return targetType.propExpressionClassName()
         }
-        return prop.expressionTypeName(metadata)
+        return prop.expressionTypeName(typeSystem)
     }
 
     private fun existsMethod(
         prop: ImmutableProp,
         withImplementation: Boolean,
     ): MethodSpec? {
-        if (!metadata.isEntityAssociation(prop) || !prop.list) {
+        if (!schema.isEntityAssociation(prop) || !prop.list) {
             return null
         }
-        val targetType = requireNotNull(metadata.targetType(prop)) {
+        val targetType = requireNotNull(schema.targetTypeOf(prop)) {
             "List association '${prop.id.value}' must have a concrete target"
         }
         return MethodSpec.methodBuilder(prop.name)
@@ -475,11 +492,11 @@ private class QueryJavaRenderContext(
             .apply {
                 if (withImplementation) {
                     addAnnotation(OVERRIDE)
-                    val runtimePropsClass = metadata.runtimePropsOwnerType(type, prop).propsClassName()
+                    val runtimePropsClass = schema.primaryLineageOwner(type, prop).propsClassName()
                     addStatement(
                         "return exists(\$T.\$L.unwrap(), block)",
                         runtimePropsClass,
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
                 } else {
                     addModifiers(Modifier.ABSTRACT)
@@ -493,30 +510,30 @@ private class QueryJavaRenderContext(
         tableEx: Boolean,
         withImplementation: Boolean,
     ): MethodSpec? {
-        val methodName = metadata.associatedIdPropName(type, prop) ?: return null
+        val methodName = schema.associatedIdPropName(type, prop) ?: return null
         if (
             prop.primaryMapping == PrimaryMapping.TRANSIENT ||
-            !metadata.isEntityAssociation(prop) ||
+            !schema.isEntityAssociation(prop) ||
             prop.list != tableEx
         ) {
             return null
         }
-        val targetIdProp = requireNotNull(metadata.targetIdProp(prop)) {
+        val targetIdProp = requireNotNull(schema.targetIdPropOf(prop)) {
             "Association '${prop.id.value}' must target an entity with an id property"
         }
         return MethodSpec.methodBuilder(methodName)
             .addModifiers(Modifier.PUBLIC)
-            .returns(targetIdProp.expressionTypeName(metadata))
+            .returns(targetIdProp.expressionTypeName(typeSystem))
             .apply {
                 if (withImplementation) {
                     if (!tableEx) {
                         addAnnotation(OVERRIDE)
                     }
-                    val runtimePropsClass = metadata.runtimePropsOwnerType(type, prop).propsClassName()
+                    val runtimePropsClass = schema.primaryLineageOwner(type, prop).propsClassName()
                     addStatement(
                         "return __getAssociatedId(\$T.\$L.unwrap())",
                         runtimePropsClass,
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
                 } else {
                     addModifiers(Modifier.ABSTRACT)
@@ -561,7 +578,7 @@ private class QueryJavaRenderContext(
     }
 
     private fun TypeSpec.Builder.addPolymorphicMethods() {
-        if (metadata.strictTypeBranches(type).isEmpty()) {
+        if (schema.strictPrimarySubtypesOf(type).isEmpty()) {
             return
         }
         addMethod(treatAsMethod(optional = false))
@@ -815,7 +832,7 @@ private class QueryJavaRenderContext(
                 returnType,
                 idProp.type.toJavaTypeName().box(),
                 propsClass,
-                metadata.fieldName(idProp),
+                idProp.fieldName(),
             )
             .build()
     }
@@ -857,11 +874,9 @@ private class QueryJavaRenderContext(
     }
 }
 
-private fun ImmutableProp.expressionTypeName(
-    metadata: JimmerImmutableQueryMetadata,
-): TypeName {
+private fun ImmutableProp.expressionTypeName(typeSystem: LsiTypeSystem): TypeName {
     val boxedType = type.toJavaTypeName().box()
-    return when (metadata.expressionKind(this)) {
+    return when (expressionKind(typeSystem)) {
         JimmerImmutablePropExpressionKind.GENERIC -> ParameterizedTypeName.get(PROP_EXPRESSION, boxedType)
         JimmerImmutablePropExpressionKind.NUMERIC -> ParameterizedTypeName.get(PROP_NUMERIC_EXPRESSION, boxedType)
         JimmerImmutablePropExpressionKind.STRING -> PROP_STRING_EXPRESSION

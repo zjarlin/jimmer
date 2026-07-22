@@ -11,18 +11,24 @@ import com.squareup.javapoet.TypeSpec
 import javax.lang.model.element.Modifier
 import org.babyfish.jimmer.client.meta.Doc
 import site.addzero.lsi.jimmer.ImmutableProp
+import org.babyfish.jimmer.compiler.immutable.expressionKind
+import org.babyfish.jimmer.compiler.immutable.fieldName
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePropExpressionKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
+import org.babyfish.jimmer.compiler.immutable.typedPropKind
 import org.babyfish.jimmer.compiler.render.apt.toJavaTypeName
+import site.addzero.lsi.jimmer.elementTypeOrSelf
+import site.addzero.lsi.jimmer.targetTypeOf
+import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.LsiTypeSystem
 
 class JimmerImmutableEmbeddableJavaRenderer {
 
@@ -34,23 +40,26 @@ class JimmerImmutableEmbeddableJavaRenderer {
         require(type.kind == ImmutableTypeKind.EMBEDDABLE) {
             "Java immutable embeddable renderer only supports embeddable types: ${type.id.value}"
         }
-        val metadata = JimmerImmutableQueryMetadata(schema, workspace)
-        val propsContent = JavaFile.builder(type.packageName, propsType(type, metadata))
+        val typeSystem = LsiTypeSystem(workspace)
+        val propsContent = JavaFile.builder(type.packageName, propsType(schema, type))
             .indent("    ")
             .build()
             .toString()
-        val expressionContent = JavaFile.builder(type.packageName, propExpressionType(type, metadata))
+        val expressionContent = JavaFile.builder(
+            type.packageName,
+            propExpressionType(schema, type, typeSystem),
+        )
             .indent("    ")
             .build()
             .toString()
-        val originatingSymbols = metadata.originatingSymbols(type)
+        val originatingSymbols = setOf(type.id)
         val originatingSources = workspace.originatingSources(originatingSymbols)
         return listOf(
             GeneratedArtifact.source(
                 kind = ArtifactKind.JAVA_SOURCE,
                 qualifiedName = type.propsClassName().canonicalName(),
                 content = propsContent,
-                aggregationMode = metadata.aggregationMode(),
+                aggregationMode = ArtifactAggregationMode.ISOLATING,
                 originatingSymbols = originatingSymbols,
                 originatingSources = originatingSources,
             ),
@@ -58,7 +67,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
                 kind = ArtifactKind.JAVA_SOURCE,
                 qualifiedName = type.propExpressionClassName().canonicalName(),
                 content = expressionContent,
-                aggregationMode = metadata.aggregationMode(),
+                aggregationMode = ArtifactAggregationMode.ISOLATING,
                 originatingSymbols = originatingSymbols,
                 originatingSources = originatingSources,
             ),
@@ -66,31 +75,31 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 
     private fun propsType(
+        schema: ImmutableSchema,
         type: ImmutableType,
-        metadata: JimmerImmutableQueryMetadata,
     ): TypeSpec {
         return TypeSpec.interfaceBuilder(type.propsClassName().simpleName())
             .addModifiers(Modifier.PUBLIC)
             .addAnnotation(type.generatedAnnotation())
             .apply {
-                type.props.forEach { prop -> addField(typedPropField(type, prop, metadata)) }
+                type.props.forEach { prop -> addField(typedPropField(schema, type, prop)) }
             }
             .build()
     }
 
     private fun typedPropField(
+        schema: ImmutableSchema,
         type: ImmutableType,
         prop: ImmutableProp,
-        metadata: JimmerImmutableQueryMetadata,
     ): FieldSpec {
-        val kind = metadata.typedPropKind(prop)
+        val kind = schema.typedPropKind(prop)
         return FieldSpec.builder(
             ParameterizedTypeName.get(
                 kind.typedPropClassName(),
                 type.className(),
-                metadata.typedPropElementType(prop).toJavaTypeName().box(),
+                prop.elementTypeOrSelf().toJavaTypeName().box(),
             ),
-            metadata.fieldName(prop),
+            prop.fieldName(),
             Modifier.PUBLIC,
             Modifier.STATIC,
             Modifier.FINAL,
@@ -107,8 +116,9 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 
     private fun propExpressionType(
+        schema: ImmutableSchema,
         type: ImmutableType,
-        metadata: JimmerImmutableQueryMetadata,
+        typeSystem: LsiTypeSystem,
     ): TypeSpec {
         return TypeSpec.classBuilder(type.propExpressionClassName().simpleName())
             .addModifiers(Modifier.PUBLIC)
@@ -117,7 +127,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
             .apply {
                 addMethod(rawConstructor(type))
                 addMethod(baseTableConstructor(type))
-                type.props.forEach { prop -> addMethod(propMethod(type, prop, metadata)) }
+                type.props.forEach { prop -> addMethod(propMethod(schema, type, prop, typeSystem)) }
                 addMethod(baseTableOwnerMethod(type))
             }
             .build()
@@ -141,12 +151,13 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 
     private fun propMethod(
+        schema: ImmutableSchema,
         type: ImmutableType,
         prop: ImmutableProp,
-        metadata: JimmerImmutableQueryMetadata,
+        typeSystem: LsiTypeSystem,
     ): MethodSpec {
-        val targetType = metadata.targetType(prop)
-        val returnType = targetType?.propExpressionClassName() ?: prop.expressionTypeName(metadata)
+        val targetType = schema.targetTypeOf(prop)
+        val returnType = targetType?.propExpressionClassName() ?: prop.expressionTypeName(typeSystem)
         return MethodSpec.methodBuilder(prop.name)
             .addModifiers(Modifier.PUBLIC)
             .returns(returnType)
@@ -159,13 +170,13 @@ class JimmerImmutableEmbeddableJavaRenderer {
                         "return new \$T(__get(\$T.\$L.unwrap()))",
                         returnType,
                         type.propsClassName(),
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
                 } else {
                     addStatement(
                         "return __get(\$T.\$L.unwrap())",
                         type.propsClassName(),
-                        metadata.fieldName(prop),
+                        prop.fieldName(),
                     )
                 }
             }
@@ -184,10 +195,10 @@ class JimmerImmutableEmbeddableJavaRenderer {
 }
 
 private fun ImmutableProp.expressionTypeName(
-    metadata: JimmerImmutableQueryMetadata,
+    typeSystem: LsiTypeSystem,
 ): TypeName {
     val boxedType = type.toJavaTypeName().box()
-    return when (metadata.expressionKind(this)) {
+    return when (expressionKind(typeSystem)) {
         JimmerImmutablePropExpressionKind.GENERIC -> ParameterizedTypeName.get(PROP_EXPRESSION, boxedType)
         JimmerImmutablePropExpressionKind.NUMERIC -> ParameterizedTypeName.get(PROP_NUMERIC_EXPRESSION, boxedType)
         JimmerImmutablePropExpressionKind.STRING -> PROP_STRING_EXPRESSION

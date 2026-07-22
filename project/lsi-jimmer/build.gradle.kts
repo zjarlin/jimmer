@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     api(projects.lsiCore)
+    testImplementation(libs.kotlin.test)
 }
 
 val verifyLsiJimmerArchitecture by tasks.registering(VerifyCompilerArchitecture::class) {

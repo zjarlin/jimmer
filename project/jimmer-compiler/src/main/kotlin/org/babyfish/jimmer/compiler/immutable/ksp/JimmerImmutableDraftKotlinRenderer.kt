@@ -17,12 +17,14 @@ import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableAssociatedIdContract
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftArtifactMetadata
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftPropPlan
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftRuntimePropKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftRuntimeValueCategory
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTypePlan
+import org.babyfish.jimmer.compiler.immutable.draftArtifactAggregationMode
+import org.babyfish.jimmer.compiler.immutable.draftArtifactDependencySources
+import org.babyfish.jimmer.compiler.immutable.kotlinDraftQualifiedFileName
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.render.ksp.toLegacyKotlinAnnotationSpecWithDefaults
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
@@ -50,8 +52,6 @@ internal class JimmerImmutableDraftKotlinRenderContext(
     val schema: JimmerImmutableDraftCodegenSchema,
     val type: JimmerImmutableDraftTypePlan,
 ) {
-
-    private val artifactMetadata = JimmerImmutableDraftArtifactMetadata(schema)
 
     val packageName: String = type.qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
 
@@ -89,7 +89,7 @@ internal class JimmerImmutableDraftKotlinRenderContext(
     }
 
     fun render(): GeneratedArtifact {
-        val qualifiedFileName = artifactMetadata.kotlinQualifiedFileName(type)
+        val qualifiedFileName = type.kotlinDraftQualifiedFileName()
         val fileName = qualifiedFileName.substringAfterLast('.')
         val fileSpec = FileSpec.builder(packageName, fileName)
             .indent("    ")
@@ -105,11 +105,11 @@ internal class JimmerImmutableDraftKotlinRenderContext(
             kind = ArtifactKind.KOTLIN_SOURCE,
             qualifiedName = qualifiedFileName,
             content = fileSpec.toString(),
-            aggregationMode = artifactMetadata.aggregationMode(type),
+            aggregationMode = type.draftArtifactAggregationMode(),
             originatingSymbols = type.artifactOriginatingSymbols,
             originatingSources = type.artifactOriginatingSources.toSet(),
             dependencySymbols = type.dependencySymbols,
-            dependencySources = artifactMetadata.dependencySources(type),
+            dependencySources = type.draftArtifactDependencySources(),
         )
     }
 

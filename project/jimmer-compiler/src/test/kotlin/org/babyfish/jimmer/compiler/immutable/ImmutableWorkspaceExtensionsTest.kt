@@ -1291,7 +1291,7 @@ class ImmutableWorkspaceExtensionsTest {
             )
         )
         val exception = assertFailsWith<ImmutablePrecompileException> {
-            JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(setOf(rootId))
+            schema.validateFetcherGenerationContracts(setOf(rootId))
         }
 
         assertEquals(conflictProp.id, exception.declarationId)
@@ -1301,16 +1301,15 @@ class ImmutableWorkspaceExtensionsTest {
     @Test
     fun `inheritance fetcher aggregates strict branch origins`() {
         val schema = compileFixture(inheritanceWorkspace(LsiLanguage.KOTLIN))
-        val metadata = JimmerImmutableFetcherMetadata(schema)
         val rootId = LsiSymbolId.type("demo.Account")
         val childId = LsiSymbolId.type("demo.AdminAccount")
         val root = schema.typesById.getValue(rootId)
         val child = schema.typesById.getValue(childId)
 
-        assertEquals(ArtifactAggregationMode.AGGREGATING, metadata.aggregationMode(root))
-        assertEquals(setOf(rootId, childId), metadata.originatingSymbols(root))
-        assertEquals(ArtifactAggregationMode.AGGREGATING, metadata.aggregationMode(child))
-        assertEquals(setOf(childId), metadata.originatingSymbols(child))
+        assertEquals(ArtifactAggregationMode.AGGREGATING, schema.inheritanceArtifactAggregationMode(root))
+        assertEquals(setOf(rootId, childId), schema.inheritanceArtifactOriginatingSymbols(root))
+        assertEquals(ArtifactAggregationMode.AGGREGATING, schema.inheritanceArtifactAggregationMode(child))
+        assertEquals(setOf(childId), schema.inheritanceArtifactOriginatingSymbols(child))
     }
 
     @Test

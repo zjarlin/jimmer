@@ -157,13 +157,12 @@ class JimmerImmutableDraftCodegenModelTest {
         assertTrue(VALID_BOOK in book.dependencySymbols)
         assertTrue(VALIDATOR in book.dependencySymbols)
         assertTrue(BASE_SOURCE in book.dependencySources)
-        val artifactMetadata = JimmerImmutableDraftArtifactMetadata(draftSchema)
-        assertEquals("demo.BookDraft", artifactMetadata.javaQualifiedName(book))
-        assertEquals("demo.ModelsDraft", artifactMetadata.kotlinQualifiedFileName(book))
-        assertEquals(ArtifactAggregationMode.AGGREGATING, artifactMetadata.aggregationMode(book))
+        assertEquals("demo.BookDraft", book.javaDraftQualifiedName())
+        assertEquals("demo.ModelsDraft", book.kotlinDraftQualifiedFileName())
+        assertEquals(ArtifactAggregationMode.AGGREGATING, book.draftArtifactAggregationMode())
         assertEquals(
             listOf(AUTHOR, BASE_ID, BOOK),
-            artifactMetadata.generatedTypes(setOf(BOOK, BASE_ID, AUTHOR)).map { type -> type.typeId },
+            draftSchema.generatedDraftTypes(setOf(BOOK, BASE_ID, AUTHOR)).map { type -> type.typeId },
         )
         val excludedAnnotationSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             schema,

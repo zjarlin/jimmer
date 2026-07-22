@@ -12,15 +12,22 @@ import com.squareup.javapoet.WildcardTypeName
 import java.util.function.Consumer
 import javax.lang.model.element.Modifier
 import org.babyfish.jimmer.client.meta.Doc
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableFetcherMetadata
+import org.babyfish.jimmer.compiler.immutable.isBranchDependent
+import org.babyfish.jimmer.compiler.immutable.packageName
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactAggregationMode
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactOriginatingSymbols
+import org.babyfish.jimmer.compiler.immutable.simpleName
 import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.packageName
-import org.babyfish.jimmer.compiler.immutable.simpleName
+import site.addzero.lsi.jimmer.hasAnnotation
+import site.addzero.lsi.jimmer.idViewBasePropOrSelf
+import site.addzero.lsi.jimmer.isConcreteEntityAssociation
+import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
+import site.addzero.lsi.jimmer.targetTypeOf
 import org.babyfish.jimmer.impl.util.StringUtil
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.ArtifactEmissionMode
@@ -35,18 +42,17 @@ class JimmerImmutableFetcherJavaRenderer {
         type: ImmutableType,
         workspace: LsiWorkspace,
     ): GeneratedArtifact {
-        val metadata = JimmerImmutableFetcherMetadata(schema)
-        val content = JavaFile.builder(type.packageName, fetcherType(type, metadata))
+        val content = JavaFile.builder(type.packageName, fetcherType(schema, type))
             .indent("    ")
             .build()
             .toString()
-        val originatingSymbols = metadata.originatingSymbols(type)
+        val originatingSymbols = schema.inheritanceArtifactOriginatingSymbols(type)
         return GeneratedArtifact.source(
             kind = ArtifactKind.JAVA_SOURCE,
             qualifiedName = type.fetcherClassName().canonicalName(),
             content = content,
-            aggregationMode = metadata.aggregationMode(type),
-            emissionMode = if (metadata.branchDependent(type)) {
+            aggregationMode = schema.inheritanceArtifactAggregationMode(type),
+            emissionMode = if (schema.isBranchDependent(type)) {
                 ArtifactEmissionMode.STABLE
             } else {
                 ArtifactEmissionMode.IMMEDIATE
@@ -57,8 +63,8 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun fetcherType(
+        schema: ImmutableSchema,
         type: ImmutableType,
-        metadata: JimmerImmutableFetcherMetadata,
     ): TypeSpec {
         val fetcherClass = type.fetcherClassName()
         return TypeSpec.classBuilder(fetcherClass.simpleName())
@@ -75,8 +81,8 @@ class JimmerImmutableFetcherJavaRenderer {
                 addRootField(type)
                 addFromMethod(type)
                 addBaseConstructor(type)
-                addForType(type, metadata)
-                type.props.forEach { prop -> addPropMethods(type, prop, metadata) }
+                addForType(schema, type)
+                type.props.forEach { prop -> addPropMethods(schema, type, prop) }
                 addNegativeConstructor(type)
                 addFieldConfigConstructor(type)
                 addTypeBranchConstructor(type)
@@ -124,10 +130,10 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addForType(
+        schema: ImmutableSchema,
         type: ImmutableType,
-        metadata: JimmerImmutableFetcherMetadata,
     ) {
-        if (metadata.strictTypeBranches(type).isEmpty()) {
+        if (schema.strictPrimarySubtypesOf(type).isEmpty()) {
             return
         }
         val typeVariable = TypeVariableName.get("ST", type.className())
@@ -144,20 +150,20 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addPropMethods(
+        schema: ImmutableSchema,
         type: ImmutableType,
         prop: ImmutableProp,
-        metadata: JimmerImmutableFetcherMetadata,
     ) {
         if (prop.primaryMapping == PrimaryMapping.ID || !prop.fetchable) {
             return
         }
         addSimpleProp(type, prop)
         addEnabledProp(type, prop)
-        val targetType = metadata.targetType(prop)
-        if (metadata.isEntityAssociation(prop)) {
+        val targetType = schema.targetTypeOf(prop)
+        if (schema.isConcreteEntityAssociation(prop)) {
             addChildProp(type, prop, targetType)
             if (!prop.list) {
-                addIdOnlyProp(type, prop, metadata)
+                addIdOnlyProp(schema, type, prop)
             }
             if (!prop.remote) {
                 addFieldConfigProp(type, prop, targetType)
@@ -221,17 +227,17 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addIdOnlyProp(
+        schema: ImmutableSchema,
         type: ImmutableType,
         prop: ImmutableProp,
-        metadata: JimmerImmutableFetcherMetadata,
     ) {
-        val associationProp = metadata.idOnlyAssociationProp(prop)
+        val associationProp = schema.idViewBasePropOrSelf(prop)
         if (
             associationProp.primaryMapping == PrimaryMapping.TRANSIENT ||
-            !metadata.isEntityAssociation(associationProp) ||
+            !schema.isConcreteEntityAssociation(associationProp) ||
             prop.reverse ||
             prop.list ||
-            metadata.hasAnnotation(prop, JOIN_TABLE_ANNOTATION)
+            prop.hasAnnotation(JOIN_TABLE_ANNOTATION)
         ) {
             return
         }

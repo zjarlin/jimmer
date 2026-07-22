@@ -24,11 +24,13 @@ import org.babyfish.jimmer.DraftConsumer
 import org.babyfish.jimmer.ImmutableObjects
 import org.babyfish.jimmer.UnloadedException
 import org.babyfish.jimmer.client.Description
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftArtifactMetadata
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftPropPlan
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftRuntimePropKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTypePlan
+import org.babyfish.jimmer.compiler.immutable.draftArtifactAggregationMode
+import org.babyfish.jimmer.compiler.immutable.draftArtifactDependencySources
+import org.babyfish.jimmer.compiler.immutable.javaDraftQualifiedName
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.render.apt.toJavaAnnotationSpecPreservingArgumentOrder
 import org.babyfish.jimmer.compiler.render.apt.toJavaTypeName
@@ -69,7 +71,6 @@ internal class JimmerImmutableDraftJavaRenderer {
         require(schema.typesById[type.typeId] == type) {
             "Immutable draft type '${type.typeId.value}' does not belong to the supplied schema"
         }
-        val artifactMetadata = JimmerImmutableDraftArtifactMetadata(schema)
         val content = JavaFile.builder(
             type.qualifiedName.substringBeforeLast('.', missingDelimiterValue = ""),
             DraftTypeRenderer(schema, type).render(),
@@ -79,13 +80,13 @@ internal class JimmerImmutableDraftJavaRenderer {
             .toString()
         return GeneratedArtifact.source(
             kind = ArtifactKind.JAVA_SOURCE,
-            qualifiedName = artifactMetadata.javaQualifiedName(type),
+            qualifiedName = type.javaDraftQualifiedName(),
             content = content,
-            aggregationMode = artifactMetadata.aggregationMode(type),
+            aggregationMode = type.draftArtifactAggregationMode(),
             originatingSymbols = type.artifactOriginatingSymbols,
             originatingSources = type.artifactOriginatingSources.toSet(),
             dependencySymbols = type.dependencySymbols,
-            dependencySources = artifactMetadata.dependencySources(type),
+            dependencySources = type.draftArtifactDependencySources(),
         )
     }
 }

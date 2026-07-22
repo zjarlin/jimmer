@@ -81,7 +81,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     workspace = context.round.workspace,
                 ),
             )
-            JimmerImmutableFetcherMetadata(schema).validateGenerationContracts(targetTypeIds)
+            schema.validateFetcherGenerationContracts(targetTypeIds)
             JimmerCompilerFeaturePrecompileResult(
                 state = JimmerImmutableCompilerFeatureState(
                     schema = schema,
@@ -113,19 +113,16 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         if (state.status != JimmerImmutableCompilerFeatureStatus.RESOLVED) {
             return JimmerCompilerFeatureRenderResult()
         }
-        val fetcherMetadata = JimmerImmutableFetcherMetadata(state.schema)
-        val fetcherTypes = fetcherMetadata.generatedTypes(state.targetTypeIds)
-        val draftArtifactMetadata = JimmerImmutableDraftArtifactMetadata(state.draftCodegenSchema)
-        val draftTypes = draftArtifactMetadata.generatedTypes(state.currentTypeIds)
-        val queryMetadata = JimmerImmutableQueryMetadata(state.schema, context.round.workspace)
-        val embeddableTypes = queryMetadata.generatedEmbeddableTypes(state.currentTypeIds)
+        val fetcherTypes = state.schema.generatedFetcherTypes(state.targetTypeIds)
+        val draftTypes = state.draftCodegenSchema.generatedDraftTypes(state.currentTypeIds)
+        val embeddableTypes = state.schema.generatedEmbeddableTypes(state.currentTypeIds)
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> {
                 val draftRenderer = JimmerImmutableDraftJavaRenderer()
                 val fetcherRenderer = JimmerImmutableFetcherJavaRenderer()
                 val embeddableRenderer = JimmerImmutableEmbeddableJavaRenderer()
                 val queryRenderer = JimmerImmutableQueryJavaRenderer()
-                val queryTypes = queryMetadata.generatedPropsTypes(state.targetTypeIds)
+                val queryTypes = state.schema.generatedPropsTypes(state.targetTypeIds)
                 draftTypes.map { type ->
                     draftRenderer.render(state.draftCodegenSchema, type)
                 } + fetcherTypes.map { type ->
@@ -141,7 +138,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 val fetcherRenderer = JimmerImmutableFetcherKotlinRenderer()
                 val embeddableRenderer = JimmerImmutableEmbeddableKotlinRenderer()
                 val queryRenderer = JimmerImmutableQueryKotlinRenderer()
-                val queryTypes = queryMetadata.generatedQueryTypes(state.targetTypeIds)
+                val queryTypes = state.schema.generatedQueryTypes(state.targetTypeIds)
                 draftTypes.map { type ->
                     draftRenderer.render(state.draftCodegenSchema, type)
                 } + fetcherTypes.map { type ->

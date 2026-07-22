@@ -15,14 +15,22 @@ import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableFetcherMetadata
+import org.babyfish.jimmer.compiler.immutable.immutableSourceBaseName
+import org.babyfish.jimmer.compiler.immutable.isBranchDependent
+import org.babyfish.jimmer.compiler.immutable.packageName
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactAggregationMode
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactOriginatingSymbols
+import org.babyfish.jimmer.compiler.immutable.simpleName
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.packageName
-import org.babyfish.jimmer.compiler.immutable.simpleName
+import site.addzero.lsi.jimmer.hasAnnotation
+import site.addzero.lsi.jimmer.idViewBasePropOrSelf
+import site.addzero.lsi.jimmer.isConcreteEntityAssociation
+import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
+import site.addzero.lsi.jimmer.targetTypeOf
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.ArtifactEmissionMode
@@ -49,12 +57,10 @@ class JimmerImmutableFetcherKotlinRenderer {
 }
 
 private class FetcherRenderContext(
-    schema: ImmutableSchema,
+    private val schema: ImmutableSchema,
     private val type: ImmutableType,
     private val workspace: LsiWorkspace,
 ) {
-
-    private val metadata = JimmerImmutableFetcherMetadata(schema)
 
     private val modelClass = ClassName.bestGuess(type.qualifiedName)
 
@@ -64,10 +70,10 @@ private class FetcherRenderContext(
 
     private val emptyFetcherName = "empty${type.simpleName}$FETCHER_SUFFIX"
 
-    private val strictTypeBranches = metadata.strictTypeBranches(type)
+    private val strictTypeBranches = schema.strictPrimarySubtypesOf(type)
 
     fun render(): GeneratedArtifact {
-        val sourceBaseName = metadata.sourceBaseName(type, workspace)
+        val sourceBaseName = workspace.immutableSourceBaseName(type)
         val fileName = "$sourceBaseName$FETCHER_SUFFIX"
         val fileSpec = FileSpec.builder(type.packageName, fileName)
             .indent("    ")
@@ -81,7 +87,7 @@ private class FetcherRenderContext(
                 addProperty(emptyFetcherProperty())
             }
             .build()
-        val originatingSymbols = metadata.originatingSymbols(type)
+        val originatingSymbols = schema.inheritanceArtifactOriginatingSymbols(type)
         val qualifiedFileName = if (type.packageName.isEmpty()) {
             fileName
         } else {
@@ -91,8 +97,8 @@ private class FetcherRenderContext(
             kind = ArtifactKind.KOTLIN_SOURCE,
             qualifiedName = qualifiedFileName,
             content = fileSpec.toString(),
-            aggregationMode = metadata.aggregationMode(type),
-            emissionMode = if (metadata.branchDependent(type)) {
+            aggregationMode = schema.inheritanceArtifactAggregationMode(type),
+            emissionMode = if (schema.isBranchDependent(type)) {
                 ArtifactEmissionMode.STABLE
             } else {
                 ArtifactEmissionMode.IMMEDIATE
@@ -104,8 +110,8 @@ private class FetcherRenderContext(
 
     private fun FileSpec.Builder.addCrossPackageByImports() {
         type.props.asSequence()
-            .filter(metadata::isEntityAssociation)
-            .mapNotNull(metadata::targetType)
+            .filter(schema::isConcreteEntityAssociation)
+            .mapNotNull(schema::targetTypeOf)
             .filter { targetType ->
                 targetType.packageName.isNotEmpty() && targetType.packageName != type.packageName
             }
@@ -280,17 +286,17 @@ private class FetcherRenderContext(
     }
 
     private fun idOnlyFetchTypeFunction(prop: ImmutableProp): FunSpec? {
-        val associationProp = metadata.idOnlyAssociationProp(prop)
+        val associationProp = schema.idViewBasePropOrSelf(prop)
         if (
             associationProp.primaryMapping == PrimaryMapping.TRANSIENT ||
-            !metadata.isEntityAssociation(associationProp)
+            !schema.isConcreteEntityAssociation(associationProp)
         ) {
             return null
         }
         if (
             prop.reverse ||
             associationProp.list ||
-            metadata.hasAnnotation(associationProp, JOIN_TABLE_ANNOTATION)
+            associationProp.hasAnnotation(JOIN_TABLE_ANNOTATION)
         ) {
             return null
         }
@@ -306,7 +312,7 @@ private class FetcherRenderContext(
         lambda: Boolean,
         config: Boolean,
     ): FunSpec? {
-        val targetType = metadata.targetType(prop) ?: return null
+        val targetType = schema.targetTypeOf(prop) ?: return null
         if (
             targetType.kind != ImmutableTypeKind.ENTITY &&
             targetType.kind != ImmutableTypeKind.EMBEDDABLE
@@ -422,10 +428,10 @@ private class FetcherRenderContext(
         prop: ImmutableProp,
         lambda: Boolean,
     ): FunSpec? {
-        if (prop.remote || prop.list || !metadata.isEntityAssociation(prop)) {
+        if (prop.remote || prop.list || !schema.isConcreteEntityAssociation(prop)) {
             return null
         }
-        val targetType = requireNotNull(metadata.targetType(prop)) {
+        val targetType = requireNotNull(schema.targetTypeOf(prop)) {
             "Entity association '${prop.id.value}' has no target type"
         }
         val targetTypeName = prop.targetTypeName()
@@ -521,7 +527,7 @@ private class FetcherRenderContext(
     private fun configDsl(prop: ImmutableProp): Pair<ClassName, String> {
         return when {
             prop.list -> K_LIST_FIELD_DSL to "list"
-            metadata.isEntityAssociation(prop) -> K_REFERENCE_FIELD_DSL to "reference"
+            schema.isConcreteEntityAssociation(prop) -> K_REFERENCE_FIELD_DSL to "reference"
             else -> K_FIELD_DSL to "simple"
         }
     }

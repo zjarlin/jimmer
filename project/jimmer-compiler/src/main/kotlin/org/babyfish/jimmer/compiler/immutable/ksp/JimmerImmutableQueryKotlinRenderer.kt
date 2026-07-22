@@ -19,7 +19,15 @@ import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.WildcardTypeName
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.ImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
+import org.babyfish.jimmer.compiler.immutable.associatedIdPropName
+import org.babyfish.jimmer.compiler.immutable.fieldName
+import org.babyfish.jimmer.compiler.immutable.immutableSourceBaseName
+import org.babyfish.jimmer.compiler.immutable.isBranchDependent
+import org.babyfish.jimmer.compiler.immutable.isDsl
+import org.babyfish.jimmer.compiler.immutable.orderedProps
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactAggregationMode
+import org.babyfish.jimmer.compiler.immutable.inheritanceArtifactOriginatingSymbols
+import org.babyfish.jimmer.compiler.immutable.typedPropKind
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
@@ -27,6 +35,11 @@ import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
+import site.addzero.lsi.jimmer.elementTypeOrSelf
+import site.addzero.lsi.jimmer.isEntityAssociation
+import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
+import site.addzero.lsi.jimmer.targetIdPropOf
+import site.addzero.lsi.jimmer.targetTypeOf
 import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -57,8 +70,6 @@ private class QueryRenderContext(
     private val workspace: LsiWorkspace,
 ) {
 
-    private val metadata = JimmerImmutableQueryMetadata(schema, workspace)
-
     private val modelClass = ClassName.bestGuess(type.qualifiedName)
 
     private val propsClass = ClassName(type.packageName, "${type.simpleName}$PROPS_SUFFIX")
@@ -66,14 +77,14 @@ private class QueryRenderContext(
     private val fetcherDslClass = ClassName(type.packageName, "${type.simpleName}$FETCHER_DSL_SUFFIX")
 
     fun render(): GeneratedArtifact {
-        val sourceBaseName = metadata.sourceBaseName(type)
+        val sourceBaseName = workspace.immutableSourceBaseName(type)
         val fileName = "$sourceBaseName$PROPS_SUFFIX"
         val fileSpec = FileSpec.builder(type.packageName, fileName)
             .indent("    ")
             .addAnnotation(suppressAllAnnotation())
             .addAnnotation(generatedByAnnotation(modelClass))
             .apply {
-                metadata.orderedProps(type).forEach { prop ->
+                schema.orderedProps(type).forEach { prop ->
                     addQueryProp(prop, nonNullTable = true, outerJoin = false, tableEx = false)
                     addQueryProp(prop, nonNullTable = false, outerJoin = false, tableEx = false)
                     addQueryProp(prop, nonNullTable = true, outerJoin = true, tableEx = false)
@@ -97,12 +108,12 @@ private class QueryRenderContext(
                 addType(propsObject())
             }
             .build()
-        val branchDependent = metadata.branchDependent(type)
-        val aggregationMode = metadata.queryAggregationMode(type)
+        val branchDependent = schema.isBranchDependent(type)
+        val aggregationMode = schema.inheritanceArtifactAggregationMode(type)
         val originatingSymbols = if (branchDependent) {
-            metadata.queryOriginatingSymbols(type)
+            schema.inheritanceArtifactOriginatingSymbols(type)
         } else {
-            metadata.originatingSymbols(type)
+            setOf(type.id)
         }
         val qualifiedFileName = if (type.packageName.isEmpty()) {
             fileName
@@ -130,7 +141,7 @@ private class QueryRenderContext(
         outerJoin: Boolean,
         tableEx: Boolean,
     ) {
-        val entityAssociation = metadata.isEntityAssociation(prop)
+        val entityAssociation = schema.isEntityAssociation(prop)
         if (outerJoin && !entityAssociation) {
             return
         }
@@ -141,12 +152,12 @@ private class QueryRenderContext(
             return
         }
         if (prop.list && entityAssociation && !tableEx) {
-            if (!outerJoin && metadata.isDsl(prop, tableEx = true)) {
+            if (!outerJoin && schema.isDsl(prop, workspace, tableEx = true)) {
                 addFunction(existsFunction(prop))
             }
             return
         }
-        if (!metadata.isDsl(prop, tableEx)) {
+        if (!schema.isDsl(prop, workspace, tableEx)) {
             return
         }
         val receiverClass = when {
@@ -175,20 +186,20 @@ private class QueryRenderContext(
                                     K_REMOTE_REF_QUALIFIED_NAME,
                                     operationName,
                                     propsClass,
-                                    metadata.fieldName(prop),
+                                    prop.fieldName(),
                                 )
                                 operationName == "get" -> addCode(
                                     "return get<%T>(%T.%L.unwrap()) as %T",
                                     propTargetType(prop),
                                     propsClass,
-                                    metadata.fieldName(prop),
+                                    prop.fieldName(),
                                     returnType,
                                 )
                                 else -> addCode(
                                     "return %L(%T.%L.unwrap())",
                                     operationName,
                                     propsClass,
-                                    metadata.fieldName(prop),
+                                    prop.fieldName(),
                                 )
                             }
                         }
@@ -204,7 +215,7 @@ private class QueryRenderContext(
         outerJoin: Boolean,
         tableEx: Boolean,
     ): TypeName {
-        val entityAssociation = metadata.isEntityAssociation(prop)
+        val entityAssociation = schema.isEntityAssociation(prop)
         val rawReturnType = when {
             prop.remote -> if (outerJoin) K_NULLABLE_REMOTE_REF else K_NON_NULL_REMOTE_REF
             entityAssociation && tableEx -> {
@@ -231,7 +242,7 @@ private class QueryRenderContext(
     }
 
     private fun existsFunction(prop: ImmutableProp): FunSpec {
-        val targetType = metadata.targetType(prop)
+        val targetType = schema.targetTypeOf(prop)
             ?.let { target -> ClassName.bestGuess(target.qualifiedName) }
             ?: ANY
         return FunSpec.builder(prop.name)
@@ -247,7 +258,7 @@ private class QueryRenderContext(
             .addStatement(
                 "return exists(%T.%L.unwrap(), block)",
                 propsClass,
-                metadata.fieldName(prop),
+                prop.fieldName(),
             )
             .build()
     }
@@ -257,18 +268,18 @@ private class QueryRenderContext(
         nonNullTable: Boolean,
         tableEx: Boolean,
     ) {
-        val propertyName = metadata.associatedIdPropName(type, prop) ?: return
+        val propertyName = schema.associatedIdPropName(type, prop) ?: return
         if (nonNullTable && prop.nullable) {
             return
         }
         if (
             prop.primaryMapping == PrimaryMapping.TRANSIENT ||
-            !metadata.isEntityAssociation(prop) ||
+            !schema.isEntityAssociation(prop) ||
             prop.list != tableEx
         ) {
             return
         }
-        val targetIdProp = metadata.targetIdProp(prop) ?: return
+        val targetIdProp = schema.targetIdPropOf(prop) ?: return
         val receiverClass = when {
             prop.nullable -> K_PROPS
             tableEx && nonNullTable -> K_NON_NULL_TABLE_EX
@@ -294,7 +305,7 @@ private class QueryRenderContext(
                             "return getAssociatedId<%T>(%T.%L.unwrap()) as %T",
                             targetIdType.copy(nullable = false),
                             propsClass,
-                            metadata.fieldName(prop),
+                            prop.fieldName(),
                             returnType,
                         )
                         .build()
@@ -359,7 +370,7 @@ private class QueryRenderContext(
     }
 
     private fun FileSpec.Builder.addPolymorphicFunctions() {
-        if (metadata.strictTypeBranches(type).isEmpty()) {
+        if (schema.strictPrimarySubtypesOf(type).isEmpty()) {
             return
         }
         addFunction(treatAsFunction(receiverNullable = false, optional = false))
@@ -486,13 +497,13 @@ private class QueryRenderContext(
         return TypeSpec.objectBuilder(propsClass)
             .addAnnotation(generatedByAnnotation(modelClass))
             .apply {
-                metadata.orderedProps(type).forEach { prop -> addProperty(typedProp(prop)) }
+                schema.orderedProps(type).forEach { prop -> addProperty(typedProp(prop)) }
             }
             .build()
     }
 
     private fun typedProp(prop: ImmutableProp): PropertySpec {
-        val kind = metadata.typedPropKind(prop)
+        val kind = schema.typedPropKind(prop)
         val typedPropClass = when (kind) {
             JimmerImmutableTypedPropKind.SCALAR -> TYPED_PROP_SCALAR
             JimmerImmutableTypedPropKind.SCALAR_LIST -> TYPED_PROP_SCALAR_LIST
@@ -506,10 +517,10 @@ private class QueryRenderContext(
             JimmerImmutableTypedPropKind.REFERENCE_LIST -> "referenceList"
         }
         return PropertySpec.builder(
-            metadata.fieldName(prop),
+            prop.fieldName(),
             typedPropClass.parameterizedBy(
                 modelClass,
-                metadata.typedPropElementType(prop).toQueryKotlinTypeName(),
+                prop.elementTypeOrSelf().toQueryKotlinTypeName(),
             ),
         )
             .initializer(
@@ -525,7 +536,7 @@ private class QueryRenderContext(
 
     private fun propTargetType(prop: ImmutableProp): TypeName {
         val typeRef = if (prop.list) {
-            metadata.typedPropElementType(prop)
+            prop.elementTypeOrSelf()
         } else {
             prop.type
         }

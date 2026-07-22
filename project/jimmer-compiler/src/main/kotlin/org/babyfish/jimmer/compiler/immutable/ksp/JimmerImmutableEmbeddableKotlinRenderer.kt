@@ -12,14 +12,18 @@ import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
 import site.addzero.lsi.jimmer.ImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
+import org.babyfish.jimmer.compiler.immutable.fieldName
+import org.babyfish.jimmer.compiler.immutable.immutableSourceBaseName
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
+import org.babyfish.jimmer.compiler.immutable.typedPropKind
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
+import site.addzero.lsi.jimmer.elementTypeOrSelf
+import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.model.LsiWorkspace
@@ -39,12 +43,10 @@ class JimmerImmutableEmbeddableKotlinRenderer {
 }
 
 private class EmbeddableRenderContext(
-    schema: ImmutableSchema,
+    private val schema: ImmutableSchema,
     private val type: ImmutableType,
     private val workspace: LsiWorkspace,
 ) {
-
-    private val metadata = JimmerImmutableQueryMetadata(schema, workspace)
 
     private val modelClass = ClassName.bestGuess(type.qualifiedName)
 
@@ -53,7 +55,7 @@ private class EmbeddableRenderContext(
     private val fetcherDslClass = ClassName(type.packageName, "${type.simpleName}$FETCHER_DSL_SUFFIX")
 
     fun render(): GeneratedArtifact {
-        val sourceBaseName = metadata.sourceBaseName(type)
+        val sourceBaseName = workspace.immutableSourceBaseName(type)
         val fileName = "$sourceBaseName$PROPS_SUFFIX"
         val fileSpec = FileSpec.builder(type.packageName, fileName)
             .indent("    ")
@@ -69,7 +71,7 @@ private class EmbeddableRenderContext(
                 addType(propsObject())
             }
             .build()
-        val originatingSymbols = metadata.originatingSymbols(type)
+        val originatingSymbols = setOf(type.id)
         val qualifiedFileName = if (type.packageName.isEmpty()) {
             fileName
         } else {
@@ -79,7 +81,7 @@ private class EmbeddableRenderContext(
             kind = ArtifactKind.KOTLIN_SOURCE,
             qualifiedName = qualifiedFileName,
             content = fileSpec.toString(),
-            aggregationMode = metadata.aggregationMode(),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = originatingSymbols,
             originatingSources = workspace.originatingSources(originatingSymbols),
         )
@@ -116,14 +118,14 @@ private class EmbeddableRenderContext(
                                     "return get<%T>(%T.%L.unwrap()) as %T",
                                     propType,
                                     propsClass,
-                                    metadata.fieldName(prop),
+                                    prop.fieldName(),
                                     returnType,
                                 )
                             } else {
                                 addStatement(
                                     "return get(%T.%L.unwrap())",
                                     propsClass,
-                                    metadata.fieldName(prop),
+                                    prop.fieldName(),
                                 )
                             }
                         }
@@ -166,7 +168,7 @@ private class EmbeddableRenderContext(
     }
 
     private fun typedProp(prop: ImmutableProp): PropertySpec {
-        val kind = metadata.typedPropKind(prop)
+        val kind = schema.typedPropKind(prop)
         val typedPropClass = when (kind) {
             JimmerImmutableTypedPropKind.SCALAR -> TYPED_PROP_SCALAR
             JimmerImmutableTypedPropKind.SCALAR_LIST -> TYPED_PROP_SCALAR_LIST
@@ -180,10 +182,10 @@ private class EmbeddableRenderContext(
             JimmerImmutableTypedPropKind.REFERENCE_LIST -> "referenceList"
         }
         return PropertySpec.builder(
-            metadata.fieldName(prop),
+            prop.fieldName(),
             typedPropClass.parameterizedBy(
                 modelClass,
-                metadata.typedPropElementType(prop).toKotlinTypeName(),
+                prop.elementTypeOrSelf().toKotlinTypeName(),
             ),
         )
             .initializer(
