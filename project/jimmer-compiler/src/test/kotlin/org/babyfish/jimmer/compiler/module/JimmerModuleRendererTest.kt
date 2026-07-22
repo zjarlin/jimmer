@@ -15,8 +15,6 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
-import org.babyfish.jimmer.compiler.module.apt.JimmerModuleJavaRenderer
-import org.babyfish.jimmer.compiler.module.ksp.JimmerModuleKotlinRenderer
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.codegen.ArtifactAggregationMode
@@ -30,13 +28,16 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class JimmerModuleRendererTest {
 
     @Test
     fun `apt summaries match collision goldens and compile`() {
         val fixture = fixture(JimmerModulePlatform.APT)
-        val artifacts = JimmerModuleJavaRenderer().render(fixture.schema, fixture.workspace)
+        val renderer = LsiJavaPoetRenderer()
+        val artifacts = fixture.schema.toLsiPoetArtifacts(fixture.workspace).map(renderer::render)
 
         assertEquals(
             listOf("Immutables.java", "Tables.java", "TableExes.java", "Fetchers.java"),
@@ -55,7 +56,8 @@ class JimmerModuleRendererTest {
     @Test
     fun `ksp module matches golden and compiles`() {
         val fixture = fixture(JimmerModulePlatform.KSP)
-        val artifact = JimmerModuleKotlinRenderer().render(fixture.schema, fixture.workspace).single()
+        val renderer = LsiKotlinPoetRenderer()
+        val artifact = fixture.schema.toLsiPoetArtifacts(fixture.workspace).map(renderer::render).single()
 
         assertEquals(ArtifactKind.KOTLIN_SOURCE, artifact.kind)
         assertEquals(ArtifactAggregationMode.AGGREGATING, artifact.aggregationMode)

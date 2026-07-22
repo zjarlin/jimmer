@@ -11,8 +11,9 @@ import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
-import org.babyfish.jimmer.compiler.module.apt.JimmerModuleJavaRenderer
-import org.babyfish.jimmer.compiler.module.ksp.JimmerModuleKotlinRenderer
+import site.addzero.lsi.poet.LsiPoetRenderer
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
@@ -106,11 +107,12 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         if (!state.sourceReady || context.session.hasRenderedModuleSources()) {
             return JimmerCompilerFeatureRenderResult()
         }
-        val artifacts = when (context.round.platform) {
-            CompilerPlatform.APT -> JimmerModuleJavaRenderer().render(schema, context.round.workspace)
-            CompilerPlatform.KSP -> JimmerModuleKotlinRenderer().render(schema, context.round.workspace)
-            CompilerPlatform.UNKNOWN -> emptyList()
+        val renderer: LsiPoetRenderer = when (context.round.platform) {
+            CompilerPlatform.APT -> LsiJavaPoetRenderer()
+            CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
+            CompilerPlatform.UNKNOWN -> return JimmerCompilerFeatureRenderResult()
         }
+        val artifacts = schema.toLsiPoetArtifacts(context.round.workspace).map(renderer::render)
         return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
     }
 }
