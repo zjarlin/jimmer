@@ -32,6 +32,21 @@ data class LsiPoetArtifact(
         "${file.packageName}.${file.fileName}"
     }
 
+    val path: String = buildString {
+        if (file.packageName.isNotEmpty()) {
+            append(file.packageName.replace('.', '/'))
+            append('/')
+        }
+        append(file.fileName)
+        append(
+            when (kind) {
+                ArtifactKind.JAVA_SOURCE -> ".java"
+                ArtifactKind.KOTLIN_SOURCE -> ".kt"
+                ArtifactKind.RESOURCE -> error("LSI Poet artifact cannot be a resource")
+            }
+        )
+    }
+
     init {
         if (aggregationMode == ArtifactAggregationMode.ISOLATING) {
             require(originatingSymbols.size == 1) {
@@ -44,12 +59,18 @@ data class LsiPoetArtifact(
         require(dependencySources.containsAll(originatingSources)) {
             "LSI Poet artifact dependencies must contain all originating sources: $qualifiedFileName"
         }
+        require(
+            emissionMode != ArtifactEmissionMode.STABLE ||
+                aggregationMode == ArtifactAggregationMode.AGGREGATING
+        ) {
+            "Stable LSI Poet artifact must be aggregating: $qualifiedFileName"
+        }
     }
 
     fun generatedArtifact(content: String): GeneratedArtifact {
-        return GeneratedArtifact.source(
+        return GeneratedArtifact.create(
             kind = kind,
-            qualifiedName = qualifiedFileName,
+            path = path,
             content = content,
             aggregationMode = aggregationMode,
             emissionMode = emissionMode,

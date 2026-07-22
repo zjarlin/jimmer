@@ -23,14 +23,17 @@ import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetConstructor
 import site.addzero.lsi.poet.LsiPoetField
+import site.addzero.lsi.poet.LsiPoetFile
+import site.addzero.lsi.poet.LsiPoetFileNameStyle
 import site.addzero.lsi.poet.LsiPoetFunction
+import site.addzero.lsi.poet.LsiPoetImport
 import site.addzero.lsi.poet.LsiPoetMember
 import site.addzero.lsi.poet.LsiPoetModifier
+import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
-import site.addzero.lsi.poet.LsiPoetFile
 
 class LsiKotlinPoetRendererTest {
 
@@ -273,6 +276,79 @@ class LsiKotlinPoetRendererTest {
         val content = LsiKotlinPoetRenderer().render(artifact(type, "ReturnsBlock")).content
 
         assertContains(content, "public fun message(): String = call() {")
+    }
+
+    @Test
+    fun `renders escaped declaration names and explicit imports exactly`() {
+        val artifact = LsiPoetArtifact(
+            file = LsiPoetFile(
+                language = LsiLanguage.KOTLIN,
+                packageName = "demo.generated",
+                fileName = "FetcherDsl",
+                imports = listOf(LsiPoetImport("demo.child", "by")),
+                members = listOf(
+                    LsiPoetType(
+                        name = "Order-ItemFetcherDsl",
+                        kind = LsiPoetTypeKind.CLASS,
+                        nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                        members = listOf(
+                            LsiPoetProperty(
+                                name = "emptyOrder-ItemFetcher",
+                                type = stringType,
+                                mutable = false,
+                                nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                                initializer = LsiPoetCodeBlock.build { string("empty") },
+                            ),
+                            LsiPoetFunction(
+                                name = "children*",
+                                nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact).content
+
+        assertEquals(
+            """
+                package demo.generated
+
+                import demo.child.`by`
+                import kotlin.String
+
+                public class `Order-ItemFetcherDsl` {
+                    public val `emptyOrder-ItemFetcher`: String = "empty"
+
+                    public fun `children*`() {
+                    }
+                }
+            """.trimIndent(),
+            content.trimIndent(),
+        )
+    }
+
+    @Test
+    fun `preserves raw source stem in generated artifact path`() {
+        val artifact = LsiPoetArtifact(
+            file = LsiPoetFile(
+                language = LsiLanguage.KOTLIN,
+                packageName = "demo.generated",
+                fileName = "order-item.partFetcher",
+                fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
+                members = listOf(LsiPoetType("OrderFetcher", LsiPoetTypeKind.CLASS)),
+            ),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(LsiSymbolId.type("demo.Order")),
+        )
+
+        val generated = LsiKotlinPoetRenderer().render(artifact)
+
+        assertEquals("demo/generated/order-item.partFetcher.kt", generated.path)
+        assertContains(generated.content, "public class OrderFetcher")
     }
 
     private fun artifact(type: LsiPoetType, fileName: String): LsiPoetArtifact {

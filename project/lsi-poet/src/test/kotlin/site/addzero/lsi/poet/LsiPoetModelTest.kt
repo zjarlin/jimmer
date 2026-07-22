@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
@@ -95,6 +96,14 @@ class LsiPoetModelTest {
             )
         }
         assertTrue(exception.message.orEmpty().contains("originating symbol"))
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetArtifact(
+                file = file,
+                aggregationMode = ArtifactAggregationMode.ISOLATING,
+                emissionMode = ArtifactEmissionMode.STABLE,
+                originatingSymbols = setOf(LsiSymbolId.type("demo.Book")),
+            )
+        }
     }
 
     @Test
@@ -172,6 +181,86 @@ class LsiPoetModelTest {
                         type = LsiPrimitiveType(LsiPrimitiveKind.INT),
                     ),
                 ),
+            )
+        }
+    }
+
+    @Test
+    fun `models escaped Kotlin declarations and explicit imports`() {
+        val type = LsiPoetType(
+            name = "Order-ItemFetcherDsl",
+            kind = LsiPoetTypeKind.CLASS,
+            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+        )
+        val function = LsiPoetFunction(
+            name = "children*",
+            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+        )
+        val property = LsiPoetProperty(
+            name = "emptyOrder-ItemFetcher",
+            type = LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
+            mutable = false,
+            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+        )
+        val sourceImport = LsiPoetImport("demo.child", "by")
+
+        assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, type.nameStyle)
+        assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, function.nameStyle)
+        assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, property.nameStyle)
+        assertEquals("demo.child", sourceImport.packageName)
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetType(
+                name = "broken`name",
+                kind = LsiPoetTypeKind.CLASS,
+                nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetFunction(
+                name = "broken`name",
+                nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetProperty(
+                name = "broken`name",
+                type = LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
+                mutable = false,
+                nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetImport("demo.child", "broken-name")
+        }
+    }
+
+    @Test
+    fun `models raw Kotlin source stems without weakening Java file names`() {
+        val kotlinFile = LsiPoetFile(
+            language = LsiLanguage.KOTLIN,
+            packageName = "demo",
+            fileName = "order-itemFetcher",
+            fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
+            members = listOf(LsiPoetType("OrderFetcher", LsiPoetTypeKind.CLASS)),
+        )
+
+        assertEquals("order-itemFetcher", kotlinFile.fileName)
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetFile(
+                language = LsiLanguage.JAVA,
+                packageName = "demo",
+                fileName = "order-itemFetcher",
+                fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
+                members = listOf(LsiPoetType("OrderFetcher", LsiPoetTypeKind.CLASS)),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetFile(
+                language = LsiLanguage.KOTLIN,
+                packageName = "demo",
+                fileName = " order-itemFetcher",
+                fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
+                members = listOf(LsiPoetType("OrderFetcher", LsiPoetTypeKind.CLASS)),
             )
         }
     }

@@ -47,6 +47,9 @@ class LsiKotlinPoetRenderer : LsiPoetRenderer {
         file.annotations.forEach { annotation ->
             builder.addAnnotation(annotation.toKotlinSourceAnnotationSpec())
         }
+        file.imports.forEach { sourceImport ->
+            builder.addImport(sourceImport.packageName, sourceImport.simpleName)
+        }
         file.members.forEach { member -> builder.addKotlinTopLevelMember(member) }
         return artifact.generatedArtifact(builder.build().toString())
     }

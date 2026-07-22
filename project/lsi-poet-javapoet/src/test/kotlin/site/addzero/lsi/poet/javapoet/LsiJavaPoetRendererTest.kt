@@ -24,8 +24,10 @@ import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetConstructor
 import site.addzero.lsi.poet.LsiPoetField
 import site.addzero.lsi.poet.LsiPoetFunction
+import site.addzero.lsi.poet.LsiPoetImport
 import site.addzero.lsi.poet.LsiPoetMember
 import site.addzero.lsi.poet.LsiPoetModifier
+import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
@@ -329,6 +331,53 @@ class LsiJavaPoetRendererTest {
         val content = LsiJavaPoetRenderer().render(artifact(type, "ReturnsBlock")).content
 
         assertContains(content, "return call( {\n            \"ok\";\n        });")
+    }
+
+    @Test
+    fun `rejects Kotlin only declaration names and explicit imports`() {
+        val escapedFunction = LsiPoetFunction(
+            name = "children*",
+            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+        )
+        val escapedException = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(escapedFunction, "Escaped"))
+        }
+        assertContains(escapedException.message.orEmpty(), "escaped Kotlin function name")
+
+        val escapedType = LsiPoetType(
+            name = "Order-ItemFetcherDsl",
+            kind = LsiPoetTypeKind.CLASS,
+            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+        )
+        val escapedTypeException = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(
+                artifact(
+                    LsiPoetType(
+                        name = "Escaped",
+                        kind = LsiPoetTypeKind.CLASS,
+                        members = listOf(escapedType),
+                    ),
+                    "Escaped",
+                )
+            )
+        }
+        assertContains(escapedTypeException.message.orEmpty(), "escaped Kotlin type name")
+
+        val importedArtifact = LsiPoetArtifact(
+            file = LsiPoetFile(
+                language = LsiLanguage.JAVA,
+                packageName = "demo.generated",
+                fileName = "Imported",
+                imports = listOf(LsiPoetImport("demo.child", "by")),
+                members = listOf(LsiPoetType("Imported", LsiPoetTypeKind.CLASS)),
+            ),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
+        )
+        val importException = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(importedArtifact)
+        }
+        assertContains(importException.message.orEmpty(), "explicit imports")
     }
 
     private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {

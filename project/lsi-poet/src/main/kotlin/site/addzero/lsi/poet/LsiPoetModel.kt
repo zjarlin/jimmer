@@ -47,6 +47,39 @@ enum class LsiPoetTypeKind {
     RECORD,
 }
 
+/**
+ * 声明名的源码表示方式。
+ */
+enum class LsiPoetNameStyle {
+    IDENTIFIER,
+    KOTLIN_ESCAPED,
+}
+
+/**
+ * 生成文件名的源码约束。
+ */
+enum class LsiPoetFileNameStyle {
+    JVM_IDENTIFIER,
+    KOTLIN_SOURCE_STEM,
+}
+
+/**
+ * 描述必须保留在生成文件中的显式导入。
+ */
+data class LsiPoetImport(
+    val packageName: String,
+    val simpleName: String,
+) {
+    init {
+        require(packageName.isQualifiedName()) {
+            "LSI Poet import package name must be a qualified JVM name: '$packageName'"
+        }
+        require(simpleName.isJvmIdentifier()) {
+            "LSI Poet import simple name must be a JVM identifier: '$simpleName'"
+        }
+    }
+}
+
 sealed interface LsiPoetMember {
     val annotations: List<LsiPoetAnnotation>
     val modifiers: Set<LsiPoetModifier>
@@ -57,7 +90,9 @@ data class LsiPoetFile(
     val language: LsiLanguage,
     val packageName: String,
     val fileName: String,
+    val fileNameStyle: LsiPoetFileNameStyle = LsiPoetFileNameStyle.JVM_IDENTIFIER,
     val annotations: List<LsiPoetAnnotation> = emptyList(),
+    val imports: List<LsiPoetImport> = emptyList(),
     val members: List<LsiPoetMember>,
     val headerComment: String? = null,
 ) {
@@ -71,8 +106,21 @@ data class LsiPoetFile(
         require(packageName.isEmpty() || packageName.isQualifiedName()) {
             "LSI Poet package name must be a qualified JVM name: '$packageName'"
         }
-        require(fileName.isJvmIdentifier()) {
-            "LSI Poet file name must be a JVM identifier without an extension: '$fileName'"
+        when (fileNameStyle) {
+            LsiPoetFileNameStyle.JVM_IDENTIFIER -> require(fileName.isJvmIdentifier()) {
+                "LSI Poet file name must be a JVM identifier without an extension: '$fileName'"
+            }
+            LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM -> {
+                require(language == LsiLanguage.KOTLIN) {
+                    "Kotlin source stem can only be used by a Kotlin LSI Poet file: '$fileName'"
+                }
+                require(fileName.isKotlinSourceStem()) {
+                    "LSI Poet Kotlin source stem is invalid: '$fileName'"
+                }
+            }
+        }
+        require(imports.distinct() == imports) {
+            "LSI Poet file cannot contain duplicate explicit imports: $fileName"
         }
         require(members.isNotEmpty()) { "LSI Poet file must contain at least one member: $fileName" }
     }
@@ -81,6 +129,7 @@ data class LsiPoetFile(
 data class LsiPoetType(
     val name: String,
     val kind: LsiPoetTypeKind,
+    val nameStyle: LsiPoetNameStyle = LsiPoetNameStyle.IDENTIFIER,
     override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
@@ -93,7 +142,7 @@ data class LsiPoetType(
     val members: List<LsiPoetMember> = emptyList(),
 ) : LsiPoetMember {
     init {
-        require(name.isJvmIdentifier()) { "LSI Poet type name must be a JVM identifier: '$name'" }
+        requirePoetDeclarationName(name, nameStyle, "type")
         require(typeParameters.map(LsiTypeParameter::id).distinct().size == typeParameters.size) {
             "LSI Poet type parameters cannot have duplicate ids: $name"
         }
@@ -163,6 +212,7 @@ enum class LsiPoetDelegationTarget {
 
 data class LsiPoetFunction(
     val name: String,
+    val nameStyle: LsiPoetNameStyle = LsiPoetNameStyle.IDENTIFIER,
     override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
@@ -174,7 +224,7 @@ data class LsiPoetFunction(
     val body: LsiPoetCodeBlock = LsiPoetCodeBlock.EMPTY,
 ) : LsiPoetMember {
     init {
-        require(name.isJvmIdentifier()) { "LSI Poet function name must be a JVM identifier: '$name'" }
+        requirePoetDeclarationName(name, nameStyle, "function")
         require(typeParameters.map(LsiTypeParameter::id).distinct().size == typeParameters.size) {
             "LSI Poet function type parameters cannot have duplicate ids: $name"
         }
@@ -219,6 +269,7 @@ data class LsiPoetProperty(
     val name: String,
     val type: LsiTypeRef,
     val mutable: Boolean,
+    val nameStyle: LsiPoetNameStyle = LsiPoetNameStyle.IDENTIFIER,
     override val annotations: List<LsiPoetAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
@@ -228,7 +279,7 @@ data class LsiPoetProperty(
     val setter: LsiPoetAccessor? = null,
 ) : LsiPoetMember {
     init {
-        require(name.isJvmIdentifier()) { "LSI Poet property name must be a JVM identifier: '$name'" }
+        requirePoetDeclarationName(name, nameStyle, "property")
         require(mutable || setter == null) {
             "Immutable LSI Poet property cannot declare a setter: $name"
         }
@@ -264,4 +315,31 @@ private fun String.isJvmIdentifier(): Boolean {
         return false
     }
     return drop(1).all(Character::isJavaIdentifierPart)
+}
+
+private fun requirePoetDeclarationName(
+    name: String,
+    nameStyle: LsiPoetNameStyle,
+    declarationKind: String,
+) {
+    when (nameStyle) {
+        LsiPoetNameStyle.IDENTIFIER -> require(name.isJvmIdentifier()) {
+            "LSI Poet $declarationKind name must be a JVM identifier: '$name'"
+        }
+        LsiPoetNameStyle.KOTLIN_ESCAPED -> require(name.isKotlinEscapedIdentifier()) {
+            "LSI Poet escaped Kotlin $declarationKind name is invalid: '$name'"
+        }
+    }
+}
+
+private fun String.isKotlinEscapedIdentifier(): Boolean {
+    return isNotBlank() && none { character ->
+        character == '`' || character == '\n' || character == '\r'
+    }
+}
+
+private fun String.isKotlinSourceStem(): Boolean {
+    return isNotBlank() && this == trim() && this != "." && this != ".." && none { character ->
+        character == '/' || character == '\\' || character == '\n' || character == '\r' || character == '\u0000'
+    }
 }

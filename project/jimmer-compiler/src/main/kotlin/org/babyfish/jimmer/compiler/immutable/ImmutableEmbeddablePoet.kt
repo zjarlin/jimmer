@@ -39,6 +39,7 @@ import site.addzero.lsi.poet.LsiPoetDelegationCall
 import site.addzero.lsi.poet.LsiPoetDelegationTarget
 import site.addzero.lsi.poet.LsiPoetField
 import site.addzero.lsi.poet.LsiPoetFile
+import site.addzero.lsi.poet.LsiPoetFileNameStyle
 import site.addzero.lsi.poet.LsiPoetFunction
 import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
@@ -422,6 +423,7 @@ private fun ImmutableType.toKotlinPoetArtifact(
             language = LsiLanguage.KOTLIN,
             packageName = packageName,
             fileName = "${sourceBaseName}Props",
+            fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
             annotations = listOf(
                 FILE_WARNING_SUPPRESSION,
                 generatedByAnnotation(modelType, LsiAnnotationUseSiteTarget.FILE),

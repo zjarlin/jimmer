@@ -23,6 +23,7 @@ import site.addzero.lsi.poet.LsiPoetFunction
 import site.addzero.lsi.poet.LsiPoetInitializerBlock
 import site.addzero.lsi.poet.LsiPoetMember
 import site.addzero.lsi.poet.LsiPoetModifier
+import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetRenderer
@@ -42,6 +43,9 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
         require(file.annotations.isEmpty()) {
             "JavaPoet renderer does not support file annotations: ${artifact.qualifiedFileName}"
         }
+        require(file.imports.isEmpty()) {
+            "JavaPoet renderer does not support explicit imports: ${artifact.qualifiedFileName}"
+        }
         val type = file.members.singleOrNull() as? LsiPoetType
             ?: error("Java LSI Poet file must contain exactly one top-level type: ${artifact.qualifiedFileName}")
         require(type.name == file.fileName) {
@@ -58,6 +62,9 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
 }
 
 private fun LsiPoetType.toJavaTypeSpec(): TypeSpec {
+    require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
+        "JavaPoet renderer cannot emit an escaped Kotlin type name: $name"
+    }
     val builder = when (kind) {
         LsiPoetTypeKind.CLASS -> TypeSpec.classBuilder(name)
         LsiPoetTypeKind.INTERFACE -> TypeSpec.interfaceBuilder(name)
@@ -146,6 +153,9 @@ private fun LsiPoetConstructor.toJavaConstructor(): MethodSpec {
 }
 
 private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
+    require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
+        "JavaPoet renderer cannot emit an escaped Kotlin function name: $name"
+    }
     require(receiverType == null) {
         "JavaPoet renderer cannot emit an extension receiver: $name"
     }
