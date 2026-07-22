@@ -9,14 +9,15 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
-import org.babyfish.jimmer.compiler.error.apt.ErrorJavaRenderer
-import org.babyfish.jimmer.compiler.error.ksp.ErrorKotlinRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.poet.LsiPoetRenderer
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     override val descriptor = JimmerCompilerFeatureDescriptor("error")
@@ -74,11 +75,14 @@ class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         if (state.status != ErrorCompilerFeatureStatus.RESOLVED || state.schema.families.isEmpty()) {
             return JimmerCompilerFeatureRenderResult()
         }
-        val artifacts = when (context.round.platform) {
-            CompilerPlatform.APT -> ErrorJavaRenderer().render(state.schema, context.round.workspace)
-            CompilerPlatform.KSP -> ErrorKotlinRenderer().render(state.schema, context.round.workspace)
-            CompilerPlatform.UNKNOWN -> emptyList()
+        val renderer: LsiPoetRenderer = when (context.round.platform) {
+            CompilerPlatform.APT -> LsiJavaPoetRenderer()
+            CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
+            CompilerPlatform.UNKNOWN -> return JimmerCompilerFeatureRenderResult()
         }
+        val artifacts = state.schema
+            .toLsiPoetArtifacts(context.round.workspace)
+            .map(renderer::render)
         return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
     }
 }

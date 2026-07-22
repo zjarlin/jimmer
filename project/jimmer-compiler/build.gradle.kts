@@ -53,8 +53,6 @@ val verifySharedCompilerArchitecture by tasks.registering(VerifyCompilerArchitec
     allowedPoetPathSegments.set(setOf("render"))
     allowedPoetFileSuffixes.set(
         setOf(
-            "ErrorJavaRenderer.kt",
-            "ErrorKotlinRenderer.kt",
             "JimmerImmutableDraftJavaRenderer.kt",
             "JimmerImmutableDraftJavaValidationRenderer.kt",
             "JimmerImmutableDraftKotlinRenderer.kt",

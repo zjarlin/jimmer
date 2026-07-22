@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.error
 
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import javax.tools.DiagnosticCollector
 import javax.tools.JavaFileObject
@@ -7,11 +9,11 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.error.apt.ErrorJavaRenderer
-import org.babyfish.jimmer.compiler.error.ksp.ErrorKotlinRenderer
+import org.jetbrains.kotlin.cli.common.ExitCode
+import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
+import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -23,46 +25,81 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class ErrorRendererTest {
 
     @Test
-    fun `renders compiling java error source and isolating origin`() {
+    fun `java renderer matches frozen baseline and compiles`() {
         val (schema, workspace) = fixture(LsiLanguage.JAVA)
-        val artifact = ErrorJavaRenderer().render(schema, workspace).single()
+        val artifact = LsiJavaPoetRenderer().render(
+            schema.toLsiPoetArtifacts(workspace).single()
+        )
 
         assertEquals(ArtifactKind.JAVA_SOURCE, artifact.kind)
+        assertEquals(ArtifactAggregationMode.ISOLATING, artifact.aggregationMode)
         assertEquals("demo/BookException.java", artifact.path)
         assertEquals(setOf(FAMILY_ID), artifact.originatingSymbols)
         assertEquals(workspace.sources.toSet(), artifact.originatingSources)
-        assertContains(artifact.content, "abstract class BookException")
-        assertContains(artifact.content, "class OutOfRange extends BookException")
-        assertContains(artifact.content, "@ClientException")
-        assertContains(artifact.content, "return BookErrorCode.OUT_OF_RANGE")
-        assertContains(artifact.content, "int[] primitiveValues")
-        assertContains(artifact.content, "Integer[] boxedValues")
+        assertDependencyContract(schema, artifact.dependencySymbols)
+        assertEquals(workspace.sources.toSet(), artifact.dependencySources)
+        assertEquals(golden("apt/BookException.java"), artifact.content)
         compileJava(artifact.content)
     }
 
     @Test
-    fun `renders kotlin error source with equivalent metadata`() {
+    fun `kotlin renderer matches frozen baseline and compiles`() {
         val (schema, workspace) = fixture(LsiLanguage.KOTLIN)
-        val artifact = ErrorKotlinRenderer().render(schema, workspace).single()
+        val artifact = LsiKotlinPoetRenderer().render(
+            schema.toLsiPoetArtifacts(workspace).single()
+        )
 
         assertEquals(ArtifactKind.KOTLIN_SOURCE, artifact.kind)
+        assertEquals(ArtifactAggregationMode.ISOLATING, artifact.aggregationMode)
         assertEquals("demo/BookException.kt", artifact.path)
         assertEquals(setOf(FAMILY_ID), artifact.originatingSymbols)
-        assertContains(artifact.content, "abstract class BookException")
-        assertContains(artifact.content, "class OutOfRange")
-        assertContains(artifact.content, "family = \"BOOK\"")
-        assertContains(artifact.content, "code = \"OUT_OF_RANGE\"")
-        assertContains(artifact.content, "BookErrorCode.OUT_OF_RANGE")
-        assertContains(artifact.content, ") : BookException(message, cause, timestamp)")
-        assertContains(artifact.content, "\"timestamp\" to timestamp")
-        assertContains(artifact.content, "\"min\" to min")
-        assertContains(artifact.content, "label: String")
-        assertContains(artifact.content, "primitiveValues: IntArray")
-        assertContains(artifact.content, "boxedValues: Array<Int>")
+        assertEquals(workspace.sources.toSet(), artifact.originatingSources)
+        assertDependencyContract(schema, artifact.dependencySymbols)
+        assertEquals(workspace.sources.toSet(), artifact.dependencySources)
+        assertEquals(golden("ksp/BookException.kt"), artifact.content)
+        compileKotlin(artifact.content)
+    }
+
+    @Test
+    fun `cross source field dependency makes artifact aggregating`() {
+        val (schema, workspace) = fixture(LsiLanguage.JAVA)
+        val dependencyId = LsiSymbolId.type("demo.Timestamp")
+        val dependencySource = LsiSource.of("demo/Timestamp.java", LsiLanguage.JAVA)
+        val dependencyWorkspace = LsiWorkspace(
+            sources = workspace.sources + dependencySource,
+            declarations = workspace.declarations + site.addzero.lsi.model.LsiTypeDeclaration(
+                id = dependencyId,
+                name = "Timestamp",
+                qualifiedName = "demo.Timestamp",
+                kind = site.addzero.lsi.model.LsiTypeDeclarationKind.CLASS,
+                origin = LsiOrigin(LsiOriginKind.SOURCE, dependencySource),
+            ),
+        )
+        val family = schema.families.single()
+        val sharedField = family.declaredFields.single().copy(type = LsiDeclaredType(dependencyId))
+        val code = family.codes.single().copy(
+            fields = listOf(sharedField) + family.codes.single().declaredFields,
+        )
+        val dependentSchema = ErrorPrecompiledSchema(
+            listOf(
+                family.copy(
+                    declaredFields = listOf(sharedField),
+                    codes = listOf(code),
+                )
+            )
+        )
+
+        val artifact = dependentSchema.toLsiPoetArtifacts(dependencyWorkspace).single()
+
+        assertEquals(ArtifactAggregationMode.AGGREGATING, artifact.aggregationMode)
+        assertTrue(dependencyId in artifact.dependencySymbols)
+        assertEquals(dependencyWorkspace.sources.toSet(), artifact.dependencySources)
     }
 
     private fun fixture(language: LsiLanguage): Pair<ErrorPrecompiledSchema, LsiWorkspace> {
@@ -174,6 +211,55 @@ class ErrorRendererTest {
             ).call()
         }
         assertTrue(success, diagnostics.diagnostics.joinToString("\n"))
+    }
+
+    private fun compileKotlin(content: String) {
+        val projectDir = createTempDirectory(prefix = "jimmer-error-kotlin-renderer-test").toFile()
+        val sourceRoot = projectDir.resolve("src/demo").apply { mkdirs() }
+        val output = projectDir.resolve("classes").apply { mkdirs() }
+        val generatedSource = sourceRoot.resolve("BookException.kt").apply { writeText(content) }
+        val enumSource = sourceRoot.resolve("BookErrorCode.kt").apply {
+            writeText("package demo\nenum class BookErrorCode { OUT_OF_RANGE }")
+        }
+        val messages = ByteArrayOutputStream()
+        val exitCode = PrintStream(messages, true, StandardCharsets.UTF_8).use { stream ->
+            K2JVMCompiler().exec(
+                stream,
+                "-no-stdlib",
+                "-no-reflect",
+                "-classpath",
+                System.getProperty("java.class.path"),
+                "-d",
+                output.absolutePath,
+                generatedSource.absolutePath,
+                enumSource.absolutePath,
+            )
+        }
+        assertEquals(ExitCode.OK, exitCode, messages.toString(StandardCharsets.UTF_8))
+    }
+
+    private fun golden(path: String): String {
+        return requireNotNull(javaClass.getResource("/error/$path")).readText()
+    }
+
+    private fun assertDependencyContract(
+        schema: ErrorPrecompiledSchema,
+        dependencySymbols: Set<LsiSymbolId>,
+    ) {
+        val family = schema.families.single()
+        val code = family.codes.single()
+        val expected = buildSet {
+            add(family.id)
+            add(family.exceptionTypeId)
+            add(code.id)
+            add(code.exceptionTypeId)
+            add(LsiSymbolId.type("org.babyfish.jimmer.ClientException"))
+            add(LsiSymbolId.type("org.babyfish.jimmer.internal.GeneratedBy"))
+            add(LsiSymbolId.type("com.fasterxml.jackson.annotation.JsonIgnore"))
+            family.declaredFields.mapTo(this, ErrorFieldModel::declaredBy)
+            code.fields.mapTo(this, ErrorFieldModel::declaredBy)
+        }
+        assertTrue(dependencySymbols.containsAll(expected), dependencySymbols.toString())
     }
 
     private companion object {
