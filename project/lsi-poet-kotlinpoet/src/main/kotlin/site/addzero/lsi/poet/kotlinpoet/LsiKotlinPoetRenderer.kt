@@ -30,6 +30,7 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
 /**
  * 在边界内使用 KotlinPoet 渲染 Kotlin 源码。
@@ -260,7 +261,13 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
                 "%M",
                 MemberName(part.packageName, part.simpleName, part.extension),
             )
-            is LsiPoetCodePart.Type -> builder.add("%T", part.value.toKotlinTypeName())
+            is LsiPoetCodePart.Type -> when (part.referenceStyle) {
+                LsiPoetTypeReferenceStyle.IMPORTED -> builder.add("%T", part.value.toKotlinTypeName())
+                LsiPoetTypeReferenceStyle.FULLY_QUALIFIED -> builder.add(
+                    "%L",
+                    part.value.toKotlinTypeName(),
+                )
+            }
             LsiPoetCodePart.Unindent -> builder.unindent()
         }
     }

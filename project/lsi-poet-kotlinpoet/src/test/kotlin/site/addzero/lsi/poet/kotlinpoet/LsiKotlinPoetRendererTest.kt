@@ -36,6 +36,7 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
 class LsiKotlinPoetRendererTest {
 
@@ -389,6 +390,35 @@ class LsiKotlinPoetRendererTest {
         val content = LsiKotlinPoetRenderer().render(artifact).content
 
         assertContains(content, "public inline fun <reified S : String> query(): S = error(\"unused\")")
+    }
+
+    @Test
+    fun `renders fully qualified Kotlin type references without imports`() {
+        val externalType = LsiDeclaredType(LsiSymbolId.type("demo.external.External"))
+        val function = LsiPoetFunction(
+            name = "typeName",
+            body = LsiPoetCodeBlock.build {
+                statement {
+                    type(externalType, LsiPoetTypeReferenceStyle.FULLY_QUALIFIED)
+                    text("::class")
+                }
+            },
+        )
+        val file = LsiPoetArtifact(
+            file = LsiPoetFile(
+                language = LsiLanguage.KOTLIN,
+                packageName = "demo.generated",
+                fileName = "Qualified",
+                members = listOf(function),
+            ),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(file).content
+
+        assertContains(content, "demo.`external`.External::class")
+        assertTrue("import demo.external.External" !in content)
     }
 
     private fun artifact(type: LsiPoetType, fileName: String): LsiPoetArtifact {

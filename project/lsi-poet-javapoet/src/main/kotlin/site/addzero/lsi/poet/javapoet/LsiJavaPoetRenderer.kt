@@ -29,6 +29,7 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
 /**
  * 在边界内使用 JavaPoet 渲染 Java 源码。
@@ -238,7 +239,13 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
                 "JavaPoet renderer cannot emit a Kotlin top-level member reference: " +
                     "${part.packageName}.${part.simpleName}"
             )
-            is LsiPoetCodePart.Type -> builder.add("\$T", part.value.toJavaTypeName())
+            is LsiPoetCodePart.Type -> when (part.referenceStyle) {
+                LsiPoetTypeReferenceStyle.IMPORTED -> builder.add("\$T", part.value.toJavaTypeName())
+                LsiPoetTypeReferenceStyle.FULLY_QUALIFIED -> builder.add(
+                    "\$L",
+                    part.value.toJavaTypeName(),
+                )
+            }
             LsiPoetCodePart.Unindent -> builder.unindent()
         }
     }

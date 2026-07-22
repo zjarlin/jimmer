@@ -16,6 +16,7 @@ import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
+import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
@@ -32,6 +33,7 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 import site.addzero.lsi.poet.LsiPoetFile
 
 class LsiJavaPoetRendererTest {
@@ -399,6 +401,32 @@ class LsiJavaPoetRendererTest {
         }
 
         assertContains(exception.message.orEmpty(), "reified type parameters")
+    }
+
+    @Test
+    fun `renders fully qualified type references without symbol prefixes`() {
+        val listType = LsiDeclaredType(
+            declarationId = LsiSymbolId.type("java.util.List"),
+            arguments = listOf(LsiTypeArgument.invariant(stringType)),
+        )
+        val function = LsiPoetFunction(
+            name = "cast",
+            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            parameters = listOf(LsiPoetParameter("value", LsiDeclaredType(LsiSymbolId.type("java.lang.Object")))),
+            returnType = listType,
+            body = LsiPoetCodeBlock.build {
+                returnValue {
+                    text("(")
+                    type(listType, LsiPoetTypeReferenceStyle.FULLY_QUALIFIED)
+                    text(")value")
+                }
+            },
+        )
+
+        val content = LsiJavaPoetRenderer().render(artifact(function, "Qualified")).content
+
+        assertContains(content, "return (java.util.List<java.lang.String>)value;")
+        assertTrue("type:" !in content)
     }
 
     private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {

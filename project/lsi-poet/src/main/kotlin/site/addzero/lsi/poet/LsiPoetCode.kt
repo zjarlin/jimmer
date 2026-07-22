@@ -8,7 +8,10 @@ import site.addzero.lsi.model.LsiTypeRef
 sealed interface LsiPoetCodePart {
     data class Text(val value: String) : LsiPoetCodePart
 
-    data class Type(val value: LsiTypeRef) : LsiPoetCodePart
+    data class Type(
+        val value: LsiTypeRef,
+        val referenceStyle: LsiPoetTypeReferenceStyle = LsiPoetTypeReferenceStyle.IMPORTED,
+    ) : LsiPoetCodePart
 
     /**
      * 指向 Kotlin 包级声明，由 KotlinPoet 负责导入和关键字转义。
@@ -91,6 +94,14 @@ enum class LsiPoetBracedExpressionCompletion {
     STATEMENT,
 }
 
+/**
+ * 控制代码块中的类型引用是否参与文件导入缩写。
+ */
+enum class LsiPoetTypeReferenceStyle {
+    IMPORTED,
+    FULLY_QUALIFIED,
+}
+
 data class LsiPoetCodeBlock(
     val parts: List<LsiPoetCodePart>,
 ) {
@@ -148,8 +159,11 @@ class LsiPoetCodeBuilder internal constructor() {
         }
     }
 
-    fun type(value: LsiTypeRef) {
-        parts += LsiPoetCodePart.Type(value)
+    fun type(
+        value: LsiTypeRef,
+        referenceStyle: LsiPoetTypeReferenceStyle = LsiPoetTypeReferenceStyle.IMPORTED,
+    ) {
+        parts += LsiPoetCodePart.Type(value, referenceStyle)
     }
 
     fun topLevelMember(
