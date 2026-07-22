@@ -230,6 +230,27 @@ class LsiKotlinPoetRendererTest {
         assertTrue("if (values.isEmpty()) {\n            return\n        }" in content, content)
     }
 
+    @Test
+    fun `renders structural return as a Kotlin expression body`() {
+        val type = LsiPoetType(
+            name = "Returns",
+            kind = LsiPoetTypeKind.CLASS,
+            members = listOf(
+                LsiPoetFunction(
+                    name = "message",
+                    returnType = stringType,
+                    body = LsiPoetCodeBlock.build {
+                        returnValue { string("ok") }
+                    },
+                )
+            ),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact(type, "Returns")).content
+
+        assertContains(content, "public fun message(): String = \"ok\"")
+    }
+
     private fun artifact(type: LsiPoetType, fileName: String): LsiPoetArtifact {
         return LsiPoetArtifact(
             file = LsiPoetFile(

@@ -113,6 +113,18 @@ class LsiPoetModelTest {
     }
 
     @Test
+    fun `models return with and without a value`() {
+        val body = LsiPoetCodeBlock.build {
+            returnValue { name("value") }
+            returnVoid()
+        }
+
+        assertEquals(2, body.parts.size)
+        assertTrue((body.parts[0] as LsiPoetCodePart.Return).value != null)
+        assertEquals(null, (body.parts[1] as LsiPoetCodePart.Return).value)
+    }
+
+    @Test
     fun `rejects source extension and non trailing vararg`() {
         assertFailsWith<IllegalArgumentException> {
             LsiPoetFile(

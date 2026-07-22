@@ -285,6 +285,27 @@ class LsiJavaPoetRendererTest {
         assertTrue("if (values.length == 0) {\n            return;\n        }" in content)
     }
 
+    @Test
+    fun `renders structural return with Java termination`() {
+        val type = LsiPoetType(
+            name = "Returns",
+            kind = LsiPoetTypeKind.CLASS,
+            members = listOf(
+                LsiPoetFunction(
+                    name = "message",
+                    returnType = stringType,
+                    body = LsiPoetCodeBlock.build {
+                        returnValue { string("ok") }
+                    },
+                )
+            ),
+        )
+
+        val content = LsiJavaPoetRenderer().render(artifact(type, "Returns")).content
+
+        assertContains(content, "return \"ok\";")
+    }
+
     private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {
         val type = if (member is LsiPoetType) member else {
             LsiPoetType(fileName, LsiPoetTypeKind.CLASS, members = listOf(member))

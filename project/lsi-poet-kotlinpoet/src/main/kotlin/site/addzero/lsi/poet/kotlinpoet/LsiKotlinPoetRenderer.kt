@@ -238,6 +238,9 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
                 "%L",
                 part.header.toKotlinCodeBlock(),
             )
+            is LsiPoetCodePart.Return -> part.value?.let { value ->
+                builder.addStatement("return %L", value.toKotlinCodeBlock())
+            } ?: builder.addStatement("return")
             is LsiPoetCodePart.Statement -> builder.addStatement("%L", part.value.toKotlinCodeBlock())
             is LsiPoetCodePart.StringLiteral -> builder.add("%S", part.value)
             is LsiPoetCodePart.Text -> builder.add("%L", part.value)

@@ -32,6 +32,11 @@ sealed interface LsiPoetCodePart {
     data class Statement(val value: LsiPoetCodeBlock) : LsiPoetCodePart
 
     /**
+     * 由具体 Poet 实现选择块状返回或表达式函数。
+     */
+    data class Return(val value: LsiPoetCodeBlock?) : LsiPoetCodePart
+
+    /**
      * 开始一个由具体 Poet 实现负责排版的控制流。
      */
     data class BeginControlFlow(val header: LsiPoetCodeBlock) : LsiPoetCodePart
@@ -133,6 +138,14 @@ class LsiPoetCodeBuilder internal constructor() {
 
     fun statement(block: LsiPoetCodeBuilder.() -> Unit) {
         parts += LsiPoetCodePart.Statement(LsiPoetCodeBlock.build(block))
+    }
+
+    fun returnValue(block: LsiPoetCodeBuilder.() -> Unit) {
+        parts += LsiPoetCodePart.Return(LsiPoetCodeBlock.build(block))
+    }
+
+    fun returnVoid() {
+        parts += LsiPoetCodePart.Return(null)
     }
 
     fun beginControlFlow(block: LsiPoetCodeBuilder.() -> Unit) {
