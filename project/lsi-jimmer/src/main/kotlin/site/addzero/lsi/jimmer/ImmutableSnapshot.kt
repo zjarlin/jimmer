@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.immutable
+package site.addzero.lsi.jimmer
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -12,9 +12,9 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 
-fun JimmerImmutableSchema.normalizedSnapshot(): String {
+fun ImmutableSchema.normalizedSnapshot(): String {
     return buildString {
-        types.sortedBy(JimmerImmutableType::id).forEach { type ->
+        types.sortedBy(ImmutableType::id).forEach { type ->
             appendRecord(
                 "type",
                 type.id.value,
@@ -46,7 +46,7 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.declaringTypeId.value,
                     prop.name,
                     prop.documentation.orEmpty(),
-                    prop.type.normalizedTypeSignature(),
+                    prop.type.jimmerTypeSignature(),
                     prop.annotations.semanticCanonicalText(),
                     prop.overrideChain.joinToString(",") { id -> id.value },
                     prop.inherited.toString(),
@@ -60,23 +60,23 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.primaryAnnotationTypeId?.value.orEmpty(),
                     when (prop.defaultContract) {
                         null -> ""
-                        is JimmerImmutableDefault.Application -> "APPLICATION"
-                        is JimmerImmutableDefault.Database -> "DATABASE"
+                        is ImmutableDefault.Application -> "APPLICATION"
+                        is ImmutableDefault.Database -> "DATABASE"
                     },
                     when (val default = prop.defaultContract) {
                         null -> ""
-                        is JimmerImmutableDefault.Application -> (default.annotationValue != null).toString()
-                        is JimmerImmutableDefault.Database -> "true"
+                        is ImmutableDefault.Application -> (default.annotationValue != null).toString()
+                        is ImmutableDefault.Database -> "true"
                     },
                     when (val default = prop.defaultContract) {
                         null -> ""
-                        is JimmerImmutableDefault.Application -> default.annotationValue.orEmpty()
-                        is JimmerImmutableDefault.Database -> default.expression.orEmpty()
+                        is ImmutableDefault.Application -> default.annotationValue.orEmpty()
+                        is ImmutableDefault.Database -> default.expression.orEmpty()
                     },
                     when (val default = prop.defaultContract) {
                         null -> ""
-                        is JimmerImmutableDefault.Application -> default.strategy?.name.orEmpty()
-                        is JimmerImmutableDefault.Database -> "DATABASE"
+                        is ImmutableDefault.Application -> default.strategy?.name.orEmpty()
+                        is ImmutableDefault.Database -> "DATABASE"
                     },
                     prop.associationKind.name,
                     prop.associationStorage.name,
@@ -85,15 +85,15 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                     prop.fetchable.toString(),
                     when (prop.view) {
                         null -> ""
-                        is JimmerImmutableView.Id -> "ID"
-                        is JimmerImmutableView.ManyToMany -> "MANY_TO_MANY"
+                        is ImmutableView.Id -> "ID"
+                        is ImmutableView.ManyToMany -> "MANY_TO_MANY"
                     },
                     prop.view?.dependencyPropIds?.joinToString(",") { propId -> propId.value }.orEmpty(),
                     prop.genericTarget.toString(),
                     prop.remote.toString(),
                     prop.recursive.toString(),
                 )
-                prop.validations.sortedBy(JimmerValidation::annotationTypeId).forEach { validation ->
+                prop.validations.sortedBy(ImmutableValidation::annotationTypeId).forEach { validation ->
                     appendRecord(
                         "validation",
                         prop.id.value,
@@ -107,8 +107,8 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                         "converter",
                         prop.id.value,
                         converter.converterTypeId.value,
-                        converter.sourceType?.normalizedTypeSignature().orEmpty(),
-                        converter.targetType?.normalizedTypeSignature().orEmpty(),
+                        converter.sourceType?.jimmerTypeSignature().orEmpty(),
+                        converter.targetType?.jimmerTypeSignature().orEmpty(),
                         converter.sourceNullable.toString(),
                         converter.targetNullable.toString(),
                         converter.propertyNullable.toString(),
@@ -127,12 +127,12 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
                         "transient-resolver",
                         prop.id.value,
                         when (resolver) {
-                            is JimmerTransientResolver.Type -> "TYPE"
-                            is JimmerTransientResolver.Reference -> "REFERENCE"
+                            is TransientResolver.Type -> "TYPE"
+                            is TransientResolver.Reference -> "REFERENCE"
                         },
                         when (resolver) {
-                            is JimmerTransientResolver.Type -> resolver.typeId.value
-                            is JimmerTransientResolver.Reference -> resolver.beanName
+                            is TransientResolver.Type -> resolver.typeId.value
+                            is TransientResolver.Reference -> resolver.beanName
                         },
                     )
                 }
@@ -148,7 +148,7 @@ fun JimmerImmutableSchema.normalizedSnapshot(): String {
     }
 }
 
-fun JimmerImmutableSchema.fingerprint(): String {
+fun ImmutableSchema.fingerprint(): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes = digest.digest(normalizedSnapshot().toByteArray(StandardCharsets.UTF_8))
     return bytes.joinToString("") { byte -> "%02x".format(byte) }

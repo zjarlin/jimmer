@@ -17,13 +17,13 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.WildcardTypeName
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
@@ -37,8 +37,8 @@ import site.addzero.lsi.model.LsiWorkspace
 class JimmerImmutableQueryKotlinRenderer {
 
     fun render(
-        schema: JimmerImmutableSchema,
-        type: JimmerImmutableType,
+        schema: ImmutableSchema,
+        type: ImmutableType,
         workspace: LsiWorkspace,
     ): GeneratedArtifact {
         require(type.kind in QUERY_TYPE_KINDS) {
@@ -52,8 +52,8 @@ class JimmerImmutableQueryKotlinRenderer {
 }
 
 private class QueryRenderContext(
-    private val schema: JimmerImmutableSchema,
-    private val type: JimmerImmutableType,
+    private val schema: ImmutableSchema,
+    private val type: ImmutableType,
     private val workspace: LsiWorkspace,
 ) {
 
@@ -87,7 +87,7 @@ private class QueryRenderContext(
                     addAssociatedIdProp(prop, nonNullTable = true, tableEx = true)
                     addAssociatedIdProp(prop, nonNullTable = false, tableEx = true)
                 }
-                if (type.kind == JimmerImmutableTypeKind.ENTITY) {
+                if (type.kind == ImmutableTypeKind.ENTITY) {
                     addRemoteIdProp(nullable = false)
                     addRemoteIdProp(nullable = true)
                     addFunction(fetchByFunction(nullable = false))
@@ -125,7 +125,7 @@ private class QueryRenderContext(
     }
 
     private fun FileSpec.Builder.addQueryProp(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         nonNullTable: Boolean,
         outerJoin: Boolean,
         tableEx: Boolean,
@@ -199,7 +199,7 @@ private class QueryRenderContext(
     }
 
     private fun queryPropReturnType(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         nonNullTable: Boolean,
         outerJoin: Boolean,
         tableEx: Boolean,
@@ -230,7 +230,7 @@ private class QueryRenderContext(
         return rawReturnType.parameterizedBy(targetType)
     }
 
-    private fun existsFunction(prop: JimmerImmutableProp): FunSpec {
+    private fun existsFunction(prop: ImmutableProp): FunSpec {
         val targetType = metadata.targetType(prop)
             ?.let { target -> ClassName.bestGuess(target.qualifiedName) }
             ?: ANY
@@ -253,7 +253,7 @@ private class QueryRenderContext(
     }
 
     private fun FileSpec.Builder.addAssociatedIdProp(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         nonNullTable: Boolean,
         tableEx: Boolean,
     ) {
@@ -262,7 +262,7 @@ private class QueryRenderContext(
             return
         }
         if (
-            prop.primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT ||
+            prop.primaryMapping == PrimaryMapping.TRANSIENT ||
             !metadata.isEntityAssociation(prop) ||
             prop.list != tableEx
         ) {
@@ -491,7 +491,7 @@ private class QueryRenderContext(
             .build()
     }
 
-    private fun typedProp(prop: JimmerImmutableProp): PropertySpec {
+    private fun typedProp(prop: ImmutableProp): PropertySpec {
         val kind = metadata.typedPropKind(prop)
         val typedPropClass = when (kind) {
             JimmerImmutableTypedPropKind.SCALAR -> TYPED_PROP_SCALAR
@@ -523,7 +523,7 @@ private class QueryRenderContext(
             .build()
     }
 
-    private fun propTargetType(prop: JimmerImmutableProp): TypeName {
+    private fun propTargetType(prop: ImmutableProp): TypeName {
         val typeRef = if (prop.list) {
             metadata.typedPropElementType(prop)
         } else {
@@ -558,8 +558,8 @@ private const val PROPS_SUFFIX = "Props"
 private const val FETCHER_DSL_SUFFIX = "FetcherDsl"
 
 private val QUERY_TYPE_KINDS = setOf(
-    JimmerImmutableTypeKind.ENTITY,
-    JimmerImmutableTypeKind.MAPPED_SUPERCLASS,
+    ImmutableTypeKind.ENTITY,
+    ImmutableTypeKind.MAPPED_SUPERCLASS,
 )
 
 private val SUPPRESS = ClassName("kotlin", "Suppress")

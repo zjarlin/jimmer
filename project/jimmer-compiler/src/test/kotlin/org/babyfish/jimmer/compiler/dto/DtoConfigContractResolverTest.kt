@@ -9,14 +9,14 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
-import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
@@ -920,7 +920,7 @@ class DtoConfigContractResolverTest {
                 ),
             ),
         )
-        private val IMMUTABLE_SCHEMA = JimmerImmutableSchema(
+        private val IMMUTABLE_SCHEMA = ImmutableSchema(
             listOf(
                 immutableType(
                     BOOK_TYPE_ID,
@@ -972,13 +972,13 @@ class DtoConfigContractResolverTest {
 
         private fun immutableType(
             typeId: LsiSymbolId,
-            props: List<JimmerImmutableProp>,
-        ): JimmerImmutableType {
+            props: List<ImmutableProp>,
+        ): ImmutableType {
             val completeProps = completeEntityProps(typeId, props)
-            return JimmerImmutableType(
+            return ImmutableType(
                 id = typeId,
                 qualifiedName = typeId.requireTypeQualifiedName(),
-                kind = JimmerImmutableTypeKind.ENTITY,
+                kind = ImmutableTypeKind.ENTITY,
                 documentation = null,
                 annotations = emptyList(),
                 typeParameterIds = emptyList(),
@@ -992,13 +992,13 @@ class DtoConfigContractResolverTest {
                 discriminatorValue = null,
                 discriminatorPropId = null,
                 idPropId = completeProps.singleOrNull { prop ->
-                    prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                    prop.primaryMapping == PrimaryMapping.ID
                 }?.id,
                 versionPropId = completeProps.singleOrNull { prop ->
-                    prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION
+                    prop.primaryMapping == PrimaryMapping.VERSION
                 }?.id,
                 logicalDeletedPropId = completeProps.singleOrNull { prop ->
-                    prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+                    prop.primaryMapping == PrimaryMapping.LOGICAL_DELETED
                 }?.id,
                 acrossMicroServices = false,
                 microServiceName = "",
@@ -1009,9 +1009,9 @@ class DtoConfigContractResolverTest {
             ownerTypeId: LsiSymbolId,
             name: String,
             targetTypeId: LsiSymbolId,
-        ): JimmerImmutableProp {
+        ): ImmutableProp {
             val propId = LsiSymbolId.property(ownerTypeId, name)
-            return JimmerImmutableProp(
+            return ImmutableProp(
                 id = propId,
                 declarationId = propId,
                 ownerTypeId = ownerTypeId,
@@ -1031,13 +1031,13 @@ class DtoConfigContractResolverTest {
                 association = true,
                 embedded = false,
                 targetTypeId = targetTypeId,
-                primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+                primaryMapping = PrimaryMapping.ASSOCIATION,
                 primaryAnnotationTypeId = null,
                 defaultContract = null,
-                associationKind = JimmerAssociationKind.MANY_TO_MANY,
-                formulaKind = JimmerFormulaKind.NONE,
+                associationKind = AssociationKind.MANY_TO_MANY,
+                formulaKind = FormulaKind.NONE,
                 mappedBy = null,
-                associationStorage = JimmerAssociationStorageKind.MIDDLE_TABLE,
+                associationStorage = AssociationStorageKind.MIDDLE_TABLE,
                 transientResolver = null,
                 view = null,
                 genericTarget = false,

@@ -11,9 +11,9 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.module.apt.JimmerModuleJavaRenderer
 import org.babyfish.jimmer.compiler.module.ksp.JimmerModuleKotlinRenderer
@@ -115,13 +115,13 @@ class JimmerModuleRendererTest {
                 origin = LsiOrigin(LsiOriginKind.SOURCE, sources[index]),
             )
         }
-        val immutableSchema = JimmerImmutableSchema(
+        val immutableSchema = ImmutableSchema(
             types = ENTITY_NAMES.mapIndexed { index, qualifiedName ->
                 val props = completeEntityProps(ENTITY_IDS[index])
-                JimmerImmutableType(
+                ImmutableType(
                     id = ENTITY_IDS[index],
                     qualifiedName = qualifiedName,
-                    kind = JimmerImmutableTypeKind.ENTITY,
+                    kind = ImmutableTypeKind.ENTITY,
                     documentation = null,
                     annotations = emptyList(),
                     typeParameterIds = emptyList(),

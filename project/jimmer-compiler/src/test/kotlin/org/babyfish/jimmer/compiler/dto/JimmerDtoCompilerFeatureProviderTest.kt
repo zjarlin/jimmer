@@ -18,18 +18,18 @@ import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
-import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableView
-import org.babyfish.jimmer.compiler.immutable.JimmerInheritanceStrategy
-import org.babyfish.jimmer.compiler.immutable.JimmerJoinedTableDissociateAction
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.InheritanceStrategy
+import site.addzero.lsi.jimmer.JoinedTableDissociateAction
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLanguage
@@ -233,12 +233,12 @@ class JimmerDtoCompilerFeatureProviderTest {
 
     @Test
     fun `precompiles simple dto into platform independent semantic model`() {
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(
                 immutableType(
                     id = BOOK_ID,
                     props = listOf(
-                        prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID),
+                        prop(BOOK_ID, "id", LONG_TYPE, PrimaryMapping.ID),
                         prop(BOOK_ID, "name", STRING_TYPE),
                     ),
                 )
@@ -599,11 +599,11 @@ class JimmerDtoCompilerFeatureProviderTest {
 
     @Test
     fun `annotation and interface contracts participate in schema and state fingerprints`() {
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(
                 immutableType(
                     id = BOOK_ID,
-                    props = listOf(prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)),
+                    props = listOf(prop(BOOK_ID, "id", LONG_TYPE, PrimaryMapping.ID)),
                 )
             )
         )
@@ -682,23 +682,23 @@ class JimmerDtoCompilerFeatureProviderTest {
             storeId,
             "id",
             LONG_TYPE,
-            JimmerImmutablePrimaryMapping.ID,
+            PrimaryMapping.ID,
         )
         val storeProp = prop(
             ownerTypeId = BOOK_ID,
             name = "store",
             type = LsiDeclaredType(storeId),
-            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+            primaryMapping = PrimaryMapping.ASSOCIATION,
             association = true,
-            associationKind = JimmerAssociationKind.MANY_TO_ONE,
+            associationKind = AssociationKind.MANY_TO_ONE,
         )
         val storeIdViewProp = prop(
             ownerTypeId = BOOK_ID,
             name = "storeId",
             type = LONG_TYPE,
-            primaryMapping = JimmerImmutablePrimaryMapping.VIEW,
+            primaryMapping = PrimaryMapping.VIEW,
             targetTypeId = null,
-            view = JimmerImmutableView.Id(storeProp.id, storeIdProp.id),
+            view = ImmutableView.Id(storeProp.id, storeIdProp.id),
         )
         val linksProp = prop(
             ownerTypeId = BOOK_ID,
@@ -707,19 +707,19 @@ class JimmerDtoCompilerFeatureProviderTest {
                 declarationId = LsiSymbolId.type("java.util.List"),
                 arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(linkId))),
             ),
-            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+            primaryMapping = PrimaryMapping.ASSOCIATION,
             list = true,
             association = true,
             targetTypeId = linkId,
-            associationKind = JimmerAssociationKind.ONE_TO_MANY,
+            associationKind = AssociationKind.ONE_TO_MANY,
         )
         val deeperProp = prop(
             ownerTypeId = linkId,
             name = "author",
             type = LsiDeclaredType(authorId),
-            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+            primaryMapping = PrimaryMapping.ASSOCIATION,
             association = true,
-            associationKind = JimmerAssociationKind.MANY_TO_ONE,
+            associationKind = AssociationKind.MANY_TO_ONE,
         )
         val authorsViewProp = prop(
             ownerTypeId = BOOK_ID,
@@ -728,14 +728,14 @@ class JimmerDtoCompilerFeatureProviderTest {
                 declarationId = LsiSymbolId.type("java.util.List"),
                 arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(authorId))),
             ),
-            primaryMapping = JimmerImmutablePrimaryMapping.VIEW,
+            primaryMapping = PrimaryMapping.VIEW,
             list = true,
             association = true,
             targetTypeId = authorId,
-            associationKind = JimmerAssociationKind.MANY_TO_MANY_VIEW,
-            view = JimmerImmutableView.ManyToMany(linksProp.id, deeperProp.id),
+            associationKind = AssociationKind.MANY_TO_MANY_VIEW,
+            view = ImmutableView.ManyToMany(linksProp.id, deeperProp.id),
         )
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(
                 immutableType(storeId, props = listOf(storeIdProp)),
                 immutableType(authorId, props = emptyList()),
@@ -755,12 +755,12 @@ class JimmerDtoCompilerFeatureProviderTest {
 
     @Test
     fun `uses immutable inheritance metadata for polymorphic dto branches`() {
-        val idProp = prop(CLIENT_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)
+        val idProp = prop(CLIENT_ID, "id", LONG_TYPE, PrimaryMapping.ID)
         val discriminatorProp = prop(
             ownerTypeId = CLIENT_ID,
             name = "type",
             type = STRING_TYPE,
-            primaryMapping = JimmerImmutablePrimaryMapping.DISCRIMINATOR,
+            primaryMapping = PrimaryMapping.DISCRIMINATOR,
         )
         val nameProp = prop(CLIENT_ID, "name", STRING_TYPE)
         val root = immutableType(
@@ -768,8 +768,8 @@ class JimmerDtoCompilerFeatureProviderTest {
             props = listOf(idProp, discriminatorProp, nameProp),
             instantiable = false,
             inheritanceRootTypeId = CLIENT_ID,
-            inheritanceStrategy = JimmerInheritanceStrategy.SINGLE_TABLE,
-            joinedTableDissociateAction = JimmerJoinedTableDissociateAction.DELETE,
+            inheritanceStrategy = InheritanceStrategy.SINGLE_TABLE,
+            joinedTableDissociateAction = JoinedTableDissociateAction.DELETE,
             discriminatorPropId = discriminatorProp.id,
         )
         val inheritedId = idProp.inheritedBy(ORGANIZATION_ID)
@@ -790,7 +790,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             discriminatorValue = "ORGANIZATION",
             discriminatorPropId = inheritedDiscriminator.id,
         )
-        val schema = JimmerImmutableSchema(listOf(root, organization))
+        val schema = ImmutableSchema(listOf(root, organization))
         val outcome = JimmerDtoPrecompiler().compile(
             inputDocumentSnapshots = listOf(
                 REFERENCE_FREEZER.freeze(
@@ -841,16 +841,16 @@ class JimmerDtoCompilerFeatureProviderTest {
 
     @Test
     fun `sorts multiple documents and includes frozen content in fingerprint`() {
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(
                 immutableType(
                     id = AUTHOR_ID,
-                    props = listOf(prop(AUTHOR_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)),
+                    props = listOf(prop(AUTHOR_ID, "id", LONG_TYPE, PrimaryMapping.ID)),
                 ),
                 immutableType(
                     id = BOOK_ID,
                     props = listOf(
-                        prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID),
+                        prop(BOOK_ID, "id", LONG_TYPE, PrimaryMapping.ID),
                         prop(BOOK_ID, "name", STRING_TYPE),
                     ),
                 ),
@@ -901,11 +901,11 @@ class JimmerDtoCompilerFeatureProviderTest {
 
     @Test
     fun `keeps empty dto document in stable snapshot`() {
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(
                 immutableType(
                     id = BOOK_ID,
-                    props = listOf(prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)),
+                    props = listOf(prop(BOOK_ID, "id", LONG_TYPE, PrimaryMapping.ID)),
                 )
             )
         )
@@ -1651,17 +1651,17 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
     }
 
-    private fun bookAndAuthorSchema(): JimmerImmutableSchema {
-        return JimmerImmutableSchema(
+    private fun bookAndAuthorSchema(): ImmutableSchema {
+        return ImmutableSchema(
             listOf(
                 immutableType(
                     id = AUTHOR_ID,
-                    props = listOf(prop(AUTHOR_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID)),
+                    props = listOf(prop(AUTHOR_ID, "id", LONG_TYPE, PrimaryMapping.ID)),
                 ),
                 immutableType(
                     id = BOOK_ID,
                     props = listOf(
-                        prop(BOOK_ID, "id", LONG_TYPE, JimmerImmutablePrimaryMapping.ID),
+                        prop(BOOK_ID, "id", LONG_TYPE, PrimaryMapping.ID),
                         prop(BOOK_ID, "name", STRING_TYPE),
                     ),
                 ),
@@ -1764,24 +1764,24 @@ class JimmerDtoCompilerFeatureProviderTest {
 
     private fun immutableType(
         id: LsiSymbolId,
-        props: List<JimmerImmutableProp>,
+        props: List<ImmutableProp>,
         superTypeIds: List<LsiSymbolId> = emptyList(),
         primarySuperTypeId: LsiSymbolId? = null,
         inheritanceRootTypeId: LsiSymbolId? = null,
-        inheritanceStrategy: JimmerInheritanceStrategy? = null,
-        joinedTableDissociateAction: JimmerJoinedTableDissociateAction? = null,
+        inheritanceStrategy: InheritanceStrategy? = null,
+        joinedTableDissociateAction: JoinedTableDissociateAction? = null,
         instantiable: Boolean = true,
         discriminatorValue: String? = null,
         discriminatorPropId: LsiSymbolId? = null,
         acrossMicroServices: Boolean = false,
         microServiceName: String = "",
-    ): JimmerImmutableType {
+    ): ImmutableType {
         val qualifiedName = id.requireTypeQualifiedName()
         val completeProps = completeEntityProps(id, props)
-        return JimmerImmutableType(
+        return ImmutableType(
             id = id,
             qualifiedName = qualifiedName,
-            kind = JimmerImmutableTypeKind.ENTITY,
+            kind = ImmutableTypeKind.ENTITY,
             documentation = null,
             annotations = emptyList(),
             typeParameterIds = emptyList(),
@@ -1795,13 +1795,13 @@ class JimmerDtoCompilerFeatureProviderTest {
             discriminatorValue = discriminatorValue,
             discriminatorPropId = discriminatorPropId,
             idPropId = completeProps.singleOrNull { prop ->
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                prop.primaryMapping == PrimaryMapping.ID
             }?.id,
             versionPropId = completeProps.singleOrNull { prop ->
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION
+                prop.primaryMapping == PrimaryMapping.VERSION
             }?.id,
             logicalDeletedPropId = completeProps.singleOrNull { prop ->
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+                prop.primaryMapping == PrimaryMapping.LOGICAL_DELETED
             }?.id,
             acrossMicroServices = acrossMicroServices,
             microServiceName = microServiceName,
@@ -1812,18 +1812,18 @@ class JimmerDtoCompilerFeatureProviderTest {
         ownerTypeId: LsiSymbolId,
         name: String,
         type: LsiTypeRef,
-        primaryMapping: JimmerImmutablePrimaryMapping = JimmerImmutablePrimaryMapping.SCALAR,
+        primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
         list: Boolean = false,
         association: Boolean = false,
         targetTypeId: LsiSymbolId? = (type as? LsiDeclaredType)?.declarationId,
-        associationKind: JimmerAssociationKind = JimmerAssociationKind.NONE,
+        associationKind: AssociationKind = AssociationKind.NONE,
         genericTarget: Boolean = false,
         remote: Boolean = false,
         recursive: Boolean = false,
-        view: JimmerImmutableView? = null,
-    ): JimmerImmutableProp {
+        view: ImmutableView? = null,
+    ): ImmutableProp {
         val id = LsiSymbolId.property(ownerTypeId, name)
-        return JimmerImmutableProp(
+        return ImmutableProp(
             id = id,
             declarationId = id,
             ownerTypeId = ownerTypeId,
@@ -1844,14 +1844,14 @@ class JimmerDtoCompilerFeatureProviderTest {
             primaryAnnotationTypeId = null,
             defaultContract = null,
             associationKind = associationKind,
-            formulaKind = JimmerFormulaKind.NONE,
+            formulaKind = FormulaKind.NONE,
             mappedBy = null,
             associationStorage = when (associationKind) {
-                JimmerAssociationKind.ONE_TO_ONE,
-                JimmerAssociationKind.MANY_TO_ONE,
-                -> JimmerAssociationStorageKind.COLUMN
-                JimmerAssociationKind.MANY_TO_MANY -> JimmerAssociationStorageKind.MIDDLE_TABLE
-                else -> JimmerAssociationStorageKind.NONE
+                AssociationKind.ONE_TO_ONE,
+                AssociationKind.MANY_TO_ONE,
+                -> AssociationStorageKind.COLUMN
+                AssociationKind.MANY_TO_MANY -> AssociationStorageKind.MIDDLE_TABLE
+                else -> AssociationStorageKind.NONE
             },
             transientResolver = null,
             view = view,
@@ -1863,7 +1863,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
     }
 
-    private fun JimmerImmutableProp.inheritedBy(ownerTypeId: LsiSymbolId): JimmerImmutableProp {
+    private fun ImmutableProp.inheritedBy(ownerTypeId: LsiSymbolId): ImmutableProp {
         return copy(
             id = LsiSymbolId.property(ownerTypeId, name),
             ownerTypeId = ownerTypeId,

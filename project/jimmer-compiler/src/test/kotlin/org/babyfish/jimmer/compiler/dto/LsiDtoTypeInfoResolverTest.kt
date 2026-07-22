@@ -5,9 +5,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 import site.addzero.lsi.core.LsiLanguage
@@ -161,7 +161,7 @@ class LsiDtoTypeInfoResolverTest {
     ): LsiDtoTypeInfoResolver {
         val workspace = LsiWorkspace(declarations = declarations)
         val registry = LsiDtoTypeRegistry(
-            immutableSchema = JimmerImmutableSchema(listOf(immutableType(BOOK_TYPE_ID))),
+            immutableSchema = ImmutableSchema(listOf(immutableType(BOOK_TYPE_ID))),
             workspace = workspace,
         )
         return LsiDtoTypeInfoResolver(registry, platform)
@@ -194,12 +194,12 @@ class LsiDtoTypeInfoResolverTest {
         )
     }
 
-    private fun immutableType(id: LsiSymbolId): JimmerImmutableType {
+    private fun immutableType(id: LsiSymbolId): ImmutableType {
         val props = completeEntityProps(id)
-        return JimmerImmutableType(
+        return ImmutableType(
             id = id,
             qualifiedName = id.requireTypeQualifiedName(),
-            kind = JimmerImmutableTypeKind.ENTITY,
+            kind = ImmutableTypeKind.ENTITY,
             documentation = null,
             annotations = emptyList(),
             typeParameterIds = emptyList(),

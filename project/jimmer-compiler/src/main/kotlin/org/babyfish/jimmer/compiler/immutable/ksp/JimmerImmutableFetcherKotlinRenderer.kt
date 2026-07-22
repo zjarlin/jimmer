@@ -16,11 +16,11 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.UNIT
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableFetcherMetadata
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
@@ -34,13 +34,13 @@ import site.addzero.lsi.model.LsiWorkspace
 class JimmerImmutableFetcherKotlinRenderer {
 
     fun render(
-        schema: JimmerImmutableSchema,
-        type: JimmerImmutableType,
+        schema: ImmutableSchema,
+        type: ImmutableType,
         workspace: LsiWorkspace,
     ): GeneratedArtifact {
         require(
-            type.kind == JimmerImmutableTypeKind.ENTITY ||
-                type.kind == JimmerImmutableTypeKind.EMBEDDABLE
+            type.kind == ImmutableTypeKind.ENTITY ||
+                type.kind == ImmutableTypeKind.EMBEDDABLE
         ) {
             "Kotlin immutable fetcher renderer only supports entity and embeddable types: ${type.id.value}"
         }
@@ -49,8 +49,8 @@ class JimmerImmutableFetcherKotlinRenderer {
 }
 
 private class FetcherRenderContext(
-    schema: JimmerImmutableSchema,
-    private val type: JimmerImmutableType,
+    schema: ImmutableSchema,
+    private val type: ImmutableType,
     private val workspace: LsiWorkspace,
 ) {
 
@@ -109,7 +109,7 @@ private class FetcherRenderContext(
             .filter { targetType ->
                 targetType.packageName.isNotEmpty() && targetType.packageName != type.packageName
             }
-            .map(JimmerImmutableType::packageName)
+            .map(ImmutableType::packageName)
             .distinct()
             .sorted()
             .forEach { packageName -> addImport(packageName, "by") }
@@ -167,7 +167,7 @@ private class FetcherRenderContext(
             .apply {
                 addInheritanceFunctions()
                 type.props.forEach { prop ->
-                    if (prop.primaryMapping != JimmerImmutablePrimaryMapping.ID) {
+                    if (prop.primaryMapping != PrimaryMapping.ID) {
                         addFunction(simplePropFunction(prop))
                         idOnlyFetchTypeFunction(prop)?.let(::addFunction)
                         BOOLEAN_VALUES.forEach { enabled ->
@@ -227,7 +227,7 @@ private class FetcherRenderContext(
         }
     }
 
-    private fun typeBranchFunction(typeBranch: JimmerImmutableType): FunSpec {
+    private fun typeBranchFunction(typeBranch: ImmutableType): FunSpec {
         val branchClass = ClassName.bestGuess(typeBranch.qualifiedName)
         val branchFetcherDslClass = typeBranch.fetcherDslClassName()
         return FunSpec.builder("forType")
@@ -259,7 +259,7 @@ private class FetcherRenderContext(
             .build()
     }
 
-    private fun simplePropFunction(prop: JimmerImmutableProp): FunSpec {
+    private fun simplePropFunction(prop: ImmutableProp): FunSpec {
         return FunSpec.builder(prop.name)
             .addParameter(
                 ParameterSpec.builder("enabled", BOOLEAN)
@@ -279,10 +279,10 @@ private class FetcherRenderContext(
             .build()
     }
 
-    private fun idOnlyFetchTypeFunction(prop: JimmerImmutableProp): FunSpec? {
+    private fun idOnlyFetchTypeFunction(prop: ImmutableProp): FunSpec? {
         val associationProp = metadata.idOnlyAssociationProp(prop)
         if (
-            associationProp.primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT ||
+            associationProp.primaryMapping == PrimaryMapping.TRANSIENT ||
             !metadata.isEntityAssociation(associationProp)
         ) {
             return null
@@ -301,19 +301,19 @@ private class FetcherRenderContext(
     }
 
     private fun propFunction(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         enabled: Boolean,
         lambda: Boolean,
         config: Boolean,
     ): FunSpec? {
         val targetType = metadata.targetType(prop) ?: return null
         if (
-            targetType.kind != JimmerImmutableTypeKind.ENTITY &&
-            targetType.kind != JimmerImmutableTypeKind.EMBEDDABLE
+            targetType.kind != ImmutableTypeKind.ENTITY &&
+            targetType.kind != ImmutableTypeKind.EMBEDDABLE
         ) {
             return null
         }
-        val configurable = !prop.remote && targetType.kind == JimmerImmutableTypeKind.ENTITY
+        val configurable = !prop.remote && targetType.kind == ImmutableTypeKind.ENTITY
         if (!configurable && config) {
             return null
         }
@@ -362,7 +362,7 @@ private class FetcherRenderContext(
     }
 
     private fun enabledPropCode(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         lambda: Boolean,
         config: Boolean,
     ): CodeBlock {
@@ -390,7 +390,7 @@ private class FetcherRenderContext(
     }
 
     private fun directPropCode(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         targetFetcherDslClass: ClassName,
         lambda: Boolean,
         config: Boolean,
@@ -419,7 +419,7 @@ private class FetcherRenderContext(
     }
 
     private fun referenceFetchTypeFunction(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         lambda: Boolean,
     ): FunSpec? {
         if (prop.remote || prop.list || !metadata.isEntityAssociation(prop)) {
@@ -473,7 +473,7 @@ private class FetcherRenderContext(
     }
 
     private fun recursiveFunction(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         config: Boolean,
     ): FunSpec? {
         if (!prop.recursive) {
@@ -518,7 +518,7 @@ private class FetcherRenderContext(
             .build()
     }
 
-    private fun configDsl(prop: JimmerImmutableProp): Pair<ClassName, String> {
+    private fun configDsl(prop: ImmutableProp): Pair<ClassName, String> {
         return when {
             prop.list -> K_LIST_FIELD_DSL to "list"
             metadata.isEntityAssociation(prop) -> K_REFERENCE_FIELD_DSL to "reference"
@@ -526,7 +526,7 @@ private class FetcherRenderContext(
         }
     }
 
-    private fun JimmerImmutableProp.targetTypeName(): TypeName {
+    private fun ImmutableProp.targetTypeName(): TypeName {
         val targetTypeRef = if (list) {
             val declaredType = type as? LsiDeclaredType
                 ?: error("List immutable property '${id.value}' must use a declared list type")
@@ -546,7 +546,7 @@ private class FetcherRenderContext(
     }
 }
 
-private fun JimmerImmutableType.fetcherDslClassName(): ClassName {
+private fun ImmutableType.fetcherDslClassName(): ClassName {
     return ClassName(packageName, "$simpleName$FETCHER_DSL_SUFFIX")
 }
 

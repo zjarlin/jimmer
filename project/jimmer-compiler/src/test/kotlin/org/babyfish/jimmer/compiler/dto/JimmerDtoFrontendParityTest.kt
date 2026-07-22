@@ -28,12 +28,12 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompiler
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableView
-import org.babyfish.jimmer.compiler.immutable.fingerprint
-import org.babyfish.jimmer.compiler.immutable.normalizedSnapshot
-import org.babyfish.jimmer.compiler.immutable.normalizedTypeSignature
+import site.addzero.lsi.jimmer.toImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.fingerprint
+import site.addzero.lsi.jimmer.normalizedSnapshot
+import site.addzero.lsi.jimmer.jimmerTypeSignature
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
@@ -118,9 +118,9 @@ class JimmerDtoFrontendParityTest {
             marker.arguments.getValue("value").value,
         )
         assertTrue(ratingProp.nullable)
-        assertEquals("primitive:int:boxed?", ratingProp.type.normalizedTypeSignature())
+        assertEquals("primitive:int:boxed?", ratingProp.type.jimmerTypeSignature())
         assertEquals(
-            JimmerImmutableView.Id(
+            ImmutableView.Id(
                 basePropId = storeProp.id,
                 targetIdPropId = LsiSymbolId.property(STORE_ID, "id"),
             ),
@@ -148,7 +148,7 @@ class JimmerDtoFrontendParityTest {
         workspace: LsiWorkspace,
         platform: CompilerPlatform,
     ): CompiledFixture {
-        val immutableSchema = JimmerImmutablePrecompiler().compile(workspace)
+        val immutableSchema = workspace.toImmutableSchema()
         val document = CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
@@ -318,7 +318,7 @@ class JimmerDtoFrontendParityTest {
     }
 
     private data class CompiledFixture(
-        val immutableSchema: JimmerImmutableSchema,
+        val immutableSchema: ImmutableSchema,
         val dtoSchema: JimmerDtoPrecompiledSchema,
     )
 

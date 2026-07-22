@@ -1,7 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
 import java.security.MessageDigest
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSymbolId
@@ -277,7 +277,7 @@ internal enum class JimmerDtoAnnotationScalarKind {
 
 internal class JimmerDtoAnnotationContractFreezer(
     private val workspace: LsiWorkspace,
-    private val immutableSchema: JimmerImmutableSchema,
+    private val immutableSchema: ImmutableSchema,
 ) {
     fun freeze(graph: JimmerDtoRenderGraph): JimmerDtoAnnotationContract {
         val diagnostics = mutableListOf<LsiDiagnostic>()

@@ -3,7 +3,7 @@ package org.babyfish.jimmer.compiler.input
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReference
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelection
-import org.babyfish.jimmer.compiler.immutable.hasImmutableMarker
+import site.addzero.lsi.jimmer.isJimmerImmutableType
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
@@ -38,5 +38,5 @@ internal fun CompilerInputDocumentReference.selectOwnerTarget(
 }
 
 private fun LsiWorkspace.isImmutableType(typeId: LsiSymbolId): Boolean {
-    return (this[typeId] as? LsiTypeDeclaration)?.hasImmutableMarker() == true
+    return (this[typeId] as? LsiTypeDeclaration)?.isJimmerImmutableType() == true
 }

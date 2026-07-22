@@ -1,6 +1,15 @@
 package org.babyfish.jimmer.compiler.immutable
 
 import org.babyfish.jimmer.impl.util.StringUtil
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
@@ -17,75 +26,75 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
 internal class JimmerImmutableQueryMetadata(
-    private val schema: JimmerImmutableSchema,
+    private val schema: ImmutableSchema,
     private val workspace: LsiWorkspace,
 ) {
 
     private val typeSystem = LsiTypeSystem(workspace)
 
-    fun generatedEmbeddableTypes(currentTypeIds: Set<LsiSymbolId>): List<JimmerImmutableType> {
+    fun generatedEmbeddableTypes(currentTypeIds: Set<LsiSymbolId>): List<ImmutableType> {
         return currentTypeIds
             .mapNotNull(schema.typesById::get)
             .filter { type ->
-                type.kind == JimmerImmutableTypeKind.EMBEDDABLE && type.typeParameterIds.isEmpty()
+                type.kind == ImmutableTypeKind.EMBEDDABLE && type.typeParameterIds.isEmpty()
             }
-            .sortedBy(JimmerImmutableType::qualifiedName)
+            .sortedBy(ImmutableType::qualifiedName)
     }
 
-    fun generatedPropsTypes(currentTypeIds: Set<LsiSymbolId>): List<JimmerImmutableType> {
+    fun generatedPropsTypes(currentTypeIds: Set<LsiSymbolId>): List<ImmutableType> {
         return currentTypeIds
             .mapNotNull(schema.typesById::get)
             .filter { type ->
                 type.kind in PROPS_TYPE_KINDS && type.typeParameterIds.isEmpty()
             }
-            .sortedBy(JimmerImmutableType::qualifiedName)
+            .sortedBy(ImmutableType::qualifiedName)
     }
 
-    fun generatedQueryTypes(currentTypeIds: Set<LsiSymbolId>): List<JimmerImmutableType> {
+    fun generatedQueryTypes(currentTypeIds: Set<LsiSymbolId>): List<ImmutableType> {
         return currentTypeIds
             .mapNotNull(schema.typesById::get)
             .filter { type ->
                 type.kind in SQL_QUERY_TYPE_KINDS && type.typeParameterIds.isEmpty()
             }
-            .sortedBy(JimmerImmutableType::qualifiedName)
+            .sortedBy(ImmutableType::qualifiedName)
     }
 
-    fun generatedEntityTypes(currentTypeIds: Set<LsiSymbolId>): List<JimmerImmutableType> {
+    fun generatedEntityTypes(currentTypeIds: Set<LsiSymbolId>): List<ImmutableType> {
         return currentTypeIds
             .mapNotNull(schema.typesById::get)
             .filter { type ->
-                type.kind == JimmerImmutableTypeKind.ENTITY && type.typeParameterIds.isEmpty()
+                type.kind == ImmutableTypeKind.ENTITY && type.typeParameterIds.isEmpty()
             }
-            .sortedBy(JimmerImmutableType::qualifiedName)
+            .sortedBy(ImmutableType::qualifiedName)
     }
 
-    fun targetType(prop: JimmerImmutableProp): JimmerImmutableType? {
+    fun targetType(prop: ImmutableProp): ImmutableType? {
         return prop.targetTypeId?.let(schema.typesById::get)
     }
 
-    fun targetIdProp(prop: JimmerImmutableProp): JimmerImmutableProp? {
+    fun targetIdProp(prop: ImmutableProp): ImmutableProp? {
         return targetType(prop)?.idPropId?.let(schema.propsById::get)
     }
 
-    fun isEntityAssociation(prop: JimmerImmutableProp): Boolean {
+    fun isEntityAssociation(prop: ImmutableProp): Boolean {
         return prop.association &&
-            (prop.genericTarget || targetType(prop)?.kind == JimmerImmutableTypeKind.ENTITY)
+            (prop.genericTarget || targetType(prop)?.kind == ImmutableTypeKind.ENTITY)
     }
 
-    fun isImmutableReference(prop: JimmerImmutableProp): Boolean {
-        return prop.association || prop.embedded || targetType(prop)?.kind == JimmerImmutableTypeKind.IMMUTABLE
+    fun isImmutableReference(prop: ImmutableProp): Boolean {
+        return prop.association || prop.embedded || targetType(prop)?.kind == ImmutableTypeKind.IMMUTABLE
     }
 
-    fun orderedProps(type: JimmerImmutableType): List<JimmerImmutableProp> {
+    fun orderedProps(type: ImmutableType): List<ImmutableProp> {
         val (idProps, otherProps) = type.props.partition { prop ->
-            prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+            prop.primaryMapping == PrimaryMapping.ID
         }
         return idProps + otherProps
     }
 
-    fun isDsl(prop: JimmerImmutableProp, tableEx: Boolean): Boolean {
-        if (prop.view is JimmerImmutableView.Id || prop.isLanguageFormula() ||
-            prop.primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT) {
+    fun isDsl(prop: ImmutableProp, tableEx: Boolean): Boolean {
+        if (prop.view is ImmutableView.Id || prop.isLanguageFormula() ||
+            prop.primaryMapping == PrimaryMapping.TRANSIENT) {
             return false
         }
         if (prop.remote && prop.reverse) {
@@ -104,27 +113,27 @@ internal class JimmerImmutableQueryMetadata(
         return true
     }
 
-    fun propsSuperTypes(type: JimmerImmutableType): List<JimmerImmutableType> {
+    fun propsSuperTypes(type: ImmutableType): List<ImmutableType> {
         return type.superTypeIds
             .mapNotNull(schema.typesById::get)
             .filter { superType ->
-                superType.kind != JimmerImmutableTypeKind.ENTITY && superType.typeParameterIds.isEmpty()
+                superType.kind != ImmutableTypeKind.ENTITY && superType.typeParameterIds.isEmpty()
             }
     }
 
-    fun propsMethodProps(type: JimmerImmutableType): List<JimmerImmutableProp> {
+    fun propsMethodProps(type: ImmutableType): List<ImmutableProp> {
         val propsByLineage = type.props.associateBy { prop -> prop.lineageRootId() }
         val primaryProps = type.primarySuperTypeId
             ?.let(schema.typesById::get)
             ?.let(::orderedProps)
             .orEmpty()
             .mapNotNull { primaryProp -> propsByLineage[primaryProp.lineageRootId()] }
-        val selectedIds = primaryProps.mapTo(linkedSetOf(), JimmerImmutableProp::id)
+        val selectedIds = primaryProps.mapTo(linkedSetOf(), ImmutableProp::id)
         val orderedProps = orderedProps(type)
         val declaredProps = orderedProps.filter { prop ->
             !prop.overridden && prop.declaringTypeId == type.id && prop.id !in selectedIds
         }
-        declaredProps.mapTo(selectedIds, JimmerImmutableProp::id)
+        declaredProps.mapTo(selectedIds, ImmutableProp::id)
         val genericRedefinedProps = orderedProps.filter { prop ->
             prop.id !in selectedIds &&
                 schema.typesById[prop.declaringTypeId]?.typeParameterIds?.isNotEmpty() == true
@@ -133,9 +142,9 @@ internal class JimmerImmutableQueryMetadata(
     }
 
     fun runtimePropsOwnerType(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
-    ): JimmerImmutableType {
+        type: ImmutableType,
+        prop: ImmutableProp,
+    ): ImmutableType {
         if (prop.declaringTypeId == type.id) {
             return type
         }
@@ -147,22 +156,22 @@ internal class JimmerImmutableQueryMetadata(
     }
 
     fun associatedIdPropName(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        type: ImmutableType,
+        prop: ImmutableProp,
     ): String? {
         return associatedIdPropNames(type)[prop.id]
     }
 
-    fun strictTypeBranches(type: JimmerImmutableType): List<JimmerImmutableType> {
-        if (type.kind != JimmerImmutableTypeKind.ENTITY || type.inheritanceRootTypeId == null) {
+    fun strictTypeBranches(type: ImmutableType): List<ImmutableType> {
+        if (type.kind != ImmutableTypeKind.ENTITY || type.inheritanceRootTypeId == null) {
             return emptyList()
         }
         return schema.types
             .filter { candidate -> candidate.id != type.id && candidate.isPrimarySubtypeOf(type.id) }
-            .sortedBy(JimmerImmutableType::qualifiedName)
+            .sortedBy(ImmutableType::qualifiedName)
     }
 
-    fun queryAggregationMode(type: JimmerImmutableType): ArtifactAggregationMode {
+    fun queryAggregationMode(type: ImmutableType): ArtifactAggregationMode {
         return if (branchDependent(type)) {
             ArtifactAggregationMode.AGGREGATING
         } else {
@@ -170,18 +179,18 @@ internal class JimmerImmutableQueryMetadata(
         }
     }
 
-    fun branchDependent(type: JimmerImmutableType): Boolean {
-        return type.kind == JimmerImmutableTypeKind.ENTITY && type.inheritanceRootTypeId != null
+    fun branchDependent(type: ImmutableType): Boolean {
+        return type.kind == ImmutableTypeKind.ENTITY && type.inheritanceRootTypeId != null
     }
 
-    fun queryOriginatingSymbols(type: JimmerImmutableType): Set<LsiSymbolId> {
+    fun queryOriginatingSymbols(type: ImmutableType): Set<LsiSymbolId> {
         return buildSet {
             add(type.id)
-            strictTypeBranches(type).mapTo(this, JimmerImmutableType::id)
+            strictTypeBranches(type).mapTo(this, ImmutableType::id)
         }
     }
 
-    fun typedPropKind(prop: JimmerImmutableProp): JimmerImmutableTypedPropKind {
+    fun typedPropKind(prop: ImmutableProp): JimmerImmutableTypedPropKind {
         val reference = isImmutableReference(prop)
         return when {
             reference && prop.list -> JimmerImmutableTypedPropKind.REFERENCE_LIST
@@ -191,7 +200,7 @@ internal class JimmerImmutableQueryMetadata(
         }
     }
 
-    fun typedPropElementType(prop: JimmerImmutableProp): LsiTypeRef {
+    fun typedPropElementType(prop: ImmutableProp): LsiTypeRef {
         if (!prop.list) {
             return prop.type
         }
@@ -201,14 +210,14 @@ internal class JimmerImmutableQueryMetadata(
             ?: error("List immutable property '${prop.id.value}' must declare one element type")
     }
 
-    fun expressionKind(prop: JimmerImmutableProp): JimmerImmutablePropExpressionKind {
+    fun expressionKind(prop: ImmutableProp): JimmerImmutablePropExpressionKind {
         return when (val type = prop.type) {
             is LsiPrimitiveType -> type.expressionKind()
             is LsiDeclaredType -> type.expressionKind()
             is LsiArrayType,
             is LsiTypeParameterRef,
             -> JimmerImmutablePropExpressionKind.GENERIC
-            is LsiUnresolvedType -> throw JimmerImmutablePrecompileException(
+            is LsiUnresolvedType -> throw ImmutablePrecompileException(
                 declarationId = prop.declarationId,
                 recoverable = true,
                 message = "Cannot resolve embedded property expression type of '${prop.id.value}'",
@@ -216,11 +225,11 @@ internal class JimmerImmutableQueryMetadata(
         }
     }
 
-    fun fieldName(prop: JimmerImmutableProp): String {
+    fun fieldName(prop: ImmutableProp): String {
         return StringUtil.snake(prop.name, StringUtil.SnakeCase.UPPER)
     }
 
-    fun sourceBaseName(type: JimmerImmutableType): String {
+    fun sourceBaseName(type: ImmutableType): String {
         val declaration = workspace[type.id] as? LsiTypeDeclaration
             ?: error("Cannot resolve immutable source declaration '${type.id.value}'")
         val source = declaration.origin.source
@@ -234,14 +243,14 @@ internal class JimmerImmutableQueryMetadata(
         return ArtifactAggregationMode.ISOLATING
     }
 
-    fun originatingSymbols(type: JimmerImmutableType): Set<LsiSymbolId> {
+    fun originatingSymbols(type: ImmutableType): Set<LsiSymbolId> {
         return setOf(type.id)
     }
 
-    private fun associatedIdPropNames(type: JimmerImmutableType): Map<LsiSymbolId, String> {
+    private fun associatedIdPropNames(type: ImmutableType): Map<LsiSymbolId, String> {
         val namesByPropId = linkedMapOf<LsiSymbolId, String>()
         type.props.forEach { prop ->
-            val view = prop.view as? JimmerImmutableView.Id ?: return@forEach
+            val view = prop.view as? ImmutableView.Id ?: return@forEach
             namesByPropId[view.basePropId] = prop.name
         }
         type.props.forEach { prop ->
@@ -261,21 +270,21 @@ internal class JimmerImmutableQueryMetadata(
         return namesByPropId
     }
 
-    private fun JimmerImmutableProp.isLanguageFormula(): Boolean {
-        if (formulaKind == JimmerFormulaKind.LANGUAGE) {
+    private fun ImmutableProp.isLanguageFormula(): Boolean {
+        if (formulaKind == FormulaKind.LANGUAGE) {
             return true
         }
-        if (formulaKind != JimmerFormulaKind.ABSTRACT) {
+        if (formulaKind != FormulaKind.ABSTRACT) {
             return false
         }
         return (workspace[declarationId] as? LsiProperty)?.origin?.language == LsiLanguage.JAVA
     }
 
-    private fun JimmerImmutableProp.lineageRootId(): LsiSymbolId {
+    private fun ImmutableProp.lineageRootId(): LsiSymbolId {
         return overrideChain.lastOrNull() ?: declarationId
     }
 
-    private fun JimmerImmutableType.isPrimarySubtypeOf(superTypeId: LsiSymbolId): Boolean {
+    private fun ImmutableType.isPrimarySubtypeOf(superTypeId: LsiSymbolId): Boolean {
         var currentTypeId = primarySuperTypeId
         val visited = mutableSetOf<LsiSymbolId>()
         while (currentTypeId != null && visited.add(currentTypeId)) {
@@ -364,13 +373,13 @@ private val TEMPORAL_TYPE_ID = LsiSymbolId.type("java.time.temporal.Temporal")
 private val COMPARABLE_TYPE_ID = LsiSymbolId.type("java.lang.Comparable")
 
 private val SQL_QUERY_TYPE_KINDS = setOf(
-    JimmerImmutableTypeKind.ENTITY,
-    JimmerImmutableTypeKind.MAPPED_SUPERCLASS,
+    ImmutableTypeKind.ENTITY,
+    ImmutableTypeKind.MAPPED_SUPERCLASS,
 )
 
-private val PROPS_TYPE_KINDS = SQL_QUERY_TYPE_KINDS + JimmerImmutableTypeKind.IMMUTABLE
+private val PROPS_TYPE_KINDS = SQL_QUERY_TYPE_KINDS + ImmutableTypeKind.IMMUTABLE
 
 private val TO_ONE_ASSOCIATION_KINDS = setOf(
-    JimmerAssociationKind.ONE_TO_ONE,
-    JimmerAssociationKind.MANY_TO_ONE,
+    AssociationKind.ONE_TO_ONE,
+    AssociationKind.MANY_TO_ONE,
 )

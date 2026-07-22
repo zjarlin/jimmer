@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.ImmutableProp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -339,7 +340,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         )
     }
 
-    private fun JimmerImmutableProp.annotationString(
+    private fun ImmutableProp.annotationString(
         annotationType: LsiSymbolId,
         argumentName: String,
     ): String? {

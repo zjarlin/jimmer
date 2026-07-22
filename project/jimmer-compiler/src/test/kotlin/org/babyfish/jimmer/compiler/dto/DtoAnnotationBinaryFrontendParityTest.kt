@@ -26,9 +26,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
@@ -267,12 +267,12 @@ class DtoAnnotationBinaryFrontendParityTest {
     ): JimmerDtoAnnotationDeclaration {
         val baseType = assertIs<LsiTypeDeclaration>(workspace[baseTypeId])
         val props = completeEntityProps(baseTypeId)
-        val immutableSchema = JimmerImmutableSchema(
+        val immutableSchema = ImmutableSchema(
             listOf(
-                JimmerImmutableType(
+                ImmutableType(
                     id = baseTypeId,
                     qualifiedName = baseType.qualifiedName,
-                    kind = JimmerImmutableTypeKind.ENTITY,
+                    kind = ImmutableTypeKind.ENTITY,
                     documentation = null,
                     annotations = baseType.annotations,
                     typeParameterIds = emptyList(),

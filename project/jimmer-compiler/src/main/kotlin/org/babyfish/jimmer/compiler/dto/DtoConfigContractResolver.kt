@@ -1,7 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
 import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -28,7 +28,7 @@ import site.addzero.lsi.model.stableSignature
 
 internal class DtoConfigContractResolver(
     private val workspace: LsiWorkspace,
-    private val immutableSchema: JimmerImmutableSchema,
+    private val immutableSchema: ImmutableSchema,
     private val platform: CompilerPlatform,
     private val typeSystem: LsiTypeSystem = LsiTypeSystem(workspace),
 ) {

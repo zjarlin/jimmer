@@ -11,9 +11,9 @@ import org.babyfish.jimmer.compiler.CompilerSession
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.core.LsiLanguage
@@ -241,13 +241,13 @@ class JimmerDtoSelectorStagingTest {
         )
     }
 
-    private fun immutableSchema(typeIds: Collection<LsiSymbolId>): JimmerImmutableSchema {
-        return JimmerImmutableSchema(typeIds.sorted().map { typeId ->
+    private fun immutableSchema(typeIds: Collection<LsiSymbolId>): ImmutableSchema {
+        return ImmutableSchema(typeIds.sorted().map { typeId ->
             val props = completeEntityProps(typeId)
-            JimmerImmutableType(
+            ImmutableType(
                 id = typeId,
                 qualifiedName = typeId.requireTypeQualifiedName(),
-                kind = JimmerImmutableTypeKind.ENTITY,
+                kind = ImmutableTypeKind.ENTITY,
                 documentation = null,
                 annotations = emptyList(),
                 typeParameterIds = emptyList(),

@@ -1,8 +1,8 @@
 package org.babyfish.jimmer.compiler.module
 
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.core.LsiSymbolId
 
 data class JimmerModulePrecompileOptions(
@@ -64,12 +64,12 @@ class JimmerModulePrecompiler(
     private val options: JimmerModulePrecompileOptions,
 ) {
     fun compile(
-        immutableSchema: JimmerImmutableSchema,
+        immutableSchema: ImmutableSchema,
         resourceState: JimmerModuleResourceState = JimmerModuleResourceState.EMPTY,
         compilationScope: JimmerModuleCompilationScope = immutableSchema.defaultCompilationScope(),
     ): JimmerModuleSchema {
-        val allTypes = immutableSchema.types.sortedBy(JimmerImmutableType::qualifiedName)
-        val allTypesById = allTypes.associateBy(JimmerImmutableType::id)
+        val allTypes = immutableSchema.types.sortedBy(ImmutableType::qualifiedName)
+        val allTypesById = allTypes.associateBy(ImmutableType::id)
         val unknownCumulativeTypeIds = compilationScope.cumulativeImmutableTypeIds
             .filterNot(allTypesById::containsKey)
         require(unknownCumulativeTypeIds.isEmpty()) {
@@ -78,24 +78,24 @@ class JimmerModulePrecompiler(
         }
         val cumulativeTypeIdSet = compilationScope.cumulativeImmutableTypeIds.toSet()
         val cumulativeTypes = allTypes.filter { type -> type.id in cumulativeTypeIdSet }
-        val cumulativeTypesById = cumulativeTypes.associateBy(JimmerImmutableType::id)
+        val cumulativeTypesById = cumulativeTypes.associateBy(ImmutableType::id)
         val currentTypeIdSet = compilationScope.currentImmutableTypeIds.toSet()
         val currentTypes = cumulativeTypes.filter { type -> type.id in currentTypeIdSet }
         val cumulativeEntities = cumulativeTypes
-            .filter { type -> type.kind == JimmerImmutableTypeKind.ENTITY }
-            .map(JimmerImmutableType::toAggregateType)
+            .filter { type -> type.kind == ImmutableTypeKind.ENTITY }
+            .map(ImmutableType::toAggregateType)
         val cumulativeImmutableIndexTypes = cumulativeTypes
             .filter { type -> type.kind in IMMUTABLE_RESOURCE_KINDS }
-            .map(JimmerImmutableType::toAggregateType)
+            .map(ImmutableType::toAggregateType)
         val currentEntities = currentTypes
-            .filter { type -> type.kind == JimmerImmutableTypeKind.ENTITY }
-            .map(JimmerImmutableType::toAggregateType)
+            .filter { type -> type.kind == ImmutableTypeKind.ENTITY }
+            .map(ImmutableType::toAggregateType)
         val currentImmutableIndexTypes = currentTypes
             .filter { type -> type.kind in IMMUTABLE_RESOURCE_KINDS }
-            .map(JimmerImmutableType::toAggregateType)
+            .map(ImmutableType::toAggregateType)
         val retainedEntities = resourceState.entityQualifiedTypeNames.toRetainedTypes(
             currentTypesById = cumulativeTypesById,
-            acceptedCurrentKinds = setOf(JimmerImmutableTypeKind.ENTITY),
+            acceptedCurrentKinds = setOf(ImmutableTypeKind.ENTITY),
         )
         val retainedImmutableTypes = resourceState.immutableQualifiedTypeNames.toRetainedTypes(
             currentTypesById = cumulativeTypesById,
@@ -306,7 +306,7 @@ private data class AggregateType(
     val simpleName: String,
 )
 
-private fun JimmerImmutableType.toAggregateType(): AggregateType {
+private fun ImmutableType.toAggregateType(): AggregateType {
     return qualifiedName.toAggregateType(id)
 }
 
@@ -320,8 +320,8 @@ private fun String.toAggregateType(id: LsiSymbolId = LsiSymbolId.type(this)): Ag
 }
 
 private fun List<String>.toRetainedTypes(
-    currentTypesById: Map<LsiSymbolId, JimmerImmutableType>,
-    acceptedCurrentKinds: Set<JimmerImmutableTypeKind>,
+    currentTypesById: Map<LsiSymbolId, ImmutableType>,
+    acceptedCurrentKinds: Set<ImmutableTypeKind>,
 ): List<AggregateType> {
     return mapNotNull { qualifiedName ->
         val id = LsiSymbolId.type(qualifiedName)
@@ -350,8 +350,8 @@ private fun List<AggregateType>.dependencies(
     )
 }
 
-private fun JimmerImmutableSchema.defaultCompilationScope(): JimmerModuleCompilationScope {
-    val typeIds = types.map(JimmerImmutableType::id).distinct().sorted()
+private fun ImmutableSchema.defaultCompilationScope(): JimmerModuleCompilationScope {
+    val typeIds = types.map(ImmutableType::id).distinct().sorted()
     return JimmerModuleCompilationScope(
         currentImmutableTypeIds = typeIds,
         compilationSourceTypeIds = typeIds,
@@ -417,8 +417,8 @@ private fun validateQualifiedTypeNames(values: List<String>, role: String) {
 }
 
 private val IMMUTABLE_RESOURCE_KINDS = setOf(
-    JimmerImmutableTypeKind.IMMUTABLE,
-    JimmerImmutableTypeKind.EMBEDDABLE,
+    ImmutableTypeKind.IMMUTABLE,
+    ImmutableTypeKind.EMBEDDABLE,
 )
 private const val ENTITIES_RESOURCE_PATH = "META-INF/jimmer/entities"
 private const val IMMUTABLES_RESOURCE_PATH = "META-INF/jimmer/immutables"

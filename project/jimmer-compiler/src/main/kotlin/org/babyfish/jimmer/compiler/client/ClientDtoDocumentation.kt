@@ -2,11 +2,11 @@ package org.babyfish.jimmer.compiler.client
 
 import org.babyfish.jimmer.compiler.dto.JimmerDtoBaseProp
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPrecompiledSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiSymbolId
 
 internal fun JimmerDtoPrecompiledSchema.toClientDefinitionDocumentation(
-    immutableSchema: JimmerImmutableSchema,
+    immutableSchema: ImmutableSchema,
 ): Map<LsiSymbolId, ClientDefinitionDocumentation> {
     val documentationByTypeId = linkedMapOf<LsiSymbolId, ClientDefinitionDocumentation>()
     documents.forEach { document ->

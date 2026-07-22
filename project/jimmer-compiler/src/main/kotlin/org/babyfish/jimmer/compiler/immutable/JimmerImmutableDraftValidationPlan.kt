@@ -1,6 +1,8 @@
 package org.babyfish.jimmer.compiler.immutable
 
 import java.math.BigDecimal
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
@@ -186,7 +188,7 @@ internal enum class JimmerImmutableDraftPatternFlag(
 internal class JimmerImmutableDraftValidationPrecompiler {
 
     fun compile(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         workspace: LsiWorkspace,
     ): JimmerImmutableDraftValidationPlan {
         val annotations = prop.annotations
@@ -229,7 +231,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addNotEmpty(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -245,7 +247,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addNotBlank(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -261,7 +263,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addSize(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -323,7 +325,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addBounds(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -410,7 +412,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addEmail(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -426,7 +428,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addPatterns(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -457,7 +459,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addCustomValidators(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         workspace: LsiWorkspace,
     ) {
         val validationKeys = mutableSetOf<Pair<LsiSymbolId, LsiAnnotationUseSiteTarget?>>()
@@ -486,7 +488,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addAsserts(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -515,7 +517,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addDigits(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -563,7 +565,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun MutableList<JimmerImmutableDraftValidationStep>.addTemporal(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
     ) {
@@ -591,7 +593,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun validateAnnotationDeclaration(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotation: LsiAnnotation,
         workspace: LsiWorkspace,
     ) {
@@ -602,7 +604,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun validateTypeSymbol(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         typeId: LsiSymbolId,
         role: String,
         workspace: LsiWorkspace,
@@ -614,10 +616,10 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun invalidType(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotation: LsiAnnotation,
         message: String,
-    ): JimmerImmutablePrecompileException {
+    ): ImmutablePrecompileException {
         return invalid(
             prop,
             "it is decorated by @${annotation.type.requireTypeQualifiedName()} but $message",
@@ -625,11 +627,11 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun invalidArgument(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         annotation: LsiAnnotation,
         name: String,
         expected: String,
-    ): JimmerImmutablePrecompileException {
+    ): ImmutablePrecompileException {
         return invalid(
             prop,
             "annotation @${annotation.type.requireTypeQualifiedName()} argument '$name' must be $expected",
@@ -637,10 +639,10 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun invalid(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         message: String,
-    ): JimmerImmutablePrecompileException {
-        return JimmerImmutablePrecompileException(
+    ): ImmutablePrecompileException {
+        return ImmutablePrecompileException(
             declarationId = prop.declarationId,
             message = "Immutable property '${prop.id.value}' $message",
         )
@@ -663,7 +665,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun LsiAnnotation.patternFlags(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
     ): List<JimmerImmutableDraftPatternFlag> {
         val value = arguments["flags"]?.value ?: return emptyList()
         val elements = (value as? LsiAnnotationValue.ArrayValue)?.elements
@@ -681,7 +683,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun LsiAnnotation.stringArgument(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         name: String,
         defaultValue: String?,
     ): String? {
@@ -695,7 +697,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun LsiAnnotation.intArgument(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         name: String,
         defaultValue: Int,
     ): Int {
@@ -712,7 +714,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun LsiAnnotation.longArgument(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         name: String,
         defaultValue: Long,
     ): Long {
@@ -727,7 +729,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun LsiAnnotation.booleanArgument(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         name: String,
         defaultValue: Boolean,
     ): Boolean {
@@ -737,7 +739,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     }
 
     private fun LsiAnnotation.decimalArgument(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         name: String,
         defaultValue: String,
     ): BigDecimal {
@@ -782,19 +784,20 @@ private fun LsiAnnotation.builtInValidationName(): String {
     }
 }
 
-private fun JimmerImmutableProp.isUnboxedPrimitive(): Boolean {
-    return type is LsiPrimitiveType && !type.boxed
+private fun ImmutableProp.isUnboxedPrimitive(): Boolean {
+    val propType = type
+    return propType is LsiPrimitiveType && !propType.boxed
 }
 
-private fun JimmerImmutableProp.isString(): Boolean {
+private fun ImmutableProp.isString(): Boolean {
     return type.declarationIdOrNull() == STRING_TYPE
 }
 
-private fun JimmerImmutableProp.isBoolean(): Boolean {
+private fun ImmutableProp.isBoolean(): Boolean {
     return (type as? LsiPrimitiveType)?.kind == LsiPrimitiveKind.BOOLEAN
 }
 
-private fun JimmerImmutableProp.numericTarget(): JimmerImmutableDraftNumericTarget? {
+private fun ImmutableProp.numericTarget(): JimmerImmutableDraftNumericTarget? {
     val primitive = type as? LsiPrimitiveType
     if (primitive != null && primitive.kind in NUMERIC_PRIMITIVE_KINDS) {
         return JimmerImmutableDraftNumericTarget.PRIMITIVE
@@ -806,8 +809,9 @@ private fun JimmerImmutableProp.numericTarget(): JimmerImmutableDraftNumericTarg
     }
 }
 
-private fun JimmerImmutableProp.digitsTarget(): JimmerImmutableDraftDigitsTarget? {
-    if (type is LsiPrimitiveType && type.kind !in NON_VALUE_PRIMITIVE_KINDS) {
+private fun ImmutableProp.digitsTarget(): JimmerImmutableDraftDigitsTarget? {
+    val propType = type
+    if (propType is LsiPrimitiveType && propType.kind !in NON_VALUE_PRIMITIVE_KINDS) {
         return JimmerImmutableDraftDigitsTarget.PRIMITIVE
     }
     return when (type.declarationIdOrNull()) {
@@ -818,7 +822,7 @@ private fun JimmerImmutableProp.digitsTarget(): JimmerImmutableDraftDigitsTarget
     }
 }
 
-private fun JimmerImmutableProp.temporalTarget(): JimmerImmutableDraftTemporalTarget? {
+private fun ImmutableProp.temporalTarget(): JimmerImmutableDraftTemporalTarget? {
     return when (type.declarationIdOrNull()) {
         LOCAL_DATE_TYPE -> JimmerImmutableDraftTemporalTarget.LOCAL_DATE
         LOCAL_DATE_TIME_TYPE -> JimmerImmutableDraftTemporalTarget.LOCAL_DATE_TIME

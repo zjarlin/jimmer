@@ -21,6 +21,12 @@ import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableEmbeddableKotli
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableDraftKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableFetcherKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableQueryKotlinRenderer
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.fingerprint
+import site.addzero.lsi.jimmer.isJimmerImmutableType
+import site.addzero.lsi.jimmer.toImmutableSchema
+import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
@@ -44,27 +50,21 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val semanticRootTypeIds = targetTypeIds + context.round.dtoSemanticRootTypeIds(sourceFilter)
         val currentTypeIds = context.round.currentRootTypeIds
             .filterTo(sortedSetOf(), targetTypeIds::contains)
-        val precompiler = JimmerImmutablePrecompiler()
         try {
             validateSourceLayout(context.round, currentTypeIds)
-        } catch (exception: JimmerImmutablePrecompileException) {
+        } catch (exception: ImmutablePrecompileException) {
             return failedResult(
                 context = context,
-                precompiler = precompiler,
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
                 exception = exception,
             )
         }
-        val unresolvedTypeIds = precompiler.unresolvedTargetTypeIds(
-            workspace = context.round.workspace,
-            targetTypeIds = semanticRootTypeIds,
-        )
+        val unresolvedTypeIds = context.round.workspace.unresolvedJimmerImmutableTypeIds(semanticRootTypeIds)
         if (unresolvedTypeIds.isNotEmpty()) {
             return unresolvedResult(
                 context = context,
-                precompiler = precompiler,
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -72,7 +72,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             )
         }
         return try {
-            val schema = precompiler.compile(context.round.workspace, semanticRootTypeIds)
+            val schema = context.round.workspace.toImmutableSchema(semanticRootTypeIds)
             val draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema = schema,
                 workspace = context.round.workspace,
@@ -92,10 +92,9 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 ),
                 processedSymbols = currentTypeIds,
             )
-        } catch (exception: JimmerImmutablePrecompileException) {
+        } catch (exception: ImmutablePrecompileException) {
             failedResult(
                 context = context,
-                precompiler = precompiler,
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -176,7 +175,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             .firstOrNull { (_, types) -> types.size > 1 }
             ?: return
         val conflictingTypes = conflict.value.sortedBy(LsiTypeDeclaration::qualifiedName)
-        throw JimmerImmutablePrecompileException(
+        throw ImmutablePrecompileException(
             declarationId = conflictingTypes.first().id,
             message = "Source '${conflict.key.path}' declares several Jimmer immutable types: " +
                 conflictingTypes.joinToString { type -> type.qualifiedName },
@@ -185,7 +184,6 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
     private fun unresolvedResult(
         context: JimmerCompilerPrecompileContext,
-        precompiler: JimmerImmutablePrecompiler,
         targetTypeIds: Set<LsiSymbolId>,
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
@@ -194,7 +192,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val deferred = context.round.platform == CompilerPlatform.APT && !context.round.isFinal
         val resolvedTypeIds = semanticRootTypeIds - unresolvedTypeIds
         val (schema, draftCodegenSchema) = try {
-            val schema = precompiler.compile(context.round.workspace, resolvedTypeIds)
+            val schema = context.round.workspace.toImmutableSchema(resolvedTypeIds)
             schema to JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema = schema,
                 workspace = context.round.workspace,
@@ -203,10 +201,9 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     workspace = context.round.workspace,
                 ),
             )
-        } catch (exception: JimmerImmutablePrecompileException) {
+        } catch (exception: ImmutablePrecompileException) {
             return failedResult(
                 context = context,
-                precompiler = precompiler,
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -248,11 +245,10 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
     private fun failedResult(
         context: JimmerCompilerPrecompileContext,
-        precompiler: JimmerImmutablePrecompiler,
         targetTypeIds: Set<LsiSymbolId>,
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
-        exception: JimmerImmutablePrecompileException,
+        exception: ImmutablePrecompileException,
         knownUnresolvedTypeIds: Set<LsiSymbolId> = emptySet(),
     ): JimmerCompilerFeaturePrecompileResult {
         val affectedTypeId = exception.declarationId.rootTypeId()
@@ -275,7 +271,6 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             }
             return unresolvedResult(
                 context = context,
-                precompiler = precompiler,
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
@@ -284,7 +279,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }
         return JimmerCompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
-                schema = JimmerImmutableSchema(emptyList()),
+                schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
                     jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
                     types = emptyList(),
@@ -319,7 +314,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     ): JimmerCompilerFeaturePrecompileResult {
         return JimmerCompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
-                schema = JimmerImmutableSchema(emptyList()),
+                schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
                     jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
                     types = emptyList(),
@@ -344,7 +339,7 @@ internal enum class JimmerImmutableCompilerFeatureStatus {
 }
 
 internal data class JimmerImmutableCompilerFeatureState(
-    val schema: JimmerImmutableSchema,
+    val schema: ImmutableSchema,
     val draftCodegenSchema: JimmerImmutableDraftCodegenSchema,
     val targetTypeIds: Set<LsiSymbolId>,
     val semanticRootTypeIds: Set<LsiSymbolId>,
@@ -395,7 +390,7 @@ private fun LsiWorkspace.immutableTargetTypeIds(
 ): Set<LsiSymbolId> {
     return declarationsOfType<LsiTypeDeclaration>()
         .asSequence()
-        .filter(LsiTypeDeclaration::hasImmutableMarker)
+        .filter(LsiTypeDeclaration::isJimmerImmutableType)
         .filter { type -> type.origin.kind in COMPILATION_ORIGIN_KINDS }
         .filter { type -> sourceFilter.accepts(type.qualifiedName) }
         .filter { type -> type.isCompilerTargetVisible(platform) }
@@ -420,7 +415,7 @@ private fun CompilerRound.dtoSemanticRootTypeIds(
             val semanticTypeIds = buildSet {
                 activeTargetTypeIds.forEach { typeId ->
                     val declaration = workspace[typeId] as? LsiTypeDeclaration
-                    if (declaration == null || declaration.hasImmutableMarker()) {
+                    if (declaration == null || declaration.isJimmerImmutableType()) {
                         add(typeId)
                     }
                 }
@@ -437,7 +432,7 @@ private fun CompilerRound.dtoSemanticRootTypeIds(
             }
             semanticTypeIds.forEach referenceLoop@{ typeId ->
                 val type = workspace[typeId] as? LsiTypeDeclaration ?: return@referenceLoop
-                if (type.hasImmutableMarker()) {
+                if (type.isJimmerImmutableType()) {
                     add(type.id)
                 }
             }

@@ -1,5 +1,8 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -46,7 +49,7 @@ internal enum class JimmerImmutableDraftRuntimeValueCategory {
     REFERENCE_LIST,
 }
 
-internal fun JimmerImmutableProp.compileDraftRuntimeProp(
+internal fun ImmutableProp.compileDraftRuntimeProp(
     elementType: LsiTypeRef,
     immutableReference: Boolean,
 ): JimmerImmutableDraftRuntimeProp {
@@ -54,9 +57,9 @@ internal fun JimmerImmutableProp.compileDraftRuntimeProp(
         annotation.type == KEY_ANNOTATION_TYPE_ID || annotation.type == KEYS_ANNOTATION_TYPE_ID
     }
     val kind = when {
-        primaryMapping == JimmerImmutablePrimaryMapping.ID -> JimmerImmutableDraftRuntimePropKind.ID
-        primaryMapping == JimmerImmutablePrimaryMapping.VERSION -> JimmerImmutableDraftRuntimePropKind.VERSION
-        primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> {
+        primaryMapping == PrimaryMapping.ID -> JimmerImmutableDraftRuntimePropKind.ID
+        primaryMapping == PrimaryMapping.VERSION -> JimmerImmutableDraftRuntimePropKind.VERSION
+        primaryMapping == PrimaryMapping.LOGICAL_DELETED -> {
             JimmerImmutableDraftRuntimePropKind.LOGICAL_DELETED
         }
         key && immutableReference -> JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE
@@ -72,7 +75,7 @@ internal fun JimmerImmutableProp.compileDraftRuntimeProp(
     }
     val associationAnnotationTypeId = when (kind) {
         JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE -> {
-            if (associationKind == JimmerAssociationKind.ONE_TO_ONE) {
+            if (associationKind == AssociationKind.ONE_TO_ONE) {
                 ONE_TO_ONE_ANNOTATION_TYPE_ID
             } else {
                 MANY_TO_ONE_ANNOTATION_TYPE_ID
@@ -94,18 +97,18 @@ internal fun JimmerImmutableProp.compileDraftRuntimeProp(
     )
 }
 
-private val JimmerAssociationKind.hasRuntimeAnnotation: Boolean
-    get() = this != JimmerAssociationKind.NONE && this != JimmerAssociationKind.IMPLICIT
+private val AssociationKind.hasRuntimeAnnotation: Boolean
+    get() = this != AssociationKind.NONE && this != AssociationKind.IMPLICIT
 
-private fun JimmerAssociationKind.runtimeAnnotationTypeId(): LsiSymbolId {
+private fun AssociationKind.runtimeAnnotationTypeId(): LsiSymbolId {
     return when (this) {
-        JimmerAssociationKind.ONE_TO_ONE -> ONE_TO_ONE_ANNOTATION_TYPE_ID
-        JimmerAssociationKind.MANY_TO_ONE -> MANY_TO_ONE_ANNOTATION_TYPE_ID
-        JimmerAssociationKind.ONE_TO_MANY -> ONE_TO_MANY_ANNOTATION_TYPE_ID
-        JimmerAssociationKind.MANY_TO_MANY -> MANY_TO_MANY_ANNOTATION_TYPE_ID
-        JimmerAssociationKind.MANY_TO_MANY_VIEW -> MANY_TO_MANY_VIEW_ANNOTATION_TYPE_ID
-        JimmerAssociationKind.NONE,
-        JimmerAssociationKind.IMPLICIT,
+        AssociationKind.ONE_TO_ONE -> ONE_TO_ONE_ANNOTATION_TYPE_ID
+        AssociationKind.MANY_TO_ONE -> MANY_TO_ONE_ANNOTATION_TYPE_ID
+        AssociationKind.ONE_TO_MANY -> ONE_TO_MANY_ANNOTATION_TYPE_ID
+        AssociationKind.MANY_TO_MANY -> MANY_TO_MANY_ANNOTATION_TYPE_ID
+        AssociationKind.MANY_TO_MANY_VIEW -> MANY_TO_MANY_VIEW_ANNOTATION_TYPE_ID
+        AssociationKind.NONE,
+        AssociationKind.IMPLICIT,
         -> error("Immutable association kind '$this' has no runtime annotation")
     }
 }

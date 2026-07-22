@@ -13,12 +13,12 @@ import java.util.function.Consumer
 import javax.lang.model.element.Modifier
 import org.babyfish.jimmer.client.meta.Doc
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableFetcherMetadata
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompileException
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
 import org.babyfish.jimmer.impl.util.StringUtil
@@ -31,8 +31,8 @@ import site.addzero.lsi.model.LsiWorkspace
 class JimmerImmutableFetcherJavaRenderer {
 
     fun render(
-        schema: JimmerImmutableSchema,
-        type: JimmerImmutableType,
+        schema: ImmutableSchema,
+        type: ImmutableType,
         workspace: LsiWorkspace,
     ): GeneratedArtifact {
         val metadata = JimmerImmutableFetcherMetadata(schema)
@@ -57,7 +57,7 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun fetcherType(
-        type: JimmerImmutableType,
+        type: ImmutableType,
         metadata: JimmerImmutableFetcherMetadata,
     ): TypeSpec {
         val fetcherClass = type.fetcherClassName()
@@ -87,7 +87,7 @@ class JimmerImmutableFetcherJavaRenderer {
             .build()
     }
 
-    private fun TypeSpec.Builder.addRootField(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addRootField(type: ImmutableType) {
         val fetcherClass = type.fetcherClassName()
         addField(
             FieldSpec.builder(fetcherClass, "\$")
@@ -97,7 +97,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addFromMethod(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addFromMethod(type: ImmutableType) {
         val fetcherClass = type.fetcherClassName()
         val fetcherType = ParameterizedTypeName.get(FETCHER, type.className())
         val fetcherImplType = ParameterizedTypeName.get(FETCHER_IMPL, type.className())
@@ -113,7 +113,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addBaseConstructor(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addBaseConstructor(type: ImmutableType) {
         addMethod(
             MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PRIVATE)
@@ -124,7 +124,7 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addForType(
-        type: JimmerImmutableType,
+        type: ImmutableType,
         metadata: JimmerImmutableFetcherMetadata,
     ) {
         if (metadata.strictTypeBranches(type).isEmpty()) {
@@ -144,11 +144,11 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addPropMethods(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        type: ImmutableType,
+        prop: ImmutableProp,
         metadata: JimmerImmutableFetcherMetadata,
     ) {
-        if (prop.primaryMapping == JimmerImmutablePrimaryMapping.ID || !prop.fetchable) {
+        if (prop.primaryMapping == PrimaryMapping.ID || !prop.fetchable) {
             return
         }
         addSimpleProp(type, prop)
@@ -167,14 +167,14 @@ class JimmerImmutableFetcherJavaRenderer {
                 addRecursiveProp(type, prop, targetType, withConfig = false)
                 addRecursiveProp(type, prop, targetType, withConfig = true)
             }
-        } else if (targetType?.kind == JimmerImmutableTypeKind.EMBEDDABLE) {
+        } else if (targetType?.kind == ImmutableTypeKind.EMBEDDABLE) {
             addChildProp(type, prop, targetType)
         }
     }
 
     private fun TypeSpec.Builder.addSimpleProp(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        type: ImmutableType,
+        prop: ImmutableProp,
     ) {
         addMethod(
             MethodSpec.methodBuilder(prop.name)
@@ -188,8 +188,8 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addEnabledProp(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        type: ImmutableType,
+        prop: ImmutableProp,
     ) {
         addMethod(
             MethodSpec.methodBuilder(prop.name)
@@ -204,9 +204,9 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addChildProp(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
-        targetType: JimmerImmutableType?,
+        type: ImmutableType,
+        prop: ImmutableProp,
+        targetType: ImmutableType?,
     ) {
         val targetClass = targetType.requiredClassName(prop)
         addMethod(
@@ -221,13 +221,13 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addIdOnlyProp(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        type: ImmutableType,
+        prop: ImmutableProp,
         metadata: JimmerImmutableFetcherMetadata,
     ) {
         val associationProp = metadata.idOnlyAssociationProp(prop)
         if (
-            associationProp.primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT ||
+            associationProp.primaryMapping == PrimaryMapping.TRANSIENT ||
             !metadata.isEntityAssociation(associationProp) ||
             prop.reverse ||
             prop.list ||
@@ -247,9 +247,9 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addFieldConfigProp(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
-        targetType: JimmerImmutableType?,
+        type: ImmutableType,
+        prop: ImmutableProp,
+        targetType: ImmutableType?,
     ) {
         val targetClass = targetType.requiredClassName(prop)
         val fieldConfigClass = if (prop.list) LIST_FIELD_CONFIG else REFERENCE_FIELD_CONFIG
@@ -271,9 +271,9 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addReferenceFetchTypeProp(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
-        targetType: JimmerImmutableType?,
+        type: ImmutableType,
+        prop: ImmutableProp,
+        targetType: ImmutableType?,
     ) {
         addMethod(
             MethodSpec.methodBuilder(prop.name)
@@ -291,9 +291,9 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 
     private fun TypeSpec.Builder.addRecursiveProp(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
-        targetType: JimmerImmutableType?,
+        type: ImmutableType,
+        prop: ImmutableProp,
+        targetType: ImmutableType?,
         withConfig: Boolean,
     ) {
         if (!prop.recursive) {
@@ -323,7 +323,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addNegativeConstructor(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addNegativeConstructor(type: ImmutableType) {
         addMethod(
             MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PRIVATE)
@@ -336,7 +336,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addFieldConfigConstructor(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addFieldConfigConstructor(type: ImmutableType) {
         addMethod(
             MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PRIVATE)
@@ -348,7 +348,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addTypeBranchConstructor(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addTypeBranchConstructor(type: ImmutableType) {
         addMethod(
             MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PRIVATE)
@@ -359,7 +359,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addNegativeCreator(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addNegativeCreator(type: ImmutableType) {
         addMethod(
             MethodSpec.methodBuilder("createFetcher")
                 .addModifiers(Modifier.PROTECTED)
@@ -373,7 +373,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addFieldConfigCreator(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addFieldConfigCreator(type: ImmutableType) {
         addMethod(
             MethodSpec.methodBuilder("createFetcher")
                 .addModifiers(Modifier.PROTECTED)
@@ -386,7 +386,7 @@ class JimmerImmutableFetcherJavaRenderer {
         )
     }
 
-    private fun TypeSpec.Builder.addTypeBranchCreator(type: JimmerImmutableType) {
+    private fun TypeSpec.Builder.addTypeBranchCreator(type: ImmutableType) {
         addMethod(
             MethodSpec.methodBuilder("createFetcher")
                 .addModifiers(Modifier.PROTECTED)
@@ -408,32 +408,32 @@ class JimmerImmutableFetcherJavaRenderer {
     }
 }
 
-private fun JimmerImmutableType.className(): ClassName = ClassName.bestGuess(qualifiedName)
+private fun ImmutableType.className(): ClassName = ClassName.bestGuess(qualifiedName)
 
-private fun JimmerImmutableType.fetcherClassName(): ClassName = ClassName.get(packageName, "${simpleName}Fetcher")
+private fun ImmutableType.fetcherClassName(): ClassName = ClassName.get(packageName, "${simpleName}Fetcher")
 
-private fun JimmerImmutableType.tableClassName(): ClassName = ClassName.get(packageName, "${simpleName}Table")
+private fun ImmutableType.tableClassName(): ClassName = ClassName.get(packageName, "${simpleName}Table")
 
-private fun JimmerImmutableType.generatedAnnotation(): AnnotationSpec {
+private fun ImmutableType.generatedAnnotation(): AnnotationSpec {
     return AnnotationSpec.builder(GENERATED_BY)
         .addMember("type", "\$T.class", className())
         .build()
 }
 
-private fun JimmerImmutableProp.fetcherDocumentation(): String? {
+private fun ImmutableProp.fetcherDocumentation(): String? {
     return documentation?.let(Doc::parse)?.value
 }
 
-private fun JimmerImmutableType?.requiredClassName(prop: JimmerImmutableProp): ClassName {
-    return this?.className() ?: throw JimmerImmutablePrecompileException(
+private fun ImmutableType?.requiredClassName(prop: ImmutableProp): ClassName {
+    return this?.className() ?: throw ImmutablePrecompileException(
         declarationId = prop.declarationId,
         recoverable = true,
         message = "Cannot resolve fetcher target type of immutable property '${prop.id.value}'",
     )
 }
 
-private fun JimmerImmutableType?.requiredTableClassName(prop: JimmerImmutableProp): ClassName {
-    return this?.tableClassName() ?: throw JimmerImmutablePrecompileException(
+private fun ImmutableType?.requiredTableClassName(prop: ImmutableProp): ClassName {
+    return this?.tableClassName() ?: throw ImmutablePrecompileException(
         declarationId = prop.declarationId,
         recoverable = true,
         message = "Cannot resolve fetcher table type of immutable property '${prop.id.value}'",

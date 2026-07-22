@@ -23,7 +23,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftPropPlan
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftRuntimePropKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftRuntimeValueCategory
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTypePlan
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.render.ksp.toLegacyKotlinAnnotationSpecWithDefaults
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeVariableName
@@ -73,7 +73,7 @@ internal class JimmerImmutableDraftKotlinRenderContext(
 
     val builderClass: ClassName = draftClass.nestedClass(BUILDER)
 
-    val mappedSuperclass: Boolean = type.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+    val mappedSuperclass: Boolean = type.kind == ImmutableTypeKind.MAPPED_SUPERCLASS
 
     val propsInDeclarationOrder: List<JimmerImmutableDraftPropPlan> = buildList {
         val added = hashSetOf<LsiSymbolId>()
@@ -176,7 +176,7 @@ internal class JimmerImmutableDraftKotlinRenderContext(
 
     fun slotReference(prop: JimmerImmutableDraftPropPlan): CodeBlock {
         val owner = type(prop.runtimeOwnerTypeId)
-        return if (owner.typeId == type.typeId || owner.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
+        return if (owner.typeId == type.typeId || owner.kind == ImmutableTypeKind.MAPPED_SUPERCLASS) {
             CodeBlock.of("%L", prop.slotIndex)
         } else {
             CodeBlock.of("%T.%L", producerClass(owner.typeId), prop.slotName)

@@ -1,14 +1,14 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableView
-import org.babyfish.jimmer.compiler.immutable.hasImmutableMarker
-import org.babyfish.jimmer.compiler.immutable.normalizedTypeSignature
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.isJimmerImmutableType
+import site.addzero.lsi.jimmer.jimmerTypeSignature
 import org.babyfish.jimmer.dto.compiler.DtoCompiler
 import org.babyfish.jimmer.dto.compiler.DtoFile
 import org.babyfish.jimmer.dto.compiler.DtoModifier
@@ -30,7 +30,7 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
 internal class LsiDtoTypeRegistry(
-    immutableSchema: JimmerImmutableSchema,
+    immutableSchema: ImmutableSchema,
     val workspace: LsiWorkspace,
 ) {
     private val typesById: Map<LsiSymbolId, LsiDtoBaseType>
@@ -39,7 +39,7 @@ internal class LsiDtoTypeRegistry(
 
     init {
         typesById = immutableSchema.types
-            .sortedBy(JimmerImmutableType::id)
+            .sortedBy(ImmutableType::id)
             .associate { immutableType ->
                 immutableType.id to LsiDtoBaseType(immutableType, this)
             }
@@ -85,7 +85,7 @@ internal class LsiDtoTypeRegistry(
 }
 
 internal class LsiDtoBaseType(
-    internal val immutableType: JimmerImmutableType,
+    internal val immutableType: ImmutableType,
     private val registry: LsiDtoTypeRegistry,
 ) : BaseType {
     val id: LsiSymbolId
@@ -97,7 +97,7 @@ internal class LsiDtoBaseType(
 
     override val qualifiedName: String = immutableType.qualifiedName
 
-    override val isEntity: Boolean = immutableType.kind == JimmerImmutableTypeKind.ENTITY
+    override val isEntity: Boolean = immutableType.kind == ImmutableTypeKind.ENTITY
 
     internal val props: Map<String, LsiDtoBaseProp> by lazy {
         registry.props(this)
@@ -117,7 +117,7 @@ internal class LsiDtoBaseType(
 
 internal class LsiDtoBaseProp(
     private val ownerType: LsiDtoBaseType,
-    internal val immutableProp: JimmerImmutableProp,
+    internal val immutableProp: ImmutableProp,
     private val registry: LsiDtoTypeRegistry,
 ) : BaseProp {
     val id: LsiSymbolId
@@ -132,24 +132,24 @@ internal class LsiDtoBaseProp(
     override val isReference: Boolean
         get() = !isList && isAssociation(false)
 
-    override val isFormula: Boolean = immutableProp.formulaKind != JimmerFormulaKind.NONE
+    override val isFormula: Boolean = immutableProp.formulaKind != FormulaKind.NONE
 
     override val isTransient: Boolean =
-        immutableProp.primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT
+        immutableProp.primaryMapping == PrimaryMapping.TRANSIENT
 
     override val idViewBaseProp: LsiDtoBaseProp? by lazy {
-        (immutableProp.view as? JimmerImmutableView.Id)
+        (immutableProp.view as? ImmutableView.Id)
             ?.basePropId
             ?.let(::ownerProp)
     }
 
     override val manyToManyViewBaseProp: LsiDtoBaseProp? by lazy {
-        (immutableProp.view as? JimmerImmutableView.ManyToMany)
+        (immutableProp.view as? ImmutableView.ManyToMany)
             ?.basePropId
             ?.let(::ownerProp)
     }
 
-    override val isId: Boolean = immutableProp.primaryMapping == JimmerImmutablePrimaryMapping.ID
+    override val isId: Boolean = immutableProp.primaryMapping == PrimaryMapping.ID
 
     override val isKey: Boolean = immutableProp.annotations.hasAnnotation(KEY_ANNOTATION)
 
@@ -158,7 +158,7 @@ internal class LsiDtoBaseProp(
     override val isEmbedded: Boolean = immutableProp.embedded
 
     override val isLogicalDeleted: Boolean =
-        immutableProp.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+        immutableProp.primaryMapping == PrimaryMapping.LOGICAL_DELETED
 
     override val isExcludedFromAllScalars: Boolean =
         immutableProp.annotations.hasAnnotation(EXCLUDE_FROM_ALL_SCALARS_ANNOTATION)
@@ -202,7 +202,7 @@ internal class LsiDtoCompiler(
 
     override fun isImmutableType(qualifiedName: String): Boolean {
         val typeId = LsiSymbolId.type(qualifiedName)
-        return (registry.workspace[typeId] as? LsiTypeDeclaration)?.hasImmutableMarker() == true
+        return (registry.workspace[typeId] as? LsiTypeDeclaration)?.isJimmerImmutableType() == true
     }
 
     override fun getDirectSubTypes(baseType: LsiDtoBaseType): Collection<LsiDtoBaseType> {
@@ -262,8 +262,8 @@ internal class LsiDtoCompiler(
     }
 
     override fun isSameType(baseProp1: LsiDtoBaseProp, baseProp2: LsiDtoBaseProp): Boolean {
-        return baseProp1.clientType().normalizedTypeSignature(ignoreRootNullability = true) ==
-            baseProp2.clientType().normalizedTypeSignature(ignoreRootNullability = true)
+        return baseProp1.clientType().jimmerTypeSignature(ignoreRootNullability = true) ==
+            baseProp2.clientType().jimmerTypeSignature(ignoreRootNullability = true)
     }
 
     override fun getGenericTypeCount(qualifiedName: String): Int? {

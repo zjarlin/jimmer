@@ -21,9 +21,10 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompileException
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompiler
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.toImmutableSchema
+import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -273,7 +274,7 @@ private data class ClientDependencies(
     val status: JimmerClientCompilerDependencyStatus,
     val immutableFingerprint: String,
     val errorFingerprint: String,
-    val immutableSchema: JimmerImmutableSchema,
+    val immutableSchema: ImmutableSchema,
     val errorSchema: ErrorPrecompiledSchema,
     val definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
     val dtoFingerprint: String,
@@ -349,15 +350,11 @@ private fun CompilerRound.previewClientDependencies(): ClientPrecompileDependenc
             type.annotations.any { annotation -> annotation.type in IMMUTABLE_TYPE_ANNOTATIONS }
         }
         .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
-    val immutablePrecompiler = JimmerImmutablePrecompiler()
-    val resolvedImmutableTypeIds = immutableTypeIds - immutablePrecompiler.unresolvedTargetTypeIds(
-        workspace = workspace,
-        targetTypeIds = immutableTypeIds,
-    )
+    val resolvedImmutableTypeIds = immutableTypeIds - workspace.unresolvedJimmerImmutableTypeIds(immutableTypeIds)
     val immutableSchema = try {
-        immutablePrecompiler.compile(workspace, resolvedImmutableTypeIds)
-    } catch (_: JimmerImmutablePrecompileException) {
-        JimmerImmutableSchema(emptyList())
+        workspace.toImmutableSchema(resolvedImmutableTypeIds)
+    } catch (_: ImmutablePrecompileException) {
+        ImmutableSchema(emptyList())
     }
     val errorSchema = try {
         ErrorPrecompiler(

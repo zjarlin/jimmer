@@ -2,6 +2,8 @@ package org.babyfish.jimmer.compiler.immutable
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import site.addzero.lsi.jimmer.ImmutableValidation
+import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiTypeParameter
@@ -146,15 +148,15 @@ private fun LsiTypeParameter.snapshotText(): String {
         append(':')
         append(variance.name)
         append(':')
-        append(upperBounds.joinToString("&") { bound -> bound.normalizedTypeSignature() })
+        append(upperBounds.joinToString("&") { bound -> bound.jimmerTypeSignature() })
     }
 }
 
 private fun site.addzero.lsi.model.LsiTypeRef.typeText(includePlatformSurface: Boolean): String {
-    return if (includePlatformSurface) stableSignature() else normalizedTypeSignature()
+    return if (includePlatformSurface) stableSignature() else jimmerTypeSignature()
 }
 
-private fun List<JimmerValidation>.validationText(includePlatformSurface: Boolean): String {
+private fun List<ImmutableValidation>.validationText(includePlatformSurface: Boolean): String {
     return joinToString(";") { validation ->
         buildString {
             append(validation.annotationTypeId.value)
@@ -303,7 +305,7 @@ private fun LsiAnnotationValue.annotationValueText(includePlatformSurface: Boole
         is LsiAnnotationValue.CharValue -> "char:${value.code}"
         is LsiAnnotationValue.StringValue -> "string:$value"
         is LsiAnnotationValue.EnumValue -> "enum:${enumType.value}:$entryName"
-        is LsiAnnotationValue.ClassValue -> "class:${type.normalizedTypeSignature()}"
+        is LsiAnnotationValue.ClassValue -> "class:${type.jimmerTypeSignature()}"
         is LsiAnnotationValue.NestedAnnotationValue -> {
             "annotation:${annotation.annotationText(includePlatformSurface)}"
         }

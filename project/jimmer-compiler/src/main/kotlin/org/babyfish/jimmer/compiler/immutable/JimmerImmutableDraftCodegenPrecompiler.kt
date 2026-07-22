@@ -1,6 +1,20 @@
 package org.babyfish.jimmer.compiler.immutable
 
 import org.babyfish.jimmer.impl.util.StringUtil
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.FormulaDependency
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableValidation
+import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.TransientResolver
+import site.addzero.lsi.jimmer.classTypeIds
+import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
@@ -21,7 +35,7 @@ import site.addzero.lsi.model.LsiWorkspace
 internal class JimmerImmutableDraftCodegenPrecompiler {
 
     fun compile(
-        schema: JimmerImmutableSchema,
+        schema: ImmutableSchema,
         workspace: LsiWorkspace,
         options: JimmerImmutableDraftCodegenOptions,
     ): JimmerImmutableDraftCodegenSchema {
@@ -30,13 +44,13 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
         fun compileType(typeId: LsiSymbolId): JimmerImmutableDraftTypePlan {
             compiledTypes[typeId]?.let { type -> return type }
             val type = schema.typesById[typeId]
-                ?: throw JimmerImmutablePrecompileException(
+                ?: throw ImmutablePrecompileException(
                     declarationId = typeId,
                     recoverable = true,
                     message = "Cannot resolve immutable draft type '${typeId.value}'",
                 )
             val declaration = workspace[typeId] as? LsiTypeDeclaration
-                ?: throw JimmerImmutablePrecompileException(
+                ?: throw ImmutablePrecompileException(
                     declarationId = typeId,
                     recoverable = true,
                     message = "Cannot resolve LSI declaration of immutable draft type '${typeId.value}'",
@@ -48,7 +62,7 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                 superType.declarationId to compileType(superType.declarationId)
             }
             val primarySuperPlan = type.primarySuperTypeId?.let(directSuperPlans::getValue)
-            val propsByName = type.props.associateBy(JimmerImmutableProp::name)
+            val propsByName = type.props.associateBy(ImmutableProp::name)
             val primaryPropNames = primarySuperPlan
                 ?.propsBySlot
                 .orEmpty()
@@ -91,10 +105,10 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                 .mapNotNull { memberId -> workspace[memberId] as? LsiProperty }
                 .mapNotNull { property -> propsByName[property.name] }
                 .filter { prop -> prop.declaringTypeId == type.id && !prop.overridden }
-                .distinctBy(JimmerImmutableProp::id)
+                .distinctBy(ImmutableProp::id)
                 .let { props ->
                     val (idProps, otherProps) = props.partition { prop ->
-                        prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                        prop.primaryMapping == PrimaryMapping.ID
                     }
                     idProps + otherProps
                 }
@@ -110,7 +124,7 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
             val assignedPropIds = assignments.mapTo(linkedSetOf()) { assignment -> assignment.prop.id }
             val missingProps = type.props.filterNot { prop -> prop.id in assignedPropIds }
             if (missingProps.isNotEmpty()) {
-                throw JimmerImmutablePrecompileException(
+                throw ImmutablePrecompileException(
                     declarationId = missingProps.first().declarationId,
                     message = "Cannot determine immutable draft slot for properties: " +
                         missingProps.joinToString { prop -> prop.id.value },
@@ -219,7 +233,7 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                     converter.sourceType?.referencedTypeIds()?.forEach(::includeDependency)
                     converter.targetType?.referencedTypeIds()?.forEach(::includeDependency)
                 }
-                (semanticProp.transientResolver as? JimmerTransientResolver.Type)
+                (semanticProp.transientResolver as? TransientResolver.Type)
                     ?.typeId
                     ?.let(::includeDependency)
             }
@@ -268,25 +282,26 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
 }
 
 private data class JimmerImmutableDraftSlotAssignment(
-    val prop: JimmerImmutableProp,
+    val prop: ImmutableProp,
     val slotIndex: Int,
     val runtimeOwnerTypeId: LsiSymbolId,
     val role: JimmerImmutableDraftPropRole,
 ) {
     fun toPlan(
-        ownerType: JimmerImmutableType,
-        schema: JimmerImmutableSchema,
+        ownerType: ImmutableType,
+        schema: ImmutableSchema,
         workspace: LsiWorkspace,
         baseDependencyPropIds: Set<LsiSymbolId>,
         options: JimmerImmutableDraftCodegenOptions,
     ): JimmerImmutableDraftPropPlan {
         val declaration = workspace[prop.declarationId] as? LsiProperty
-            ?: throw JimmerImmutablePrecompileException(
+            ?: throw ImmutablePrecompileException(
                 declarationId = prop.declarationId,
                 recoverable = true,
                 message = "Cannot resolve LSI declaration of immutable draft property '${prop.id.value}'",
             )
-        val primitive = prop.type is LsiPrimitiveType && !prop.type.boxed
+        val propType = prop.type
+        val primitive = propType is LsiPrimitiveType && !propType.boxed
         val languageFormula = prop.isLanguageFormula(declaration.origin.language)
         val valueRequired = prop.view == null && !languageFormula
         val valueState = when {
@@ -294,8 +309,8 @@ private data class JimmerImmutableDraftSlotAssignment(
             prop.nullable || primitive -> JimmerImmutableDraftValueState.VALUE_AND_LOADED
             else -> JimmerImmutableDraftValueState.VALUE_ONLY
         }
-        val idView = prop.view as? JimmerImmutableView.Id
-        val manyToManyView = prop.view as? JimmerImmutableView.ManyToMany
+        val idView = prop.view as? ImmutableView.Id
+        val manyToManyView = prop.view as? ImmutableView.ManyToMany
         val targetIdPropId = prop.targetTypeId
             ?.let(schema.typesById::get)
             ?.idPropId
@@ -306,7 +321,7 @@ private data class JimmerImmutableDraftSlotAssignment(
         val associatedId = if (
             prop.association &&
             !prop.list &&
-            prop.targetTypeId?.let(schema.typesById::get)?.kind == JimmerImmutableTypeKind.ENTITY &&
+            prop.targetTypeId?.let(schema.typesById::get)?.kind == ImmutableTypeKind.ENTITY &&
             targetIdPropId != null &&
             schema.idViewPropIdsByBasePropId[prop.id].isNullOrEmpty() &&
             ownerType.props.none { candidate -> candidate.codegenName(workspace) == associatedIdName }
@@ -328,18 +343,18 @@ private data class JimmerImmutableDraftSlotAssignment(
         )
         val validationPlan = JimmerImmutableDraftValidationPrecompiler().compile(prop, workspace)
         val writable = !languageFormula &&
-            prop.primaryMapping != JimmerImmutablePrimaryMapping.DISCRIMINATOR &&
+            prop.primaryMapping != PrimaryMapping.DISCRIMINATOR &&
             manyToManyView == null
         val autoCreateSupported = (immutableReference || prop.list) &&
             !prop.genericTarget &&
             manyToManyView == null &&
-            prop.formulaKind == JimmerFormulaKind.NONE &&
-            prop.primaryMapping != JimmerImmutablePrimaryMapping.DISCRIMINATOR
+            prop.formulaKind == FormulaKind.NONE &&
+            prop.primaryMapping != PrimaryMapping.DISCRIMINATOR
         val referenceMutationSupported = immutableReference &&
             !prop.genericTarget &&
             manyToManyView == null &&
-            prop.formulaKind == JimmerFormulaKind.NONE &&
-            prop.primaryMapping != JimmerImmutablePrimaryMapping.DISCRIMINATOR
+            prop.formulaKind == FormulaKind.NONE &&
+            prop.primaryMapping != PrimaryMapping.DISCRIMINATOR
         return JimmerImmutableDraftPropPlan(
             propId = prop.id,
             declarationId = prop.declarationId,
@@ -348,7 +363,7 @@ private data class JimmerImmutableDraftSlotAssignment(
             runtimeOwnerTypeId = runtimeOwnerTypeId,
             slotIndex = slotIndex,
             metadataSlotIndex = slotIndex.takeUnless {
-                ownerType.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+                ownerType.kind == ImmutableTypeKind.MAPPED_SUPERCLASS
             },
             role = role,
             name = prop.name,
@@ -398,14 +413,14 @@ private data class JimmerImmutableDraftSlotAssignment(
             idViewBasePropId = idView?.basePropId,
             manyToManyBasePropId = manyToManyView?.basePropId,
             manyToManyDeeperPropId = manyToManyView?.deeperPropId,
-            formulaDependencyPaths = prop.formulaDependencies.map(JimmerFormulaDependency::propIds),
+            formulaDependencyPaths = prop.formulaDependencies.map(FormulaDependency::propIds),
             associatedId = associatedId,
             validationPlan = validationPlan,
         )
     }
 }
 
-private fun JimmerImmutableProp.elementType(): LsiTypeRef {
+private fun ImmutableProp.elementType(): LsiTypeRef {
     if (!list) {
         return type
     }
@@ -416,15 +431,15 @@ private fun JimmerImmutableProp.elementType(): LsiTypeRef {
         ?: type
 }
 
-private fun JimmerImmutableProp.genericSourceTarget(
+private fun ImmutableProp.genericSourceTarget(
     workspace: LsiWorkspace,
     role: JimmerImmutableDraftPropRole,
-    ownerKind: JimmerImmutableTypeKind,
+    ownerKind: ImmutableTypeKind,
 ): Boolean {
     if (role == JimmerImmutableDraftPropRole.DECLARED) {
         return false
     }
-    if (ownerKind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
+    if (ownerKind == ImmutableTypeKind.MAPPED_SUPERCLASS) {
         return false
     }
     return (listOf(declarationId) + overrideChain)
@@ -444,9 +459,9 @@ private fun LsiTypeRef.targetType(list: Boolean): LsiTypeRef {
         ?: this
 }
 
-private fun JimmerImmutableProp.isLanguageFormula(language: LsiLanguage): Boolean {
-    return formulaKind == JimmerFormulaKind.LANGUAGE ||
-        formulaKind == JimmerFormulaKind.ABSTRACT && language == LsiLanguage.JAVA
+private fun ImmutableProp.isLanguageFormula(language: LsiLanguage): Boolean {
+    return formulaKind == FormulaKind.LANGUAGE ||
+        formulaKind == FormulaKind.ABSTRACT && language == LsiLanguage.JAVA
 }
 
 private fun LsiProperty.accessorStyle(propName: String): JimmerImmutableDraftAccessorStyle {
@@ -465,17 +480,18 @@ private fun LsiProperty.accessorStyle(propName: String): JimmerImmutableDraftAcc
     }
 }
 
-private fun LsiProperty.codegenName(prop: JimmerImmutableProp): String {
+private fun LsiProperty.codegenName(prop: ImmutableProp): String {
     if (origin.language != LsiLanguage.JAVA) {
         return prop.name
     }
     if (getterName.startsWith("get") && getterName.length > 3 && getterName[3].isUpperCase()) {
         return getterName.substring(3).replaceFirstChar(Char::lowercaseChar)
     }
+    val propType = prop.type
     if (
-        prop.type is LsiPrimitiveType &&
-        !prop.type.boxed &&
-        prop.type.kind == LsiPrimitiveKind.BOOLEAN &&
+        propType is LsiPrimitiveType &&
+        !propType.boxed &&
+        propType.kind == LsiPrimitiveKind.BOOLEAN &&
         getterName != prop.name &&
         getterName.startsWith("is") &&
         getterName.length > 2 &&
@@ -486,7 +502,7 @@ private fun LsiProperty.codegenName(prop: JimmerImmutableProp): String {
     return getterName
 }
 
-private fun JimmerImmutableProp.codegenName(workspace: LsiWorkspace): String {
+private fun ImmutableProp.codegenName(workspace: LsiWorkspace): String {
     val declaration = workspace[declarationId] as? LsiProperty ?: return name
     return declaration.codegenName(this)
 }
@@ -530,7 +546,7 @@ private fun List<LsiAnnotation>.constraintAnnotations(workspace: LsiWorkspace): 
     }
 }
 
-private fun List<LsiAnnotation>.customValidations(workspace: LsiWorkspace): List<JimmerValidation> {
+private fun List<LsiAnnotation>.customValidations(workspace: LsiWorkspace): List<ImmutableValidation> {
     return mapNotNull { annotation ->
         val annotationType = workspace[annotation.type] as? LsiTypeDeclaration ?: return@mapNotNull null
         val constraint = annotationType.annotations.firstOrNull { metaAnnotation ->
@@ -540,7 +556,7 @@ private fun List<LsiAnnotation>.customValidations(workspace: LsiWorkspace): List
         if (validatorTypeIds.isEmpty()) {
             return@mapNotNull null
         }
-        JimmerValidation(
+        ImmutableValidation(
             annotationTypeId = annotation.type,
             validatorTypeIds = validatorTypeIds,
             message = (annotation.arguments["message"]?.value as? LsiAnnotationValue.StringValue)?.value.orEmpty(),

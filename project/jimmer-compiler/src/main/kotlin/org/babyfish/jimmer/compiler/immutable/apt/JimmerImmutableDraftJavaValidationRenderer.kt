@@ -26,7 +26,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTemporalTarget
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTypePlan
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftValidationFailure
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftValidationStep
-import org.babyfish.jimmer.compiler.immutable.JimmerValidation
+import site.addzero.lsi.jimmer.ImmutableValidation
 import org.babyfish.jimmer.compiler.immutable.legacyUpper
 import org.babyfish.jimmer.compiler.render.apt.toJavaTypeName
 import org.babyfish.jimmer.meta.PropId
@@ -219,7 +219,7 @@ internal object JimmerImmutableDraftJavaValidationRenderer {
 
     private fun typeValidatorField(
         type: JimmerImmutableDraftTypePlan,
-        validation: JimmerValidation,
+        validation: ImmutableValidation,
     ): FieldSpec {
         val originalType = type.originalClassName()
         return FieldSpec.builder(

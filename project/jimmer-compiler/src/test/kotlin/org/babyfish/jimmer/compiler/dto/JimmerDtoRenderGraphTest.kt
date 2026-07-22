@@ -21,16 +21,16 @@ import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.client.toClientDefinitionDocumentation
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
-import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.JimmerInheritanceStrategy
-import org.babyfish.jimmer.compiler.immutable.JimmerJoinedTableDissociateAction
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.InheritanceStrategy
+import site.addzero.lsi.jimmer.JoinedTableDissociateAction
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import org.babyfish.jimmer.dto.compiler.DtoModifier
@@ -211,7 +211,7 @@ class JimmerDtoRenderGraphTest {
         val outcome = JimmerDtoPrecompiler().compile(
             inputDocumentSnapshots = listOf(CompilerInputDocumentReferenceFreezer().freeze(fixture.document)),
             immutableSchema = fixture.schema,
-            immutableSemanticRootTypeIds = fixture.schema.types.mapTo(sortedSetOf(), JimmerImmutableType::id),
+            immutableSemanticRootTypeIds = fixture.schema.types.mapTo(sortedSetOf(), ImmutableType::id),
             workspace = fixture.workspace,
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
@@ -564,13 +564,13 @@ class JimmerDtoRenderGraphTest {
             ownerTypeId = CLIENT_TYPE_ID,
             name = "id",
             type = LONG_TYPE,
-            primaryMapping = JimmerImmutablePrimaryMapping.ID,
+            primaryMapping = PrimaryMapping.ID,
         )
         val discriminatorProp = immutableProp(
             ownerTypeId = CLIENT_TYPE_ID,
             name = "type",
             type = STRING_TYPE,
-            primaryMapping = JimmerImmutablePrimaryMapping.DISCRIMINATOR,
+            primaryMapping = PrimaryMapping.DISCRIMINATOR,
         )
         val rootProps = listOf(
             idProp,
@@ -585,19 +585,19 @@ class JimmerDtoRenderGraphTest {
                 ownerTypeId = CLIENT_TYPE_ID,
                 name = "store",
                 type = LsiDeclaredType(STORE_TYPE_ID),
-                primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+                primaryMapping = PrimaryMapping.ASSOCIATION,
                 association = true,
                 targetTypeId = STORE_TYPE_ID,
-                associationKind = JimmerAssociationKind.MANY_TO_ONE,
+                associationKind = AssociationKind.MANY_TO_ONE,
             ),
             immutableProp(
                 ownerTypeId = CLIENT_TYPE_ID,
                 name = "publisher",
                 type = LsiDeclaredType(STORE_TYPE_ID),
-                primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
+                primaryMapping = PrimaryMapping.ASSOCIATION,
                 association = true,
                 targetTypeId = STORE_TYPE_ID,
-                associationKind = JimmerAssociationKind.MANY_TO_ONE,
+                associationKind = AssociationKind.MANY_TO_ONE,
             ),
         )
         val root = immutableType(
@@ -606,8 +606,8 @@ class JimmerDtoRenderGraphTest {
             documentation = "Base client documentation\n@param name Base client name documentation",
             instantiable = false,
             inheritanceRootTypeId = CLIENT_TYPE_ID,
-            inheritanceStrategy = JimmerInheritanceStrategy.SINGLE_TABLE,
-            joinedTableDissociateAction = JimmerJoinedTableDissociateAction.DELETE,
+            inheritanceStrategy = InheritanceStrategy.SINGLE_TABLE,
+            joinedTableDissociateAction = JoinedTableDissociateAction.DELETE,
             discriminatorPropId = discriminatorProp.id,
         )
         val inheritedProps = rootProps.map { prop -> prop.inheritedBy(ORGANIZATION_TYPE_ID) }
@@ -630,7 +630,7 @@ class JimmerDtoRenderGraphTest {
                     ownerTypeId = STORE_TYPE_ID,
                     name = "id",
                     type = LONG_TYPE,
-                    primaryMapping = JimmerImmutablePrimaryMapping.ID,
+                    primaryMapping = PrimaryMapping.ID,
                 ),
                 immutableProp(
                     ownerTypeId = STORE_TYPE_ID,
@@ -640,7 +640,7 @@ class JimmerDtoRenderGraphTest {
                 ),
             ),
         )
-        val schema = JimmerImmutableSchema(listOf(root, organization, store))
+        val schema = ImmutableSchema(listOf(root, organization, store))
         val document = CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
@@ -674,28 +674,28 @@ class JimmerDtoRenderGraphTest {
         return RealPrecompilerFixture(
             document = document,
             schema = schema,
-            workspace = immutableHeaderWorkspace(schema.types.map(JimmerImmutableType::id)),
+            workspace = immutableHeaderWorkspace(schema.types.map(ImmutableType::id)),
         )
     }
 
     private fun immutableType(
         id: LsiSymbolId,
-        props: List<JimmerImmutableProp>,
+        props: List<ImmutableProp>,
         documentation: String? = null,
         superTypeIds: List<LsiSymbolId> = emptyList(),
         primarySuperTypeId: LsiSymbolId? = null,
         inheritanceRootTypeId: LsiSymbolId? = null,
-        inheritanceStrategy: JimmerInheritanceStrategy? = null,
-        joinedTableDissociateAction: JimmerJoinedTableDissociateAction? = null,
+        inheritanceStrategy: InheritanceStrategy? = null,
+        joinedTableDissociateAction: JoinedTableDissociateAction? = null,
         instantiable: Boolean = true,
         discriminatorValue: String? = null,
         discriminatorPropId: LsiSymbolId? = null,
-    ): JimmerImmutableType {
+    ): ImmutableType {
         val completeProps = completeEntityProps(id, props)
-        return JimmerImmutableType(
+        return ImmutableType(
             id = id,
             qualifiedName = id.requireTypeQualifiedName(),
-            kind = JimmerImmutableTypeKind.ENTITY,
+            kind = ImmutableTypeKind.ENTITY,
             documentation = documentation,
             annotations = emptyList(),
             typeParameterIds = emptyList(),
@@ -709,13 +709,13 @@ class JimmerDtoRenderGraphTest {
             discriminatorValue = discriminatorValue,
             discriminatorPropId = discriminatorPropId,
             idPropId = completeProps.singleOrNull { prop ->
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                prop.primaryMapping == PrimaryMapping.ID
             }?.id,
             versionPropId = completeProps.singleOrNull { prop ->
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION
+                prop.primaryMapping == PrimaryMapping.VERSION
             }?.id,
             logicalDeletedPropId = completeProps.singleOrNull { prop ->
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+                prop.primaryMapping == PrimaryMapping.LOGICAL_DELETED
             }?.id,
             acrossMicroServices = false,
             microServiceName = "",
@@ -726,14 +726,14 @@ class JimmerDtoRenderGraphTest {
         ownerTypeId: LsiSymbolId,
         name: String,
         type: LsiTypeRef,
-        primaryMapping: JimmerImmutablePrimaryMapping = JimmerImmutablePrimaryMapping.SCALAR,
+        primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
         association: Boolean = false,
         targetTypeId: LsiSymbolId? = (type as? LsiDeclaredType)?.declarationId,
-        associationKind: JimmerAssociationKind = JimmerAssociationKind.NONE,
+        associationKind: AssociationKind = AssociationKind.NONE,
         documentation: String? = null,
-    ): JimmerImmutableProp {
+    ): ImmutableProp {
         val id = LsiSymbolId.property(ownerTypeId, name)
-        return JimmerImmutableProp(
+        return ImmutableProp(
             id = id,
             declarationId = id,
             ownerTypeId = ownerTypeId,
@@ -754,14 +754,14 @@ class JimmerDtoRenderGraphTest {
             primaryAnnotationTypeId = null,
             defaultContract = null,
             associationKind = associationKind,
-            formulaKind = JimmerFormulaKind.NONE,
+            formulaKind = FormulaKind.NONE,
             mappedBy = null,
             associationStorage = when (associationKind) {
-                JimmerAssociationKind.ONE_TO_ONE,
-                JimmerAssociationKind.MANY_TO_ONE,
-                -> JimmerAssociationStorageKind.COLUMN
-                JimmerAssociationKind.MANY_TO_MANY -> JimmerAssociationStorageKind.MIDDLE_TABLE
-                else -> JimmerAssociationStorageKind.NONE
+                AssociationKind.ONE_TO_ONE,
+                AssociationKind.MANY_TO_ONE,
+                -> AssociationStorageKind.COLUMN
+                AssociationKind.MANY_TO_MANY -> AssociationStorageKind.MIDDLE_TABLE
+                else -> AssociationStorageKind.NONE
             },
             transientResolver = null,
             view = null,
@@ -773,7 +773,7 @@ class JimmerDtoRenderGraphTest {
         )
     }
 
-    private fun JimmerImmutableProp.inheritedBy(ownerTypeId: LsiSymbolId): JimmerImmutableProp {
+    private fun ImmutableProp.inheritedBy(ownerTypeId: LsiSymbolId): ImmutableProp {
         return copy(
             id = LsiSymbolId.property(ownerTypeId, name),
             ownerTypeId = ownerTypeId,
@@ -1110,6 +1110,6 @@ class JimmerDtoRenderGraphTest {
 
 private data class RealPrecompilerFixture(
     val document: CompilerInputDocument,
-    val schema: JimmerImmutableSchema,
+    val schema: ImmutableSchema,
     val workspace: LsiWorkspace,
 )

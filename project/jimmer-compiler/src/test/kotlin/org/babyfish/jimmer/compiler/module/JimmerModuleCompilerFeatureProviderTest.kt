@@ -23,9 +23,9 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableJacksonFamily
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.core.LsiLanguage
@@ -194,7 +194,7 @@ class JimmerModuleCompilerFeatureProviderTest {
     fun `deferred and invalid immutable states block module with stable empty output`() {
         val brokenId = LsiSymbolId.type("demo.Broken")
         val deferredDependency = JimmerImmutableCompilerFeatureState(
-            schema = JimmerImmutableSchema(emptyList()),
+            schema = ImmutableSchema(emptyList()),
             draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
                 jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
                 types = emptyList(),
@@ -391,12 +391,12 @@ class JimmerModuleCompilerFeatureProviderTest {
     private fun resolvedDependencyState(qualifiedName: String): JimmerImmutableCompilerFeatureState {
         val typeId = LsiSymbolId.type(qualifiedName)
         val props = completeEntityProps(typeId)
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(
-                JimmerImmutableType(
+                ImmutableType(
                     id = typeId,
                     qualifiedName = qualifiedName,
-                    kind = JimmerImmutableTypeKind.ENTITY,
+                    kind = ImmutableTypeKind.ENTITY,
                     documentation = null,
                     annotations = emptyList(),
                     typeParameterIds = emptyList(),

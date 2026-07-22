@@ -12,14 +12,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
-import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
@@ -284,7 +284,7 @@ class JimmerDtoAnnotationContractTest {
             dtoAnnotation("demo.OverriddenRepeat", "\"dto-first\""),
             dtoAnnotation("demo.OverriddenRepeat", "\"dto-last\""),
         )
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(baseType.copy(annotations = baseType.annotations + baseAnnotations))
         )
         val graph = JimmerDtoRenderGraph(
@@ -720,7 +720,7 @@ class JimmerDtoAnnotationContractTest {
         val templateType = base.schema.types.single()
         val templateProp = templateType.props.single { prop -> prop.id == NAME_PROP }
         val bookIdProp = templateType.props.single { prop ->
-            prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+            prop.primaryMapping == PrimaryMapping.ID
         }
         val headProp = templateProp.copy(
             id = STORE_PROP,
@@ -736,8 +736,8 @@ class JimmerDtoAnnotationContractTest {
             overrideChain = listOf(STORE_PROP),
             association = true,
             targetTypeId = STORE_TYPE,
-            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
-            associationKind = JimmerAssociationKind.MANY_TO_ONE,
+            primaryMapping = PrimaryMapping.ASSOCIATION,
+            associationKind = AssociationKind.MANY_TO_ONE,
         )
         val tailProp = templateProp.copy(
             id = STORE_NAME_PROP,
@@ -756,7 +756,7 @@ class JimmerDtoAnnotationContractTest {
             declaringTypeId = STORE_TYPE,
             overrideChain = listOf(storeIdPropId),
         )
-        val schema = JimmerImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(
                 templateType.copy(
                     annotations = emptyList(),
@@ -769,7 +769,7 @@ class JimmerDtoAnnotationContractTest {
                     props = listOf(storeIdProp, tailProp),
                     idPropId = storeIdProp.id,
                 ),
-            ).sortedBy(JimmerImmutableType::id)
+            ).sortedBy(ImmutableType::id)
         )
         val templateDtoType = base.graph.types.single()
         val templateDtoProp = base.graph.props.single() as JimmerDtoBaseProp
@@ -836,8 +836,8 @@ class JimmerDtoAnnotationContractTest {
     private fun immutableSchema(
         typeAnnotations: List<LsiAnnotation>,
         propAnnotations: List<LsiAnnotation>,
-    ): JimmerImmutableSchema {
-        val prop = JimmerImmutableProp(
+    ): ImmutableSchema {
+        val prop = ImmutableProp(
             id = NAME_PROP,
             declarationId = NAME_PROP,
             ownerTypeId = BOOK_TYPE,
@@ -854,13 +854,13 @@ class JimmerDtoAnnotationContractTest {
             association = false,
             embedded = false,
             targetTypeId = null,
-            primaryMapping = JimmerImmutablePrimaryMapping.SCALAR,
+            primaryMapping = PrimaryMapping.SCALAR,
             primaryAnnotationTypeId = null,
             defaultContract = null,
-            associationKind = JimmerAssociationKind.NONE,
-            formulaKind = JimmerFormulaKind.NONE,
+            associationKind = AssociationKind.NONE,
+            formulaKind = FormulaKind.NONE,
             mappedBy = null,
-            associationStorage = JimmerAssociationStorageKind.NONE,
+            associationStorage = AssociationStorageKind.NONE,
             transientResolver = null,
             view = null,
             genericTarget = false,
@@ -870,12 +870,12 @@ class JimmerDtoAnnotationContractTest {
             converter = null,
         )
         val props = completeEntityProps(BOOK_TYPE, listOf(prop))
-        return JimmerImmutableSchema(
+        return ImmutableSchema(
             listOf(
-                JimmerImmutableType(
+                ImmutableType(
                     id = BOOK_TYPE,
                     qualifiedName = "demo.Book",
-                    kind = JimmerImmutableTypeKind.ENTITY,
+                    kind = ImmutableTypeKind.ENTITY,
                     documentation = null,
                     annotations = typeAnnotations,
                     typeParameterIds = emptyList(),
@@ -889,7 +889,7 @@ class JimmerDtoAnnotationContractTest {
                     discriminatorValue = null,
                     discriminatorPropId = null,
                     idPropId = props.single { candidate ->
-                        candidate.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                        candidate.primaryMapping == PrimaryMapping.ID
                     }.id,
                     versionPropId = null,
                     logicalDeletedPropId = null,
@@ -1126,7 +1126,7 @@ class JimmerDtoAnnotationContractTest {
 
     private data class Fixture(
         val workspace: LsiWorkspace,
-        val schema: JimmerImmutableSchema,
+        val schema: ImmutableSchema,
         val graph: JimmerDtoRenderGraph,
     )
 

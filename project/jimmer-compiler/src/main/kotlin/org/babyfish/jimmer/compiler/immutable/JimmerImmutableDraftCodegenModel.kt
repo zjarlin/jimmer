@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
@@ -26,7 +28,7 @@ internal data class JimmerImmutableDraftCodegenSchema(
 internal data class JimmerImmutableDraftTypePlan(
     val typeId: LsiSymbolId,
     val qualifiedName: String,
-    val kind: JimmerImmutableTypeKind,
+    val kind: ImmutableTypeKind,
     val sourceLanguage: LsiLanguage,
     val sourcePath: String?,
     val sourceBaseName: String?,
@@ -42,7 +44,7 @@ internal data class JimmerImmutableDraftTypePlan(
     val idPropId: LsiSymbolId?,
     val versionPropId: LsiSymbolId?,
     val logicalDeletedPropId: LsiSymbolId?,
-    val customValidations: List<JimmerValidation>,
+    val customValidations: List<ImmutableValidation>,
     val artifactOriginatingSymbols: Set<LsiSymbolId>,
     val artifactOriginatingSources: List<LsiSource>,
     val dependencySymbols: Set<LsiSymbolId>,

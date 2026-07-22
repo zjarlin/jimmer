@@ -7,9 +7,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiSymbolId
@@ -23,11 +23,11 @@ class JimmerModulePrecompilerTest {
             moduleRequired = true,
         ).compile(
             immutableSchema(
-                "demo.book.Book" to JimmerImmutableTypeKind.ENTITY,
-                "demo.store.Store" to JimmerImmutableTypeKind.ENTITY,
-                "demo.common.Address" to JimmerImmutableTypeKind.EMBEDDABLE,
-                "demo.common.Page" to JimmerImmutableTypeKind.IMMUTABLE,
-                "demo.common.Base" to JimmerImmutableTypeKind.MAPPED_SUPERCLASS,
+                "demo.book.Book" to ImmutableTypeKind.ENTITY,
+                "demo.store.Store" to ImmutableTypeKind.ENTITY,
+                "demo.common.Address" to ImmutableTypeKind.EMBEDDABLE,
+                "demo.common.Page" to ImmutableTypeKind.IMMUTABLE,
+                "demo.common.Base" to ImmutableTypeKind.MAPPED_SUPERCLASS,
             )
         )
 
@@ -83,9 +83,9 @@ class JimmerModulePrecompilerTest {
             )
         ).compile(
             immutableSchema(
-                "alpha.Book" to JimmerImmutableTypeKind.ENTITY,
-                "beta.Book" to JimmerImmutableTypeKind.ENTITY,
-                "beta.URLValue" to JimmerImmutableTypeKind.ENTITY,
+                "alpha.Book" to ImmutableTypeKind.ENTITY,
+                "beta.Book" to ImmutableTypeKind.ENTITY,
+                "beta.URLValue" to ImmutableTypeKind.ENTITY,
             )
         )
 
@@ -115,8 +115,8 @@ class JimmerModulePrecompilerTest {
         )
         val schema = precompiler(JimmerModulePlatform.APT).compile(
             immutableSchema(
-                "demo.Store" to JimmerImmutableTypeKind.ENTITY,
-                "legacy.Changed" to JimmerImmutableTypeKind.EMBEDDABLE,
+                "demo.Store" to ImmutableTypeKind.ENTITY,
+                "legacy.Changed" to ImmutableTypeKind.EMBEDDABLE,
             ),
             state,
         )
@@ -151,7 +151,7 @@ class JimmerModulePrecompilerTest {
 
     @Test
     fun `apt emits empty index plans without immutable models`() {
-        val schema = precompiler(JimmerModulePlatform.APT).compile(JimmerImmutableSchema(emptyList()))
+        val schema = precompiler(JimmerModulePlatform.APT).compile(ImmutableSchema(emptyList()))
 
         assertTrue(schema.summaries.isEmpty())
         assertEquals(2, schema.resources.size)
@@ -163,8 +163,8 @@ class JimmerModulePrecompilerTest {
     @Test
     fun `compilation scope separates cumulative content from current origins`() {
         val immutableSchema = immutableSchema(
-            "demo.Book" to JimmerImmutableTypeKind.ENTITY,
-            "demo.Store" to JimmerImmutableTypeKind.ENTITY,
+            "demo.Book" to ImmutableTypeKind.ENTITY,
+            "demo.Store" to ImmutableTypeKind.ENTITY,
         )
         val bookId = LsiSymbolId.type("demo.Book")
         val storeId = LsiSymbolId.type("demo.Store")
@@ -197,11 +197,11 @@ class JimmerModulePrecompilerTest {
     @Test
     fun `ksp plans entity index and optional module only`() {
         val immutableSchema = immutableSchema(
-            "demo.book.Book" to JimmerImmutableTypeKind.ENTITY,
-            "demo.store.Store" to JimmerImmutableTypeKind.ENTITY,
-            "demo.value.Address" to JimmerImmutableTypeKind.EMBEDDABLE,
+            "demo.book.Book" to ImmutableTypeKind.ENTITY,
+            "demo.store.Store" to ImmutableTypeKind.ENTITY,
+            "demo.value.Address" to ImmutableTypeKind.EMBEDDABLE,
         )
-        val currentTypeIds = immutableSchema.types.map(JimmerImmutableType::id).sorted()
+        val currentTypeIds = immutableSchema.types.map(ImmutableType::id).sorted()
         val compilationSourceTypeIds = (currentTypeIds + LsiSymbolId.type("demo.api.BookApi")).sorted()
         val schema = precompiler(
             platform = JimmerModulePlatform.KSP,
@@ -240,7 +240,7 @@ class JimmerModulePrecompilerTest {
 
     @Test
     fun `ksp resource switch suppresses module and module switch preserves resource`() {
-        val entities = immutableSchema("demo.Book" to JimmerImmutableTypeKind.ENTITY)
+        val entities = immutableSchema("demo.Book" to ImmutableTypeKind.ENTITY)
         val disabledResources = precompiler(
             platform = JimmerModulePlatform.KSP,
             moduleRequired = true,
@@ -259,14 +259,14 @@ class JimmerModulePrecompilerTest {
         val empty = precompiler(
             platform = JimmerModulePlatform.KSP,
             moduleRequired = true,
-        ).compile(JimmerImmutableSchema(emptyList()))
+        ).compile(ImmutableSchema(emptyList()))
         assertNull(empty.module)
         assertTrue(empty.resources.isEmpty())
     }
 
     @Test
     fun `platform and options participate in snapshots and fingerprints`() {
-        val immutableSchema = immutableSchema("demo.Book" to JimmerImmutableTypeKind.ENTITY)
+        val immutableSchema = immutableSchema("demo.Book" to ImmutableTypeKind.ENTITY)
         val apt = precompiler(JimmerModulePlatform.APT).compile(immutableSchema)
         val ksp = precompiler(JimmerModulePlatform.KSP).compile(immutableSchema)
         val renamed = JimmerModulePrecompiler(
@@ -318,17 +318,17 @@ class JimmerModulePrecompilerTest {
     }
 
     private fun immutableSchema(
-        vararg types: Pair<String, JimmerImmutableTypeKind>,
-    ): JimmerImmutableSchema {
-        return JimmerImmutableSchema(
+        vararg types: Pair<String, ImmutableTypeKind>,
+    ): ImmutableSchema {
+        return ImmutableSchema(
             types = types.map { (qualifiedName, kind) ->
                 val typeId = LsiSymbolId.type(qualifiedName)
-                val props = if (kind == JimmerImmutableTypeKind.ENTITY) {
+                val props = if (kind == ImmutableTypeKind.ENTITY) {
                     completeEntityProps(typeId)
                 } else {
                     emptyList()
                 }
-                JimmerImmutableType(
+                ImmutableType(
                     id = typeId,
                     qualifiedName = qualifiedName,
                     kind = kind,
@@ -341,7 +341,7 @@ class JimmerModulePrecompilerTest {
                     inheritanceRootTypeId = null,
                     inheritanceStrategy = null,
                     joinedTableDissociateAction = null,
-                    instantiable = kind == JimmerImmutableTypeKind.ENTITY,
+                    instantiable = kind == ImmutableTypeKind.ENTITY,
                     discriminatorValue = null,
                     discriminatorPropId = null,
                     idPropId = props.singleOrNull()?.id,

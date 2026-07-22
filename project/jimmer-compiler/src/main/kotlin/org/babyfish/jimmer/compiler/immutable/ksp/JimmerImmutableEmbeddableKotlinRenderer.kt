@@ -11,12 +11,12 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
+import site.addzero.lsi.jimmer.ImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
 import org.babyfish.jimmer.compiler.render.ksp.toKotlinTypeName
@@ -27,11 +27,11 @@ import site.addzero.lsi.model.LsiWorkspace
 class JimmerImmutableEmbeddableKotlinRenderer {
 
     fun render(
-        schema: JimmerImmutableSchema,
-        type: JimmerImmutableType,
+        schema: ImmutableSchema,
+        type: ImmutableType,
         workspace: LsiWorkspace,
     ): GeneratedArtifact {
-        require(type.kind == JimmerImmutableTypeKind.EMBEDDABLE) {
+        require(type.kind == ImmutableTypeKind.EMBEDDABLE) {
             "Kotlin immutable embeddable renderer only supports embeddable types: ${type.id.value}"
         }
         return EmbeddableRenderContext(schema, type, workspace).render()
@@ -39,8 +39,8 @@ class JimmerImmutableEmbeddableKotlinRenderer {
 }
 
 private class EmbeddableRenderContext(
-    schema: JimmerImmutableSchema,
-    private val type: JimmerImmutableType,
+    schema: ImmutableSchema,
+    private val type: ImmutableType,
     private val workspace: LsiWorkspace,
 ) {
 
@@ -86,7 +86,7 @@ private class EmbeddableRenderContext(
     }
 
     private fun FileSpec.Builder.addEmbeddedProp(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         nullable: Boolean,
     ) {
         if (!nullable && prop.nullable) {
@@ -165,7 +165,7 @@ private class EmbeddableRenderContext(
             .build()
     }
 
-    private fun typedProp(prop: JimmerImmutableProp): PropertySpec {
+    private fun typedProp(prop: ImmutableProp): PropertySpec {
         val kind = metadata.typedPropKind(prop)
         val typedPropClass = when (kind) {
             JimmerImmutableTypedPropKind.SCALAR -> TYPED_PROP_SCALAR

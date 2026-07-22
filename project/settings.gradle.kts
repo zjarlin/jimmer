@@ -7,6 +7,7 @@ include(
     "lsi-poet",
     "lsi-poet-javapoet",
     "lsi-poet-kotlinpoet",
+    "lsi-jimmer",
     "jimmer-compiler-core",
     "jimmer-compiler",
     "jimmer-sql",

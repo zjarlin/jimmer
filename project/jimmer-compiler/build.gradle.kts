@@ -8,6 +8,7 @@ plugins {
 
 dependencies {
     implementation(projects.jimmerCompilerCore)
+    implementation(projects.lsiJimmer)
     implementation(projects.jimmerDdlCompiler)
     implementation(projects.jimmerMapstructApt)
     implementation(projects.jimmerCore)

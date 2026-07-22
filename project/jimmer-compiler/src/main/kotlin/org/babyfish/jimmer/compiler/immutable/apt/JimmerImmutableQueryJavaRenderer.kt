@@ -14,13 +14,13 @@ import com.squareup.javapoet.TypeVariableName
 import com.squareup.javapoet.WildcardTypeName
 import javax.lang.model.element.Modifier
 import org.babyfish.jimmer.client.meta.Doc
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePropExpressionKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
@@ -35,8 +35,8 @@ import site.addzero.lsi.model.LsiWorkspace
 class JimmerImmutableQueryJavaRenderer {
 
     fun render(
-        schema: JimmerImmutableSchema,
-        type: JimmerImmutableType,
+        schema: ImmutableSchema,
+        type: ImmutableType,
         workspace: LsiWorkspace,
     ): List<GeneratedArtifact> {
         require(type.kind in QUERY_TYPE_KINDS) {
@@ -50,8 +50,8 @@ class JimmerImmutableQueryJavaRenderer {
 }
 
 private class QueryJavaRenderContext(
-    private val schema: JimmerImmutableSchema,
-    private val type: JimmerImmutableType,
+    private val schema: ImmutableSchema,
+    private val type: ImmutableType,
     private val workspace: LsiWorkspace,
 ) {
 
@@ -75,7 +75,7 @@ private class QueryJavaRenderContext(
                 originatingSymbols = propsOriginatingSymbols,
             )
         )
-        if (type.kind != JimmerImmutableTypeKind.ENTITY) {
+        if (type.kind != ImmutableTypeKind.ENTITY) {
             return artifacts
         }
         val tableOriginatingSymbols = metadata.queryOriginatingSymbols(type)
@@ -146,7 +146,7 @@ private class QueryJavaRenderContext(
                         addSuperinterface(superType.propsClassName())
                     }
                 }
-                if (type.kind == JimmerImmutableTypeKind.ENTITY) {
+                if (type.kind == ImmutableTypeKind.ENTITY) {
                     addSuperinterface(ParameterizedTypeName.get(SELECTION, modelClass))
                 }
                 metadata.orderedProps(type).forEach { prop -> addField(typedPropField(prop)) }
@@ -178,7 +178,7 @@ private class QueryJavaRenderContext(
             .build()
     }
 
-    private fun typedPropField(prop: JimmerImmutableProp): FieldSpec {
+    private fun typedPropField(prop: ImmutableProp): FieldSpec {
         val kind = metadata.typedPropKind(prop)
         return FieldSpec.builder(
             ParameterizedTypeName.get(
@@ -339,7 +339,7 @@ private class QueryJavaRenderContext(
     }
 
     private fun propertyMethod(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         tableEx: Boolean,
         withJoinType: Boolean,
         withImplementation: Boolean,
@@ -374,7 +374,7 @@ private class QueryJavaRenderContext(
     }
 
     private fun MethodSpec.Builder.addPropertyImplementation(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         returnType: TypeName,
         withJoinType: Boolean,
     ) {
@@ -431,7 +431,7 @@ private class QueryJavaRenderContext(
     }
 
     private fun propertyReturnType(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         tableEx: Boolean,
     ): TypeName {
         val targetType = metadata.targetType(prop)
@@ -452,7 +452,7 @@ private class QueryJavaRenderContext(
     }
 
     private fun existsMethod(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         withImplementation: Boolean,
     ): MethodSpec? {
         if (!metadata.isEntityAssociation(prop) || !prop.list) {
@@ -489,13 +489,13 @@ private class QueryJavaRenderContext(
     }
 
     private fun associatedIdMethod(
-        prop: JimmerImmutableProp,
+        prop: ImmutableProp,
         tableEx: Boolean,
         withImplementation: Boolean,
     ): MethodSpec? {
         val methodName = metadata.associatedIdPropName(type, prop) ?: return null
         if (
-            prop.primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT ||
+            prop.primaryMapping == PrimaryMapping.TRANSIENT ||
             !metadata.isEntityAssociation(prop) ||
             prop.list != tableEx
         ) {
@@ -805,7 +805,7 @@ private class QueryJavaRenderContext(
             .build()
     }
 
-    private fun remoteIdMethod(idProp: JimmerImmutableProp): MethodSpec {
+    private fun remoteIdMethod(idProp: ImmutableProp): MethodSpec {
         val returnType = propertyReturnType(idProp, tableEx = false)
         return MethodSpec.methodBuilder(idProp.name)
             .addModifiers(Modifier.PUBLIC)
@@ -857,7 +857,7 @@ private class QueryJavaRenderContext(
     }
 }
 
-private fun JimmerImmutableProp.expressionTypeName(
+private fun ImmutableProp.expressionTypeName(
     metadata: JimmerImmutableQueryMetadata,
 ): TypeName {
     val boxedType = type.toJavaTypeName().box()
@@ -892,15 +892,15 @@ private fun JimmerImmutableTypedPropKind.factoryName(): String {
     }
 }
 
-private fun JimmerImmutableType.propsClassName(): ClassName = ClassName.get(packageName, "${simpleName}Props")
+private fun ImmutableType.propsClassName(): ClassName = ClassName.get(packageName, "${simpleName}Props")
 
-private fun JimmerImmutableType.tableClassName(): ClassName = ClassName.get(packageName, "${simpleName}Table")
+private fun ImmutableType.tableClassName(): ClassName = ClassName.get(packageName, "${simpleName}Table")
 
-private fun JimmerImmutableType.tableExClassName(): ClassName = ClassName.get(packageName, "${simpleName}TableEx")
+private fun ImmutableType.tableExClassName(): ClassName = ClassName.get(packageName, "${simpleName}TableEx")
 
-private fun JimmerImmutableType.remoteTableClassName(): ClassName = tableClassName().nestedClass("Remote")
+private fun ImmutableType.remoteTableClassName(): ClassName = tableClassName().nestedClass("Remote")
 
-private fun JimmerImmutableType.propExpressionClassName(): ClassName =
+private fun ImmutableType.propExpressionClassName(): ClassName =
     ClassName.get(packageName, "${simpleName}PropExpression")
 
 private fun suppressAllAnnotation(): AnnotationSpec {
@@ -910,14 +910,14 @@ private fun suppressAllAnnotation(): AnnotationSpec {
 }
 
 private val QUERY_TYPE_KINDS = setOf(
-    JimmerImmutableTypeKind.IMMUTABLE,
-    JimmerImmutableTypeKind.ENTITY,
-    JimmerImmutableTypeKind.MAPPED_SUPERCLASS,
+    ImmutableTypeKind.IMMUTABLE,
+    ImmutableTypeKind.ENTITY,
+    ImmutableTypeKind.MAPPED_SUPERCLASS,
 )
 
 private val SQL_QUERY_TYPE_KINDS = setOf(
-    JimmerImmutableTypeKind.ENTITY,
-    JimmerImmutableTypeKind.MAPPED_SUPERCLASS,
+    ImmutableTypeKind.ENTITY,
+    ImmutableTypeKind.MAPPED_SUPERCLASS,
 )
 
 private val GENERATED_BY = ClassName.get("org.babyfish.jimmer.internal", "GeneratedBy")

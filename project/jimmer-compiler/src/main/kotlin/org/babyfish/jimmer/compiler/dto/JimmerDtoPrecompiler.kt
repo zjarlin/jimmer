@@ -9,9 +9,9 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelection
 import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.hasImmutableMarker
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.isJimmerImmutableType
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
 import org.babyfish.jimmer.dto.compiler.DtoAstException
@@ -30,7 +30,7 @@ import site.addzero.lsi.model.LsiWorkspace
 internal class JimmerDtoPrecompiler {
     fun compile(
         inputDocumentSnapshots: Collection<CompilerInputDocumentSnapshot>,
-        immutableSchema: JimmerImmutableSchema,
+        immutableSchema: ImmutableSchema,
         immutableSemanticRootTypeIds: Set<LsiSymbolId>,
         workspace: LsiWorkspace,
         sourceFilter: JimmerCompilerSourceFilter,
@@ -104,7 +104,7 @@ internal class JimmerDtoPrecompiler {
             }
             val invalidTargetTypeIds = entry.targetTypeIds.filter { targetTypeId ->
                 val workspaceType = workspace[targetTypeId] as? LsiTypeDeclaration
-                workspaceType != null && !workspaceType.hasImmutableMarker()
+                workspaceType != null && !workspaceType.isJimmerImmutableType()
             }
             invalidTargetTypeIds.forEach { targetTypeId ->
                 failures += JimmerDtoCompilerFailure(
@@ -125,7 +125,7 @@ internal class JimmerDtoPrecompiler {
                 entry.targetTypeIds.filterTo(this) { targetTypeId ->
                     val workspaceType = workspace[targetTypeId] as? LsiTypeDeclaration
                     workspaceType == null ||
-                        workspaceType.hasImmutableMarker() && registry[targetTypeId] == null
+                        workspaceType.isJimmerImmutableType() && registry[targetTypeId] == null
                 }
                 snapshot.references
                     .asSequence()
@@ -144,7 +144,7 @@ internal class JimmerDtoPrecompiler {
                         when (reference.kind) {
                             CompilerInputDocumentReferenceKind.MODEL_TYPE ->
                                 declaration == null ||
-                                    declaration.hasImmutableMarker() && registry[typeId] == null
+                                    declaration.isJimmerImmutableType() && registry[typeId] == null
 
                             else -> declaration == null
                         }
@@ -175,7 +175,7 @@ internal class JimmerDtoPrecompiler {
                     false
                 } else {
                     val targetType = workspace[targetTypeId] as? LsiTypeDeclaration
-                    targetType == null || !targetType.hasImmutableMarker() ||
+                    targetType == null || !targetType.isJimmerImmutableType() ||
                         targetTypeId in immutableSemanticRootTypeIds
                 }
             }
@@ -255,7 +255,7 @@ internal class JimmerDtoPrecompiler {
             compiledTypes
                 .map { dtoType -> dtoType.baseType }
                 .filter { baseType ->
-                    baseType.immutableType.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+                    baseType.immutableType.kind == ImmutableTypeKind.MAPPED_SUPERCLASS
                 }
                 .distinctBy(LsiDtoBaseType::id)
                 .forEach { baseType ->
@@ -424,7 +424,7 @@ private fun CompilerInputDocumentSnapshot.resolveStaticReferences(
         .filter { typeId -> sourceFilter.accepts(typeId.requireTypeQualifiedName()) }
         .filter { typeId ->
             val declaration = workspace[typeId] as? LsiTypeDeclaration
-            declaration == null || !declaration.hasImmutableMarker() ||
+            declaration == null || !declaration.isJimmerImmutableType() ||
                 typeId in immutableSemanticRootTypeIds
         }
         .sorted()

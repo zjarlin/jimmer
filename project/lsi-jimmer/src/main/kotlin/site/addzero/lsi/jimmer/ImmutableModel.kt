@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.immutable
+package site.addzero.lsi.jimmer
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
@@ -6,18 +6,18 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiTypeRef
 
-data class JimmerImmutableSchema(
-    val types: List<JimmerImmutableType>,
+data class ImmutableSchema(
+    val types: List<ImmutableType>,
 ) {
 
-    val typesById: Map<LsiSymbolId, JimmerImmutableType> = types.associateBy(JimmerImmutableType::id)
+    val typesById: Map<LsiSymbolId, ImmutableType> = types.associateBy(ImmutableType::id)
 
-    val propsById: Map<LsiSymbolId, JimmerImmutableProp> = types
-        .flatMap(JimmerImmutableType::props)
-        .associateBy(JimmerImmutableProp::id)
+    val propsById: Map<LsiSymbolId, ImmutableProp> = types
+        .flatMap(ImmutableType::props)
+        .associateBy(ImmutableProp::id)
 
     val ownerPropIdByInversePropId: Map<LsiSymbolId, LsiSymbolId> = types
-        .flatMap(JimmerImmutableType::props)
+        .flatMap(ImmutableType::props)
         .mapNotNull { prop ->
             prop.mappedBy?.ownerPropId?.let { ownerPropId -> prop.id to ownerPropId }
         }
@@ -32,28 +32,28 @@ data class JimmerImmutableSchema(
             .mapValues { (_, inversePropIds) -> inversePropIds.sorted() }
 
     val idViewPropIdsByBasePropId: Map<LsiSymbolId, List<LsiSymbolId>> = types
-        .flatMap(JimmerImmutableType::props)
+        .flatMap(ImmutableType::props)
         .mapNotNull { prop ->
-            val view = prop.view as? JimmerImmutableView.Id ?: return@mapNotNull null
+            val view = prop.view as? ImmutableView.Id ?: return@mapNotNull null
             view.basePropId to prop.id
         }
         .groupBy({ (basePropId, _) -> basePropId }, { (_, viewPropId) -> viewPropId })
         .mapValues { (_, viewPropIds) -> viewPropIds.sorted() }
 
     val viewDependencyPathByPropId: Map<LsiSymbolId, List<LsiSymbolId>> = types
-        .flatMap(JimmerImmutableType::props)
+        .flatMap(ImmutableType::props)
         .mapNotNull { prop -> prop.view?.let { view -> prop.id to view.dependencyPropIds } }
         .toMap()
 
     val formulaDependencyPathsByPropId: Map<LsiSymbolId, List<List<LsiSymbolId>>> = types
-        .flatMap(JimmerImmutableType::props)
+        .flatMap(ImmutableType::props)
         .filter { prop -> prop.formulaDependencies.isNotEmpty() }
         .associate { prop ->
-            prop.id to prop.formulaDependencies.map(JimmerFormulaDependency::propIds)
+            prop.id to prop.formulaDependencies.map(FormulaDependency::propIds)
         }
 
     val dependentFormulaPropIdsByPropId: Map<LsiSymbolId, List<LsiSymbolId>> = types
-        .flatMap(JimmerImmutableType::props)
+        .flatMap(ImmutableType::props)
         .flatMap { formulaProp ->
             formulaProp.formulaDependencies.flatMap { dependency ->
                 dependency.propIds.map { dependencyPropId -> dependencyPropId to formulaProp.id }
@@ -93,31 +93,31 @@ data class JimmerImmutableSchema(
     }
 
     private fun validateAssociationMetadata(
-        ownerType: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        ownerType: ImmutableType,
+        prop: ImmutableProp,
     ) {
         val hasJoinSql = prop.annotations.any { annotation -> annotation.type == JOIN_SQL_ANNOTATION }
         if (hasJoinSql) {
             require(
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
-                    prop.associationKind == JimmerAssociationKind.MANY_TO_MANY &&
+                prop.primaryMapping == PrimaryMapping.ASSOCIATION &&
+                    prop.associationKind == AssociationKind.MANY_TO_MANY &&
                     prop.mappedBy == null &&
-                    prop.associationStorage == JimmerAssociationStorageKind.NONE
+                    prop.associationStorage == AssociationStorageKind.NONE
             ) {
                 "Immutable JoinSql association metadata is illegal: ${prop.id.value}"
             }
         }
         when (prop.associationStorage) {
-            JimmerAssociationStorageKind.NONE -> Unit
-            JimmerAssociationStorageKind.COLUMN -> require(
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+            AssociationStorageKind.NONE -> Unit
+            AssociationStorageKind.COLUMN -> require(
+                prop.primaryMapping == PrimaryMapping.ASSOCIATION &&
                     prop.associationKind in COLUMN_ASSOCIATION_KINDS &&
                     prop.mappedBy == null
             ) {
                 "Immutable column association storage is illegal: ${prop.id.value}"
             }
-            JimmerAssociationStorageKind.MIDDLE_TABLE -> require(
-                prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+            AssociationStorageKind.MIDDLE_TABLE -> require(
+                prop.primaryMapping == PrimaryMapping.ASSOCIATION &&
                     prop.associationKind in MIDDLE_TABLE_ASSOCIATION_KINDS &&
                     prop.mappedBy == null
             ) {
@@ -125,15 +125,15 @@ data class JimmerImmutableSchema(
             }
         }
         val mappedBy = prop.mappedBy ?: return
-        require(prop.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION && prop.association) {
+        require(prop.primaryMapping == PrimaryMapping.ASSOCIATION && prop.association) {
             "Only persistent immutable association can declare mappedBy: ${prop.id.value}"
         }
-        require(prop.associationStorage == JimmerAssociationStorageKind.NONE) {
+        require(prop.associationStorage == AssociationStorageKind.NONE) {
             "Inverse immutable association cannot declare storage: ${prop.id.value}"
         }
         val ownerPropId = mappedBy.ownerPropId
         if (ownerPropId == null) {
-            require(ownerType.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS && prop.genericTarget) {
+            require(ownerType.kind == ImmutableTypeKind.MAPPED_SUPERCLASS && prop.genericTarget) {
                 "Only generic mapped-superclass association can have unresolved mappedBy: ${prop.id.value}"
             }
             return
@@ -145,14 +145,14 @@ data class JimmerImmutableSchema(
             "Immutable mappedBy owner property belongs to an unexpected type: ${prop.id.value}"
         }
         require(
-            associationOwner.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION &&
+            associationOwner.primaryMapping == PrimaryMapping.ASSOCIATION &&
                 associationOwner.association &&
                 associationOwner.mappedBy == null
         ) {
             "Immutable mappedBy must reference a direct persistent association: ${prop.id.value}"
         }
         require(
-            associationOwner.associationStorage != JimmerAssociationStorageKind.NONE ||
+            associationOwner.associationStorage != AssociationStorageKind.NONE ||
                 associationOwner.annotations.any { annotation -> annotation.type == JOIN_SQL_ANNOTATION }
         ) {
             "Immutable mappedBy must reference a stored or JoinSql association: ${prop.id.value}"
@@ -196,8 +196,8 @@ data class JimmerImmutableSchema(
     }
 
     private fun validateFormulaDependencies(
-        ownerType: JimmerImmutableType,
-        formulaProp: JimmerImmutableProp,
+        ownerType: ImmutableType,
+        formulaProp: ImmutableProp,
     ) {
         formulaProp.formulaDependencies.forEach { dependency ->
             var expectedOwnerTypeId = ownerType.id
@@ -222,17 +222,17 @@ data class JimmerImmutableSchema(
     }
 
     private fun validateView(
-        ownerType: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        ownerType: ImmutableType,
+        prop: ImmutableProp,
     ) {
         val view = prop.view
-        require((view == null) == (prop.primaryMapping != JimmerImmutablePrimaryMapping.VIEW)) {
+        require((view == null) == (prop.primaryMapping != PrimaryMapping.VIEW)) {
             "Immutable view mapping and typed view metadata must be declared together: ${prop.id.value}"
         }
         when (view) {
             null -> Unit
-            is JimmerImmutableView.Id -> {
-                require(!prop.association && prop.associationKind == JimmerAssociationKind.NONE) {
+            is ImmutableView.Id -> {
+                require(!prop.association && prop.associationKind == AssociationKind.NONE) {
                     "Immutable id-view property must be scalar or scalar-list metadata: ${prop.id.value}"
                 }
                 val baseProp = requireNotNull(propsById[view.basePropId]) {
@@ -244,8 +244,8 @@ data class JimmerImmutableSchema(
                 require(
                     baseProp.association &&
                         (
-                            baseProp.primaryMapping == JimmerImmutablePrimaryMapping.ASSOCIATION ||
-                                baseProp.view is JimmerImmutableView.ManyToMany
+                            baseProp.primaryMapping == PrimaryMapping.ASSOCIATION ||
+                                baseProp.view is ImmutableView.ManyToMany
                             )
                 ) {
                     "Immutable id-view base property must be a persistent association or many-to-many view: " +
@@ -260,11 +260,11 @@ data class JimmerImmutableSchema(
                     }
                 }
                 if (targetIdProp == null) {
-                    require(ownerType.kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS && baseProp.genericTarget) {
+                    require(ownerType.kind == ImmutableTypeKind.MAPPED_SUPERCLASS && baseProp.genericTarget) {
                         "Only generic mapped-superclass id-view can omit target id property: ${prop.id.value}"
                     }
                 } else {
-                    require(targetIdProp.primaryMapping == JimmerImmutablePrimaryMapping.ID) {
+                    require(targetIdProp.primaryMapping == PrimaryMapping.ID) {
                         "Immutable id-view target property must be an id: ${targetIdProp.id.value}"
                     }
                     require(targetIdProp.ownerTypeId == baseProp.targetTypeId) {
@@ -272,11 +272,11 @@ data class JimmerImmutableSchema(
                     }
                 }
             }
-            is JimmerImmutableView.ManyToMany -> {
+            is ImmutableView.ManyToMany -> {
                 require(
                     prop.list &&
                         prop.association &&
-                        prop.associationKind == JimmerAssociationKind.MANY_TO_MANY_VIEW
+                        prop.associationKind == AssociationKind.MANY_TO_MANY_VIEW
                 ) {
                     "Immutable many-to-many view must be a list association: ${prop.id.value}"
                 }
@@ -289,7 +289,7 @@ data class JimmerImmutableSchema(
                 require(baseProp.ownerTypeId == ownerType.id) {
                     "Immutable many-to-many view base property must belong to the same owner: ${prop.id.value}"
                 }
-                require(baseProp.associationKind == JimmerAssociationKind.ONE_TO_MANY) {
+                require(baseProp.associationKind == AssociationKind.ONE_TO_MANY) {
                     "Immutable many-to-many view base property must be one-to-many: ${prop.id.value}"
                 }
                 require(deeperProp.ownerTypeId == baseProp.targetTypeId) {
@@ -298,7 +298,7 @@ data class JimmerImmutableSchema(
                 require(deeperProp.targetTypeId == prop.targetTypeId) {
                     "Immutable many-to-many view deeper property must target view type: ${prop.id.value}"
                 }
-                require(deeperProp.associationKind == JimmerAssociationKind.MANY_TO_ONE) {
+                require(deeperProp.associationKind == AssociationKind.MANY_TO_ONE) {
                     "Immutable many-to-many view deeper property must be many-to-one: ${prop.id.value}"
                 }
             }
@@ -306,19 +306,19 @@ data class JimmerImmutableSchema(
     }
 }
 
-data class JimmerImmutableType(
+data class ImmutableType(
     val id: LsiSymbolId,
     val qualifiedName: String,
-    val kind: JimmerImmutableTypeKind,
+    val kind: ImmutableTypeKind,
     val documentation: String?,
     val annotations: List<LsiAnnotation>,
     val typeParameterIds: List<LsiSymbolId>,
     val superTypeIds: List<LsiSymbolId>,
-    val props: List<JimmerImmutableProp>,
+    val props: List<ImmutableProp>,
     val primarySuperTypeId: LsiSymbolId?,
     val inheritanceRootTypeId: LsiSymbolId?,
-    val inheritanceStrategy: JimmerInheritanceStrategy?,
-    val joinedTableDissociateAction: JimmerJoinedTableDissociateAction?,
+    val inheritanceStrategy: InheritanceStrategy?,
+    val joinedTableDissociateAction: JoinedTableDissociateAction?,
     val instantiable: Boolean,
     val discriminatorValue: String?,
     val discriminatorPropId: LsiSymbolId?,
@@ -333,10 +333,10 @@ data class JimmerImmutableType(
         require(primarySuperTypeId == null || primarySuperTypeId in superTypeIds) {
             "Primary immutable super type must be one of direct super types: ${id.value}"
         }
-        require(!instantiable || kind == JimmerImmutableTypeKind.ENTITY) {
+        require(!instantiable || kind == ImmutableTypeKind.ENTITY) {
             "Only immutable entity type can be instantiable: ${id.value}"
         }
-        require(inheritanceRootTypeId == null || kind == JimmerImmutableTypeKind.ENTITY) {
+        require(inheritanceRootTypeId == null || kind == ImmutableTypeKind.ENTITY) {
             "Only immutable entity type can have an inheritance root: ${id.value}"
         }
         require(inheritanceStrategy == null || inheritanceRootTypeId == id) {
@@ -352,8 +352,8 @@ data class JimmerImmutableType(
             "Immutable inheritance root must declare a joined table dissociate action: ${id.value}"
         }
         require(
-            joinedTableDissociateAction != JimmerJoinedTableDissociateAction.LAX ||
-                inheritanceStrategy == JimmerInheritanceStrategy.JOINED
+            joinedTableDissociateAction != JoinedTableDissociateAction.LAX ||
+                inheritanceStrategy == InheritanceStrategy.JOINED
         ) {
             "LAX joined table dissociate action requires JOINED inheritance: ${id.value}"
         }
@@ -367,39 +367,39 @@ data class JimmerImmutableType(
             "Immutable discriminator property must belong to its type: ${id.value}"
         }
         require(
-            props.filter { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.ID }
-                .map(JimmerImmutableProp::id) == listOfNotNull(idPropId)
+            props.filter { prop -> prop.primaryMapping == PrimaryMapping.ID }
+                .map(ImmutableProp::id) == listOfNotNull(idPropId)
         ) {
             "Immutable id property metadata must match its effective property: ${id.value}"
         }
         require(
-            props.filter { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION }
-                .map(JimmerImmutableProp::id) == listOfNotNull(versionPropId)
+            props.filter { prop -> prop.primaryMapping == PrimaryMapping.VERSION }
+                .map(ImmutableProp::id) == listOfNotNull(versionPropId)
         ) {
             "Immutable version property metadata must match its effective property: ${id.value}"
         }
         require(
-            props.filter { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED }
-                .map(JimmerImmutableProp::id) == listOfNotNull(logicalDeletedPropId)
+            props.filter { prop -> prop.primaryMapping == PrimaryMapping.LOGICAL_DELETED }
+                .map(ImmutableProp::id) == listOfNotNull(logicalDeletedPropId)
         ) {
             "Immutable logical-deleted property metadata must match its effective property: ${id.value}"
         }
         require(
-            kind in setOf(JimmerImmutableTypeKind.ENTITY, JimmerImmutableTypeKind.MAPPED_SUPERCLASS) ||
+            kind in setOf(ImmutableTypeKind.ENTITY, ImmutableTypeKind.MAPPED_SUPERCLASS) ||
                 idPropId == null && versionPropId == null && logicalDeletedPropId == null
         ) {
             "Only immutable entity or mapped superclass can declare identity properties: ${id.value}"
         }
-        require(kind != JimmerImmutableTypeKind.ENTITY || idPropId != null) {
+        require(kind != ImmutableTypeKind.ENTITY || idPropId != null) {
             "Immutable entity must have an id property: ${id.value}"
         }
         require(
-            kind in setOf(JimmerImmutableTypeKind.ENTITY, JimmerImmutableTypeKind.MAPPED_SUPERCLASS) ||
+            kind in setOf(ImmutableTypeKind.ENTITY, ImmutableTypeKind.MAPPED_SUPERCLASS) ||
                 props.none { prop -> prop.defaultContract != null }
         ) {
             "Only immutable entity or mapped superclass can declare property defaults: ${id.value}"
         }
-        require(!acrossMicroServices || kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS) {
+        require(!acrossMicroServices || kind == ImmutableTypeKind.MAPPED_SUPERCLASS) {
             "Only immutable mapped superclass can be across microservices: ${id.value}"
         }
         require(!acrossMicroServices || microServiceName.isEmpty()) {
@@ -407,15 +407,15 @@ data class JimmerImmutableType(
         }
         require(
             microServiceName.isEmpty() ||
-                kind == JimmerImmutableTypeKind.ENTITY ||
-                kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+                kind == ImmutableTypeKind.ENTITY ||
+                kind == ImmutableTypeKind.MAPPED_SUPERCLASS
         ) {
             "Only immutable entity or mapped superclass can declare a micro service name: ${id.value}"
         }
     }
 }
 
-data class JimmerImmutableProp(
+data class ImmutableProp(
     val id: LsiSymbolId,
     val declarationId: LsiSymbolId,
     val ownerTypeId: LsiSymbolId,
@@ -432,25 +432,25 @@ data class JimmerImmutableProp(
     val association: Boolean,
     val embedded: Boolean,
     val targetTypeId: LsiSymbolId?,
-    val primaryMapping: JimmerImmutablePrimaryMapping,
+    val primaryMapping: PrimaryMapping,
     val primaryAnnotationTypeId: LsiSymbolId?,
-    val defaultContract: JimmerImmutableDefault?,
-    val associationKind: JimmerAssociationKind,
-    val formulaKind: JimmerFormulaKind,
-    val mappedBy: JimmerMappedBy?,
-    val associationStorage: JimmerAssociationStorageKind,
-    val transientResolver: JimmerTransientResolver?,
-    val view: JimmerImmutableView?,
+    val defaultContract: ImmutableDefault?,
+    val associationKind: AssociationKind,
+    val formulaKind: FormulaKind,
+    val mappedBy: MappedBy?,
+    val associationStorage: AssociationStorageKind,
+    val transientResolver: TransientResolver?,
+    val view: ImmutableView?,
     val genericTarget: Boolean,
     val remote: Boolean,
     val recursive: Boolean,
-    val validations: List<JimmerValidation>,
-    val converter: JimmerConverter?,
-    val formulaDependencies: List<JimmerFormulaDependency> = emptyList(),
+    val validations: List<ImmutableValidation>,
+    val converter: ImmutableConverter?,
+    val formulaDependencies: List<FormulaDependency> = emptyList(),
 ) {
 
-    val fetchable: Boolean = primaryMapping != JimmerImmutablePrimaryMapping.ID &&
-        (primaryMapping != JimmerImmutablePrimaryMapping.TRANSIENT || transientResolver != null)
+    val fetchable: Boolean = primaryMapping != PrimaryMapping.ID &&
+        (primaryMapping != PrimaryMapping.TRANSIENT || transientResolver != null)
 
     val reverse: Boolean = mappedBy != null
 
@@ -472,53 +472,53 @@ data class JimmerImmutableProp(
                 val annotationValue = requireNotNull(applicationDefaultAnnotations.single().stringValue("value")) {
                     "Immutable application default must declare a typed string value: ${id.value}"
                 }
-                JimmerImmutableDefault.Application(
+                ImmutableDefault.Application(
                     annotationValue = annotationValue,
                     strategy = when {
                         annotationValue.isNotEmpty() ||
-                            primaryMapping == JimmerImmutablePrimaryMapping.VERSION -> {
-                            JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE
+                            primaryMapping == PrimaryMapping.VERSION -> {
+                            ApplicationDefaultStrategy.DECLARED_VALUE
                         }
-                        primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> {
-                            JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED
+                        primaryMapping == PrimaryMapping.LOGICAL_DELETED -> {
+                            ApplicationDefaultStrategy.LOGICAL_DELETED
                         }
                         else -> null
                     },
                 )
             }
-            databaseDefaultAnnotations.isNotEmpty() -> JimmerImmutableDefault.Database(
+            databaseDefaultAnnotations.isNotEmpty() -> ImmutableDefault.Database(
                 expression = databaseDefaultAnnotations.single().databaseDefaultExpression(id),
             )
-            primaryMapping == JimmerImmutablePrimaryMapping.VERSION -> JimmerImmutableDefault.Application(
+            primaryMapping == PrimaryMapping.VERSION -> ImmutableDefault.Application(
                 annotationValue = null,
-                strategy = JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO,
+                strategy = ApplicationDefaultStrategy.VERSION_ZERO,
             )
-            primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED -> JimmerImmutableDefault.Application(
+            primaryMapping == PrimaryMapping.LOGICAL_DELETED -> ImmutableDefault.Application(
                 annotationValue = null,
-                strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+                strategy = ApplicationDefaultStrategy.LOGICAL_DELETED,
             )
             else -> null
         }
         require(defaultContract == expectedDefault) {
             "Immutable default metadata must match its effective annotations: ${id.value}"
         }
-        require(association == (associationKind != JimmerAssociationKind.NONE)) {
+        require(association == (associationKind != AssociationKind.NONE)) {
             "Immutable association flag and kind must be declared together: ${id.value}"
         }
         when (associationKind) {
-            JimmerAssociationKind.ONE_TO_ONE,
-            JimmerAssociationKind.MANY_TO_ONE,
+            AssociationKind.ONE_TO_ONE,
+            AssociationKind.MANY_TO_ONE,
             -> require(!list) {
                 "Immutable to-one association cannot be a list: ${id.value}"
             }
-            JimmerAssociationKind.ONE_TO_MANY,
-            JimmerAssociationKind.MANY_TO_MANY,
-            JimmerAssociationKind.MANY_TO_MANY_VIEW,
+            AssociationKind.ONE_TO_MANY,
+            AssociationKind.MANY_TO_MANY,
+            AssociationKind.MANY_TO_MANY_VIEW,
             -> require(list) {
                 "Immutable to-many association must be a list: ${id.value}"
             }
-            JimmerAssociationKind.NONE,
-            JimmerAssociationKind.IMPLICIT,
+            AssociationKind.NONE,
+            AssociationKind.IMPLICIT,
             -> Unit
         }
         require(!embedded || !association) {
@@ -526,45 +526,45 @@ data class JimmerImmutableProp(
         }
         when (val default = defaultContract) {
             null -> Unit
-            is JimmerImmutableDefault.Application -> {
+            is ImmutableDefault.Application -> {
                 require(
                     primaryMapping in setOf(
-                        JimmerImmutablePrimaryMapping.VERSION,
-                        JimmerImmutablePrimaryMapping.LOGICAL_DELETED,
-                        JimmerImmutablePrimaryMapping.SCALAR,
+                        PrimaryMapping.VERSION,
+                        PrimaryMapping.LOGICAL_DELETED,
+                        PrimaryMapping.SCALAR,
                     ) && !association && !embedded
                 ) {
                     "Application default must belong to a scalar, version or logical-deleted property: ${id.value}"
                 }
                 when (default.strategy) {
                     null -> require(
-                        primaryMapping == JimmerImmutablePrimaryMapping.SCALAR &&
+                        primaryMapping == PrimaryMapping.SCALAR &&
                             default.annotationValue == ""
                     ) {
                         "Empty application default marker must belong to a scalar property: ${id.value}"
                     }
-                    JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE -> require(
+                    ApplicationDefaultStrategy.DECLARED_VALUE -> require(
                         default.annotationValue != null &&
                             (default.annotationValue.isNotEmpty() ||
-                                primaryMapping == JimmerImmutablePrimaryMapping.VERSION)
+                                primaryMapping == PrimaryMapping.VERSION)
                     ) {
                         "Declared application default must preserve its annotation value: ${id.value}"
                     }
-                    JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO -> require(
-                        primaryMapping == JimmerImmutablePrimaryMapping.VERSION && default.annotationValue == null
+                    ApplicationDefaultStrategy.VERSION_ZERO -> require(
+                        primaryMapping == PrimaryMapping.VERSION && default.annotationValue == null
                     ) {
                         "Implicit version default must belong to a version property: ${id.value}"
                     }
-                    JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED -> require(
-                        primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED &&
+                    ApplicationDefaultStrategy.LOGICAL_DELETED -> require(
+                        primaryMapping == PrimaryMapping.LOGICAL_DELETED &&
                             default.annotationValue?.isNotEmpty() != true
                     ) {
                         "Logical-deleted default must belong to a logical-deleted property: ${id.value}"
                     }
                 }
             }
-            is JimmerImmutableDefault.Database -> require(
-                primaryMapping == JimmerImmutablePrimaryMapping.SCALAR &&
+            is ImmutableDefault.Database -> require(
+                primaryMapping == PrimaryMapping.SCALAR &&
                     !association &&
                     !embedded &&
                     annotations.none { annotation ->
@@ -586,31 +586,31 @@ data class JimmerImmutableProp(
         require(!recursive || !genericTarget) {
             "Immutable property with a generic target cannot be recursive: ${id.value}"
         }
-        require(!recursive || view !is JimmerImmutableView.ManyToMany) {
+        require(!recursive || view !is ImmutableView.ManyToMany) {
             "Many-to-many view property cannot be recursive: ${id.value}"
         }
-        require(formulaKind != JimmerFormulaKind.NONE || formulaDependencies.isEmpty()) {
+        require(formulaKind != FormulaKind.NONE || formulaDependencies.isEmpty()) {
             "Only immutable formula property can declare formula dependencies: ${id.value}"
         }
         require(formulaDependencies.distinct() == formulaDependencies) {
             "Immutable formula property cannot contain duplicate dependency paths: ${id.value}"
         }
-        require(transientResolver == null || primaryMapping == JimmerImmutablePrimaryMapping.TRANSIENT) {
+        require(transientResolver == null || primaryMapping == PrimaryMapping.TRANSIENT) {
             "Only immutable transient property can declare a transient resolver: ${id.value}"
         }
         require(mappedBy == null || association) {
             "Only immutable association can declare mappedBy: ${id.value}"
         }
-        require(mappedBy == null || associationStorage == JimmerAssociationStorageKind.NONE) {
+        require(mappedBy == null || associationStorage == AssociationStorageKind.NONE) {
             "Inverse immutable association cannot declare storage: ${id.value}"
         }
-        require(associationStorage == JimmerAssociationStorageKind.NONE || association) {
+        require(associationStorage == AssociationStorageKind.NONE || association) {
             "Only immutable association can declare association storage: ${id.value}"
         }
     }
 }
 
-data class JimmerMappedBy(
+data class MappedBy(
     val name: String,
     val ownerPropId: LsiSymbolId?,
 ) {
@@ -619,7 +619,7 @@ data class JimmerMappedBy(
     }
 }
 
-data class JimmerFormulaDependency(
+data class FormulaDependency(
     val propIds: List<LsiSymbolId>,
 ) {
     init {
@@ -627,29 +627,29 @@ data class JimmerFormulaDependency(
     }
 }
 
-sealed interface JimmerTransientResolver {
+sealed interface TransientResolver {
 
     data class Type(
         val typeId: LsiSymbolId,
-    ) : JimmerTransientResolver
+    ) : TransientResolver
 
     data class Reference(
         val beanName: String,
-    ) : JimmerTransientResolver {
+    ) : TransientResolver {
         init {
             require(beanName.isNotEmpty()) { "Immutable transient resolver bean name cannot be empty" }
         }
     }
 }
 
-data class JimmerValidation(
+data class ImmutableValidation(
     val annotationTypeId: LsiSymbolId,
     val validatorTypeIds: List<LsiSymbolId>,
     val message: String,
     val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
 )
 
-data class JimmerConverter(
+data class ImmutableConverter(
     val converterTypeId: LsiSymbolId,
     val sourceType: LsiTypeRef?,
     val targetType: LsiTypeRef?,
@@ -658,12 +658,12 @@ data class JimmerConverter(
     val propertyNullable: Boolean,
 )
 
-sealed interface JimmerImmutableDefault {
+sealed interface ImmutableDefault {
 
     data class Application(
         val annotationValue: String?,
-        val strategy: JimmerImmutableApplicationDefaultStrategy?,
-    ) : JimmerImmutableDefault {
+        val strategy: ApplicationDefaultStrategy?,
+    ) : ImmutableDefault {
         init {
             require(annotationValue != null || strategy != null) {
                 "Immutable application default must declare an annotation value or insert strategy"
@@ -673,33 +673,33 @@ sealed interface JimmerImmutableDefault {
 
     data class Database(
         val expression: String?,
-    ) : JimmerImmutableDefault
+    ) : ImmutableDefault
 }
 
-enum class JimmerImmutableApplicationDefaultStrategy {
+enum class ApplicationDefaultStrategy {
     DECLARED_VALUE,
     VERSION_ZERO,
     LOGICAL_DELETED,
 }
 
-enum class JimmerImmutableTypeKind {
+enum class ImmutableTypeKind {
     IMMUTABLE,
     ENTITY,
     MAPPED_SUPERCLASS,
     EMBEDDABLE,
 }
 
-enum class JimmerInheritanceStrategy {
+enum class InheritanceStrategy {
     SINGLE_TABLE,
     JOINED,
 }
 
-enum class JimmerJoinedTableDissociateAction {
+enum class JoinedTableDissociateAction {
     DELETE,
     LAX,
 }
 
-enum class JimmerImmutablePrimaryMapping {
+enum class PrimaryMapping {
     ID,
     VERSION,
     LOGICAL_DELETED,
@@ -711,7 +711,7 @@ enum class JimmerImmutablePrimaryMapping {
     SCALAR,
 }
 
-enum class JimmerAssociationKind {
+enum class AssociationKind {
     NONE,
     IMPLICIT,
     ONE_TO_ONE,
@@ -721,36 +721,36 @@ enum class JimmerAssociationKind {
     MANY_TO_MANY_VIEW,
 }
 
-enum class JimmerAssociationStorageKind {
+enum class AssociationStorageKind {
     NONE,
     COLUMN,
     MIDDLE_TABLE,
 }
 
-internal fun JimmerAssociationKind.isInverseOf(ownerKind: JimmerAssociationKind): Boolean {
+internal fun AssociationKind.isInverseOf(ownerKind: AssociationKind): Boolean {
     return when (ownerKind) {
-        JimmerAssociationKind.ONE_TO_ONE -> this == JimmerAssociationKind.ONE_TO_ONE
-        JimmerAssociationKind.MANY_TO_ONE -> this == JimmerAssociationKind.ONE_TO_MANY
-        JimmerAssociationKind.MANY_TO_MANY -> this == JimmerAssociationKind.MANY_TO_MANY
-        JimmerAssociationKind.NONE,
-        JimmerAssociationKind.IMPLICIT,
-        JimmerAssociationKind.ONE_TO_MANY,
-        JimmerAssociationKind.MANY_TO_MANY_VIEW,
+        AssociationKind.ONE_TO_ONE -> this == AssociationKind.ONE_TO_ONE
+        AssociationKind.MANY_TO_ONE -> this == AssociationKind.ONE_TO_MANY
+        AssociationKind.MANY_TO_MANY -> this == AssociationKind.MANY_TO_MANY
+        AssociationKind.NONE,
+        AssociationKind.IMPLICIT,
+        AssociationKind.ONE_TO_MANY,
+        AssociationKind.MANY_TO_MANY_VIEW,
         -> false
     }
 }
 
 internal val COLUMN_ASSOCIATION_KINDS = setOf(
-    JimmerAssociationKind.ONE_TO_ONE,
-    JimmerAssociationKind.MANY_TO_ONE,
+    AssociationKind.ONE_TO_ONE,
+    AssociationKind.MANY_TO_ONE,
 )
 
-internal val MIDDLE_TABLE_ASSOCIATION_KINDS = COLUMN_ASSOCIATION_KINDS + JimmerAssociationKind.MANY_TO_MANY
+internal val MIDDLE_TABLE_ASSOCIATION_KINDS = COLUMN_ASSOCIATION_KINDS + AssociationKind.MANY_TO_MANY
 
 internal val LIST_ASSOCIATION_KINDS = setOf(
-    JimmerAssociationKind.ONE_TO_MANY,
-    JimmerAssociationKind.MANY_TO_MANY,
-    JimmerAssociationKind.MANY_TO_MANY_VIEW,
+    AssociationKind.ONE_TO_MANY,
+    AssociationKind.MANY_TO_MANY,
+    AssociationKind.MANY_TO_MANY_VIEW,
 )
 
 private val JOIN_SQL_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.JoinSql")
@@ -775,21 +775,21 @@ private fun LsiAnnotation.databaseDefaultExpression(propId: LsiSymbolId): String
     return value.value.takeIf(String::isNotBlank)
 }
 
-enum class JimmerFormulaKind {
+enum class FormulaKind {
     NONE,
     SQL,
     LANGUAGE,
     ABSTRACT,
 }
 
-sealed interface JimmerImmutableView {
+sealed interface ImmutableView {
 
     val dependencyPropIds: List<LsiSymbolId>
 
     data class Id(
         val basePropId: LsiSymbolId,
         val targetIdPropId: LsiSymbolId?,
-    ) : JimmerImmutableView {
+    ) : ImmutableView {
         override val dependencyPropIds: List<LsiSymbolId> =
             listOfNotNull(basePropId, targetIdPropId)
     }
@@ -797,7 +797,7 @@ sealed interface JimmerImmutableView {
     data class ManyToMany(
         val basePropId: LsiSymbolId,
         val deeperPropId: LsiSymbolId,
-    ) : JimmerImmutableView {
+    ) : ImmutableView {
         override val dependencyPropIds: List<LsiSymbolId> = listOf(basePropId, deeperPropId)
     }
 }

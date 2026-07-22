@@ -18,7 +18,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTemporalConstr
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTemporalTarget
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftValidationFailure
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftValidationStep
-import org.babyfish.jimmer.compiler.immutable.JimmerValidation
+import site.addzero.lsi.jimmer.ImmutableValidation
 import org.babyfish.jimmer.compiler.immutable.legacyUpper
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 
@@ -283,7 +283,7 @@ internal class JimmerImmutableDraftKotlinValidationRenderer(
         }
     }
 
-    private fun typeValidatorProperty(validation: JimmerValidation): PropertySpec {
+    private fun typeValidatorProperty(validation: ImmutableValidation): PropertySpec {
         val annotationName = validation.annotationTypeId.requireTypeQualifiedName()
         return PropertySpec.builder(
             typeValidatorFieldName(annotationName),

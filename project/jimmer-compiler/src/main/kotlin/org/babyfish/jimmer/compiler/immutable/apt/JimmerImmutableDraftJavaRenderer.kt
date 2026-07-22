@@ -29,7 +29,7 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftPropPlan
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftRuntimePropKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftTypePlan
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.render.apt.toJavaAnnotationSpecPreservingArgumentOrder
 import org.babyfish.jimmer.compiler.render.apt.toJavaTypeName
 import org.babyfish.jimmer.compiler.render.apt.toJavaTypeVariableName
@@ -1884,7 +1884,7 @@ private class DraftTypeRenderer(
             accessorStyle == org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftAccessorStyle.JAVA_BEAN_IS
 
     private val JimmerImmutableDraftTypePlan.isMappedSuperclass: Boolean
-        get() = kind == JimmerImmutableTypeKind.MAPPED_SUPERCLASS
+        get() = kind == ImmutableTypeKind.MAPPED_SUPERCLASS
 
     private val JimmerImmutableDraftTypePlan.packageName: String
         get() = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")

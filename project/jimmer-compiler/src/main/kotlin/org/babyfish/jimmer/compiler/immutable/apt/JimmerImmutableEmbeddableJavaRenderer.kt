@@ -10,12 +10,12 @@ import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeSpec
 import javax.lang.model.element.Modifier
 import org.babyfish.jimmer.client.meta.Doc
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
+import site.addzero.lsi.jimmer.ImmutableProp
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePropExpressionKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableQueryMetadata
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypedPropKind
 import org.babyfish.jimmer.compiler.immutable.packageName
 import org.babyfish.jimmer.compiler.immutable.simpleName
@@ -27,11 +27,11 @@ import site.addzero.lsi.model.LsiWorkspace
 class JimmerImmutableEmbeddableJavaRenderer {
 
     fun render(
-        schema: JimmerImmutableSchema,
-        type: JimmerImmutableType,
+        schema: ImmutableSchema,
+        type: ImmutableType,
         workspace: LsiWorkspace,
     ): List<GeneratedArtifact> {
-        require(type.kind == JimmerImmutableTypeKind.EMBEDDABLE) {
+        require(type.kind == ImmutableTypeKind.EMBEDDABLE) {
             "Java immutable embeddable renderer only supports embeddable types: ${type.id.value}"
         }
         val metadata = JimmerImmutableQueryMetadata(schema, workspace)
@@ -66,7 +66,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 
     private fun propsType(
-        type: JimmerImmutableType,
+        type: ImmutableType,
         metadata: JimmerImmutableQueryMetadata,
     ): TypeSpec {
         return TypeSpec.interfaceBuilder(type.propsClassName().simpleName())
@@ -79,8 +79,8 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 
     private fun typedPropField(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        type: ImmutableType,
+        prop: ImmutableProp,
         metadata: JimmerImmutableQueryMetadata,
     ): FieldSpec {
         val kind = metadata.typedPropKind(prop)
@@ -107,7 +107,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 
     private fun propExpressionType(
-        type: JimmerImmutableType,
+        type: ImmutableType,
         metadata: JimmerImmutableQueryMetadata,
     ): TypeSpec {
         return TypeSpec.classBuilder(type.propExpressionClassName().simpleName())
@@ -123,7 +123,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
             .build()
     }
 
-    private fun rawConstructor(type: JimmerImmutableType): MethodSpec {
+    private fun rawConstructor(type: ImmutableType): MethodSpec {
         return MethodSpec.constructorBuilder()
             .addModifiers(Modifier.PUBLIC)
             .addParameter(ParameterizedTypeName.get(EMBEDDED_PROP_EXPRESSION, type.className()), "raw")
@@ -131,7 +131,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
             .build()
     }
 
-    private fun baseTableConstructor(type: JimmerImmutableType): MethodSpec {
+    private fun baseTableConstructor(type: ImmutableType): MethodSpec {
         return MethodSpec.constructorBuilder()
             .addModifiers(Modifier.PUBLIC)
             .addParameter(type.propExpressionClassName(), "base")
@@ -141,8 +141,8 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 
     private fun propMethod(
-        type: JimmerImmutableType,
-        prop: JimmerImmutableProp,
+        type: ImmutableType,
+        prop: ImmutableProp,
         metadata: JimmerImmutableQueryMetadata,
     ): MethodSpec {
         val targetType = metadata.targetType(prop)
@@ -172,7 +172,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
             .build()
     }
 
-    private fun baseTableOwnerMethod(type: JimmerImmutableType): MethodSpec {
+    private fun baseTableOwnerMethod(type: ImmutableType): MethodSpec {
         return MethodSpec.methodBuilder("__baseTableOwner")
             .addModifiers(Modifier.PUBLIC)
             .addAnnotation(Override::class.java)
@@ -183,7 +183,7 @@ class JimmerImmutableEmbeddableJavaRenderer {
     }
 }
 
-private fun JimmerImmutableProp.expressionTypeName(
+private fun ImmutableProp.expressionTypeName(
     metadata: JimmerImmutableQueryMetadata,
 ): TypeName {
     val boxedType = type.toJavaTypeName().box()
@@ -218,14 +218,14 @@ private fun JimmerImmutableTypedPropKind.factoryName(): String {
     }
 }
 
-private fun JimmerImmutableType.className(): ClassName = ClassName.bestGuess(qualifiedName)
+private fun ImmutableType.className(): ClassName = ClassName.bestGuess(qualifiedName)
 
-private fun JimmerImmutableType.propsClassName(): ClassName = ClassName.get(packageName, "${simpleName}Props")
+private fun ImmutableType.propsClassName(): ClassName = ClassName.get(packageName, "${simpleName}Props")
 
-private fun JimmerImmutableType.propExpressionClassName(): ClassName =
+private fun ImmutableType.propExpressionClassName(): ClassName =
     ClassName.get(packageName, "${simpleName}PropExpression")
 
-private fun JimmerImmutableType.generatedAnnotation(): AnnotationSpec {
+private fun ImmutableType.generatedAnnotation(): AnnotationSpec {
     return AnnotationSpec.builder(GENERATED_BY)
         .addMember("type", "\$T.class", className())
         .build()

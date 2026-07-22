@@ -1,5 +1,11 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
@@ -7,17 +13,17 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
 
 internal class JimmerImmutableFetcherMetadata(
-    private val schema: JimmerImmutableSchema,
+    private val schema: ImmutableSchema,
 ) {
 
-    fun generatedTypes(currentTypeIds: Set<LsiSymbolId>): List<JimmerImmutableType> {
+    fun generatedTypes(currentTypeIds: Set<LsiSymbolId>): List<ImmutableType> {
         return currentTypeIds
             .mapNotNull(schema.typesById::get)
             .filter { type ->
-                type.kind == JimmerImmutableTypeKind.ENTITY ||
-                    type.kind == JimmerImmutableTypeKind.EMBEDDABLE
+                type.kind == ImmutableTypeKind.ENTITY ||
+                    type.kind == ImmutableTypeKind.EMBEDDABLE
             }
-            .sortedBy(JimmerImmutableType::qualifiedName)
+            .sortedBy(ImmutableType::qualifiedName)
     }
 
     fun validateGenerationContracts(currentTypeIds: Set<LsiSymbolId>) {
@@ -27,7 +33,7 @@ internal class JimmerImmutableFetcherMetadata(
             }
             val conflictProp = type.props.firstOrNull { prop -> prop.name == "forType" }
                 ?: return@forEach
-            throw JimmerImmutablePrecompileException(
+            throw ImmutablePrecompileException(
                 declarationId = conflictProp.declarationId,
                 message = "Illegal property name 'forType', it conflicts with the generated fetcher method " +
                     "for inheritance type branches",
@@ -35,33 +41,33 @@ internal class JimmerImmutableFetcherMetadata(
         }
     }
 
-    fun targetType(prop: JimmerImmutableProp): JimmerImmutableType? {
+    fun targetType(prop: ImmutableProp): ImmutableType? {
         return prop.targetTypeId?.let(schema.typesById::get)
     }
 
-    fun isEntityAssociation(prop: JimmerImmutableProp): Boolean {
-        return prop.association && targetType(prop)?.kind == JimmerImmutableTypeKind.ENTITY
+    fun isEntityAssociation(prop: ImmutableProp): Boolean {
+        return prop.association && targetType(prop)?.kind == ImmutableTypeKind.ENTITY
     }
 
-    fun hasAnnotation(prop: JimmerImmutableProp, annotationTypeId: LsiSymbolId): Boolean {
+    fun hasAnnotation(prop: ImmutableProp, annotationTypeId: LsiSymbolId): Boolean {
         return prop.annotations.any { annotation -> annotation.type == annotationTypeId }
     }
 
-    fun idOnlyAssociationProp(prop: JimmerImmutableProp): JimmerImmutableProp {
-        val view = prop.view as? JimmerImmutableView.Id ?: return prop
+    fun idOnlyAssociationProp(prop: ImmutableProp): ImmutableProp {
+        val view = prop.view as? ImmutableView.Id ?: return prop
         return schema.propsById.getValue(view.basePropId)
     }
 
-    fun strictTypeBranches(type: JimmerImmutableType): List<JimmerImmutableType> {
-        if (type.kind != JimmerImmutableTypeKind.ENTITY || type.inheritanceRootTypeId == null) {
+    fun strictTypeBranches(type: ImmutableType): List<ImmutableType> {
+        if (type.kind != ImmutableTypeKind.ENTITY || type.inheritanceRootTypeId == null) {
             return emptyList()
         }
         return schema.types
             .filter { candidate -> candidate.id != type.id && candidate.isPrimarySubtypeOf(type.id) }
-            .sortedBy(JimmerImmutableType::qualifiedName)
+            .sortedBy(ImmutableType::qualifiedName)
     }
 
-    fun aggregationMode(type: JimmerImmutableType): ArtifactAggregationMode {
+    fun aggregationMode(type: ImmutableType): ArtifactAggregationMode {
         return if (branchDependent(type)) {
             ArtifactAggregationMode.AGGREGATING
         } else {
@@ -69,18 +75,18 @@ internal class JimmerImmutableFetcherMetadata(
         }
     }
 
-    fun branchDependent(type: JimmerImmutableType): Boolean {
-        return type.kind == JimmerImmutableTypeKind.ENTITY && type.inheritanceRootTypeId != null
+    fun branchDependent(type: ImmutableType): Boolean {
+        return type.kind == ImmutableTypeKind.ENTITY && type.inheritanceRootTypeId != null
     }
 
-    fun originatingSymbols(type: JimmerImmutableType): Set<LsiSymbolId> {
+    fun originatingSymbols(type: ImmutableType): Set<LsiSymbolId> {
         return buildSet {
             add(type.id)
-            strictTypeBranches(type).mapTo(this, JimmerImmutableType::id)
+            strictTypeBranches(type).mapTo(this, ImmutableType::id)
         }
     }
 
-    fun sourceBaseName(type: JimmerImmutableType, workspace: LsiWorkspace): String {
+    fun sourceBaseName(type: ImmutableType, workspace: LsiWorkspace): String {
         val declaration = workspace[type.id] as? LsiTypeDeclaration
             ?: error("Cannot resolve immutable source declaration '${type.id.value}'")
         val source = declaration.origin.source
@@ -88,7 +94,7 @@ internal class JimmerImmutableFetcherMetadata(
         return source.fileNameWithoutExtension()
     }
 
-    private fun JimmerImmutableType.isPrimarySubtypeOf(superTypeId: LsiSymbolId): Boolean {
+    private fun ImmutableType.isPrimarySubtypeOf(superTypeId: LsiSymbolId): Boolean {
         var currentTypeId = primarySuperTypeId
         val visited = mutableSetOf<LsiSymbolId>()
         while (currentTypeId != null && visited.add(currentTypeId)) {
@@ -101,10 +107,10 @@ internal class JimmerImmutableFetcherMetadata(
     }
 }
 
-internal val JimmerImmutableType.packageName: String
+internal val ImmutableType.packageName: String
     get() = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
 
-internal val JimmerImmutableType.simpleName: String
+internal val ImmutableType.simpleName: String
     get() = qualifiedName.substringAfterLast('.')
 
 private fun LsiSource.fileNameWithoutExtension(): String {

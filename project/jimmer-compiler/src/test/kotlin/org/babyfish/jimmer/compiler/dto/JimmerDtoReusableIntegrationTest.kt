@@ -17,17 +17,17 @@ import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationKind
-import org.babyfish.jimmer.compiler.immutable.JimmerAssociationStorageKind
-import org.babyfish.jimmer.compiler.immutable.JimmerFormulaKind
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaKind
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrimaryMapping
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableType
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableTypeKind
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.core.LsiLanguage
@@ -311,7 +311,7 @@ class JimmerDtoReusableIntegrationTest {
             annotations = listOf(LsiAnnotation(ENTITY_ANNOTATION_TYPE_ID)),
             memberIds = IMMUTABLE_SCHEMA.typesById.getValue(BOOK_TYPE_ID)
                 .props
-                .map(JimmerImmutableProp::id),
+                .map(ImmutableProp::id),
         )
         val store = typeDeclaration(
             id = STORE_TYPE_ID,
@@ -320,7 +320,7 @@ class JimmerDtoReusableIntegrationTest {
             annotations = listOf(LsiAnnotation(ENTITY_ANNOTATION_TYPE_ID)),
             memberIds = IMMUTABLE_SCHEMA.typesById.getValue(STORE_TYPE_ID)
                 .props
-                .map(JimmerImmutableProp::id),
+                .map(ImmutableProp::id),
         )
         val properties = IMMUTABLE_SCHEMA.types.flatMap { type ->
             type.props.map { prop ->
@@ -411,7 +411,7 @@ class JimmerDtoReusableIntegrationTest {
         val BINARY_ORIGIN = LsiOrigin(LsiOriginKind.BINARY)
         val REFERENCE_FREEZER = CompilerInputDocumentReferenceFreezer()
 
-        val IMMUTABLE_SCHEMA = JimmerImmutableSchema(
+        val IMMUTABLE_SCHEMA = ImmutableSchema(
             listOf(
                 immutableType(
                     id = BOOK_TYPE_ID,
@@ -420,14 +420,14 @@ class JimmerDtoReusableIntegrationTest {
                             ownerTypeId = BOOK_TYPE_ID,
                             name = "id",
                             type = LONG_TYPE,
-                            primaryMapping = JimmerImmutablePrimaryMapping.ID,
+                            primaryMapping = PrimaryMapping.ID,
                         ),
                         prop(
                             ownerTypeId = BOOK_TYPE_ID,
                             name = "store",
                             type = LsiDeclaredType(STORE_TYPE_ID),
-                            primaryMapping = JimmerImmutablePrimaryMapping.ASSOCIATION,
-                            associationKind = JimmerAssociationKind.MANY_TO_ONE,
+                            primaryMapping = PrimaryMapping.ASSOCIATION,
+                            associationKind = AssociationKind.MANY_TO_ONE,
                         ),
                     ),
                 ),
@@ -438,7 +438,7 @@ class JimmerDtoReusableIntegrationTest {
                             ownerTypeId = STORE_TYPE_ID,
                             name = "id",
                             type = LONG_TYPE,
-                            primaryMapping = JimmerImmutablePrimaryMapping.ID,
+                            primaryMapping = PrimaryMapping.ID,
                         ),
                         prop(
                             ownerTypeId = STORE_TYPE_ID,
@@ -452,13 +452,13 @@ class JimmerDtoReusableIntegrationTest {
 
         fun immutableType(
             id: LsiSymbolId,
-            props: List<JimmerImmutableProp>,
-        ): JimmerImmutableType {
+            props: List<ImmutableProp>,
+        ): ImmutableType {
             val completeProps = completeEntityProps(id, props)
-            return JimmerImmutableType(
+            return ImmutableType(
                 id = id,
                 qualifiedName = id.requireTypeQualifiedName(),
-                kind = JimmerImmutableTypeKind.ENTITY,
+                kind = ImmutableTypeKind.ENTITY,
                 documentation = null,
                 annotations = emptyList(),
                 typeParameterIds = emptyList(),
@@ -472,13 +472,13 @@ class JimmerDtoReusableIntegrationTest {
                 discriminatorValue = null,
                 discriminatorPropId = null,
                 idPropId = completeProps.singleOrNull { prop ->
-                    prop.primaryMapping == JimmerImmutablePrimaryMapping.ID
+                    prop.primaryMapping == PrimaryMapping.ID
                 }?.id,
                 versionPropId = completeProps.singleOrNull { prop ->
-                    prop.primaryMapping == JimmerImmutablePrimaryMapping.VERSION
+                    prop.primaryMapping == PrimaryMapping.VERSION
                 }?.id,
                 logicalDeletedPropId = completeProps.singleOrNull { prop ->
-                    prop.primaryMapping == JimmerImmutablePrimaryMapping.LOGICAL_DELETED
+                    prop.primaryMapping == PrimaryMapping.LOGICAL_DELETED
                 }?.id,
                 acrossMicroServices = false,
                 microServiceName = "",
@@ -489,11 +489,11 @@ class JimmerDtoReusableIntegrationTest {
             ownerTypeId: LsiSymbolId,
             name: String,
             type: LsiTypeRef,
-            primaryMapping: JimmerImmutablePrimaryMapping = JimmerImmutablePrimaryMapping.SCALAR,
-            associationKind: JimmerAssociationKind = JimmerAssociationKind.NONE,
-        ): JimmerImmutableProp {
+            primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
+            associationKind: AssociationKind = AssociationKind.NONE,
+        ): ImmutableProp {
             val id = LsiSymbolId.property(ownerTypeId, name)
-            return JimmerImmutableProp(
+            return ImmutableProp(
                 id = id,
                 declarationId = id,
                 ownerTypeId = ownerTypeId,
@@ -507,9 +507,9 @@ class JimmerDtoReusableIntegrationTest {
                 overridden = false,
                 nullable = false,
                 list = false,
-                association = associationKind != JimmerAssociationKind.NONE,
+                association = associationKind != AssociationKind.NONE,
                 embedded = false,
-                targetTypeId = if (associationKind == JimmerAssociationKind.NONE) {
+                targetTypeId = if (associationKind == AssociationKind.NONE) {
                     null
                 } else {
                     (type as LsiDeclaredType).declarationId
@@ -518,14 +518,14 @@ class JimmerDtoReusableIntegrationTest {
                 primaryAnnotationTypeId = null,
                 defaultContract = null,
                 associationKind = associationKind,
-                formulaKind = JimmerFormulaKind.NONE,
+                formulaKind = FormulaKind.NONE,
                 mappedBy = null,
                 associationStorage = when (associationKind) {
-                    JimmerAssociationKind.ONE_TO_ONE,
-                    JimmerAssociationKind.MANY_TO_ONE,
-                    -> JimmerAssociationStorageKind.COLUMN
-                    JimmerAssociationKind.MANY_TO_MANY -> JimmerAssociationStorageKind.MIDDLE_TABLE
-                    else -> JimmerAssociationStorageKind.NONE
+                    AssociationKind.ONE_TO_ONE,
+                    AssociationKind.MANY_TO_ONE,
+                    -> AssociationStorageKind.COLUMN
+                    AssociationKind.MANY_TO_MANY -> AssociationStorageKind.MIDDLE_TABLE
+                    else -> AssociationStorageKind.NONE
                 },
                 transientResolver = null,
                 view = null,

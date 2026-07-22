@@ -1,5 +1,22 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.ApplicationDefaultStrategy
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaDependency
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.ImmutableDefault
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.InheritanceStrategy
+import site.addzero.lsi.jimmer.JoinedTableDissociateAction
+import site.addzero.lsi.jimmer.TransientResolver
+import site.addzero.lsi.jimmer.fingerprint
+import site.addzero.lsi.jimmer.jimmerTypeSignature
+import site.addzero.lsi.jimmer.normalizedSnapshot
+import site.addzero.lsi.jimmer.toImmutableSchema
 import com.google.devtools.ksp.impl.KotlinSymbolProcessing
 import com.google.devtools.ksp.processing.KSPJvmConfig
 import com.google.devtools.ksp.processing.KSPLogger
@@ -101,8 +118,8 @@ class JimmerImmutableFrontendParityTest {
         )
 
         val root = aptSchema.types.single { type -> type.qualifiedName == "demo.Asset" }
-        assertEquals(JimmerInheritanceStrategy.JOINED, root.inheritanceStrategy)
-        assertEquals(JimmerJoinedTableDissociateAction.LAX, root.joinedTableDissociateAction)
+        assertEquals(InheritanceStrategy.JOINED, root.inheritanceStrategy)
+        assertEquals(JoinedTableDissociateAction.LAX, root.joinedTableDissociateAction)
         assertEquals(LsiSymbolId.type("demo.Asset"), root.inheritanceRootTypeId)
         assertFalse(root.instantiable)
         assertEquals(LsiSymbolId.property(root.id, "kind"), root.discriminatorPropId)
@@ -121,7 +138,7 @@ class JimmerImmutableFrontendParityTest {
         val storeProp = catalogBook.props.single { prop -> prop.name == "store" }
         val storeIdProp = catalogBook.props.single { prop -> prop.name == "storeId" }
         assertEquals(
-            JimmerImmutableView.Id(
+            ImmutableView.Id(
                 basePropId = storeProp.id,
                 targetIdPropId = LsiSymbolId.property(LsiSymbolId.type("demo.Store"), "id"),
             ),
@@ -129,7 +146,7 @@ class JimmerImmutableFrontendParityTest {
         )
         val authorsProp = catalogBook.props.single { prop -> prop.name == "authors" }
         assertEquals(
-            JimmerImmutableView.ManyToMany(
+            ImmutableView.ManyToMany(
                 basePropId = LsiSymbolId.property(catalogBook.id, "links"),
                 deeperPropId = LsiSymbolId.property(LsiSymbolId.type("demo.BookAuthor"), "author"),
             ),
@@ -137,7 +154,7 @@ class JimmerImmutableFrontendParityTest {
         )
         val authorIdsProp = catalogBook.props.single { prop -> prop.name == "authorIds" }
         assertEquals(
-            JimmerImmutableView.Id(
+            ImmutableView.Id(
                 basePropId = authorsProp.id,
                 targetIdPropId = LsiSymbolId.property(LsiSymbolId.type("demo.Author"), "id"),
             ),
@@ -162,9 +179,9 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(LsiSymbolId.property(record.id, "version"), record.versionPropId)
         assertEquals(LsiSymbolId.property(record.id, "deleted"), record.logicalDeletedPropId)
         assertEquals(
-            JimmerImmutableDefault.Application(
+            ImmutableDefault.Application(
                 annotationValue = null,
-                strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+                strategy = ApplicationDefaultStrategy.LOGICAL_DELETED,
             ),
             record.props.single { prop -> prop.name == "deleted" }.defaultContract,
         )
@@ -172,9 +189,9 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(LsiSymbolId.property(timed.id, "deletedAt"), timed.logicalDeletedPropId)
         assertTrue(timed.props.single { prop -> prop.name == "deletedAt" }.nullable)
         assertEquals(
-            JimmerImmutableDefault.Application(
+            ImmutableDefault.Application(
                 annotationValue = null,
-                strategy = JimmerImmutableApplicationDefaultStrategy.LOGICAL_DELETED,
+                strategy = ApplicationDefaultStrategy.LOGICAL_DELETED,
             ),
             timed.props.single { prop -> prop.name == "deletedAt" }.defaultContract,
         )
@@ -182,9 +199,9 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(LsiSymbolId.property(stateful.id, "state"), stateful.logicalDeletedPropId)
         assertTrue(stateful.props.single { prop -> prop.name == "state" }.nullable)
         assertEquals(
-            JimmerImmutableDefault.Application(
+            ImmutableDefault.Application(
                 annotationValue = "ALIVE",
-                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+                strategy = ApplicationDefaultStrategy.DECLARED_VALUE,
             ),
             stateful.props.single { prop -> prop.name == "state" }.defaultContract,
         )
@@ -364,7 +381,7 @@ class JimmerImmutableFrontendParityTest {
         val kspSchema = assertNotNull(ksp.schema)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(
-            JimmerFormulaKind.LANGUAGE,
+            FormulaKind.LANGUAGE,
             aptSchema.types.single().props.single { prop -> prop.name == "fullName" }.formulaKind,
         )
     }
@@ -491,9 +508,9 @@ class JimmerImmutableFrontendParityTest {
         assertTrue(aptStatus.overridden)
         assertEquals("1", aptStatus.annotationString(DEFAULT, "value"))
         assertEquals(
-            JimmerImmutableDefault.Application(
+            ImmutableDefault.Application(
                 annotationValue = "1",
-                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+                strategy = ApplicationDefaultStrategy.DECLARED_VALUE,
             ),
             aptStatus.defaultContract,
         )
@@ -776,28 +793,28 @@ class JimmerImmutableFrontendParityTest {
             .props
             .associate { prop -> prop.name to prop.defaultContract }
         assertEquals(
-            JimmerImmutableDefault.Application(
+            ImmutableDefault.Application(
                 annotationValue = "client-value",
-                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+                strategy = ApplicationDefaultStrategy.DECLARED_VALUE,
             ),
             defaults.getValue("applicationValue"),
         )
         assertEquals(
-            JimmerImmutableDefault.Database("CURRENT_TIMESTAMP"),
+            ImmutableDefault.Database("CURRENT_TIMESTAMP"),
             defaults.getValue("databaseValue"),
         )
-        assertEquals(JimmerImmutableDefault.Database(null), defaults.getValue("emptyDatabaseValue"))
+        assertEquals(ImmutableDefault.Database(null), defaults.getValue("emptyDatabaseValue"))
         assertEquals(
-            JimmerImmutableDefault.Application(
+            ImmutableDefault.Application(
                 annotationValue = null,
-                strategy = JimmerImmutableApplicationDefaultStrategy.VERSION_ZERO,
+                strategy = ApplicationDefaultStrategy.VERSION_ZERO,
             ),
             defaults.getValue("version"),
         )
         assertEquals(
-            JimmerImmutableDefault.Application(
+            ImmutableDefault.Application(
                 annotationValue = "",
-                strategy = JimmerImmutableApplicationDefaultStrategy.DECLARED_VALUE,
+                strategy = ApplicationDefaultStrategy.DECLARED_VALUE,
             ),
             aptSchema.types
                 .single { type -> type.qualifiedName == "demo.ExplicitVersionRecord" }
@@ -1047,8 +1064,8 @@ class JimmerImmutableFrontendParityTest {
         val aptSchema = assertNotNull(apt.schema)
         val kspSchema = assertNotNull(ksp.schema)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
-        val aptProps = aptSchema.types.single().props.associateBy(JimmerImmutableProp::name)
-        val kspProps = kspSchema.types.single().props.associateBy(JimmerImmutableProp::name)
+        val aptProps = aptSchema.types.single().props.associateBy(ImmutableProp::name)
+        val kspProps = kspSchema.types.single().props.associateBy(ImmutableProp::name)
         val aptPrimitiveElement = assertIs<LsiPrimitiveType>(
             assertIs<LsiArrayType>(aptProps.getValue("primitiveValues").type).elementType,
         )
@@ -1076,11 +1093,11 @@ class JimmerImmutableFrontendParityTest {
         assertTrue(kspListElement.boxed)
         assertEquals(
             "array:primitive:int!!",
-            aptProps.getValue("primitiveValues").type.normalizedTypeSignature(),
+            aptProps.getValue("primitiveValues").type.jimmerTypeSignature(),
         )
         assertEquals(
             "array:primitive:int:boxed!!",
-            aptProps.getValue("boxedValues").type.normalizedTypeSignature(),
+            aptProps.getValue("boxedValues").type.jimmerTypeSignature(),
         )
     }
 
@@ -1319,7 +1336,7 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         val values = aptSchema.types.single().props.single { prop -> prop.name == "values" }
         assertFalse(values.list)
-        assertEquals(JimmerFormulaKind.LANGUAGE, values.formulaKind)
+        assertEquals(FormulaKind.LANGUAGE, values.formulaKind)
     }
 
     @Test
@@ -1336,18 +1353,18 @@ class JimmerImmutableFrontendParityTest {
         val ownerProps = aptSchema.types
             .single { type -> type.qualifiedName == "demo.Owner" }
             .props
-            .associateBy(JimmerImmutableProp::name)
+            .associateBy(ImmutableProp::name)
         val targets = ownerProps.getValue("targets")
-        assertEquals(JimmerAssociationKind.ONE_TO_MANY, targets.associationKind)
-        assertEquals(JimmerAssociationStorageKind.NONE, targets.associationStorage)
+        assertEquals(AssociationKind.ONE_TO_MANY, targets.associationKind)
+        assertEquals(AssociationStorageKind.NONE, targets.associationStorage)
         assertTrue(targets.list)
         assertTrue(targets.reverse)
         val targetOwner = aptSchema.types
             .single { type -> type.qualifiedName == "demo.Target" }
             .props
             .single { prop -> prop.name == "owner" }
-        assertEquals(JimmerAssociationKind.MANY_TO_ONE, targetOwner.associationKind)
-        assertEquals(JimmerAssociationStorageKind.COLUMN, targetOwner.associationStorage)
+        assertEquals(AssociationKind.MANY_TO_ONE, targetOwner.associationKind)
+        assertEquals(AssociationStorageKind.COLUMN, targetOwner.associationStorage)
         assertFalse(targetOwner.list)
         assertEquals(targetOwner.id, targets.mappedBy?.ownerPropId)
         assertEquals(targetOwner.id, aptSchema.ownerPropIdByInversePropId.getValue(targets.id))
@@ -1498,9 +1515,9 @@ class JimmerImmutableFrontendParityTest {
         val aptBaseChildren = aptSchema.types.single { type -> type.qualifiedName == "demo.Base" }
             .props.single { prop -> prop.name == "children" }
         val aptNode = aptSchema.types.single { type -> type.qualifiedName == "demo.Node" }
-            .props.associateBy(JimmerImmutableProp::name)
+            .props.associateBy(ImmutableProp::name)
         assertNull(aptBaseChildren.mappedBy?.ownerPropId)
-        assertEquals(JimmerAssociationStorageKind.NONE, aptBaseChildren.associationStorage)
+        assertEquals(AssociationStorageKind.NONE, aptBaseChildren.associationStorage)
         assertEquals(
             LsiSymbolId.property(LsiSymbolId.type("demo.Node"), "parent"),
             aptNode.getValue("children").mappedBy?.ownerPropId,
@@ -1598,15 +1615,15 @@ class JimmerImmutableFrontendParityTest {
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
         val bookProps = aptSchema.types.single { type -> type.qualifiedName == "demo.Book" }
-            .props.associateBy(JimmerImmutableProp::name)
+            .props.associateBy(ImmutableProp::name)
         val authorBooks = aptSchema.types.single { type -> type.qualifiedName == "demo.Author" }
             .props.single { prop -> prop.name == "books" }
         val tagBooks = aptSchema.types.single { type -> type.qualifiedName == "demo.Tag" }
             .props.single { prop -> prop.name == "books" }
-        assertEquals(JimmerAssociationStorageKind.MIDDLE_TABLE, bookProps.getValue("authors").associationStorage)
-        assertEquals(JimmerAssociationStorageKind.NONE, bookProps.getValue("tags").associationStorage)
-        assertEquals(JimmerAssociationStorageKind.NONE, authorBooks.associationStorage)
-        assertEquals(JimmerAssociationStorageKind.NONE, tagBooks.associationStorage)
+        assertEquals(AssociationStorageKind.MIDDLE_TABLE, bookProps.getValue("authors").associationStorage)
+        assertEquals(AssociationStorageKind.NONE, bookProps.getValue("tags").associationStorage)
+        assertEquals(AssociationStorageKind.NONE, authorBooks.associationStorage)
+        assertEquals(AssociationStorageKind.NONE, tagBooks.associationStorage)
         assertEquals(bookProps.getValue("authors").id, authorBooks.mappedBy?.ownerPropId)
         assertEquals(bookProps.getValue("tags").id, tagBooks.mappedBy?.ownerPropId)
     }
@@ -1705,10 +1722,10 @@ class JimmerImmutableFrontendParityTest {
             .single { prop -> prop.name == "displayName" }
         assertEquals(
             listOf(
-                JimmerFormulaDependency(
+                FormulaDependency(
                     listOf(LsiSymbolId.property(employeeTypeId, "firstName"))
                 ),
-                JimmerFormulaDependency(
+                FormulaDependency(
                     listOf(
                         LsiSymbolId.property(employeeTypeId, "department"),
                         LsiSymbolId.property(departmentTypeId, "name"),
@@ -1718,7 +1735,7 @@ class JimmerImmutableFrontendParityTest {
             displayName.formulaDependencies,
         )
         assertEquals(
-            JimmerFormulaKind.SQL,
+            FormulaKind.SQL,
             aptSchema.typesById.getValue(employeeTypeId)
                 .props
                 .single { prop -> prop.name == "storedDisplayName" }
@@ -1794,18 +1811,18 @@ class JimmerImmutableFrontendParityTest {
 
         val props = aptSchema.types.single { type -> type.qualifiedName == "demo.Employee" }
             .props
-            .associateBy(JimmerImmutableProp::name)
+            .associateBy(ImmutableProp::name)
         assertFalse(props.getValue("id").fetchable)
         assertTrue(props.getValue("name").fetchable)
         assertFalse(props.getValue("scratch").fetchable)
         assertNull(props.getValue("scratch").transientResolver)
         assertEquals(
-            JimmerTransientResolver.Type(LsiSymbolId.type("demo.EmployeeResolver")),
+            TransientResolver.Type(LsiSymbolId.type("demo.EmployeeResolver")),
             props.getValue("typeValue").transientResolver,
         )
         assertTrue(props.getValue("typeValue").fetchable)
         assertEquals(
-            JimmerTransientResolver.Reference("employeeResolver"),
+            TransientResolver.Reference("employeeResolver"),
             props.getValue("referenceValue").transientResolver,
         )
         assertTrue(props.getValue("referenceValue").fetchable)
@@ -2200,7 +2217,7 @@ class JimmerImmutableFrontendParityTest {
     }
 
     private class FrontendCapture {
-        var schema: JimmerImmutableSchema? = null
+        var schema: ImmutableSchema? = null
             private set
 
         var draftCodegenSchema: JimmerImmutableDraftCodegenSchema? = null
@@ -2214,13 +2231,13 @@ class JimmerImmutableFrontendParityTest {
 
         fun freeze(workspace: LsiWorkspace) {
             try {
-                schema = JimmerImmutablePrecompiler().compile(workspace)
+                schema = workspace.toImmutableSchema()
                 draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
                     schema = requireNotNull(schema),
                     workspace = workspace,
                     options = JimmerImmutableDraftCodegenOptions.DEFAULT,
                 )
-            } catch (exception: JimmerImmutablePrecompileException) {
+            } catch (exception: ImmutablePrecompileException) {
                 diagnostic = exception.message
             }
             completed = true
@@ -2260,12 +2277,12 @@ class JimmerImmutableFrontendParityTest {
     }
 
     private data class FrontendResult(
-        val schema: JimmerImmutableSchema?,
+        val schema: ImmutableSchema?,
         val draftCodegenSchema: JimmerImmutableDraftCodegenSchema?,
         val diagnostic: String?,
     )
 
-    private fun JimmerImmutableProp.annotationString(
+    private fun ImmutableProp.annotationString(
         annotationType: LsiSymbolId,
         argumentName: String,
     ): String? {

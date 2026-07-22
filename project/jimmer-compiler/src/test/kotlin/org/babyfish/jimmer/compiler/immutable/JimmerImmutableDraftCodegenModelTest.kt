@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.toImmutableSchema
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -35,7 +37,7 @@ class JimmerImmutableDraftCodegenModelTest {
     @Test
     fun `freezes accessor storage associated id and validation plans`() {
         val workspace = workspace(activeGetterName = "isActive")
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val schema = workspace.toImmutableSchema()
         val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             schema,
             workspace,
@@ -198,7 +200,7 @@ class JimmerImmutableDraftCodegenModelTest {
         )
 
         val alternateWorkspace = workspace(activeGetterName = "active")
-        val alternateSchema = JimmerImmutablePrecompiler().compile(alternateWorkspace)
+        val alternateSchema = alternateWorkspace.toImmutableSchema()
         val alternateDraftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             alternateSchema,
             alternateWorkspace,
@@ -211,7 +213,7 @@ class JimmerImmutableDraftCodegenModelTest {
             activeGetterName = "isActive",
             validationUseSiteTarget = LsiAnnotationUseSiteTarget.GETTER,
         )
-        val getterValidationSchema = JimmerImmutablePrecompiler().compile(getterValidationWorkspace)
+        val getterValidationSchema = getterValidationWorkspace.toImmutableSchema()
         val getterValidationDraftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             getterValidationSchema,
             getterValidationWorkspace,
@@ -266,7 +268,7 @@ class JimmerImmutableDraftCodegenModelTest {
                 ),
             ),
         )
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val schema = workspace.toImmutableSchema()
         val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             schema,
             workspace,
@@ -317,7 +319,7 @@ class JimmerImmutableDraftCodegenModelTest {
                 ),
             ),
         )
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val schema = workspace.toImmutableSchema()
         val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             schema,
             workspace,
@@ -354,9 +356,9 @@ class JimmerImmutableDraftCodegenModelTest {
                 )
             ),
         )
-        val schema = JimmerImmutablePrecompiler().compile(workspace)
+        val schema = workspace.toImmutableSchema()
 
-        val exception = assertFailsWith<JimmerImmutablePrecompileException> {
+        val exception = assertFailsWith<ImmutablePrecompileException> {
             JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema,
                 workspace,

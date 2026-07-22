@@ -1,5 +1,10 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
@@ -11,16 +16,16 @@ import site.addzero.lsi.model.LsiWorkspace
 
 internal fun completeEntityProps(
     ownerTypeId: LsiSymbolId,
-    props: List<JimmerImmutableProp> = emptyList(),
-): List<JimmerImmutableProp> {
-    if (props.any { prop -> prop.primaryMapping == JimmerImmutablePrimaryMapping.ID }) {
+    props: List<ImmutableProp> = emptyList(),
+): List<ImmutableProp> {
+    if (props.any { prop -> prop.primaryMapping == PrimaryMapping.ID }) {
         return props
     }
     require(props.none { prop -> prop.name == "id" }) {
         "Entity test fixture cannot synthesize id over an existing property: ${ownerTypeId.value}"
     }
     val id = LsiSymbolId.property(ownerTypeId, "id")
-    val idProp = JimmerImmutableProp(
+    val idProp = ImmutableProp(
         id = id,
         declarationId = id,
         ownerTypeId = ownerTypeId,
@@ -37,13 +42,13 @@ internal fun completeEntityProps(
         association = false,
         embedded = false,
         targetTypeId = null,
-        primaryMapping = JimmerImmutablePrimaryMapping.ID,
+        primaryMapping = PrimaryMapping.ID,
         primaryAnnotationTypeId = ID_ANNOTATION_TYPE,
         defaultContract = null,
-        associationKind = JimmerAssociationKind.NONE,
-        formulaKind = JimmerFormulaKind.NONE,
+        associationKind = AssociationKind.NONE,
+        formulaKind = FormulaKind.NONE,
         mappedBy = null,
-        associationStorage = JimmerAssociationStorageKind.NONE,
+        associationStorage = AssociationStorageKind.NONE,
         transientResolver = null,
         view = null,
         genericTarget = false,

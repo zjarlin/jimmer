@@ -2,8 +2,8 @@ package org.babyfish.jimmer.compiler.client
 
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
 import org.babyfish.jimmer.compiler.error.ErrorFieldModel
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableProp
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
@@ -36,7 +36,7 @@ data class ClientPrecompileOptions(
 )
 
 data class ClientPrecompileDependencies(
-    val immutableSchema: JimmerImmutableSchema,
+    val immutableSchema: ImmutableSchema,
     val errorSchema: ErrorPrecompiledSchema,
     val definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
 )
@@ -172,7 +172,7 @@ class ClientPrecompiler(
             val immutablePropsByDeclarationId = dependencies.immutableSchema.typesById[type.id]
                 ?.props
                 .orEmpty()
-                .associateBy(JimmerImmutableProp::declarationId)
+                .associateBy(ImmutableProp::declarationId)
             workspace.jsonValueType(type.id)?.collectClientTypeIds(
                 definitionTypeIds = definitionTypeIds,
                 seedIds = seedIds,
@@ -447,7 +447,7 @@ class ClientPrecompiler(
     private fun compileDefinitions(
         workspace: LsiWorkspace,
         service: ClientService,
-        immutableSchema: JimmerImmutableSchema,
+        immutableSchema: ImmutableSchema,
         errorSchema: ErrorPrecompiledSchema,
         definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
     ): List<ClientTypeDefinition> {
@@ -572,7 +572,7 @@ class ClientPrecompiler(
         workspace: LsiWorkspace,
         rootServiceId: LsiSymbolId,
         type: LsiTypeDeclaration,
-        immutableSchema: JimmerImmutableSchema,
+        immutableSchema: ImmutableSchema,
         definitionDocumentation: ClientDefinitionDocumentation?,
         exceptionMetadata: ClientExceptionMetadata?,
     ): ClientTypeDefinition {
@@ -683,12 +683,12 @@ class ClientPrecompiler(
         rootServiceId: LsiSymbolId,
         type: LsiTypeDeclaration,
         immutable: Boolean,
-        immutableProps: List<JimmerImmutableProp>,
+        immutableProps: List<ImmutableProp>,
         clientException: Boolean,
         defaultFetcherOwnerId: LsiSymbolId?,
         definitionDocumentation: ClientDefinitionDocumentation?,
     ): List<ClientDefinitionProperty> {
-        val immutablePropsByDeclarationId = immutableProps.associateBy(JimmerImmutableProp::declarationId)
+        val immutablePropsByDeclarationId = immutableProps.associateBy(ImmutableProp::declarationId)
         val fieldsByName = type.memberIds
             .mapNotNull(workspace::get)
             .filterIsInstance<LsiField>()
@@ -1111,7 +1111,7 @@ private data class GeneratedClientErrorType(
 )
 
 private val EMPTY_CLIENT_DEPENDENCIES = ClientPrecompileDependencies(
-    immutableSchema = JimmerImmutableSchema(emptyList()),
+    immutableSchema = ImmutableSchema(emptyList()),
     errorSchema = ErrorPrecompiledSchema(emptyList()),
     definitionDocumentationByTypeId = emptyMap(),
 )

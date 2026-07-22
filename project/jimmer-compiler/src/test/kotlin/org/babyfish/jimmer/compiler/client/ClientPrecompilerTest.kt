@@ -11,8 +11,8 @@ import org.babyfish.jimmer.compiler.error.ErrorCodeModel
 import org.babyfish.jimmer.compiler.error.ErrorFamilyModel
 import org.babyfish.jimmer.compiler.error.ErrorFieldModel
 import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutablePrecompiler
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -212,7 +212,7 @@ class ClientPrecompilerTest {
                 operation,
             ),
         )
-        val immutableSchema = JimmerImmutablePrecompiler().compile(workspace, setOf(bookId))
+        val immutableSchema = workspace.toImmutableSchema(setOf(bookId))
         val schema = ClientPrecompiler().compile(
             workspace,
             ClientPrecompileDependencies(
@@ -270,7 +270,7 @@ class ClientPrecompilerTest {
         val schema = ClientPrecompiler().compile(
             workspace,
             ClientPrecompileDependencies(
-                immutableSchema = JimmerImmutableSchema(emptyList()),
+                immutableSchema = ImmutableSchema(emptyList()),
                 errorSchema = EMPTY_ERROR_SCHEMA,
                 definitionDocumentationByTypeId = mapOf(
                     dtoId to ClientDefinitionDocumentation(
@@ -468,7 +468,7 @@ class ClientPrecompilerTest {
             ),
         )
         val dependencies = ClientPrecompileDependencies(
-            immutableSchema = JimmerImmutablePrecompiler().compile(workspace, setOf(bookId)),
+            immutableSchema = workspace.toImmutableSchema(setOf(bookId)),
             errorSchema = EMPTY_ERROR_SCHEMA,
             definitionDocumentationByTypeId = emptyMap(),
         )
@@ -520,7 +520,7 @@ class ClientPrecompilerTest {
             declaredBy = familyId,
         )
         val dependencies = ClientPrecompileDependencies(
-            immutableSchema = JimmerImmutableSchema(emptyList()),
+            immutableSchema = ImmutableSchema(emptyList()),
             errorSchema = ErrorPrecompiledSchema(
                 families = listOf(
                     ErrorFamilyModel(
@@ -1394,7 +1394,7 @@ class ClientPrecompilerTest {
 
 private fun ErrorPrecompiledSchema.clientDependencies(): ClientPrecompileDependencies {
     return ClientPrecompileDependencies(
-        immutableSchema = JimmerImmutableSchema(emptyList()),
+        immutableSchema = ImmutableSchema(emptyList()),
         errorSchema = this,
         definitionDocumentationByTypeId = emptyMap(),
     )
