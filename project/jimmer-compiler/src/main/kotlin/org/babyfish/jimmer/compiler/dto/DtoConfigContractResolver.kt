@@ -12,6 +12,7 @@ import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeArgument
@@ -478,6 +479,7 @@ internal class DtoConfigContractResolver(
                 "nullable-target:${unresolvedType.stableSignature()}"
             unresolvedType is LsiPrimitiveType -> "primitive-target:${unresolvedType.stableSignature()}"
             unresolvedType is LsiArrayType -> "array-target:${unresolvedType.stableSignature()}"
+            unresolvedType is LsiFunctionType -> "function-target:${unresolvedType.stableSignature()}"
             else -> "unsupported-target:${unresolvedType.stableSignature()}"
         }
         return TargetResolution.Unresolved(reason, path)
@@ -750,6 +752,9 @@ internal class DtoConfigContractResolver(
         is LsiUnresolvedType -> true
         is LsiDeclaredType -> arguments.any { argument -> argument.type?.containsUnresolvedType() == true }
         is LsiArrayType -> elementType.containsUnresolvedType()
+        is LsiFunctionType -> receiverType?.containsUnresolvedType() == true ||
+            parameterTypes.any { parameterType -> parameterType.containsUnresolvedType() } ||
+            returnType.containsUnresolvedType()
         is LsiPrimitiveType,
         is LsiTypeParameterRef,
         -> false

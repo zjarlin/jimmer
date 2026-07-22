@@ -8,6 +8,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -1684,6 +1685,13 @@ private fun LsiTypeRef.managedTypeIds(
             }
         }
         is LsiArrayType -> elementType.managedTypeIds(kindByTypeId)
+        is LsiFunctionType -> buildList {
+            receiverType?.managedTypeIds(kindByTypeId)?.let(::addAll)
+            parameterTypes.forEach { parameter ->
+                addAll(parameter.managedTypeIds(kindByTypeId))
+            }
+            addAll(returnType.managedTypeIds(kindByTypeId))
+        }
         is LsiPrimitiveType,
         is LsiTypeParameterRef,
         is LsiUnresolvedType,
@@ -1739,6 +1747,10 @@ private fun LsiTypeRef.containsUnresolvedType(): Boolean {
         is LsiUnresolvedType -> true
         is LsiDeclaredType -> arguments.any { argument -> argument.type?.containsUnresolvedType() == true }
         is LsiArrayType -> elementType.containsUnresolvedType()
+        is LsiFunctionType ->
+            receiverType?.containsUnresolvedType() == true ||
+                parameterTypes.any(LsiTypeRef::containsUnresolvedType) ||
+                returnType.containsUnresolvedType()
         is LsiPrimitiveType,
         is LsiTypeParameterRef,
         -> false
@@ -1918,6 +1930,7 @@ private fun LsiResolvedProperty.validateListShape() {
         -> true
         is LsiDeclaredType -> elementType.arguments.isEmpty()
         is LsiArrayType,
+        is LsiFunctionType,
         is LsiUnresolvedType,
         -> false
     }
@@ -2546,6 +2559,20 @@ private fun LsiTypeRef.boxedTypeSignature(
             ignoreRootNullability = false,
             root = false,
         )}"
+        is LsiFunctionType -> buildString {
+            append("function:")
+            append(if (suspending) "suspend" else "regular")
+            receiverType?.let { receiver ->
+                append(":receiver:")
+                append(receiver.boxedTypeSignature(ignoreRootNullability = false, root = false))
+            }
+            append(":parameters:[")
+            append(parameterTypes.joinToString(",") { parameter ->
+                parameter.boxedTypeSignature(ignoreRootNullability = false, root = false)
+            })
+            append("]:return:")
+            append(returnType.boxedTypeSignature(ignoreRootNullability = false, root = false))
+        }
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
     }
@@ -2693,6 +2720,7 @@ private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
         is LsiTypeParameterRef -> copy(nullability = nullability)
         is LsiPrimitiveType -> copy(nullability = nullability)
         is LsiArrayType -> copy(nullability = nullability)
+        is LsiFunctionType -> copy(nullability = nullability)
         is LsiUnresolvedType -> copy(nullability = nullability)
     }
 }
@@ -2916,6 +2944,18 @@ private fun LsiTypeRef.jimmerTypeSignature(
             }
         }
         is LsiArrayType -> "array:${elementType.jimmerTypeSignature()}"
+        is LsiFunctionType -> buildString {
+            append("function:")
+            append(if (suspending) "suspend" else "regular")
+            receiverType?.let { receiver ->
+                append(":receiver:")
+                append(receiver.jimmerTypeSignature())
+            }
+            append(":parameters:[")
+            append(parameterTypes.joinToString(",") { parameter -> parameter.jimmerTypeSignature() })
+            append("]:return:")
+            append(returnType.jimmerTypeSignature())
+        }
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
     }

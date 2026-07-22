@@ -11,6 +11,8 @@ import com.squareup.kotlinpoet.DOUBLE
 import com.squareup.kotlinpoet.FLOAT
 import com.squareup.kotlinpoet.INT
 import com.squareup.kotlinpoet.LONG
+import com.squareup.kotlinpoet.LambdaTypeName
+import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.SHORT
 import com.squareup.kotlinpoet.STAR
@@ -25,6 +27,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -65,6 +68,14 @@ private fun LsiTypeRef.toKotlinTypeName(referenceContext: Boolean): TypeName {
             }
         }
         is LsiArrayType -> elementType.toKotlinArrayTypeName()
+        is LsiFunctionType -> LambdaTypeName.get(
+            receiver = receiverType?.toKotlinTypeName(referenceContext = true),
+            parameters = parameterTypes
+                .map { parameterType ->
+                    ParameterSpec.unnamed(parameterType.toKotlinTypeName(referenceContext = true))
+                },
+            returnType = returnType.toKotlinTypeName(referenceContext = true),
+        ).copy(suspending = suspending)
         is LsiTypeParameterRef -> TypeVariableName(parameterId.requireTypeParameterName())
         is LsiUnresolvedType -> ClassName.bestGuess(displayName.filterNot(Char::isWhitespace))
     }

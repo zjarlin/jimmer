@@ -10,6 +10,7 @@ import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -780,6 +781,9 @@ private fun LsiTypeRef.firstUnresolvedType(): LsiTypeRef? {
             argument.type?.firstUnresolvedType()
         }
         is LsiArrayType -> elementType.firstUnresolvedType()
+        is LsiFunctionType -> receiverType?.firstUnresolvedType()
+            ?: parameterTypes.firstNotNullOfOrNull(LsiTypeRef::firstUnresolvedType)
+            ?: returnType.firstUnresolvedType()
         is LsiPrimitiveType -> null
     }
 }

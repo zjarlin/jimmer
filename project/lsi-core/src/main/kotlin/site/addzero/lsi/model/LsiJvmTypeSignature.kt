@@ -87,6 +87,9 @@ private class JvmTypeSignatureRenderer(
             is LsiPrimitiveType -> type.toJvmPrimitiveSignature()
             is LsiArrayType -> "array:${renderArrayElement(type.elementType, eraseTypeArguments, erasurePath)}"
             is LsiTypeParameterRef -> renderTypeParameter(type.parameterId, eraseTypeArguments, erasurePath)
+            is LsiFunctionType -> throw IllegalArgumentException(
+                "JVM type signature cannot infer the ABI of an LSI function type",
+            )
             is LsiUnresolvedType -> "unresolved:${type.displayName.filterNot(Char::isWhitespace)}"
         }
     }

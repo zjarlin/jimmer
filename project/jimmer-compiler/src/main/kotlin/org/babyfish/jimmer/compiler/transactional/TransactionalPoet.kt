@@ -9,6 +9,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -392,6 +393,7 @@ private fun LsiTypeRef.withReturnAnnotations(annotations: List<LsiAnnotation>): 
     return when (this) {
         is LsiArrayType -> copy(annotations = mergedAnnotations)
         is LsiDeclaredType -> copy(annotations = mergedAnnotations)
+        is LsiFunctionType -> copy(annotations = mergedAnnotations)
         is LsiPrimitiveType -> copy(annotations = mergedAnnotations)
         is LsiTypeParameterRef -> copy(annotations = mergedAnnotations)
         is LsiUnresolvedType -> copy(annotations = mergedAnnotations)
@@ -448,6 +450,11 @@ private fun MutableSet<LsiSymbolId>.addType(type: LsiTypeRef) {
         is LsiDeclaredType -> {
             add(type.declarationId)
             type.arguments.forEach { argument -> argument.type?.let(::addType) }
+        }
+        is LsiFunctionType -> {
+            type.receiverType?.let(::addType)
+            type.parameterTypes.forEach(::addType)
+            addType(type.returnType)
         }
         is LsiPrimitiveType -> Unit
         is LsiTypeParameterRef -> add(type.parameterId)

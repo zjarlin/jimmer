@@ -12,6 +12,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -136,6 +137,22 @@ class LsiKotlinPoetTest {
         assertEquals(
             "kotlin.Array<kotlin.Int?>",
             LsiArrayType(nullableBoxedInt).toKotlinTypeName().toString(),
+        )
+    }
+
+    @Test
+    fun `renders nullable suspending extension function types structurally`() {
+        val functionType = LsiFunctionType(
+            receiverType = LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
+            parameterTypes = listOf(LsiPrimitiveType(LsiPrimitiveKind.INT)),
+            returnType = LsiPrimitiveType(LsiPrimitiveKind.UNIT),
+            suspending = true,
+            nullability = LsiNullability.NULLABLE,
+        )
+
+        assertEquals(
+            "(suspend kotlin.String.(kotlin.Int) -> kotlin.Unit)?",
+            functionType.toKotlinTypeName().toString(),
         )
     }
 }

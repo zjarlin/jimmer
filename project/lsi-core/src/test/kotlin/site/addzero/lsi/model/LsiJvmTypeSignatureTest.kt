@@ -129,4 +129,28 @@ class LsiJvmTypeSignatureTest {
         }
         assertTrue(requireNotNull(recursive.message).contains("Recursive JVM type parameter erasure"))
     }
+
+    @Test
+    fun `rejects function types instead of guessing a JVM ABI`() {
+        val functionType = LsiFunctionType(
+            returnType = LsiPrimitiveType(LsiPrimitiveKind.UNIT),
+            parameterTypes = listOf(LsiPrimitiveType(LsiPrimitiveKind.INT)),
+            suspending = true,
+        )
+        val containingTypes = listOf<LsiTypeRef>(
+            functionType,
+            LsiArrayType(functionType),
+            LsiDeclaredType(
+                declarationId = LsiSymbolId.type("java.util.List"),
+                arguments = listOf(LsiTypeArgument.invariant(functionType)),
+            ),
+        )
+
+        containingTypes.forEach { type ->
+            val exception = assertFailsWith<IllegalArgumentException> {
+                type.toJvmTypeSignature()
+            }
+            assertTrue(requireNotNull(exception.message).contains("cannot infer the ABI"))
+        }
+    }
 }

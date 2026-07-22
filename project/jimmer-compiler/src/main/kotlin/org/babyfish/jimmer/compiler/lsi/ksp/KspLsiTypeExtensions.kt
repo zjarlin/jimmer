@@ -22,6 +22,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -409,6 +410,7 @@ private fun LsiTypeRef.withAdditionalAnnotations(
     val mergedAnnotations = mergeAnnotations(additionalAnnotations, annotations)
     return when (this) {
         is LsiDeclaredType -> copy(annotations = mergedAnnotations)
+        is LsiFunctionType -> copy(annotations = mergedAnnotations)
         is LsiTypeParameterRef -> copy(annotations = mergedAnnotations)
         is LsiPrimitiveType -> copy(annotations = mergedAnnotations)
         is LsiArrayType -> copy(annotations = mergedAnnotations)

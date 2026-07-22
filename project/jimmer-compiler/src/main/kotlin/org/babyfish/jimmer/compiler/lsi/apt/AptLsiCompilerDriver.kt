@@ -28,6 +28,7 @@ import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -390,6 +391,9 @@ private fun LsiTypeRef.containsUnresolvedType(): Boolean {
             argument.type?.containsUnresolvedType() == true
         }
         is LsiArrayType -> elementType.containsUnresolvedType()
+        is LsiFunctionType -> receiverType?.containsUnresolvedType() == true ||
+            parameterTypes.any(LsiTypeRef::containsUnresolvedType) ||
+            returnType.containsUnresolvedType()
         is LsiPrimitiveType,
         is LsiTypeParameterRef,
         -> false

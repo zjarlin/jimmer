@@ -2,11 +2,14 @@ package org.babyfish.jimmer.compiler.tuple
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -64,7 +67,7 @@ class TypedTuplePrecompiler {
             "$packageName.$mapperSimpleName"
         }
         val properties = preparedType.properties.mapIndexed { index, property ->
-            val typeDependencyIds = property.type.declaredTypeIds()
+            val typeDependencyIds = property.type.dependencyTypeIds()
             val nextProperty = preparedType.properties.getOrNull(index + 1)
             TypedTupleProperty(
                 id = LsiSymbolId.property(type.id, property.name),
@@ -191,6 +194,7 @@ class TypedTuplePrecompiler {
                     message = "Typed tuple '${type.qualifiedName}' cannot inherit a type parameter",
                 )
                 is LsiArrayType,
+                is LsiFunctionType,
                 is LsiPrimitiveType,
                 -> throw TypedTuplePrecompileException(
                     declarationId = type.id,
@@ -429,6 +433,10 @@ private fun LsiTypeRef.validateTuplePropertyType(
             argument.type?.validateTuplePropertyType(tupleId, sourceMemberId)
         }
         is LsiArrayType -> elementType.validateTuplePropertyType(tupleId, sourceMemberId)
+        is LsiFunctionType -> throw TypedTuplePrecompileException(
+            declarationId = sourceMemberId,
+            message = "Typed tuple property '${sourceMemberId.value}' cannot use a function type",
+        )
         is LsiPrimitiveType -> if (kind == LsiPrimitiveKind.UNIT || kind == LsiPrimitiveKind.VOID) {
             throw TypedTuplePrecompileException(
                 declarationId = sourceMemberId,
@@ -447,23 +455,54 @@ private fun LsiTypeRef.validateTuplePropertyType(
     }
 }
 
-private fun LsiTypeRef.declaredTypeIds(): List<LsiSymbolId> {
-    val result = sortedSetOf<LsiSymbolId>()
-    fun collect(type: LsiTypeRef) {
-        when (type) {
-            is LsiDeclaredType -> {
-                result += type.declarationId
-                type.arguments.forEach { argument -> argument.type?.let(::collect) }
-            }
-            is LsiArrayType -> collect(type.elementType)
-            is LsiPrimitiveType,
-            is LsiTypeParameterRef,
-            is LsiUnresolvedType,
-            -> Unit
+private fun LsiTypeRef.dependencyTypeIds(): List<LsiSymbolId> {
+    return sortedSetOf<LsiSymbolId>()
+        .apply { collectDependencyType(this@dependencyTypeIds) }
+        .toList()
+}
+
+private fun MutableSet<LsiSymbolId>.collectDependencyType(type: LsiTypeRef) {
+    type.annotations.forEach(::collectDependencyAnnotation)
+    when (type) {
+        is LsiDeclaredType -> {
+            add(type.declarationId)
+            type.arguments.forEach { argument -> argument.type?.let(::collectDependencyType) }
         }
+        is LsiArrayType -> collectDependencyType(type.elementType)
+        is LsiFunctionType -> {
+            type.receiverType?.let(::collectDependencyType)
+            type.parameterTypes.forEach(::collectDependencyType)
+            collectDependencyType(type.returnType)
+        }
+        is LsiPrimitiveType,
+        is LsiTypeParameterRef,
+        is LsiUnresolvedType,
+        -> Unit
     }
-    collect(this)
-    return result.toList()
+}
+
+private fun MutableSet<LsiSymbolId>.collectDependencyAnnotation(annotation: LsiAnnotation) {
+    add(annotation.type)
+    annotation.arguments.values.forEach { argument -> collectDependencyAnnotationValue(argument.value) }
+}
+
+private fun MutableSet<LsiSymbolId>.collectDependencyAnnotationValue(value: LsiAnnotationValue) {
+    when (value) {
+        is LsiAnnotationValue.ArrayValue -> value.elements.forEach(::collectDependencyAnnotationValue)
+        is LsiAnnotationValue.ClassValue -> collectDependencyType(value.type)
+        is LsiAnnotationValue.EnumValue -> add(value.enumType)
+        is LsiAnnotationValue.NestedAnnotationValue -> collectDependencyAnnotation(value.annotation)
+        is LsiAnnotationValue.BooleanValue,
+        is LsiAnnotationValue.ByteValue,
+        is LsiAnnotationValue.ShortValue,
+        is LsiAnnotationValue.IntValue,
+        is LsiAnnotationValue.LongValue,
+        is LsiAnnotationValue.FloatValue,
+        is LsiAnnotationValue.DoubleValue,
+        is LsiAnnotationValue.CharValue,
+        is LsiAnnotationValue.StringValue,
+        -> Unit
+    }
 }
 
 private fun String.toTupleBuilderSimpleName(): String {

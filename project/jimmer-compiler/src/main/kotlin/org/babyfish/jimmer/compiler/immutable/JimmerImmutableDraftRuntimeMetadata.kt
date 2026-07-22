@@ -6,6 +6,7 @@ import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeParameterRef
@@ -130,6 +131,9 @@ private fun LsiTypeRef.toErasedMetadataType(): LsiTypeRef {
             nullability = LsiNullability.NON_NULL,
             annotations = emptyList(),
         )
+        is LsiFunctionType -> error(
+            "Cannot compile function type as immutable draft runtime metadata",
+        )
         is LsiUnresolvedType -> error(
             "Cannot compile unresolved immutable draft metadata element type '$displayName'"
         )
@@ -146,6 +150,7 @@ private fun LsiTypeRef.isErasedMetadataType(): Boolean {
         is LsiArrayType -> nullability == LsiNullability.NON_NULL &&
             annotations.isEmpty() &&
             elementType.isErasedMetadataType()
+        is LsiFunctionType -> false
         is LsiUnresolvedType -> false
     }
 }

@@ -8,6 +8,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -721,6 +722,11 @@ private fun MutableSet<LsiSymbolId>.addType(type: LsiTypeRef) {
             add(type.declarationId)
             type.arguments.forEach { argument -> argument.type?.let(::addType) }
         }
+        is LsiFunctionType -> {
+            type.receiverType?.let(::addType)
+            type.parameterTypes.forEach(::addType)
+            addType(type.returnType)
+        }
         is LsiPrimitiveType -> Unit
         is LsiTypeParameterRef -> add(type.parameterId)
         is LsiUnresolvedType -> Unit
@@ -748,6 +754,7 @@ private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
     return when (this) {
         is LsiArrayType -> copy(nullability = nullability)
         is LsiDeclaredType -> copy(nullability = nullability)
+        is LsiFunctionType -> copy(nullability = nullability)
         is LsiPrimitiveType -> copy(nullability = nullability)
         is LsiTypeParameterRef -> copy(nullability = nullability)
         is LsiUnresolvedType -> copy(nullability = nullability)

@@ -198,6 +198,20 @@ private fun LsiTypeRef.toSemanticSignature(options: LsiSemanticSnapshotOptions):
             }
         }
         is LsiArrayType -> "array:${elementType.toSemanticSignature(options)}"
+        is LsiFunctionType -> buildString {
+            append("function:")
+            append(if (suspending) "suspend" else "regular")
+            receiverType?.let { receiver ->
+                append(":receiver:")
+                append(receiver.toSemanticSignature(options))
+            }
+            append(":parameters:[")
+            append(parameterTypes.joinToString(",") { parameter ->
+                parameter.toSemanticSignature(options)
+            })
+            append("]:return:")
+            append(returnType.toSemanticSignature(options))
+        }
         is LsiUnresolvedType -> "unresolved:$displayName"
     }
     val normalizedNullability = when (nullability) {

@@ -18,6 +18,7 @@ import site.addzero.lsi.jimmer.lineageRootId
 import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -179,6 +180,7 @@ internal fun ImmutableProp.expressionKind(typeSystem: LsiTypeSystem): JimmerImmu
         is LsiPrimitiveType -> propType.expressionKind()
         is LsiDeclaredType -> propType.expressionKind(typeSystem)
         is LsiArrayType,
+        is LsiFunctionType,
         is LsiTypeParameterRef,
         -> JimmerImmutablePropExpressionKind.GENERIC
         is LsiUnresolvedType -> throw ImmutablePrecompileException(

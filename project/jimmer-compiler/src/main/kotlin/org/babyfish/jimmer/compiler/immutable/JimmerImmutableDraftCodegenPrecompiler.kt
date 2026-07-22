@@ -22,6 +22,7 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -598,18 +599,26 @@ private fun LsiAnnotationValue.referencedTypeIds(): Set<LsiSymbolId> {
 }
 
 private fun LsiTypeRef.referencedTypeIds(): Set<LsiSymbolId> {
-    return when (this) {
-        is LsiDeclaredType -> buildSet {
-            add(declarationId)
-            arguments.forEach { argument ->
-                argument.type?.referencedTypeIds()?.let(::addAll)
+    return buildSet {
+        annotations.forEach { annotation -> addAll(annotation.referencedTypeIds()) }
+        when (this@referencedTypeIds) {
+            is LsiDeclaredType -> {
+                add(declarationId)
+                arguments.forEach { argument ->
+                    argument.type?.referencedTypeIds()?.let(::addAll)
+                }
             }
+            is LsiArrayType -> addAll(elementType.referencedTypeIds())
+            is LsiFunctionType -> {
+                receiverType?.referencedTypeIds()?.let(::addAll)
+                parameterTypes.forEach { parameterType -> addAll(parameterType.referencedTypeIds()) }
+                addAll(returnType.referencedTypeIds())
+            }
+            is LsiTypeParameterRef -> add(parameterId)
+            is LsiPrimitiveType,
+            is LsiUnresolvedType,
+            -> Unit
         }
-        is LsiArrayType -> elementType.referencedTypeIds()
-        is LsiTypeParameterRef -> setOf(parameterId)
-        is LsiPrimitiveType,
-        is LsiUnresolvedType,
-        -> emptySet()
     }
 }
 

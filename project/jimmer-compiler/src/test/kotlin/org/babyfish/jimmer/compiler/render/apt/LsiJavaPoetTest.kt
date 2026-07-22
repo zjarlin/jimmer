@@ -3,11 +3,13 @@ package org.babyfish.jimmer.compiler.render.apt
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 
@@ -49,5 +51,16 @@ class LsiJavaPoetTest {
         val rendered = annotation.toJavaAnnotationSpec().toString()
         assertContains(rendered, "unit = kotlin.Unit.class")
         assertContains(rendered, "rawVoid = void.class")
+    }
+
+    @Test
+    fun `rejects function types instead of guessing a java runtime interface`() {
+        val exception = assertFailsWith<IllegalStateException> {
+            LsiFunctionType(
+                returnType = LsiPrimitiveType(LsiPrimitiveKind.UNIT),
+            ).toJavaTypeName()
+        }
+
+        assertContains(exception.message.orEmpty(), "cannot emit an LSI function type")
     }
 }

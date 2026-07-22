@@ -5,6 +5,7 @@ import java.security.MessageDigest
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
@@ -178,6 +179,17 @@ private fun LsiTypeRef.canonicalText(): String {
             }
         }
         is LsiArrayType -> "array:${elementType.canonicalText()}"
+        is LsiFunctionType -> buildString {
+            append(if (suspending) "suspend-function:" else "function:")
+            receiverType?.let { receiver ->
+                append(receiver.canonicalText())
+                append('.')
+            }
+            append('(')
+            append(parameterTypes.joinToString(",", transform = LsiTypeRef::canonicalText))
+            append(")->")
+            append(returnType.canonicalText())
+        }
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
     }

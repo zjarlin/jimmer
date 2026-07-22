@@ -10,6 +10,7 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiEnumEntry
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -63,12 +64,18 @@ private fun MutableSet<LsiSymbolId>.collect(parameter: LsiTypeParameter) {
 }
 
 private fun MutableSet<LsiSymbolId>.collect(type: LsiTypeRef) {
+    type.annotations.forEach(::collect)
     when (type) {
         is LsiDeclaredType -> {
             add(type.declarationId)
             type.arguments.mapNotNull { argument -> argument.type }.forEach(::collect)
         }
         is LsiArrayType -> collect(type.elementType)
+        is LsiFunctionType -> {
+            type.receiverType?.let(::collect)
+            type.parameterTypes.forEach(::collect)
+            collect(type.returnType)
+        }
         is LsiPrimitiveType,
         is LsiTypeParameterRef,
         is LsiUnresolvedType,

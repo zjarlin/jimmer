@@ -13,6 +13,7 @@ import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeParameter
@@ -54,6 +55,9 @@ internal fun LsiTypeRef.toJavaTypeName(): TypeName {
             }
         }
         is LsiArrayType -> ArrayTypeName.of(elementType.toJavaTypeName())
+        is LsiFunctionType -> error(
+            "Java renderer cannot emit an LSI function type",
+        )
         is LsiTypeParameterRef -> TypeVariableName.get(parameterId.requireTypeParameterName())
         is LsiUnresolvedType -> ClassName.bestGuess(displayName.filterNot(Char::isWhitespace))
     }

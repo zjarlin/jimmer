@@ -13,6 +13,7 @@ import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -30,6 +31,7 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.stableSignature
 
 data class ClientPrecompileOptions(
     val explicitApi: Boolean = false,
@@ -290,6 +292,28 @@ class ClientPrecompiler(
                 defaultFetcherOwnerId,
                 fallbackFetcherOwnerId,
             )
+            is LsiFunctionType -> {
+                receiverType?.collectClientTypeIds(
+                    definitionTypeIds,
+                    seedIds,
+                    defaultFetcherOwnerId,
+                    fallbackFetcherOwnerId,
+                )
+                parameterTypes.forEach { parameterType ->
+                    parameterType.collectClientTypeIds(
+                        definitionTypeIds,
+                        seedIds,
+                        defaultFetcherOwnerId,
+                        fallbackFetcherOwnerId,
+                    )
+                }
+                returnType.collectClientTypeIds(
+                    definitionTypeIds,
+                    seedIds,
+                    defaultFetcherOwnerId,
+                    fallbackFetcherOwnerId,
+                )
+            }
             is LsiPrimitiveType,
             is LsiTypeParameterRef,
             is LsiUnresolvedType,
@@ -963,6 +987,10 @@ class ClientPrecompiler(
                 nullable = nullable,
                 fetchBy = fetchBy,
             )
+            is LsiFunctionType -> throw ClientPrecompileException(
+                declarationId = sourceId,
+                message = "Client API type system does not support function type '${stableSignature()}'",
+            )
             is LsiTypeParameterRef -> {
                 val owner = workspace.typeParameterOwner(parameterId)
                     ?: throw ClientPrecompileException(
@@ -1452,6 +1480,9 @@ private fun LsiTypeRef.hasUnresolvedClientType(): Boolean {
             .mapNotNull(LsiTypeArgument::type)
             .any(LsiTypeRef::hasUnresolvedClientType)
         is LsiArrayType -> elementType.hasUnresolvedClientType()
+        is LsiFunctionType -> receiverType?.hasUnresolvedClientType() == true ||
+            parameterTypes.any(LsiTypeRef::hasUnresolvedClientType) ||
+            returnType.hasUnresolvedClientType()
         is LsiUnresolvedType -> true
         is LsiPrimitiveType,
         is LsiTypeParameterRef,

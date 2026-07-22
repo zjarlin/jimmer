@@ -86,6 +86,18 @@ data class LsiArrayType(
 ) : LsiTypeRef
 
 /**
+ * 保留函数的返回值、接收者、参数和挂起语义，不提前折叠为平台声明类型。
+ */
+data class LsiFunctionType(
+    val returnType: LsiTypeRef,
+    val receiverType: LsiTypeRef? = null,
+    val parameterTypes: List<LsiTypeRef> = emptyList(),
+    val suspending: Boolean = false,
+    override val nullability: LsiNullability = LsiNullability.NON_NULL,
+    override val annotations: List<LsiAnnotation> = emptyList(),
+) : LsiTypeRef
+
+/**
  * 前端暂时无法闭合的类型，不允许渲染器把它当作合法类型消费。
  */
 data class LsiUnresolvedType(
@@ -129,6 +141,12 @@ fun LsiTypeRef.toAnnotationMemberType(): LsiTypeRef {
             elementType = elementType.toAnnotationMemberType(),
             nullability = LsiNullability.NON_NULL,
         )
+        is LsiFunctionType -> copy(
+            returnType = returnType.toAnnotationMemberType(),
+            receiverType = receiverType?.toAnnotationMemberType(),
+            parameterTypes = parameterTypes.map(LsiTypeRef::toAnnotationMemberType),
+            nullability = LsiNullability.NON_NULL,
+        )
         is LsiUnresolvedType -> copy(nullability = LsiNullability.NON_NULL)
     }
 }
@@ -155,6 +173,18 @@ fun LsiTypeRef.stableSignature(): String {
             }
         }
         is LsiArrayType -> "array:${elementType.stableSignature()}"
+        is LsiFunctionType -> buildString {
+            append("function:")
+            append(if (suspending) "suspend" else "regular")
+            receiverType?.let { receiver ->
+                append(":receiver:")
+                append(receiver.stableSignature())
+            }
+            append(":parameters:[")
+            append(parameterTypes.joinToString(",") { parameter -> parameter.stableSignature() })
+            append("]:return:")
+            append(returnType.stableSignature())
+        }
         is LsiUnresolvedType -> "unresolved:$displayName"
     }
     return base + nullability.stableSuffix()

@@ -6,6 +6,7 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeParameterRef
@@ -249,6 +250,18 @@ private fun LsiTypeRef.canonicalTypeText(): String {
             }
         }
         is LsiArrayType -> "array:${elementType.canonicalTypeText()}"
+        is LsiFunctionType -> buildString {
+            append("function:")
+            append(if (suspending) "suspend" else "regular")
+            receiverType?.let { receiver ->
+                append(":receiver:")
+                append(receiver.canonicalTypeText())
+            }
+            append(":parameters:[")
+            append(parameterTypes.joinToString(",") { parameter -> parameter.canonicalTypeText() })
+            append("]:return:")
+            append(returnType.canonicalTypeText())
+        }
         is LsiTypeParameterRef -> "parameter:${parameterId.value}"
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
     }

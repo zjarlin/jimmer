@@ -13,9 +13,13 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
+import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -232,6 +236,63 @@ class TypedTuplePrecompilerTest {
         }
         assertEquals(unresolvedTuple.id, unresolvedException.declarationId)
         assertTrue(unresolvedException.recoverable)
+    }
+
+    @Test
+    fun `rejects function typed tuple properties explicitly`() {
+        val tupleId = LsiSymbolId.type("demo.CallbackTuple")
+        val callback = field(
+            ownerId = tupleId,
+            name = "callback",
+            type = LsiFunctionType(returnType = STRING_TYPE),
+        )
+        val tuple = type(
+            qualifiedName = "demo.CallbackTuple",
+            annotations = listOf(annotation(TYPED_TUPLE)),
+            memberIds = listOf(callback.id),
+        )
+
+        val exception = assertFailsWith<TypedTuplePrecompileException> {
+            TypedTuplePrecompiler().compile(LsiWorkspace(declarations = listOf(callback, tuple)))
+        }
+
+        assertEquals(callback.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("cannot use a function type"))
+        assertFalse(exception.recoverable)
+    }
+
+    @Test
+    fun `tracks type use annotation dependencies`() {
+        val tupleId = LsiSymbolId.type("demo.AnnotatedTuple")
+        val annotationId = LsiSymbolId.type("demo.TypeMarker")
+        val payloadId = LsiSymbolId.type("demo.AnnotationPayload")
+        val annotatedType = STRING_TYPE.copy(
+            annotations = listOf(
+                LsiAnnotation(
+                    type = annotationId,
+                    arguments = mapOf(
+                        "payload" to LsiAnnotationArgument(
+                            value = LsiAnnotationValue.ClassValue(LsiDeclaredType(payloadId)),
+                            origin = LsiAnnotationArgumentOrigin.EXPLICIT,
+                        )
+                    ),
+                )
+            ),
+        )
+        val value = field(tupleId, "value", annotatedType)
+        val tuple = type(
+            qualifiedName = "demo.AnnotatedTuple",
+            annotations = listOf(annotation(TYPED_TUPLE)),
+            memberIds = listOf(value.id),
+        )
+
+        val model = TypedTuplePrecompiler()
+            .compile(LsiWorkspace(declarations = listOf(value, tuple)))
+            .tuples
+            .single()
+
+        assertTrue(annotationId in model.dependencies.typeIds)
+        assertTrue(payloadId in model.dependencies.typeIds)
     }
 
     @Test

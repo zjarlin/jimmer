@@ -53,6 +53,11 @@ class LsiTypeSystem(
             is LsiArrayType -> type.copy(
                 elementType = substitute(type.elementType, substitutions),
             )
+            is LsiFunctionType -> type.copy(
+                returnType = substitute(type.returnType, substitutions),
+                receiverType = type.receiverType?.let { receiver -> substitute(receiver, substitutions) },
+                parameterTypes = type.parameterTypes.map { parameter -> substitute(parameter, substitutions) },
+            )
             is LsiPrimitiveType,
             is LsiUnresolvedType,
             -> type
@@ -299,6 +304,10 @@ private fun LsiTypeRef.withUseSiteMetadata(
                 resolvedNullability == LsiNullability.PLATFORM,
         )
         is LsiArrayType -> copy(
+            nullability = resolvedNullability,
+            annotations = resolvedAnnotations,
+        )
+        is LsiFunctionType -> copy(
             nullability = resolvedNullability,
             annotations = resolvedAnnotations,
         )

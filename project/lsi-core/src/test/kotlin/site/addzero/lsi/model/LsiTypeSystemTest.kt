@@ -99,6 +99,73 @@ class LsiTypeSystemTest {
     }
 
     @Test
+    fun `substitutes every position of a function type`() {
+        val ownerId = LsiSymbolId.type("sample.Owner")
+        val parameterId = LsiSymbolId.typeParameter(ownerId, "T")
+        val marker = annotation(LsiSymbolId.type("sample.FunctionMarker"), "function")
+        val replacement = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val functionType = LsiFunctionType(
+            returnType = LsiTypeParameterRef(parameterId),
+            receiverType = LsiTypeParameterRef(
+                parameterId = parameterId,
+                nullability = LsiNullability.NULLABLE,
+            ),
+            parameterTypes = listOf(
+                LsiArrayType(LsiTypeParameterRef(parameterId)),
+            ),
+            suspending = true,
+            annotations = listOf(marker),
+        )
+        val typeSystem = LsiTypeSystem(LsiWorkspace())
+
+        val substituted = assertIs<LsiFunctionType>(
+            typeSystem.substitute(
+                type = functionType,
+                substitutions = mapOf(parameterId to LsiTypeArgument.invariant(replacement)),
+            ),
+        )
+
+        assertEquals(replacement, substituted.returnType)
+        assertEquals(
+            replacement.copy(nullability = LsiNullability.NULLABLE),
+            substituted.receiverType,
+        )
+        assertEquals(
+            replacement,
+            assertIs<LsiArrayType>(substituted.parameterTypes.single()).elementType,
+        )
+        assertTrue(substituted.suspending)
+        assertEquals(listOf(marker), substituted.annotations)
+    }
+
+    @Test
+    fun `applies type parameter use metadata to a function replacement`() {
+        val ownerId = LsiSymbolId.type("sample.Owner")
+        val parameterId = LsiSymbolId.typeParameter(ownerId, "T")
+        val useSiteMarker = annotation(LsiSymbolId.type("sample.UseSiteMarker"), "use")
+        val replacementMarker = annotation(LsiSymbolId.type("sample.ReplacementMarker"), "replacement")
+        val replacement = LsiFunctionType(
+            returnType = LsiPrimitiveType(LsiPrimitiveKind.UNIT),
+            annotations = listOf(replacementMarker),
+        )
+        val use = LsiTypeParameterRef(
+            parameterId = parameterId,
+            nullability = LsiNullability.NULLABLE,
+            annotations = listOf(useSiteMarker),
+        )
+
+        val substituted = assertIs<LsiFunctionType>(
+            LsiTypeSystem(LsiWorkspace()).substitute(
+                type = use,
+                substitutions = mapOf(parameterId to LsiTypeArgument.invariant(replacement)),
+            ),
+        )
+
+        assertEquals(LsiNullability.NULLABLE, substituted.nullability)
+        assertEquals(listOf(useSiteMarker, replacementMarker), substituted.annotations)
+    }
+
+    @Test
     fun `boxes primitive replacements for nullable type parameter uses`() {
         val baseId = LsiSymbolId.type("sample.Base")
         val entityId = LsiSymbolId.type("sample.Entity")

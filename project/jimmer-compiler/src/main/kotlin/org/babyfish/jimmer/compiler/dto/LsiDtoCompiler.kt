@@ -20,6 +20,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
@@ -292,6 +293,7 @@ private fun LsiTypeRef.toSimplePropType(): SimplePropType {
         }
         is LsiDeclaredType -> SIMPLE_DECLARED_PROP_TYPES[declarationId] ?: SimplePropType.NONE
         is LsiArrayType,
+        is LsiFunctionType,
         is LsiTypeParameterRef,
         is LsiUnresolvedType,
         -> SimplePropType.NONE
