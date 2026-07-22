@@ -40,6 +40,7 @@ class JimmerImmutableEmbeddableGoldenTest {
 
         assertContains(expression, "PropExpression<Boolean> active()")
         assertContains(expression, "PropExpression.Num<Character> code()")
+        assertContains(expression, "PropExpression.Cmp<Character> boxedCode()")
         assertContains(expression, "PropExpression.Cmp<Boolean> boxedActive()")
         assertContains(expression, "PropExpression.Num<BigDecimal> amount()")
         assertContains(expression, "PropExpression.Dt<Date> legacyDate()")
@@ -228,6 +229,8 @@ class JimmerImmutableEmbeddableGoldenTest {
                 boolean active();
 
                 char code();
+
+                Character boxedCode();
 
                 Boolean boxedActive();
 

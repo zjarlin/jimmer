@@ -13,11 +13,9 @@ import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
-import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableEmbeddableJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableDraftJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableFetcherJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableQueryJavaRenderer
-import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableEmbeddableKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableDraftKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableFetcherKotlinRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableQueryKotlinRenderer
@@ -34,6 +32,9 @@ import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.LsiPoetRenderer
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
@@ -120,32 +121,36 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             CompilerPlatform.APT -> {
                 val draftRenderer = JimmerImmutableDraftJavaRenderer()
                 val fetcherRenderer = JimmerImmutableFetcherJavaRenderer()
-                val embeddableRenderer = JimmerImmutableEmbeddableJavaRenderer()
                 val queryRenderer = JimmerImmutableQueryJavaRenderer()
+                val embeddableRenderer: LsiPoetRenderer = LsiJavaPoetRenderer()
                 val queryTypes = state.schema.generatedPropsTypes(state.targetTypeIds)
                 draftTypes.map { type ->
                     draftRenderer.render(state.draftCodegenSchema, type)
                 } + fetcherTypes.map { type ->
                     fetcherRenderer.render(state.schema, type, context.round.workspace)
-                } + embeddableTypes.flatMap { type ->
-                    embeddableRenderer.render(state.schema, type, context.round.workspace)
-                } + queryTypes.flatMap { type ->
+                } + state.schema.toEmbeddablePoetArtifacts(
+                    types = embeddableTypes,
+                    language = LsiLanguage.JAVA,
+                    workspace = context.round.workspace,
+                ).map(embeddableRenderer::render) + queryTypes.flatMap { type ->
                     queryRenderer.render(state.schema, type, context.round.workspace)
                 }
             }
             CompilerPlatform.KSP -> {
                 val draftRenderer = JimmerImmutableDraftKotlinRenderer()
                 val fetcherRenderer = JimmerImmutableFetcherKotlinRenderer()
-                val embeddableRenderer = JimmerImmutableEmbeddableKotlinRenderer()
                 val queryRenderer = JimmerImmutableQueryKotlinRenderer()
+                val embeddableRenderer: LsiPoetRenderer = LsiKotlinPoetRenderer()
                 val queryTypes = state.schema.generatedQueryTypes(state.targetTypeIds)
                 draftTypes.map { type ->
                     draftRenderer.render(state.draftCodegenSchema, type)
                 } + fetcherTypes.map { type ->
                     fetcherRenderer.render(state.schema, type, context.round.workspace)
-                } + embeddableTypes.map { type ->
-                    embeddableRenderer.render(state.schema, type, context.round.workspace)
-                } + queryTypes.map { type ->
+                } + state.schema.toEmbeddablePoetArtifacts(
+                    types = embeddableTypes,
+                    language = LsiLanguage.KOTLIN,
+                    workspace = context.round.workspace,
+                ).map(embeddableRenderer::render) + queryTypes.map { type ->
                     queryRenderer.render(state.schema, type, context.round.workspace)
                 }
             }
