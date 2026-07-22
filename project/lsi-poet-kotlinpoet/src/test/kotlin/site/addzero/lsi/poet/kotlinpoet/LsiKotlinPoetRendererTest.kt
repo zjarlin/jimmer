@@ -9,6 +9,8 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetCodeBlock
@@ -111,6 +113,45 @@ class LsiKotlinPoetRendererTest {
             LsiKotlinPoetRenderer().render(artifact(unresolvedType, "Broken"))
         }
         assertTrue(exception.message.orEmpty().contains("unresolved"))
+    }
+
+    @Test
+    fun `renders constructor throws vararg override and structural control flow`() {
+        val exceptionType = LsiDeclaredType(LsiSymbolId.type("java.io.IOException"))
+        val type = LsiPoetType(
+            name = "Service",
+            kind = LsiPoetTypeKind.CLASS,
+            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            primaryConstructor = LsiPoetConstructor(
+                parameters = listOf(
+                    LsiPoetParameter(
+                        name = "values",
+                        type = stringType,
+                        modifiers = setOf(LsiPoetModifier.VARARG),
+                    )
+                ),
+                thrownTypes = listOf(exceptionType),
+            ),
+            members = listOf(
+                LsiPoetFunction(
+                    name = "consume",
+                    modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
+                    returnType = LsiPrimitiveType(LsiPrimitiveKind.UNIT),
+                    body = LsiPoetCodeBlock.build {
+                        beginControlFlow { text("if (values.isEmpty())") }
+                        statement { text("return") }
+                        endControlFlow()
+                    },
+                )
+            ),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact(type, "Service")).content
+
+        assertTrue("@Throws(IOException::class)" in content, content)
+        assertTrue("vararg values: String" in content, content)
+        assertTrue("public override fun consume()" in content, content)
+        assertTrue("if (values.isEmpty()) {\n            return\n        }" in content, content)
     }
 
     private fun artifact(type: LsiPoetType, fileName: String): LsiPoetArtifact {

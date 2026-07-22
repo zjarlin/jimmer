@@ -134,11 +134,15 @@ private fun LsiPoetConstructor.toKotlinConstructor(primary: Boolean): FunSpec {
             "Kotlin primary constructor cannot declare a body or delegation call"
         }
     }
+    require(typeParameters.isEmpty()) {
+        "KotlinPoet renderer cannot emit constructor type parameters"
+    }
     val builder = FunSpec.constructorBuilder()
         .addModifiers(*modifiers.toKotlinModifiers(KotlinModifierContext.CONSTRUCTOR))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toKotlinAnnotationSpec()) }
     documentation?.let { value -> builder.addKdoc("%L", value) }
     parameters.forEach { parameter -> builder.addParameter(parameter.toKotlinParameter()) }
+    builder.addThrownTypes(thrownTypes)
     delegationCall?.let { delegation ->
         val arguments = delegation.arguments.map(LsiPoetCodeBlock::toKotlinCodeBlock).toTypedArray()
         when (delegation.target) {
@@ -159,16 +163,7 @@ private fun LsiPoetFunction.toKotlinFunction(): FunSpec {
     receiverType?.let { type -> builder.receiver(type.toKotlinTypeName()) }
     parameters.forEach { parameter -> builder.addParameter(parameter.toKotlinParameter()) }
     returnType?.let { type -> builder.returns(type.toKotlinTypeName()) }
-    if (thrownTypes.isNotEmpty()) {
-        builder.addAnnotation(
-            AnnotationSpec.builder(Throws::class)
-                .addMember(
-                    thrownTypes.joinToString(", ") { "%T::class" },
-                    *thrownTypes.map { type -> type.toKotlinTypeName() }.toTypedArray(),
-                )
-                .build()
-        )
-    }
+    builder.addThrownTypes(thrownTypes)
     builder.addCode(body.toKotlinCodeBlock())
     return builder.build()
 }
@@ -223,11 +218,21 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
     val builder = CodeBlock.builder()
     parts.forEach { part ->
         when (part) {
+            is LsiPoetCodePart.BeginControlFlow -> builder.beginControlFlow(
+                "%L",
+                part.header.toKotlinCodeBlock(),
+            )
             is LsiPoetCodePart.CharacterLiteral -> builder.add("%L", part.value.kotlinCharacterLiteral())
+            LsiPoetCodePart.EndControlFlow -> builder.endControlFlow()
             LsiPoetCodePart.Indent -> builder.indent()
             is LsiPoetCodePart.Literal -> builder.add("%L", part.value)
             is LsiPoetCodePart.Name -> builder.add("%N", part.value)
             LsiPoetCodePart.NewLine -> builder.add("\n")
+            is LsiPoetCodePart.NextControlFlow -> builder.nextControlFlow(
+                "%L",
+                part.header.toKotlinCodeBlock(),
+            )
+            is LsiPoetCodePart.Statement -> builder.addStatement("%L", part.value.toKotlinCodeBlock())
             is LsiPoetCodePart.StringLiteral -> builder.add("%S", part.value)
             is LsiPoetCodePart.Text -> builder.add("%L", part.value)
             is LsiPoetCodePart.Type -> builder.add("%T", part.value.toKotlinTypeName())
@@ -235,6 +240,20 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
         }
     }
     return builder.build()
+}
+
+private fun FunSpec.Builder.addThrownTypes(thrownTypes: List<LsiTypeRef>) {
+    if (thrownTypes.isEmpty()) {
+        return
+    }
+    addAnnotation(
+        AnnotationSpec.builder(Throws::class)
+            .addMember(
+                thrownTypes.joinToString(", ") { "%T::class" },
+                *thrownTypes.map { type -> type.toKotlinTypeName() }.toTypedArray(),
+            )
+            .build()
+    )
 }
 
 private enum class KotlinModifierContext {

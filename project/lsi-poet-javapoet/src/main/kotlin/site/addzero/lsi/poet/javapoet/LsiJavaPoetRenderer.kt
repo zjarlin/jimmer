@@ -1,5 +1,6 @@
 package site.addzero.lsi.poet.javapoet
 
+import com.squareup.javapoet.ArrayTypeName
 import com.squareup.javapoet.CodeBlock
 import com.squareup.javapoet.FieldSpec
 import com.squareup.javapoet.JavaFile
@@ -9,6 +10,7 @@ import com.squareup.javapoet.TypeSpec
 import javax.lang.model.element.Modifier
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetCodePart
@@ -123,10 +125,12 @@ private fun LsiPoetConstructor.toJavaConstructor(): MethodSpec {
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.CONSTRUCTOR))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
+    typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toJavaTypeVariableName()) }
     parameters.forEach { parameter -> builder.addParameter(parameter.toJavaParameter()) }
     if (parameters.lastOrNull()?.modifiers?.contains(LsiPoetModifier.VARARG) == true) {
         builder.varargs(true)
     }
+    thrownTypes.forEach { type -> builder.addException(type.toJavaTypeName()) }
     delegationCall?.let { delegation ->
         val target = when (delegation.target) {
             LsiPoetDelegationTarget.THIS -> "this"
@@ -145,6 +149,12 @@ private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
     val builder = MethodSpec.methodBuilder(name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.FUNCTION))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
+    if (
+        LsiPoetModifier.OVERRIDE in modifiers &&
+        annotations.none { annotation -> annotation.type == JAVA_LANG_OVERRIDE }
+    ) {
+        builder.addAnnotation(Override::class.java)
+    }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
     typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toJavaTypeVariableName()) }
     parameters.forEach { parameter -> builder.addParameter(parameter.toJavaParameter()) }
@@ -161,7 +171,10 @@ private fun LsiPoetParameter.toJavaParameter(): ParameterSpec {
     require(defaultValue == null) {
         "JavaPoet renderer cannot emit a default parameter value: $name"
     }
-    val builder = ParameterSpec.builder(type.toJavaTypeName(), name)
+    val parameterType = type.toJavaTypeName().let { typeName ->
+        if (LsiPoetModifier.VARARG in modifiers) ArrayTypeName.of(typeName) else typeName
+    }
+    val builder = ParameterSpec.builder(parameterType, name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.PARAMETER))
     annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaAnnotationSpec()) }
     return builder.build()
@@ -184,11 +197,21 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
     val builder = CodeBlock.builder()
     parts.forEach { part ->
         when (part) {
+            is LsiPoetCodePart.BeginControlFlow -> builder.beginControlFlow(
+                "\$L",
+                part.header.toJavaCodeBlock(),
+            )
             is LsiPoetCodePart.CharacterLiteral -> builder.add("\$L", part.value.javaCharacterLiteral())
+            LsiPoetCodePart.EndControlFlow -> builder.endControlFlow()
             LsiPoetCodePart.Indent -> builder.indent()
             is LsiPoetCodePart.Literal -> builder.add("\$L", part.value)
             is LsiPoetCodePart.Name -> builder.add("\$N", part.value)
             LsiPoetCodePart.NewLine -> builder.add("\n")
+            is LsiPoetCodePart.NextControlFlow -> builder.nextControlFlow(
+                "\$L",
+                part.header.toJavaCodeBlock(),
+            )
+            is LsiPoetCodePart.Statement -> builder.addStatement("\$L", part.value.toJavaCodeBlock())
             is LsiPoetCodePart.StringLiteral -> builder.add("\$S", part.value)
             is LsiPoetCodePart.Text -> builder.add("\$L", part.value)
             is LsiPoetCodePart.Type -> builder.add("\$T", part.value.toJavaTypeName())
@@ -305,3 +328,5 @@ private fun Char.javaCharacterLiteral(): String {
     }
     return "'$content'"
 }
+
+private val JAVA_LANG_OVERRIDE = LsiSymbolId.type("java.lang.Override")

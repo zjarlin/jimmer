@@ -10,6 +10,10 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeParameter
+import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetConstructor
@@ -137,6 +141,59 @@ class LsiJavaPoetRendererTest {
             LsiJavaPoetRenderer().render(artifact(unresolvedType, "Broken"))
         }
         assertTrue(exception.message.orEmpty().contains("unresolved"))
+    }
+
+    @Test
+    fun `renders constructor contracts override vararg and structural control flow`() {
+        val ownerId = LsiSymbolId.type("demo.generated.Service")
+        val parameterId = LsiSymbolId.typeParameter(ownerId, "T")
+        val exceptionType = LsiDeclaredType(LsiSymbolId.type("java.io.IOException"))
+        val type = LsiPoetType(
+            name = "Service",
+            kind = LsiPoetTypeKind.CLASS,
+            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            members = listOf(
+                LsiPoetConstructor(
+                    modifiers = setOf(LsiPoetModifier.PUBLIC),
+                    typeParameters = listOf(LsiTypeParameter(parameterId, "T")),
+                    parameters = listOf(
+                        LsiPoetParameter(
+                            name = "values",
+                            type = LsiTypeParameterRef(parameterId),
+                            modifiers = setOf(LsiPoetModifier.VARARG),
+                        )
+                    ),
+                    thrownTypes = listOf(exceptionType),
+                ),
+                LsiPoetFunction(
+                    name = "consume",
+                    modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
+                    parameters = listOf(
+                        LsiPoetParameter(
+                            name = "values",
+                            type = stringType,
+                            modifiers = setOf(LsiPoetModifier.VARARG),
+                        )
+                    ),
+                    returnType = LsiPrimitiveType(LsiPrimitiveKind.VOID),
+                    body = LsiPoetCodeBlock.build {
+                        beginControlFlow {
+                            text("if (")
+                            name("values")
+                            text(".length == 0)")
+                        }
+                        statement { text("return") }
+                        endControlFlow()
+                    },
+                ),
+            ),
+        )
+
+        val content = LsiJavaPoetRenderer().render(artifact(type, "Service")).content
+
+        assertTrue("public <T> Service(T... values) throws IOException" in content)
+        assertTrue("@Override\n    public void consume(String... values)" in content)
+        assertTrue("if (values.length == 0) {\n            return;\n        }" in content)
     }
 
     private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {

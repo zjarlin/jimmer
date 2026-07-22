@@ -26,6 +26,23 @@ sealed interface LsiPoetCodePart {
 
     data class CharacterLiteral(val value: Char) : LsiPoetCodePart
 
+    /**
+     * 由具体 Poet 实现补齐语句终止符和换行。
+     */
+    data class Statement(val value: LsiPoetCodeBlock) : LsiPoetCodePart
+
+    /**
+     * 开始一个由具体 Poet 实现负责排版的控制流。
+     */
+    data class BeginControlFlow(val header: LsiPoetCodeBlock) : LsiPoetCodePart
+
+    /**
+     * 切换到同一控制流的下一分支。
+     */
+    data class NextControlFlow(val header: LsiPoetCodeBlock) : LsiPoetCodePart
+
+    data object EndControlFlow : LsiPoetCodePart
+
     data object NewLine : LsiPoetCodePart
 
     data object Indent : LsiPoetCodePart
@@ -41,9 +58,20 @@ data class LsiPoetCodeBlock(
 
     init {
         var indentation = 0
+        var controlFlowDepth = 0
         parts.forEach { part ->
             when (part) {
+                is LsiPoetCodePart.BeginControlFlow -> controlFlowDepth++
+                LsiPoetCodePart.EndControlFlow -> {
+                    controlFlowDepth--
+                    require(controlFlowDepth >= 0) {
+                        "LSI Poet code block cannot end a control flow before it begins"
+                    }
+                }
                 LsiPoetCodePart.Indent -> indentation++
+                is LsiPoetCodePart.NextControlFlow -> require(controlFlowDepth > 0) {
+                    "LSI Poet code block cannot continue a control flow before it begins"
+                }
                 LsiPoetCodePart.Unindent -> {
                     indentation--
                     require(indentation >= 0) {
@@ -55,6 +83,9 @@ data class LsiPoetCodeBlock(
         }
         require(indentation == 0) {
             "LSI Poet code block must close every indent"
+        }
+        require(controlFlowDepth == 0) {
+            "LSI Poet code block must close every control flow"
         }
     }
 
@@ -98,6 +129,22 @@ class LsiPoetCodeBuilder internal constructor() {
 
     fun line() {
         parts += LsiPoetCodePart.NewLine
+    }
+
+    fun statement(block: LsiPoetCodeBuilder.() -> Unit) {
+        parts += LsiPoetCodePart.Statement(LsiPoetCodeBlock.build(block))
+    }
+
+    fun beginControlFlow(block: LsiPoetCodeBuilder.() -> Unit) {
+        parts += LsiPoetCodePart.BeginControlFlow(LsiPoetCodeBlock.build(block))
+    }
+
+    fun nextControlFlow(block: LsiPoetCodeBuilder.() -> Unit) {
+        parts += LsiPoetCodePart.NextControlFlow(LsiPoetCodeBlock.build(block))
+    }
+
+    fun endControlFlow() {
+        parts += LsiPoetCodePart.EndControlFlow
     }
 
     fun indent(block: LsiPoetCodeBuilder.() -> Unit) {

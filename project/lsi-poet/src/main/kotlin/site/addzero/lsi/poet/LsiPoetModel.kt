@@ -133,11 +133,16 @@ data class LsiPoetConstructor(
     override val annotations: List<LsiAnnotation> = emptyList(),
     override val modifiers: Set<LsiPoetModifier> = emptySet(),
     override val documentation: String? = null,
+    val typeParameters: List<LsiTypeParameter> = emptyList(),
     val parameters: List<LsiPoetParameter> = emptyList(),
+    val thrownTypes: List<LsiTypeRef> = emptyList(),
     val body: LsiPoetCodeBlock = LsiPoetCodeBlock.EMPTY,
     val delegationCall: LsiPoetDelegationCall? = null,
 ) : LsiPoetMember {
     init {
+        require(typeParameters.map(LsiTypeParameter::id).distinct().size == typeParameters.size) {
+            "LSI Poet constructor type parameters cannot have duplicate ids"
+        }
         require(parameters.map(LsiPoetParameter::name).distinct().size == parameters.size) {
             "LSI Poet constructor parameters cannot have duplicate names"
         }

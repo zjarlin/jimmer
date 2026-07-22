@@ -66,6 +66,18 @@ class LsiPoetModelTest {
         assertFailsWith<IllegalArgumentException> {
             LsiPoetCodeBlock(listOf(LsiPoetCodePart.Unindent))
         }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetCodeBlock(listOf(LsiPoetCodePart.EndControlFlow))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetCodeBlock(
+                listOf(
+                    LsiPoetCodePart.NextControlFlow(
+                        LsiPoetCodeBlock.build { text("else") }
+                    )
+                )
+            )
+        }
         val file = LsiPoetFile(
             language = LsiLanguage.JAVA,
             packageName = "demo",
@@ -79,6 +91,21 @@ class LsiPoetModelTest {
             )
         }
         assertTrue(exception.message.orEmpty().contains("originating symbol"))
+    }
+
+    @Test
+    fun `builds balanced structural statements and control flow`() {
+        val body = LsiPoetCodeBlock.build {
+            beginControlFlow { text("if (ready)") }
+            statement { text("run()") }
+            nextControlFlow { text("else") }
+            statement { text("stop()") }
+            endControlFlow()
+        }
+
+        assertEquals(5, body.parts.size)
+        assertTrue(body.parts.first() is LsiPoetCodePart.BeginControlFlow)
+        assertTrue(body.parts.last() is LsiPoetCodePart.EndControlFlow)
     }
 
     @Test
