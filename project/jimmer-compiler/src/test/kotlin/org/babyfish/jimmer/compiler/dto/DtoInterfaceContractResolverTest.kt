@@ -28,6 +28,12 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeArgument
+import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.DtoVariance
 
 class DtoInterfaceContractResolverTest {
 
@@ -572,8 +578,8 @@ class DtoInterfaceContractResolverTest {
         )
     }
 
-    private fun graph(superInterfaces: List<JimmerDtoTypeRef>): JimmerDtoRenderGraph {
-        val type = JimmerDtoType(
+    private fun graph(superInterfaces: List<DtoTypeRef>): DtoGraph {
+        val type = DtoType(
             id = DTO_TYPE_ID,
             baseTypeId = null,
             packageName = "contract.dto",
@@ -588,7 +594,7 @@ class DtoInterfaceContractResolverTest {
             hiddenFlatPropIds = emptyList(),
             polymorphism = null,
         )
-        return JimmerDtoRenderGraph(
+        return DtoGraph(
             source = DTO_SOURCE,
             rootTypeIds = listOf(DTO_TYPE_ID),
             types = listOf(type),
@@ -598,14 +604,14 @@ class DtoInterfaceContractResolverTest {
 
     private fun typeRef(
         typeName: String,
-        arguments: List<JimmerDtoTypeArgument> = emptyList(),
+        arguments: List<DtoTypeArgument> = emptyList(),
         nullable: Boolean = false,
-    ): JimmerDtoTypeRef {
-        return JimmerDtoTypeRef(typeName, arguments, nullable, DTO_LOCATION)
+    ): DtoTypeRef {
+        return DtoTypeRef(typeName, arguments, nullable, DTO_LOCATION)
     }
 
-    private fun typeArgument(type: JimmerDtoTypeRef): JimmerDtoTypeArgument {
-        return JimmerDtoTypeArgument(JimmerDtoVariance.INVARIANT, type)
+    private fun typeArgument(type: DtoTypeRef): DtoTypeArgument {
+        return DtoTypeArgument(DtoVariance.INVARIANT, type)
     }
 
     private fun interfaceType(
@@ -661,6 +667,6 @@ class DtoInterfaceContractResolverTest {
     companion object {
         private val DTO_SOURCE = LsiSource.of("contract/Contract.dto")
         private val DTO_LOCATION = LsiLocation(DTO_SOURCE, LsiPosition(1, 1))
-        private val DTO_TYPE_ID = JimmerDtoTypeId("contract/Contract.dto#root:0000:ContractDto")
+        private val DTO_TYPE_ID = DtoTypeId("contract/Contract.dto#root:0000:ContractDto")
     }
 }

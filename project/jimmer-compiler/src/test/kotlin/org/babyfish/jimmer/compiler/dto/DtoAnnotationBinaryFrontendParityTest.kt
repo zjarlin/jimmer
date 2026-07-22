@@ -43,6 +43,9 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class DtoAnnotationBinaryFrontendParityTest {
 
@@ -293,7 +296,7 @@ class DtoAnnotationBinaryFrontendParityTest {
                 )
             )
         )
-        val dtoType = JimmerDtoType(
+        val dtoType = DtoType(
             id = DTO_TYPE_ID,
             baseTypeId = baseTypeId,
             packageName = "demo.dto",
@@ -308,7 +311,7 @@ class DtoAnnotationBinaryFrontendParityTest {
             hiddenFlatPropIds = emptyList(),
             polymorphism = null,
         )
-        val graph = JimmerDtoRenderGraph(
+        val graph = DtoGraph(
             source = DTO_SOURCE,
             rootTypeIds = listOf(DTO_TYPE_ID),
             types = listOf(dtoType),
@@ -408,6 +411,6 @@ class DtoAnnotationBinaryFrontendParityTest {
         private val KOTLIN_USE_ID = LsiSymbolId.type("demo.KotlinUse")
         private val DTO_SOURCE = LsiSource.of("dto/Use.dto")
         private val DTO_LOCATION = LsiLocation(DTO_SOURCE, LsiPosition(1, 1))
-        private val DTO_TYPE_ID = JimmerDtoTypeId("dto/Use.dto#root")
+        private val DTO_TYPE_ID = DtoTypeId("dto/Use.dto#root")
     }
 }

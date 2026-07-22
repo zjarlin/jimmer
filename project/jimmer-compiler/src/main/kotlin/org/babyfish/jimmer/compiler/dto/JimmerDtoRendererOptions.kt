@@ -3,6 +3,9 @@ package org.babyfish.jimmer.compiler.dto
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 internal data class JimmerDtoRendererOptions(
     val jacksonVersion: JimmerDtoJacksonVersion,
@@ -61,11 +64,11 @@ internal fun CompilerRound.toJimmerDtoRendererOptions(): JimmerDtoRendererOption
 internal fun JimmerDtoRendererOptions.effectiveKspMutableByRootTypeId(
     platform: CompilerPlatform,
     schema: JimmerDtoPrecompiledSchema,
-): Map<JimmerDtoTypeId, Boolean> {
-    val result = sortedMapOf<JimmerDtoTypeId, Boolean>()
+): Map<DtoTypeId, Boolean> {
+    val result = sortedMapOf<DtoTypeId, Boolean>()
     schema.documents.forEach { document ->
-        document.renderGraph.rootTypeIds.forEach { rootTypeId ->
-            val rootType = document.renderGraph.typesById.getValue(rootTypeId)
+        document.graph.rootTypeIds.forEach { rootTypeId ->
+            val rootType = document.graph.typesById.getValue(rootTypeId)
             val mutable = if (platform == CompilerPlatform.KSP) {
                 rootType.effectiveKspMutable(kspMutable)
             } else {
@@ -80,7 +83,7 @@ internal fun JimmerDtoRendererOptions.effectiveKspMutableByRootTypeId(
     return result.toMap()
 }
 
-private fun JimmerDtoType.effectiveKspMutable(defaultMutable: Boolean): Boolean {
+private fun DtoType.effectiveKspMutable(defaultMutable: Boolean): Boolean {
     val annotations = annotations.filter { annotation ->
         annotation.typeId == KOTLIN_DTO_ANNOTATION_TYPE_ID
     }
@@ -93,7 +96,7 @@ private fun JimmerDtoType.effectiveKspMutable(defaultMutable: Boolean): Boolean 
     val immutabilityArgument = annotations.single().arguments.singleOrNull { argument ->
         argument.name == KOTLIN_DTO_IMMUTABILITY_ARGUMENT
     } ?: error("DTO KotlinDto annotation requires immutability: ${id.value}")
-    val immutability = immutabilityArgument.value as? JimmerDtoAnnotationValue.EnumValue
+    val immutability = immutabilityArgument.value as? DtoAnnotationValue.EnumValue
         ?: error("DTO KotlinDto immutability must be an enum value: ${id.value}")
     require(immutability.enumTypeId == KOTLIN_DTO_IMMUTABILITY_TYPE_ID) {
         "DTO KotlinDto immutability must use ${KOTLIN_DTO_IMMUTABILITY_TYPE_ID.value}: ${id.value}"

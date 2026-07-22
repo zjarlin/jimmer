@@ -55,6 +55,9 @@ import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoType
 
 class JimmerDtoCompilerFeatureProviderTest {
     @Test
@@ -204,7 +207,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         ).dtoState()
 
         fun mutabilityByName(state: JimmerDtoCompilerFeatureState): Map<String, Boolean> {
-            val graph = state.schema.documents.single().renderGraph
+            val graph = state.schema.documents.single().graph
             return graph.rootTypeIds.associate { rootTypeId ->
                 requireNotNull(graph.typesById.getValue(rootTypeId).name) to
                     state.effectiveKspMutableByRootTypeId.getValue(rootTypeId)
@@ -259,27 +262,27 @@ class JimmerDtoCompilerFeatureProviderTest {
         assertTrue(outcome.failures.isEmpty())
         val document = outcome.schema.documents.single()
         assertEquals(inputSnapshot, document.inputSnapshot)
-        val dtoType = document.renderGraph.typesById.getValue(document.renderGraph.rootTypeIds.single())
+        val dtoType = document.graph.typesById.getValue(document.graph.rootTypeIds.single())
         assertEquals(listOf(BOOK_ID), document.targetTypeIds)
         assertEquals("demo.dto", dtoType.packageName)
         assertEquals("BookView", dtoType.name)
         assertEquals(
             listOf("id", "name"),
-            dtoType.propIds.map { propId -> document.renderGraph.propsById.getValue(propId).name },
+            dtoType.propIds.map { propId -> document.graph.propsById.getValue(propId).name },
         )
         assertEquals(BOOK_ID, dtoType.baseTypeId)
         assertTrue(document.annotationContract.diagnostics.isEmpty())
         assertEquals(
-            document.renderGraph.types.map(JimmerDtoType::id),
+            document.graph.types.map(DtoType::id),
             document.annotationContract.typePlans.map(JimmerDtoTypeAnnotationPlan::typeId),
         )
         assertEquals(
-            document.renderGraph.props.map(JimmerDtoProp::id),
+            document.graph.props.map(DtoProp::id),
             document.annotationContract.propPlans.map(JimmerDtoPropAnnotationPlan::propId),
         )
         assertTrue(document.interfaceContractResolution.successful)
         assertEquals(
-            document.renderGraph.types.map(JimmerDtoType::id),
+            document.graph.types.map(DtoType::id),
             document.interfaceContractResolution.contracts.map(DtoInterfaceContract::typeId),
         )
     }
@@ -317,8 +320,8 @@ class JimmerDtoCompilerFeatureProviderTest {
                 "BookView" to BOOK_ID,
                 "AuthorView" to AUTHOR_ID,
             ),
-            document.renderGraph.rootTypeIds.map { rootTypeId ->
-                val rootType = document.renderGraph.typesById.getValue(rootTypeId)
+            document.graph.rootTypeIds.map { rootTypeId ->
+                val rootType = document.graph.typesById.getValue(rootTypeId)
                 rootType.name to rootType.baseTypeId
             },
         )
@@ -410,18 +413,18 @@ class JimmerDtoCompilerFeatureProviderTest {
                 document.inputSnapshot.document.relativePath == fragmentDocument.relativePath
             }
             assertEquals(listOf(BOOK_ID), fragment.targetTypeIds)
-            assertTrue(fragment.renderGraph.rootTypeIds.isEmpty())
+            assertTrue(fragment.graph.rootTypeIds.isEmpty())
         }
         val document = first.schema.documents.single { candidate ->
-            candidate.renderGraph.rootTypeIds.isNotEmpty()
+            candidate.graph.rootTypeIds.isNotEmpty()
         }
         assertEquals(listOf(BOOK_ID), document.targetTypeIds)
-        val bookView = document.renderGraph.typesById.getValue(document.renderGraph.rootTypeIds.single())
+        val bookView = document.graph.typesById.getValue(document.graph.rootTypeIds.single())
         assertEquals("BookView", bookView.name)
         assertEquals(BOOK_ID, bookView.baseTypeId)
         assertEquals(
             listOf("id", "name"),
-            bookView.propIds.map { propId -> document.renderGraph.propsById.getValue(propId).name },
+            bookView.propIds.map { propId -> document.graph.propsById.getValue(propId).name },
         )
         assertEquals(first.schema.normalizedSnapshot(), reversed.schema.normalizedSnapshot())
         assertEquals(first.schema.fingerprint(), reversed.schema.fingerprint())
@@ -488,8 +491,8 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         ).dtoState()
         val contract = state.schema.documents.single().annotationContract
-        val rootTypeId = state.schema.documents.single().renderGraph.rootTypeIds.single()
-        val namePropId = state.schema.documents.single().renderGraph.props.single().id
+        val rootTypeId = state.schema.documents.single().graph.rootTypeIds.single()
+        val namePropId = state.schema.documents.single().graph.props.single().id
         val noTargetDeclaration = contract.declarationsByTypeId.getValue(noTargetTypeId)
         val typeApplications = contract.typePlansByTypeId.getValue(rootTypeId).applications
         val propApplications = contract.propPlansByPropId.getValue(namePropId).propertyApplications
@@ -618,7 +621,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         ).schema
         val document = baseline.documents.single()
         val markerTypeId = LsiSymbolId.type("demo.RenderMarker")
-        val rootTypeId = document.renderGraph.rootTypeIds.single()
+        val rootTypeId = document.graph.rootTypeIds.single()
         val annotationContract = document.annotationContract.copy(
             declarations = listOf(
                 JimmerDtoAnnotationDeclaration(
@@ -819,22 +822,22 @@ class JimmerDtoCompilerFeatureProviderTest {
 
         assertTrue(outcome.failures.isEmpty())
         val document = outcome.schema.documents.single()
-        val dtoType = document.renderGraph.typesById.getValue(document.renderGraph.rootTypeIds.single())
+        val dtoType = document.graph.typesById.getValue(document.graph.rootTypeIds.single())
         val polymorphism = assertNotNull(dtoType.polymorphism)
         assertFalse(polymorphism.exhaustive)
         assertTrue(polymorphism.branches.single { branch ->
-            branch.kind == JimmerDtoPolymorphicBranchKind.DEFAULT
+            branch.kind == DtoPolymorphicBranchKind.DEFAULT
         }.implicit)
         val branch = polymorphism.branches.single { value ->
-            value.kind == JimmerDtoPolymorphicBranchKind.TYPE
+            value.kind == DtoPolymorphicBranchKind.TYPE
         }
         assertEquals(ORGANIZATION_ID, branch.targetBaseTypeId)
         assertEquals(CLIENT_ID, schema.typesById.getValue(ORGANIZATION_ID).primarySuperTypeId)
         assertEquals(CLIENT_ID, schema.typesById.getValue(ORGANIZATION_ID).inheritanceRootTypeId)
-        val branchType = document.renderGraph.typesById.getValue(branch.bodyTypeId)
+        val branchType = document.graph.typesById.getValue(branch.bodyTypeId)
         assertEquals(
             listOf("taxCode"),
-            branchType.propIds.map { propId -> document.renderGraph.propsById.getValue(propId).name },
+            branchType.propIds.map { propId -> document.graph.propsById.getValue(propId).name },
         )
         assertTrue("branch|" in outcome.schema.normalizedSnapshot())
     }
@@ -938,7 +941,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             platform = CompilerPlatform.APT,
         ).schema
 
-        assertTrue(empty.documents.single().renderGraph.rootTypeIds.isEmpty())
+        assertTrue(empty.documents.single().graph.rootTypeIds.isEmpty())
         assertTrue("document|" in empty.normalizedSnapshot())
         assertEquals(empty.normalizedSnapshot(), same.normalizedSnapshot())
         assertEquals(empty.fingerprint(), same.fingerprint())
@@ -979,8 +982,8 @@ class JimmerDtoCompilerFeatureProviderTest {
         val secondDocument = secondState.schema.documents.single()
         assertEquals(
             listOf("BookView"),
-            secondDocument.renderGraph.rootTypeIds.map { typeId ->
-                secondDocument.renderGraph.typesById.getValue(typeId).name
+            secondDocument.graph.rootTypeIds.map { typeId ->
+                secondDocument.graph.typesById.getValue(typeId).name
             },
         )
         assertEquals(setOf(BOOK_ID), second.dtoResult().processedSymbols)
@@ -1083,8 +1086,8 @@ class JimmerDtoCompilerFeatureProviderTest {
         val secondDocument = second.dtoState().schema.documents.single()
         assertEquals(
             listOf("BookView"),
-            secondDocument.renderGraph.rootTypeIds.map { typeId ->
-                secondDocument.renderGraph.typesById.getValue(typeId).name
+            secondDocument.graph.rootTypeIds.map { typeId ->
+                secondDocument.graph.typesById.getValue(typeId).name
             },
         )
         assertEquals(setOf(BOOK_ID), second.dtoResult().processedSymbols)
@@ -1384,8 +1387,8 @@ class JimmerDtoCompilerFeatureProviderTest {
             assertEquals(listOf(AUTHOR_ID), document.targetTypeIds)
             assertEquals(
                 listOf("AuthorView" to AUTHOR_ID),
-                document.renderGraph.rootTypeIds.map { rootTypeId ->
-                    val rootType = document.renderGraph.typesById.getValue(rootTypeId)
+                document.graph.rootTypeIds.map { rootTypeId ->
+                    val rootType = document.graph.typesById.getValue(rootTypeId)
                     rootType.name to rootType.baseTypeId
                 },
             )
@@ -1624,7 +1627,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             defaultNullableInputModifier = DtoModifier.STATIC,
             rendererOptions = rendererOptions(CompilerPlatform.UNKNOWN),
             effectiveKspMutableByRootTypeId = schema.documents
-                .flatMap { document -> document.renderGraph.rootTypeIds }
+                .flatMap { document -> document.graph.rootTypeIds }
                 .sorted()
                 .associateWith { false },
             immutableDependencyFingerprint = "immutable-fingerprint",

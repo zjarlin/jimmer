@@ -17,6 +17,7 @@ import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     override val descriptor = JimmerCompilerFeatureDescriptor(
@@ -123,7 +124,7 @@ internal data class JimmerDtoCompilerFeatureState(
     val failures: List<JimmerDtoCompilerFailure>,
     val defaultNullableInputModifier: DtoModifier,
     val rendererOptions: JimmerDtoRendererOptions,
-    val effectiveKspMutableByRootTypeId: Map<JimmerDtoTypeId, Boolean>,
+    val effectiveKspMutableByRootTypeId: Map<DtoTypeId, Boolean>,
     val immutableDependencyFingerprint: String,
     override val fingerprint: String = buildString {
         append(status.name)
@@ -188,7 +189,7 @@ internal data class JimmerDtoCompilerFeatureState(
             "DTO KSP renderer plan must use stable root type id order"
         }
         val rootTypeIds = schema.documents
-            .flatMap { document -> document.renderGraph.rootTypeIds }
+            .flatMap { document -> document.graph.rootTypeIds }
             .sorted()
         require(effectiveKspMutableByRootTypeId.keys.toList() == rootTypeIds) {
             "DTO KSP renderer plan must cover every frozen root type"
@@ -394,7 +395,7 @@ private fun StringBuilder.appendLengthPrefixed(value: String) {
 }
 
 private fun StringBuilder.appendEffectiveKspMutableByRootTypeId(
-    effectiveKspMutableByRootTypeId: Map<JimmerDtoTypeId, Boolean>,
+    effectiveKspMutableByRootTypeId: Map<DtoTypeId, Boolean>,
 ) {
     append(effectiveKspMutableByRootTypeId.size)
     effectiveKspMutableByRootTypeId.forEach { (rootTypeId, mutable) ->

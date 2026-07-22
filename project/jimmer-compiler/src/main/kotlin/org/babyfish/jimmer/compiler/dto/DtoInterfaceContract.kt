@@ -4,12 +4,13 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 internal data class DtoInterfaceContractResolution(
     val contracts: List<DtoInterfaceContract>,
     val diagnostics: List<LsiDiagnostic>,
 ) {
-    val contractsByTypeId: Map<JimmerDtoTypeId, DtoInterfaceContract> =
+    val contractsByTypeId: Map<DtoTypeId, DtoInterfaceContract> =
         contracts.associateBy(DtoInterfaceContract::typeId)
 
     val successful: Boolean = diagnostics.isEmpty()
@@ -25,7 +26,7 @@ internal data class DtoInterfaceContractResolution(
 }
 
 internal data class DtoInterfaceContract(
-    val typeId: JimmerDtoTypeId,
+    val typeId: DtoTypeId,
     val superInterfaceTypeIds: List<LsiSymbolId>,
     val props: List<DtoInterfacePropContract>,
 ) {

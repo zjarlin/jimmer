@@ -46,6 +46,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
 
 class JimmerDtoReusableIntegrationTest {
 
@@ -87,11 +88,11 @@ class JimmerDtoReusableIntegrationTest {
         assertTrue(result.diagnostics.isEmpty())
         val bookGraph = state.schema.documents.single { compiledDocument ->
             compiledDocument.inputSnapshot.document.relativePath == bookDocument.relativePath
-        }.renderGraph
+        }.graph
         val bookView = bookGraph.typesById.getValue(bookGraph.rootTypeIds.single())
         val storeProp = bookView.propIds
             .map(bookGraph.propsById::getValue)
-            .single { prop -> prop.name == "store" } as JimmerDtoBaseProp
+            .single { prop -> prop.name == "store" } as DtoBaseProp
         val storeView = bookGraph.typesById.getValue(assertNotNull(storeProp.targetTypeId))
         assertEquals("StoreView", storeView.name)
         assertEquals(STORE_TYPE_ID, storeView.baseTypeId)
@@ -184,11 +185,11 @@ class JimmerDtoReusableIntegrationTest {
         assertTrue(state.failures.isEmpty())
         assertTrue(result.diagnostics.isEmpty())
         assertEquals(setOf(BOOK_TYPE_ID), result.processedSymbols)
-        val graph = state.schema.documents.single().renderGraph
+        val graph = state.schema.documents.single().graph
         val rootType = graph.typesById.getValue(graph.rootTypeIds.single())
         val storeProp = rootType.propIds
             .map(graph.propsById::getValue)
-            .single { prop -> prop.name == "store" } as JimmerDtoBaseProp
+            .single { prop -> prop.name == "store" } as DtoBaseProp
         assertNull(storeProp.targetTypeId)
     }
 

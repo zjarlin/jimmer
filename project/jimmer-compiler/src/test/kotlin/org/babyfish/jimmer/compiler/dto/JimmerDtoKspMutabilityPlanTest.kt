@@ -15,6 +15,12 @@ import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class JimmerDtoKspMutabilityPlanTest {
     @Test
@@ -85,7 +91,7 @@ class JimmerDtoKspMutabilityPlanTest {
                 JimmerDtoPrecompiledDocument(
                     inputSnapshot = CompilerInputDocumentSnapshot(DOCUMENT, emptyList()),
                     targetTypeIds = listOf(BASE_TYPE_ID),
-                    renderGraph = graph,
+                    graph = graph,
                     annotationContract = JimmerDtoAnnotationContract(
                         declarations = emptyList(),
                         typePlans = graph.types.map { type ->
@@ -109,15 +115,15 @@ class JimmerDtoKspMutabilityPlanTest {
         )
     }
 
-    private fun graph(): JimmerDtoRenderGraph {
+    private fun graph(): DtoGraph {
         val types = listOf(
             dtoType(AUTO_ROOT_TYPE_ID, kotlinDtoAnnotation("AUTO")),
             dtoType(DEFAULT_ROOT_TYPE_ID),
             dtoType(IMMUTABLE_ROOT_TYPE_ID, kotlinDtoAnnotation("IMMUTABLE")),
             dtoType(MUTABLE_ROOT_TYPE_ID, kotlinDtoAnnotation("MUTABLE")),
             dtoType(NESTED_TYPE_ID, kotlinDtoAnnotation("MUTABLE"), baseTypeId = null),
-        ).sortedBy(JimmerDtoType::id)
-        return JimmerDtoRenderGraph(
+        ).sortedBy(DtoType::id)
+        return DtoGraph(
             source = DOCUMENT.source,
             rootTypeIds = listOf(
                 MUTABLE_ROOT_TYPE_ID,
@@ -131,11 +137,11 @@ class JimmerDtoKspMutabilityPlanTest {
     }
 
     private fun dtoType(
-        id: JimmerDtoTypeId,
-        annotation: JimmerDtoAnnotation? = null,
+        id: DtoTypeId,
+        annotation: DtoAnnotation? = null,
         baseTypeId: LsiSymbolId? = BASE_TYPE_ID,
-    ): JimmerDtoType {
-        return JimmerDtoType(
+    ): DtoType {
+        return DtoType(
             id = id,
             baseTypeId = baseTypeId,
             packageName = "demo.dto",
@@ -152,13 +158,13 @@ class JimmerDtoKspMutabilityPlanTest {
         )
     }
 
-    private fun kotlinDtoAnnotation(immutability: String): JimmerDtoAnnotation {
-        return JimmerDtoAnnotation(
+    private fun kotlinDtoAnnotation(immutability: String): DtoAnnotation {
+        return DtoAnnotation(
             typeId = KOTLIN_DTO_ANNOTATION_TYPE_ID,
             arguments = listOf(
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     name = "immutability",
-                    value = JimmerDtoAnnotationValue.EnumValue(
+                    value = DtoAnnotationValue.EnumValue(
                         enumTypeId = KOTLIN_DTO_IMMUTABILITY_TYPE_ID,
                         constant = immutability,
                     ),
@@ -178,7 +184,7 @@ class JimmerDtoKspMutabilityPlanTest {
 
     private fun state(
         schema: JimmerDtoPrecompiledSchema,
-        effectiveKspMutableByRootTypeId: Map<JimmerDtoTypeId, Boolean>,
+        effectiveKspMutableByRootTypeId: Map<DtoTypeId, Boolean>,
     ): JimmerDtoCompilerFeatureState {
         return JimmerDtoCompilerFeatureState(
             status = JimmerDtoCompilerFeatureStatus.RESOLVED,
@@ -203,11 +209,11 @@ class JimmerDtoKspMutabilityPlanTest {
             content = "frozen ksp mutability fixture",
         )
         val BASE_TYPE_ID = LsiSymbolId.type("demo.Book")
-        val AUTO_ROOT_TYPE_ID = JimmerDtoTypeId("demo/Book.dto#root-auto")
-        val DEFAULT_ROOT_TYPE_ID = JimmerDtoTypeId("demo/Book.dto#root-default")
-        val IMMUTABLE_ROOT_TYPE_ID = JimmerDtoTypeId("demo/Book.dto#root-immutable")
-        val MUTABLE_ROOT_TYPE_ID = JimmerDtoTypeId("demo/Book.dto#root-mutable")
-        val NESTED_TYPE_ID = JimmerDtoTypeId("demo/Book.dto#type-nested")
+        val AUTO_ROOT_TYPE_ID = DtoTypeId("demo/Book.dto#root-auto")
+        val DEFAULT_ROOT_TYPE_ID = DtoTypeId("demo/Book.dto#root-default")
+        val IMMUTABLE_ROOT_TYPE_ID = DtoTypeId("demo/Book.dto#root-immutable")
+        val MUTABLE_ROOT_TYPE_ID = DtoTypeId("demo/Book.dto#root-mutable")
+        val NESTED_TYPE_ID = DtoTypeId("demo/Book.dto#type-nested")
         val ROOT_TYPE_IDS = listOf(
             AUTO_ROOT_TYPE_ID,
             DEFAULT_ROOT_TYPE_ID,

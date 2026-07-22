@@ -2,13 +2,14 @@ package org.babyfish.jimmer.compiler.dto
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
+import site.addzero.lsi.jimmer.dto.DtoPropId
 
 internal data class DtoConfigContractResolution(
     val contracts: List<DtoConfigContract>,
     val diagnostics: List<LsiDiagnostic>,
     val unresolvedTypeIds: List<LsiSymbolId> = emptyList(),
 ) {
-    val contractsByPropId: Map<JimmerDtoPropId, List<DtoConfigContract>> =
+    val contractsByPropId: Map<DtoPropId, List<DtoConfigContract>> =
         contracts.groupBy(DtoConfigContract::propId)
 
     val successful: Boolean = diagnostics.isEmpty() && unresolvedTypeIds.isEmpty()
@@ -28,7 +29,7 @@ internal data class DtoConfigContractResolution(
 }
 
 internal data class DtoConfigContract(
-    val propId: JimmerDtoPropId,
+    val propId: DtoPropId,
     val kind: DtoConfigContractKind,
     val implementationTypeId: LsiSymbolId,
     val targetEntityTypeId: LsiSymbolId,

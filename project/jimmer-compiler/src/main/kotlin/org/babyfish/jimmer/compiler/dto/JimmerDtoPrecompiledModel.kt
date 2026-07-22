@@ -4,6 +4,9 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoType
 
 internal data class JimmerDtoPrecompiledSchema(
     val documents: List<JimmerDtoPrecompiledDocument>,
@@ -23,7 +26,7 @@ internal data class JimmerDtoPrecompiledSchema(
 internal data class JimmerDtoPrecompiledDocument(
     val inputSnapshot: CompilerInputDocumentSnapshot,
     val targetTypeIds: List<LsiSymbolId>,
-    val renderGraph: JimmerDtoRenderGraph,
+    val graph: DtoGraph,
     val annotationContract: JimmerDtoAnnotationContract,
     val interfaceContractResolution: DtoInterfaceContractResolution,
     val configContractResolution: DtoConfigContractResolution,
@@ -33,24 +36,24 @@ internal data class JimmerDtoPrecompiledDocument(
         require(targetTypeIds == targetTypeIds.distinct().sorted()) {
             "DTO target type ids must be distinct and sorted"
         }
-        require(renderGraph.source == inputSnapshot.document.source) {
-            "DTO render graph source must match its input document"
+        require(graph.source == inputSnapshot.document.source) {
+            "DTO graph source must match its input document"
         }
-        require(renderGraph.rootTypeIds.all { typeId ->
-            renderGraph.typesById.getValue(typeId).baseTypeId in targetTypeIds
+        require(graph.rootTypeIds.all { typeId ->
+            graph.typesById.getValue(typeId).baseTypeId in targetTypeIds
         }) {
             "DTO types must reference a document target type: ${inputSnapshot.document.source.path}"
         }
-        require(annotationContract.typePlans.map(JimmerDtoTypeAnnotationPlan::typeId) == renderGraph.types.map(JimmerDtoType::id)) {
+        require(annotationContract.typePlans.map(JimmerDtoTypeAnnotationPlan::typeId) == graph.types.map(DtoType::id)) {
             "DTO annotation contract must cover every frozen DTO type: ${inputSnapshot.document.source.path}"
         }
-        require(annotationContract.propPlans.map(JimmerDtoPropAnnotationPlan::propId) == renderGraph.props.map(JimmerDtoProp::id)) {
+        require(annotationContract.propPlans.map(JimmerDtoPropAnnotationPlan::propId) == graph.props.map(DtoProp::id)) {
             "DTO annotation contract must cover every frozen DTO property: ${inputSnapshot.document.source.path}"
         }
-        require(interfaceContractResolution.contracts.all { contract -> contract.typeId in renderGraph.typesById }) {
+        require(interfaceContractResolution.contracts.all { contract -> contract.typeId in graph.typesById }) {
             "DTO interface contracts must reference frozen DTO types: ${inputSnapshot.document.source.path}"
         }
-        require(configContractResolution.contracts.all { contract -> contract.propId in renderGraph.propsById }) {
+        require(configContractResolution.contracts.all { contract -> contract.propId in graph.propsById }) {
             "DTO config contracts must reference frozen DTO properties: ${inputSnapshot.document.source.path}"
         }
     }

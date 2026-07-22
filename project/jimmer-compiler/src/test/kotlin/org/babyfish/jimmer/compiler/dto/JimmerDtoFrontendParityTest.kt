@@ -42,6 +42,7 @@ import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
 
 class JimmerDtoFrontendParityTest {
 
@@ -58,7 +59,7 @@ class JimmerDtoFrontendParityTest {
 
         val aptDocument = apt.dtoSchema.documents.single()
         val kspDocument = ksp.dtoSchema.documents.single()
-        assertEquals(aptDocument.renderGraph, kspDocument.renderGraph)
+        assertEquals(aptDocument.graph, kspDocument.graph)
         assertEquals(
             aptDocument.annotationContract.typePlans,
             kspDocument.annotationContract.typePlans,
@@ -127,17 +128,17 @@ class JimmerDtoFrontendParityTest {
             storeIdProp.view,
         )
 
-        val dtoType = aptDocument.renderGraph.typesById.getValue(
-            aptDocument.renderGraph.rootTypeIds.single(),
+        val dtoType = aptDocument.graph.typesById.getValue(
+            aptDocument.graph.rootTypeIds.single(),
         )
         val dtoProps = dtoType.propIds.map { propId ->
-            aptDocument.renderGraph.propsById.getValue(propId)
+            aptDocument.graph.propsById.getValue(propId)
         }
         assertEquals(listOf("id", "name", "rating", "storeId", "authors"), dtoProps.map { prop -> prop.name })
         assertTrue(dtoProps.single { prop -> prop.name == "rating" }.nullable)
         assertEquals(
             LsiSymbolId.property(BOOK_ID, "storeId"),
-            (dtoProps.single { prop -> prop.name == "storeId" } as JimmerDtoBaseProp)
+            (dtoProps.single { prop -> prop.name == "storeId" } as DtoBaseProp)
                 .baseProps
                 .single()
                 .propId,

@@ -285,19 +285,19 @@ internal class JimmerDtoPrecompiler {
             .map { entry ->
                 val snapshot = entry.inputSnapshot
                 val inputDocument = snapshot.document
-                val renderGraph = JimmerDtoRenderGraphFreezer(snapshot).freeze(
+                val graph = DtoGraphFreezer(snapshot).freeze(
                     compiledByCompiler.getValue(entry.compiler),
                 )
                 val annotationContract = JimmerDtoAnnotationContractFreezer(
                     workspace = workspace,
                     immutableSchema = immutableSchema,
-                ).freeze(renderGraph)
-                val interfaceContractResolution = DtoInterfaceContractResolver(workspace).resolve(renderGraph)
+                ).freeze(graph)
+                val interfaceContractResolution = DtoInterfaceContractResolver(workspace).resolve(graph)
                 val configContractResolution = DtoConfigContractResolver(
                     workspace = workspace,
                     immutableSchema = immutableSchema,
                     platform = platform,
-                ).resolve(renderGraph)
+                ).resolve(graph)
                 val semanticDiagnostics =
                     annotationContract.diagnostics +
                         interfaceContractResolution.diagnostics +
@@ -317,7 +317,7 @@ internal class JimmerDtoPrecompiler {
                 JimmerDtoPrecompiledDocument(
                     inputSnapshot = snapshot,
                     targetTypeIds = entry.targetTypeIds,
-                    renderGraph = renderGraph,
+                    graph = graph,
                     annotationContract = annotationContract,
                     interfaceContractResolution = interfaceContractResolution,
                     configContractResolution = configContractResolution,

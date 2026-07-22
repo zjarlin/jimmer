@@ -27,6 +27,10 @@ import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.DtoVariance
 
 internal class DtoInterfaceContractResolver(
     private val workspace: LsiWorkspace,
@@ -36,7 +40,7 @@ internal class DtoInterfaceContractResolver(
         .filterIsInstance<LsiTypeDeclaration>()
         .associateBy(LsiTypeDeclaration::qualifiedName)
 
-    fun resolve(graph: JimmerDtoRenderGraph): DtoInterfaceContractResolution {
+    fun resolve(graph: DtoGraph): DtoInterfaceContractResolution {
         val contracts = mutableListOf<DtoInterfaceContract>()
         val diagnostics = mutableListOf<LsiDiagnostic>()
         for (dtoType in graph.types) {
@@ -50,7 +54,7 @@ internal class DtoInterfaceContractResolver(
         )
     }
 
-    private fun resolveType(dtoType: JimmerDtoType): TypeResolution {
+    private fun resolveType(dtoType: DtoType): TypeResolution {
         if (dtoType.superInterfaces.isEmpty()) {
             return TypeResolution(
                 DtoInterfaceContract(dtoType.id, emptyList(), emptyList()),
@@ -103,8 +107,8 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun resolveRoot(
-        dtoType: JimmerDtoType,
-        typeRef: JimmerDtoTypeRef,
+        dtoType: DtoType,
+        typeRef: DtoTypeRef,
         index: Int,
         diagnostics: MutableList<LsiDiagnostic>,
     ): ResolvedInterfaceRoot? {
@@ -146,7 +150,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun collectInterface(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         interfaceType: LsiDeclaredType,
         rootIndex: Int,
         distance: Int,
@@ -271,7 +275,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun collectMember(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         declaringType: LsiTypeDeclaration,
         member: LsiDeclaration,
         substitutions: Map<LsiSymbolId, LsiTypeArgument>,
@@ -309,7 +313,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun collectProperty(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         declaringType: LsiTypeDeclaration,
         property: LsiProperty,
         substitutions: Map<LsiSymbolId, LsiTypeArgument>,
@@ -346,7 +350,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun collectFunction(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         declaringType: LsiTypeDeclaration,
         function: LsiFunction,
         substitutions: Map<LsiSymbolId, LsiTypeArgument>,
@@ -427,7 +431,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun mergeCandidates(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         candidates: List<PropCandidate>,
         diagnostics: MutableList<LsiDiagnostic>,
     ): List<DtoInterfacePropContract> {
@@ -486,7 +490,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun mergeAccessor(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         propertyName: String,
         role: String,
         accessors: List<DtoInterfaceAccessorContract>,
@@ -514,7 +518,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun validateTypeArgumentCount(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         declaration: LsiTypeDeclaration,
         type: LsiDeclaredType,
         location: LsiLocation,
@@ -536,7 +540,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun validateResolvedMemberType(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         declaration: LsiDeclaration,
         type: LsiTypeRef,
         diagnostics: MutableList<LsiDiagnostic>,
@@ -555,8 +559,8 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun resolveDtoTypeRef(
-        dtoType: JimmerDtoType,
-        typeRef: JimmerDtoTypeRef,
+        dtoType: DtoType,
+        typeRef: DtoTypeRef,
         diagnostics: MutableList<LsiDiagnostic>,
         validateDeclaredArity: Boolean = false,
     ): LsiTypeRef? {
@@ -608,7 +612,7 @@ internal class DtoInterfaceContractResolver(
         }
         val arguments = mutableListOf<LsiTypeArgument>()
         for (argument in typeRef.arguments) {
-            if (argument.variance == JimmerDtoVariance.STAR) {
+            if (argument.variance == DtoVariance.STAR) {
                 arguments += LsiTypeArgument.STAR
                 continue
             }
@@ -652,8 +656,8 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun invalidDtoTypeRefDiagnostic(
-        dtoType: JimmerDtoType,
-        typeRef: JimmerDtoTypeRef,
+        dtoType: DtoType,
+        typeRef: DtoTypeRef,
         reason: String,
     ): LsiDiagnostic {
         return diagnostic(
@@ -665,7 +669,7 @@ internal class DtoInterfaceContractResolver(
     }
 
     private fun illegalFunctionDiagnostic(
-        dtoType: JimmerDtoType,
+        dtoType: DtoType,
         declaringType: LsiTypeDeclaration,
         function: LsiFunction,
         reason: String,
@@ -807,12 +811,12 @@ private fun Boolean.toLsiNullability(): LsiNullability {
     return if (this) LsiNullability.NULLABLE else LsiNullability.NON_NULL
 }
 
-private fun JimmerDtoVariance.toLsiVariance(): LsiVariance {
+private fun DtoVariance.toLsiVariance(): LsiVariance {
     return when (this) {
-        JimmerDtoVariance.INVARIANT -> LsiVariance.INVARIANT
-        JimmerDtoVariance.IN -> LsiVariance.IN
-        JimmerDtoVariance.OUT -> LsiVariance.OUT
-        JimmerDtoVariance.STAR -> LsiVariance.STAR
+        DtoVariance.INVARIANT -> LsiVariance.INVARIANT
+        DtoVariance.IN -> LsiVariance.IN
+        DtoVariance.OUT -> LsiVariance.OUT
+        DtoVariance.STAR -> LsiVariance.STAR
     }
 }
 

@@ -42,6 +42,16 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
+import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
+import site.addzero.lsi.jimmer.dto.DtoFetchType
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoPropConfig
+import site.addzero.lsi.jimmer.dto.DtoPropId
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class DtoConfigContractResolverTest {
 
@@ -778,18 +788,18 @@ class DtoConfigContractResolverTest {
         implementationTypeId: LsiSymbolId,
         kind: DtoConfigContractKind,
         targetPackageName: String,
-    ): JimmerDtoRenderGraph {
+    ): DtoGraph {
         val type = GRAPH.types.single().copy(packageName = targetPackageName)
-        val prop = (GRAPH.props.single() as JimmerDtoBaseProp).let { baseProp ->
+        val prop = (GRAPH.props.single() as DtoBaseProp).let { baseProp ->
             baseProp.copy(
                 config = requireNotNull(baseProp.config).copy(
                     filter = if (kind == DtoConfigContractKind.FILTER) {
-                        JimmerDtoConfigTypeRef(implementationTypeId, CONFIG_LOCATION)
+                        DtoConfigTypeRef(implementationTypeId, CONFIG_LOCATION)
                     } else {
                         null
                     },
                     recursion = if (kind == DtoConfigContractKind.RECURSION) {
-                        JimmerDtoConfigTypeRef(implementationTypeId, CONFIG_LOCATION)
+                        DtoConfigTypeRef(implementationTypeId, CONFIG_LOCATION)
                     } else {
                         null
                     },
@@ -806,7 +816,7 @@ class DtoConfigContractResolverTest {
                 JimmerDtoPrecompiledDocument(
                     inputSnapshot = CompilerInputDocumentSnapshot(DOCUMENT, emptyList()),
                     targetTypeIds = listOf(BOOK_TYPE_ID),
-                    renderGraph = GRAPH,
+                    graph = GRAPH,
                     annotationContract = JimmerDtoAnnotationContract(
                         declarations = emptyList(),
                         typePlans = listOf(JimmerDtoTypeAnnotationPlan(DTO_TYPE_ID, emptyList())),
@@ -836,8 +846,8 @@ class DtoConfigContractResolverTest {
             LsiSymbolId.type("org.babyfish.jimmer.sql.fetcher.RecursionStrategy")
         private val TABLE_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.ast.table.Table")
         private val AUTHORS_PROP_ID = LsiSymbolId.property(BOOK_TYPE_ID, "authors")
-        private val DTO_TYPE_ID = JimmerDtoTypeId("dto#BookView")
-        private val DTO_PROP_ID = JimmerDtoPropId("dto#BookView/authors")
+        private val DTO_TYPE_ID = DtoTypeId("dto#BookView")
+        private val DTO_PROP_ID = DtoPropId("dto#BookView/authors")
         private val DTO_SOURCE = LsiSource.of("demo/src/main/dto/demo/Book.dto")
         private val CONFIG_LOCATION = LsiLocation(DTO_SOURCE, LsiPosition(5, 17))
         private val SOURCE_ORIGIN = LsiOrigin(
@@ -864,11 +874,11 @@ class DtoConfigContractResolverTest {
             relativePath = "demo/Book.dto",
             content = "BookView { authors !filter(demo.AuthorFilter) }",
         )
-        private val GRAPH = JimmerDtoRenderGraph(
+        private val GRAPH = DtoGraph(
             source = DTO_SOURCE,
             rootTypeIds = listOf(DTO_TYPE_ID),
             types = listOf(
-                JimmerDtoType(
+                DtoType(
                     id = DTO_TYPE_ID,
                     baseTypeId = BOOK_TYPE_ID,
                     packageName = "demo.dto",
@@ -885,7 +895,7 @@ class DtoConfigContractResolverTest {
                 ),
             ),
             props = listOf(
-                JimmerDtoBaseProp(
+                DtoBaseProp(
                     id = DTO_PROP_ID,
                     ownerTypeId = DTO_TYPE_ID,
                     name = "authors",
@@ -895,21 +905,21 @@ class DtoConfigContractResolverTest {
                     documentation = null,
                     aliasLocation = LsiLocation(DTO_SOURCE, LsiPosition(4, 5)),
                     baseLocation = LsiLocation(DTO_SOURCE, LsiPosition(4, 5)),
-                    baseProps = listOf(JimmerDtoBasePropBinding("authors", AUTHORS_PROP_ID)),
+                    baseProps = listOf(DtoBasePropBinding("authors", AUTHORS_PROP_ID)),
                     basePath = "authors",
                     nextPropId = null,
                     tailPropId = DTO_PROP_ID,
                     baseNullable = false,
-                    inputModifier = JimmerDtoModifier.STATIC,
+                    inputModifier = DtoModifier.STATIC,
                     functionName = null,
                     targetTypeId = null,
                     enumType = null,
-                    config = JimmerDtoPropConfig(
+                    config = DtoPropConfig(
                         predicate = null,
                         orderItems = emptyList(),
-                        filter = JimmerDtoConfigTypeRef(FILTER_TYPE_ID, CONFIG_LOCATION),
+                        filter = DtoConfigTypeRef(FILTER_TYPE_ID, CONFIG_LOCATION),
                         recursion = null,
-                        fetchType = JimmerDtoFetchType.AUTO,
+                        fetchType = DtoFetchType.AUTO,
                         limit = Int.MAX_VALUE,
                         offset = 0,
                         batch = 0,

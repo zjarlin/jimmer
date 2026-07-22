@@ -8,38 +8,67 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.dto.compiler.AbstractProp
 import org.babyfish.jimmer.dto.compiler.Anno
 import org.babyfish.jimmer.dto.compiler.DtoFile
-import org.babyfish.jimmer.dto.compiler.DtoModifier
-import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranch
-import org.babyfish.jimmer.dto.compiler.DtoProp
-import org.babyfish.jimmer.dto.compiler.DtoType
+import org.babyfish.jimmer.dto.compiler.DtoModifier as AstDtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranch as AstDtoPolymorphicBranch
+import org.babyfish.jimmer.dto.compiler.DtoProp as AstDtoProp
+import org.babyfish.jimmer.dto.compiler.DtoType as AstDtoType
 import org.babyfish.jimmer.dto.compiler.EnumType
 import org.babyfish.jimmer.dto.compiler.FoldProp
 import org.babyfish.jimmer.dto.compiler.LikeOption
 import org.babyfish.jimmer.dto.compiler.PropConfig
-import org.babyfish.jimmer.dto.compiler.TypeRef
+import org.babyfish.jimmer.dto.compiler.TypeRef as AstTypeRef
 import org.babyfish.jimmer.dto.compiler.UserProp
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
+import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
+import site.addzero.lsi.jimmer.dto.DtoConfigValue
+import site.addzero.lsi.jimmer.dto.DtoEnumMapping
+import site.addzero.lsi.jimmer.dto.DtoEnumType
+import site.addzero.lsi.jimmer.dto.DtoFetchType
+import site.addzero.lsi.jimmer.dto.DtoFoldProp
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoLikeOption
+import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoOrderItem
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import site.addzero.lsi.jimmer.dto.DtoPolymorphism
+import site.addzero.lsi.jimmer.dto.DtoPredicate
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropConfig
+import site.addzero.lsi.jimmer.dto.DtoPropId
+import site.addzero.lsi.jimmer.dto.DtoPropPathNode
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeArgument
+import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.DtoUserProp
+import site.addzero.lsi.jimmer.dto.DtoVariance
 
-internal class JimmerDtoRenderGraphFreezer(
+internal class DtoGraphFreezer(
     private val inputSnapshot: CompilerInputDocumentSnapshot,
 ) {
-    private val typeIds = IdentityHashMap<DtoType<LsiDtoBaseType, LsiDtoBaseProp>, JimmerDtoTypeId>()
+    private val typeIds = IdentityHashMap<AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>, DtoTypeId>()
 
     private val propIdsByOwner = mutableMapOf<
-        JimmerDtoTypeId,
-        IdentityHashMap<AbstractProp, JimmerDtoPropId>,
+        DtoTypeId,
+        IdentityHashMap<AbstractProp, DtoPropId>,
         >()
 
-    private val types = mutableMapOf<JimmerDtoTypeId, JimmerDtoType>()
+    private val types = mutableMapOf<DtoTypeId, DtoType>()
 
-    private val props = mutableMapOf<JimmerDtoPropId, JimmerDtoProp>()
+    private val props = mutableMapOf<DtoPropId, DtoProp>()
 
     fun freeze(
-        compiledTypes: List<DtoType<LsiDtoBaseType, LsiDtoBaseProp>>,
-    ): JimmerDtoRenderGraph {
+        compiledTypes: List<AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>>,
+    ): DtoGraph {
         val rootTypeIds = compiledTypes.mapIndexed { index, dtoType ->
             freezeType(
                 dtoType = dtoType,
@@ -47,23 +76,23 @@ internal class JimmerDtoRenderGraphFreezer(
                 location = location(dtoType.dtoFile, 1, 0),
             )
         }
-        return JimmerDtoRenderGraph(
+        return DtoGraph(
             source = inputSnapshot.document.source,
             rootTypeIds = rootTypeIds,
-            types = types.values.sortedBy(JimmerDtoType::id),
-            props = props.values.sortedBy(JimmerDtoProp::id),
+            types = types.values.sortedBy(DtoType::id),
+            props = props.values.sortedBy(DtoProp::id),
         )
     }
 
     private fun freezeType(
-        dtoType: DtoType<LsiDtoBaseType, LsiDtoBaseProp>,
+        dtoType: AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>,
         path: String,
         location: LsiLocation,
-    ): JimmerDtoTypeId {
+    ): DtoTypeId {
         typeIds[dtoType]?.let { typeId -> return typeId }
-        val typeId = JimmerDtoTypeId("${inputSnapshot.document.source.path}#$path")
+        val typeId = DtoTypeId("${inputSnapshot.document.source.path}#$path")
         require(typeId !in types && typeId !in typeIds.values) {
-            "Duplicate DTO render type id: ${typeId.value}"
+            "Duplicate DTO type id: ${typeId.value}"
         }
         typeIds[dtoType] = typeId
 
@@ -86,19 +115,19 @@ internal class JimmerDtoRenderGraphFreezer(
         val polymorphism = dtoType.polymorphism?.let { value ->
             freezePolymorphism(dtoType, typeId, path, value)
         }
-        val type = JimmerDtoType(
+        val type = DtoType(
             id = typeId,
             baseTypeId = dtoType.baseType?.id,
             packageName = dtoType.packageName,
             name = dtoType.name,
             modifiers = dtoType.modifiers
-                .sortedWith(compareBy(DtoModifier::getOrder, DtoModifier::name))
-                .mapTo(linkedSetOf()) { modifier -> modifier.toRenderModifier() },
+                .sortedWith(compareBy(AstDtoModifier::getOrder, AstDtoModifier::name))
+                .mapTo(linkedSetOf()) { modifier -> modifier.toDtoModifier() },
             annotations = dtoType.annotations.map { annotation ->
-                annotation.toRenderAnnotation(dtoType.dtoFile)
+                annotation.toDtoAnnotation(dtoType.dtoFile)
             },
             superInterfaces = dtoType.superInterfaces.map { typeRef ->
-                typeRef.toRenderTypeRef(dtoType.dtoFile)
+                typeRef.toDtoTypeRef(dtoType.dtoFile)
             },
             documentation = dtoType.effectiveDocumentation(),
             location = location,
@@ -113,19 +142,19 @@ internal class JimmerDtoRenderGraphFreezer(
 
     private fun freezeProp(
         prop: AbstractProp,
-        ownerType: DtoType<LsiDtoBaseType, LsiDtoBaseProp>,
-        ownerTypeId: JimmerDtoTypeId,
+        ownerType: AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>,
+        ownerTypeId: DtoTypeId,
         path: String,
-    ): JimmerDtoPropId {
+    ): DtoPropId {
         val ownerPropIds = propIdsByOwner.getOrPut(ownerTypeId, ::IdentityHashMap)
         ownerPropIds[prop]?.let { propId -> return propId }
-        val propId = JimmerDtoPropId("${inputSnapshot.document.source.path}#$path")
+        val propId = DtoPropId("${inputSnapshot.document.source.path}#$path")
         require(propId !in props && propId !in ownerPropIds.values) {
-            "Duplicate DTO render property id: ${propId.value}"
+            "Duplicate DTO property id: ${propId.value}"
         }
         ownerPropIds[prop] = propId
         val frozenProp = when (prop) {
-            is DtoProp<*, *> -> freezeBaseProp(prop.castBaseProp(), ownerType, propId, ownerTypeId, path)
+            is AstDtoProp<*, *> -> freezeBaseProp(prop.castBaseProp(), ownerType, propId, ownerTypeId, path)
             is UserProp -> freezeUserProp(prop, ownerType, propId, ownerTypeId)
             is FoldProp<*, *> -> freezeFoldProp(prop.castFoldProp(), ownerType, propId, ownerTypeId, path)
             else -> error("Unsupported DTO property implementation: ${prop.javaClass.name}")
@@ -135,12 +164,12 @@ internal class JimmerDtoRenderGraphFreezer(
     }
 
     private fun freezeBaseProp(
-        prop: DtoProp<LsiDtoBaseType, LsiDtoBaseProp>,
-        ownerType: DtoType<LsiDtoBaseType, LsiDtoBaseProp>,
-        propId: JimmerDtoPropId,
-        ownerTypeId: JimmerDtoTypeId,
+        prop: AstDtoProp<LsiDtoBaseType, LsiDtoBaseProp>,
+        ownerType: AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>,
+        propId: DtoPropId,
+        ownerTypeId: DtoTypeId,
         path: String,
-    ): JimmerDtoBaseProp {
+    ): DtoBaseProp {
         val dtoDocumentation = ownerType.dtoDocumentation(prop)
         val nextPropId = prop.nextProp?.let { nextProp ->
             freezeProp(nextProp, ownerType, ownerTypeId, "$path/next:${nextProp.name}")
@@ -159,20 +188,20 @@ internal class JimmerDtoRenderGraphFreezer(
                 location = location(it.dtoFile, prop.aliasLine, prop.aliasColumn),
             )
         }
-        return JimmerDtoBaseProp(
+        return DtoBaseProp(
             id = propId,
             ownerTypeId = ownerTypeId,
             name = prop.name,
             alias = prop.alias,
             nullable = prop.isNullable,
             annotations = prop.annotations.map { annotation ->
-                annotation.toRenderAnnotation(prop.declaringFile)
+                annotation.toDtoAnnotation(prop.declaringFile)
             },
             documentation = ownerType.effectiveDocumentation(prop, dtoDocumentation),
             aliasLocation = location(prop.declaringFile, prop.aliasLine, prop.aliasColumn),
             baseLocation = location(prop.declaringFile, prop.baseLine, prop.baseColumn),
             baseProps = prop.basePropMap.entries.map { (name, baseProp) ->
-                JimmerDtoBasePropBinding(name, baseProp.id)
+                DtoBasePropBinding(name, baseProp.id)
             },
             basePath = prop.basePath,
             nextPropId = nextPropId,
@@ -180,48 +209,48 @@ internal class JimmerDtoRenderGraphFreezer(
             baseNullable = prop.isBaseNullable,
             inputModifier = requireNotNull(prop.inputModifier) {
                 "DTO base property must declare an input modifier: ${prop.name}"
-            }.toRenderModifier(),
+            }.toDtoModifier(),
             functionName = prop.funcName,
             targetTypeId = targetTypeId,
-            enumType = prop.enumType?.toRenderEnumType(),
-            config = prop.config?.toRenderConfig(prop.declaringFile),
+            enumType = prop.enumType?.toDtoEnumType(),
+            config = prop.config?.toDtoConfig(prop.declaringFile),
             recursive = prop.isRecursive,
             likeOptions = prop.likeOptions
                 .sortedBy(LikeOption::name)
-                .mapTo(linkedSetOf()) { option -> option.toRenderLikeOption() },
+                .mapTo(linkedSetOf()) { option -> option.toDtoLikeOption() },
             dtoDocumentation = dtoDocumentation,
         )
     }
 
     private fun freezeUserProp(
         prop: UserProp,
-        ownerType: DtoType<LsiDtoBaseType, LsiDtoBaseProp>,
-        propId: JimmerDtoPropId,
-        ownerTypeId: JimmerDtoTypeId,
-    ): JimmerDtoUserProp {
-        return JimmerDtoUserProp(
+        ownerType: AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>,
+        propId: DtoPropId,
+        ownerTypeId: DtoTypeId,
+    ): DtoUserProp {
+        return DtoUserProp(
             id = propId,
             ownerTypeId = ownerTypeId,
             name = prop.name,
             alias = prop.alias,
             nullable = prop.isNullable,
             annotations = prop.annotations.map { annotation ->
-                annotation.toRenderAnnotation(prop.declaringFile)
+                annotation.toDtoAnnotation(prop.declaringFile)
             },
             documentation = ownerType.effectiveDocumentation(prop),
             aliasLocation = location(prop.declaringFile, prop.aliasLine, prop.aliasColumn),
-            type = prop.typeRef.toRenderTypeRef(prop.declaringFile),
+            type = prop.typeRef.toDtoTypeRef(prop.declaringFile),
             defaultValueText = prop.defaultValueText,
         )
     }
 
     private fun freezeFoldProp(
         prop: FoldProp<LsiDtoBaseType, LsiDtoBaseProp>,
-        ownerType: DtoType<LsiDtoBaseType, LsiDtoBaseProp>,
-        propId: JimmerDtoPropId,
-        ownerTypeId: JimmerDtoTypeId,
+        ownerType: AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>,
+        propId: DtoPropId,
+        ownerTypeId: DtoTypeId,
         path: String,
-    ): JimmerDtoFoldProp {
+    ): DtoFoldProp {
         val nullGuardPropId = prop.nullGuardProp?.let { nullGuardProp ->
             freezeProp(nullGuardProp, ownerType, ownerTypeId, "$path/null-guard:${nullGuardProp.name}")
         }
@@ -230,14 +259,14 @@ internal class JimmerDtoRenderGraphFreezer(
             path = "$path/target:${prop.targetType.name.orEmpty()}",
             location = location(prop.targetType.dtoFile, prop.aliasLine, prop.aliasColumn),
         )
-        return JimmerDtoFoldProp(
+        return DtoFoldProp(
             id = propId,
             ownerTypeId = ownerTypeId,
             name = prop.name,
             alias = prop.alias,
             nullable = prop.isNullable,
             annotations = prop.annotations.map { annotation ->
-                annotation.toRenderAnnotation(prop.declaringFile)
+                annotation.toDtoAnnotation(prop.declaringFile)
             },
             documentation = ownerType.effectiveDocumentation(prop),
             aliasLocation = location(prop.declaringFile, prop.aliasLine, prop.aliasColumn),
@@ -247,11 +276,11 @@ internal class JimmerDtoRenderGraphFreezer(
     }
 
     private fun freezePolymorphism(
-        rootType: DtoType<LsiDtoBaseType, LsiDtoBaseProp>,
-        rootTypeId: JimmerDtoTypeId,
+        rootType: AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>,
+        rootTypeId: DtoTypeId,
         rootPath: String,
         polymorphism: org.babyfish.jimmer.dto.compiler.DtoPolymorphism<LsiDtoBaseType, LsiDtoBaseProp>,
-    ): JimmerDtoPolymorphism {
+    ): DtoPolymorphism {
         val branches = buildList {
             polymorphism.defaultBranch?.let { branch ->
                 add(freezeBranch(rootType, rootTypeId, rootPath, branch, 0))
@@ -260,20 +289,20 @@ internal class JimmerDtoRenderGraphFreezer(
                 add(freezeBranch(rootType, rootTypeId, rootPath, branch, index))
             }
         }
-        return JimmerDtoPolymorphism(
+        return DtoPolymorphism(
             exhaustive = polymorphism.isExhaustive,
             branches = branches,
         )
     }
 
     private fun freezeBranch(
-        rootType: DtoType<LsiDtoBaseType, LsiDtoBaseProp>,
-        rootTypeId: JimmerDtoTypeId,
+        rootType: AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>,
+        rootTypeId: DtoTypeId,
         rootPath: String,
-        branch: DtoPolymorphicBranch<LsiDtoBaseType, LsiDtoBaseProp>,
+        branch: AstDtoPolymorphicBranch<LsiDtoBaseType, LsiDtoBaseProp>,
         index: Int,
-    ): JimmerDtoPolymorphicBranch {
-        val kind = branch.kind.toRenderBranchKind()
+    ): DtoPolymorphicBranch {
+        val kind = branch.kind.toDtoBranchKind()
         val branchPath = "$rootPath/polymorphism:${kind.name.lowercase()}:${index.stableIndex()}:${branch.className}"
         val branchLocation = location(branch.dtoType.dtoFile, branch.line, branch.col)
         val bodyTypeId = freezeType(
@@ -286,7 +315,7 @@ internal class JimmerDtoRenderGraphFreezer(
             path = "$branchPath/merged:${rootTypeId.value.substringAfterLast('#')}",
             location = branchLocation,
         )
-        return JimmerDtoPolymorphicBranch(
+        return DtoPolymorphicBranch(
             kind = kind,
             targetBaseTypeId = branch.targetType?.id,
             declaredClassName = branch.declaredClassName,
@@ -298,19 +327,19 @@ internal class JimmerDtoRenderGraphFreezer(
         )
     }
 
-    private fun TypeRef.toRenderTypeRef(declaringFile: DtoFile): JimmerDtoTypeRef {
-        return JimmerDtoTypeRef(
+    private fun AstTypeRef.toDtoTypeRef(declaringFile: DtoFile): DtoTypeRef {
+        return DtoTypeRef(
             typeName = typeName,
             arguments = arguments.map { argument ->
                 val variance = when {
-                    argument.typeRef == null -> JimmerDtoVariance.STAR
-                    argument.isIn -> JimmerDtoVariance.IN
-                    argument.isOut -> JimmerDtoVariance.OUT
-                    else -> JimmerDtoVariance.INVARIANT
+                    argument.typeRef == null -> DtoVariance.STAR
+                    argument.isIn -> DtoVariance.IN
+                    argument.isOut -> DtoVariance.OUT
+                    else -> DtoVariance.INVARIANT
                 }
-                JimmerDtoTypeArgument(
+                DtoTypeArgument(
                     variance = variance,
-                    type = argument.typeRef?.toRenderTypeRef(declaringFile),
+                    type = argument.typeRef?.toDtoTypeRef(declaringFile),
                 )
             },
             nullable = isNullable,
@@ -318,58 +347,58 @@ internal class JimmerDtoRenderGraphFreezer(
         )
     }
 
-    private fun Anno.toRenderAnnotation(declaringFile: DtoFile): JimmerDtoAnnotation {
-        return JimmerDtoAnnotation(
+    private fun Anno.toDtoAnnotation(declaringFile: DtoFile): DtoAnnotation {
+        return DtoAnnotation(
             typeId = LsiSymbolId.type(qualifiedName),
             arguments = valueMap.entries.map { (name, value) ->
-                JimmerDtoAnnotationArgument(name, value.toRenderAnnotationValue(declaringFile))
+                DtoAnnotationArgument(name, value.toDtoAnnotationValue(declaringFile))
             },
         )
     }
 
-    private fun Anno.Value.toRenderAnnotationValue(declaringFile: DtoFile): JimmerDtoAnnotationValue {
+    private fun Anno.Value.toDtoAnnotationValue(declaringFile: DtoFile): DtoAnnotationValue {
         return when (this) {
-            is Anno.ArrayValue -> JimmerDtoAnnotationValue.ArrayValue(
-                elements.map { element -> element.toRenderAnnotationValue(declaringFile) }
+            is Anno.ArrayValue -> DtoAnnotationValue.ArrayValue(
+                elements.map { element -> element.toDtoAnnotationValue(declaringFile) }
             )
-            is Anno.AnnoValue -> JimmerDtoAnnotationValue.AnnotationValue(
-                anno.toRenderAnnotation(declaringFile)
+            is Anno.AnnoValue -> DtoAnnotationValue.AnnotationValue(
+                anno.toDtoAnnotation(declaringFile)
             )
-            is Anno.EnumValue -> JimmerDtoAnnotationValue.EnumValue(
+            is Anno.EnumValue -> DtoAnnotationValue.EnumValue(
                 enumTypeId = LsiSymbolId.type(qualifiedName),
                 constant = constant,
             )
-            is Anno.TypeRefValue -> JimmerDtoAnnotationValue.TypeValue(
-                typeRef.toRenderTypeRef(declaringFile)
+            is Anno.TypeRefValue -> DtoAnnotationValue.TypeValue(
+                typeRef.toDtoTypeRef(declaringFile)
             )
-            is Anno.LiteralValue -> JimmerDtoAnnotationValue.LiteralValue(value)
+            is Anno.LiteralValue -> DtoAnnotationValue.LiteralValue(value)
             else -> error("Unsupported DTO annotation value implementation: ${javaClass.name}")
         }
     }
 
-    private fun EnumType.toRenderEnumType(): JimmerDtoEnumType {
-        return JimmerDtoEnumType(
+    private fun EnumType.toDtoEnumType(): DtoEnumType {
+        return DtoEnumType(
             numeric = isNumeric,
             mappings = valueMap.entries.map { (constant, value) ->
-                JimmerDtoEnumMapping(constant, value)
+                DtoEnumMapping(constant, value)
             },
         )
     }
 
-    private fun PropConfig<LsiDtoBaseProp>.toRenderConfig(
+    private fun PropConfig<LsiDtoBaseProp>.toDtoConfig(
         declaringFile: DtoFile,
-    ): JimmerDtoPropConfig {
-        return JimmerDtoPropConfig(
-            predicate = predicate?.toRenderPredicate(),
+    ): DtoPropConfig {
+        return DtoPropConfig(
+            predicate = predicate?.toDtoPredicate(),
             orderItems = orderItems.map { orderItem ->
-                JimmerDtoOrderItem(
-                    path = orderItem.path.map { pathNode -> pathNode.toRenderPathNode() },
+                DtoOrderItem(
+                    path = orderItem.path.map { pathNode -> pathNode.toDtoPathNode() },
                     descending = orderItem.isDesc,
                 )
             },
-            filter = filterType?.toRenderConfigTypeRef(declaringFile),
-            recursion = recursionType?.toRenderConfigTypeRef(declaringFile),
-            fetchType = JimmerDtoFetchType.valueOf(fetchType),
+            filter = filterType?.toDtoConfigTypeRef(declaringFile),
+            recursion = recursionType?.toDtoConfigTypeRef(declaringFile),
+            fetchType = DtoFetchType.valueOf(fetchType),
             limit = limit,
             offset = offset,
             batch = batch,
@@ -377,10 +406,10 @@ internal class JimmerDtoRenderGraphFreezer(
         )
     }
 
-    private fun org.babyfish.jimmer.dto.compiler.ConfigTypeRef.toRenderConfigTypeRef(
+    private fun org.babyfish.jimmer.dto.compiler.ConfigTypeRef.toDtoConfigTypeRef(
         declaringFile: DtoFile,
-    ): JimmerDtoConfigTypeRef {
-        return JimmerDtoConfigTypeRef(
+    ): DtoConfigTypeRef {
+        return DtoConfigTypeRef(
             typeId = LsiSymbolId.type(qualifiedName),
             location = LsiLocation(
                 source = source(declaringFile),
@@ -389,51 +418,51 @@ internal class JimmerDtoRenderGraphFreezer(
         )
     }
 
-    private fun PropConfig.Predicate.toRenderPredicate(): JimmerDtoPredicate {
+    private fun PropConfig.Predicate.toDtoPredicate(): DtoPredicate {
         return when (this) {
-            is PropConfig.Predicate.And -> JimmerDtoPredicate.And(
-                predicates.map { predicate -> predicate.toRenderPredicate() }
+            is PropConfig.Predicate.And -> DtoPredicate.And(
+                predicates.map { predicate -> predicate.toDtoPredicate() }
             )
-            is PropConfig.Predicate.Or -> JimmerDtoPredicate.Or(
-                predicates.map { predicate -> predicate.toRenderPredicate() }
+            is PropConfig.Predicate.Or -> DtoPredicate.Or(
+                predicates.map { predicate -> predicate.toDtoPredicate() }
             )
-            is PropConfig.Predicate.Cmp<*> -> JimmerDtoPredicate.Comparison(
-                path = path.map { pathNode -> pathNode.castPathNode().toRenderPathNode() },
+            is PropConfig.Predicate.Cmp<*> -> DtoPredicate.Comparison(
+                path = path.map { pathNode -> pathNode.castPathNode().toDtoPathNode() },
                 operator = operator,
-                value = value.toRenderConfigValue(),
+                value = value.toDtoConfigValue(),
             )
-            is PropConfig.Predicate.Nullity<*> -> JimmerDtoPredicate.Nullity(
-                path = path.map { pathNode -> pathNode.castPathNode().toRenderPathNode() },
+            is PropConfig.Predicate.Nullity<*> -> DtoPredicate.Nullity(
+                path = path.map { pathNode -> pathNode.castPathNode().toDtoPathNode() },
                 negative = isNegative,
             )
             else -> error("Unsupported DTO predicate implementation: ${javaClass.name}")
         }
     }
 
-    private fun PropConfig.PathNode<LsiDtoBaseProp>.toRenderPathNode(): JimmerDtoPropPathNode {
-        return JimmerDtoPropPathNode(
+    private fun PropConfig.PathNode<LsiDtoBaseProp>.toDtoPathNode(): DtoPropPathNode {
+        return DtoPropPathNode(
             propId = prop.id,
             associatedId = isAssociatedId,
         )
     }
 
-    private fun Any.toRenderConfigValue(): JimmerDtoConfigValue {
+    private fun Any.toDtoConfigValue(): DtoConfigValue {
         return when (this) {
-            is Boolean -> JimmerDtoConfigValue.BooleanValue(this)
-            is Long -> JimmerDtoConfigValue.LongValue(this)
-            is BigInteger -> JimmerDtoConfigValue.BigIntegerValue(toString())
-            is BigDecimal -> JimmerDtoConfigValue.DecimalValue(toString())
-            is String -> JimmerDtoConfigValue.StringValue(this)
+            is Boolean -> DtoConfigValue.BooleanValue(this)
+            is Long -> DtoConfigValue.LongValue(this)
+            is BigInteger -> DtoConfigValue.BigIntegerValue(toString())
+            is BigDecimal -> DtoConfigValue.DecimalValue(toString())
+            is String -> DtoConfigValue.StringValue(this)
             else -> error("Unsupported DTO property config value: ${javaClass.name}")
         }
     }
 
-    private fun DtoModifier.toRenderModifier(): JimmerDtoModifier = JimmerDtoModifier.valueOf(name)
+    private fun AstDtoModifier.toDtoModifier(): DtoModifier = DtoModifier.valueOf(name)
 
-    private fun LikeOption.toRenderLikeOption(): JimmerDtoLikeOption = JimmerDtoLikeOption.valueOf(name)
+    private fun LikeOption.toDtoLikeOption(): DtoLikeOption = DtoLikeOption.valueOf(name)
 
-    private fun DtoPolymorphicBranch.Kind.toRenderBranchKind(): JimmerDtoPolymorphicBranchKind =
-        JimmerDtoPolymorphicBranchKind.valueOf(name)
+    private fun AstDtoPolymorphicBranch.Kind.toDtoBranchKind(): DtoPolymorphicBranchKind =
+        DtoPolymorphicBranchKind.valueOf(name)
 
     private fun location(
         declaringFile: DtoFile,
@@ -458,23 +487,23 @@ internal class JimmerDtoRenderGraphFreezer(
     }
 }
 
-private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(): String? {
+private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(): String? {
     return Doc.parse(doc)?.toString()
         ?: Doc.parse(baseType?.immutableType?.documentation)?.toString()
 }
 
-private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
+private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
     prop: AbstractProp,
 ): String? {
     return effectiveDocumentation(prop, dtoDocumentation(prop))
 }
 
-private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
+private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
     prop: AbstractProp,
     dtoDocumentation: String?,
 ): String? {
     dtoDocumentation?.let { documentation -> return documentation }
-    val baseProp = (prop as? DtoProp<*, *>)
+    val baseProp = (prop as? AstDtoProp<*, *>)
         ?.castBaseProp()
         ?.toTailProp()
         ?.baseProp
@@ -488,11 +517,11 @@ private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
     }
 }
 
-private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.dtoDocumentation(
+private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.dtoDocumentation(
     prop: AbstractProp,
 ): String? {
     Doc.parse(prop.doc)?.toString()?.let { documentation -> return documentation }
-    val baseProp = (prop as? DtoProp<*, *>)
+    val baseProp = (prop as? AstDtoProp<*, *>)
         ?.castBaseProp()
         ?.toTailProp()
         ?.baseProp
@@ -501,8 +530,8 @@ private fun DtoType<LsiDtoBaseType, LsiDtoBaseProp>.dtoDocumentation(
 }
 
 @Suppress("UNCHECKED_CAST")
-private fun DtoProp<*, *>.castBaseProp(): DtoProp<LsiDtoBaseType, LsiDtoBaseProp> =
-    this as DtoProp<LsiDtoBaseType, LsiDtoBaseProp>
+private fun AstDtoProp<*, *>.castBaseProp(): AstDtoProp<LsiDtoBaseType, LsiDtoBaseProp> =
+    this as AstDtoProp<LsiDtoBaseType, LsiDtoBaseProp>
 
 @Suppress("UNCHECKED_CAST")
 private fun FoldProp<*, *>.castFoldProp(): FoldProp<LsiDtoBaseType, LsiDtoBaseProp> =

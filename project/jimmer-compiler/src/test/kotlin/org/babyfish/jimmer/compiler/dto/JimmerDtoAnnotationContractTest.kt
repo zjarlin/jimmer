@@ -41,6 +41,23 @@ import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import site.addzero.lsi.jimmer.dto.DtoPolymorphism
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropId
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeArgument
+import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.DtoVariance
 
 class JimmerDtoAnnotationContractTest {
     @Test
@@ -81,7 +98,7 @@ class JimmerDtoAnnotationContractTest {
     fun `keeps dto bean validation nullity annotations while filtering immutable nullity`() {
         val fixture = fixture()
         val baseProp = fixture.schema.types.single().props.single { prop -> prop.id == NAME_PROP }
-        val dtoProp = fixture.graph.props.single() as JimmerDtoBaseProp
+        val dtoProp = fixture.graph.props.single() as DtoBaseProp
         val javaxNull = LsiSymbolId.type("javax.validation.constraints.Null")
         val jakartaNotNull = LsiSymbolId.type("jakarta.validation.constraints.NotNull")
         val schema = immutableSchema(
@@ -91,7 +108,7 @@ class JimmerDtoAnnotationContractTest {
                 lsiAnnotation("javax.validation.constraints.Null"),
             ),
         )
-        val graph = JimmerDtoRenderGraph(
+        val graph = DtoGraph(
             source = fixture.graph.source,
             rootTypeIds = fixture.graph.rootTypeIds,
             types = fixture.graph.types,
@@ -133,8 +150,8 @@ class JimmerDtoAnnotationContractTest {
         val fixture = fixture()
         val annotationTypeId = LsiSymbolId.type("demo.NoTarget")
         val dtoType = fixture.graph.types.single()
-        val dtoProp = fixture.graph.props.single() as JimmerDtoBaseProp
-        val graph = JimmerDtoRenderGraph(
+        val dtoProp = fixture.graph.props.single() as DtoBaseProp
+        val graph = DtoGraph(
             source = fixture.graph.source,
             rootTypeIds = fixture.graph.rootTypeIds,
             types = listOf(
@@ -287,7 +304,7 @@ class JimmerDtoAnnotationContractTest {
         val schema = ImmutableSchema(
             listOf(baseType.copy(annotations = baseType.annotations + baseAnnotations))
         )
-        val graph = JimmerDtoRenderGraph(
+        val graph = DtoGraph(
             source = fixture.graph.source,
             rootTypeIds = fixture.graph.rootTypeIds,
             types = listOf(dtoType.copy(annotations = dtoType.annotations + dtoAnnotations)),
@@ -329,7 +346,7 @@ class JimmerDtoAnnotationContractTest {
         val immutableTag = LsiSymbolId.type("demo.ImmutableSiteTag")
         val dtoTag = LsiSymbolId.type("demo.DtoSiteTag")
         val baseProp = fixture.schema.types.single().props.single { prop -> prop.id == NAME_PROP }
-        val dtoProp = fixture.graph.props.single() as JimmerDtoBaseProp
+        val dtoProp = fixture.graph.props.single() as DtoBaseProp
         val schema = immutableSchema(
             typeAnnotations = fixture.schema.types.single().annotations,
             propAnnotations = baseProp.annotations + listOf(
@@ -345,7 +362,7 @@ class JimmerDtoAnnotationContractTest {
                 ),
             ),
         )
-        val graph = JimmerDtoRenderGraph(
+        val graph = DtoGraph(
             source = fixture.graph.source,
             rootTypeIds = fixture.graph.rootTypeIds,
             types = fixture.graph.types,
@@ -452,11 +469,11 @@ class JimmerDtoAnnotationContractTest {
         val graph = fixture.graph.copy(
             types = listOf(
                 rootType.copy(
-                    polymorphism = JimmerDtoPolymorphism(
+                    polymorphism = DtoPolymorphism(
                         exhaustive = false,
                         branches = listOf(
-                            JimmerDtoPolymorphicBranch(
-                                kind = JimmerDtoPolymorphicBranchKind.DEFAULT,
+                            DtoPolymorphicBranch(
+                                kind = DtoPolymorphicBranchKind.DEFAULT,
                                 targetBaseTypeId = null,
                                 declaredClassName = null,
                                 className = "demo.dto.BookInput.Default",
@@ -484,36 +501,36 @@ class JimmerDtoAnnotationContractTest {
     @Test
     fun `canonicalizes dto standard class literal types into lsi types`() {
         val base = fixture()
-        val standardTypes = JimmerDtoAnnotation(
+        val standardTypes = DtoAnnotation(
             typeId = STANDARD_TYPES,
             arguments = listOf(
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     "string",
-                    JimmerDtoAnnotationValue.TypeValue(dtoTypeRef("String")),
+                    DtoAnnotationValue.TypeValue(dtoTypeRef("String")),
                 ),
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     "any",
-                    JimmerDtoAnnotationValue.TypeValue(dtoTypeRef("Any")),
+                    DtoAnnotationValue.TypeValue(dtoTypeRef("Any")),
                 ),
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     "list",
-                    JimmerDtoAnnotationValue.TypeValue(
+                    DtoAnnotationValue.TypeValue(
                         dtoTypeRef(
                             "List",
-                            JimmerDtoTypeArgument(
-                                JimmerDtoVariance.INVARIANT,
+                            DtoTypeArgument(
+                                DtoVariance.INVARIANT,
                                 dtoTypeRef("String"),
                             ),
                         )
                     ),
                 ),
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     "array",
-                    JimmerDtoAnnotationValue.TypeValue(
+                    DtoAnnotationValue.TypeValue(
                         dtoTypeRef(
                             "Array",
-                            JimmerDtoTypeArgument(
-                                JimmerDtoVariance.INVARIANT,
+                            DtoTypeArgument(
+                                DtoVariance.INVARIANT,
                                 dtoTypeRef("Int"),
                             ),
                         )
@@ -521,8 +538,8 @@ class JimmerDtoAnnotationContractTest {
                 ),
             ),
         )
-        val originalProp = base.graph.props.single() as JimmerDtoBaseProp
-        val graph = JimmerDtoRenderGraph(
+        val originalProp = base.graph.props.single() as DtoBaseProp
+        val graph = DtoGraph(
             source = base.graph.source,
             rootTypeIds = base.graph.rootTypeIds,
             types = base.graph.types,
@@ -653,15 +670,15 @@ class JimmerDtoAnnotationContractTest {
         ).maybeReversed(reversed)
         val dtoPropAnnotations = listOf(
             dtoAnnotation("demo.JavaTag", "\"dto\""),
-            JimmerDtoAnnotation(
+            DtoAnnotation(
                 typeId = KOTLIN_TAG,
                 arguments = listOf(
-                    JimmerDtoAnnotationArgument(
+                    DtoAnnotationArgument(
                         name = "value",
-                        value = JimmerDtoAnnotationValue.ArrayValue(
+                        value = DtoAnnotationValue.ArrayValue(
                             listOf(
-                                JimmerDtoAnnotationValue.LiteralValue("\"alpha\""),
-                                JimmerDtoAnnotationValue.LiteralValue("\"beta\""),
+                                DtoAnnotationValue.LiteralValue("\"alpha\""),
+                                DtoAnnotationValue.LiteralValue("\"beta\""),
                             )
                         ),
                     )
@@ -669,7 +686,7 @@ class JimmerDtoAnnotationContractTest {
             ),
         ).maybeReversed(reversed)
         val schema = immutableSchema(typeAnnotations, propAnnotations)
-        val graph = renderGraph(dtoTypeAnnotations, dtoPropAnnotations)
+        val graph = graph(dtoTypeAnnotations, dtoPropAnnotations)
         val declarations = buildList {
             addAll(javaAnnotationDeclaration("demo.Shared", listOf("TYPE"), listOf("value")))
             addAll(javaAnnotationDeclaration("other.demo.Shared", listOf("TYPE"), listOf("value")))
@@ -694,7 +711,7 @@ class JimmerDtoAnnotationContractTest {
             dtoAnnotation("demo.NotAnnotation", null),
             dtoAnnotation("missing.Annotation", null),
         ).maybeReversed(reversed)
-        val graph = renderGraph(typeAnnotations, propAnnotations)
+        val graph = graph(typeAnnotations, propAnnotations)
         val markerDeclaration = javaAnnotationDeclaration("demo.Marker", listOf("FIELD"), emptyList())
         val typeOnlyDeclaration = javaAnnotationDeclaration("demo.TypeOnly", listOf("TYPE"), emptyList())
         val fieldOnlyDeclaration = javaAnnotationDeclaration("demo.FieldOnly", listOf("FIELD"), emptyList())
@@ -772,7 +789,7 @@ class JimmerDtoAnnotationContractTest {
             ).sortedBy(ImmutableType::id)
         )
         val templateDtoType = base.graph.types.single()
-        val templateDtoProp = base.graph.props.single() as JimmerDtoBaseProp
+        val templateDtoProp = base.graph.props.single() as DtoBaseProp
         val chainProp = templateDtoProp.copy(
             id = CHAIN_DTO_PROP,
             name = "storeName",
@@ -783,35 +800,35 @@ class JimmerDtoAnnotationContractTest {
                 dtoAnnotation(JSON_ALIAS.requireTypeQualifiedName(), null),
                 dtoAnnotation(TOOLS_JSON_DESERIALIZE.requireTypeQualifiedName(), null),
             ),
-            baseProps = listOf(JimmerDtoBasePropBinding("store", STORE_PROP)),
+            baseProps = listOf(DtoBasePropBinding("store", STORE_PROP)),
             basePath = "store.name",
             nextPropId = CHAIN_TAIL_DTO_PROP,
             tailPropId = CHAIN_TAIL_DTO_PROP,
-            inputModifier = JimmerDtoModifier.FIXED,
+            inputModifier = DtoModifier.FIXED,
         )
         val chainTailProp = templateDtoProp.copy(
             id = CHAIN_TAIL_DTO_PROP,
             name = "name",
             alias = "name",
             annotations = emptyList(),
-            baseProps = listOf(JimmerDtoBasePropBinding("name", STORE_NAME_PROP)),
+            baseProps = listOf(DtoBasePropBinding("name", STORE_NAME_PROP)),
             basePath = "name",
             nextPropId = null,
             tailPropId = CHAIN_TAIL_DTO_PROP,
-            inputModifier = JimmerDtoModifier.FIXED,
+            inputModifier = DtoModifier.FIXED,
         )
-        val graph = JimmerDtoRenderGraph(
+        val graph = DtoGraph(
             source = base.graph.source,
             rootTypeIds = base.graph.rootTypeIds,
             types = listOf(
                 templateDtoType.copy(
-                    modifiers = if (inputBuilder) setOf(JimmerDtoModifier.INPUT) else emptySet(),
+                    modifiers = if (inputBuilder) setOf(DtoModifier.INPUT) else emptySet(),
                     annotations = emptyList(),
                     propIds = listOf(CHAIN_DTO_PROP),
                     hiddenFlatPropIds = listOf(CHAIN_TAIL_DTO_PROP),
                 )
             ),
-            props = listOf(chainProp, chainTailProp).sortedBy(JimmerDtoProp::id),
+            props = listOf(chainProp, chainTailProp).sortedBy(DtoProp::id),
         )
         val jacksonDeclarations = listOf(
             JSON_DESERIALIZE,
@@ -900,11 +917,11 @@ class JimmerDtoAnnotationContractTest {
         )
     }
 
-    private fun renderGraph(
-        typeAnnotations: List<JimmerDtoAnnotation>,
-        propAnnotations: List<JimmerDtoAnnotation>,
-    ): JimmerDtoRenderGraph {
-        val type = JimmerDtoType(
+    private fun graph(
+        typeAnnotations: List<DtoAnnotation>,
+        propAnnotations: List<DtoAnnotation>,
+    ): DtoGraph {
+        val type = DtoType(
             id = ROOT_DTO_TYPE,
             baseTypeId = BOOK_TYPE,
             packageName = "demo.dto",
@@ -919,7 +936,7 @@ class JimmerDtoAnnotationContractTest {
             hiddenFlatPropIds = emptyList(),
             polymorphism = null,
         )
-        val prop = JimmerDtoBaseProp(
+        val prop = DtoBaseProp(
             id = NAME_DTO_PROP,
             ownerTypeId = ROOT_DTO_TYPE,
             name = "name",
@@ -929,12 +946,12 @@ class JimmerDtoAnnotationContractTest {
             documentation = null,
             aliasLocation = LOCATION,
             baseLocation = LOCATION,
-            baseProps = listOf(JimmerDtoBasePropBinding("name", NAME_PROP)),
+            baseProps = listOf(DtoBasePropBinding("name", NAME_PROP)),
             basePath = "name",
             nextPropId = null,
             tailPropId = NAME_DTO_PROP,
             baseNullable = false,
-            inputModifier = JimmerDtoModifier.FIXED,
+            inputModifier = DtoModifier.FIXED,
             functionName = null,
             targetTypeId = null,
             enumType = null,
@@ -942,7 +959,7 @@ class JimmerDtoAnnotationContractTest {
             recursive = false,
             likeOptions = emptySet(),
         )
-        return JimmerDtoRenderGraph(
+        return DtoGraph(
             source = SOURCE,
             rootTypeIds = listOf(ROOT_DTO_TYPE),
             types = listOf(type),
@@ -1084,14 +1101,14 @@ class JimmerDtoAnnotationContractTest {
     private fun dtoAnnotation(
         qualifiedName: String,
         literal: String?,
-    ): JimmerDtoAnnotation {
-        return JimmerDtoAnnotation(
+    ): DtoAnnotation {
+        return DtoAnnotation(
             typeId = LsiSymbolId.type(qualifiedName),
             arguments = literal?.let { value ->
                 listOf(
-                    JimmerDtoAnnotationArgument(
+                    DtoAnnotationArgument(
                         name = "value",
-                        value = JimmerDtoAnnotationValue.LiteralValue(value),
+                        value = DtoAnnotationValue.LiteralValue(value),
                     )
                 )
             }.orEmpty(),
@@ -1100,9 +1117,9 @@ class JimmerDtoAnnotationContractTest {
 
     private fun dtoTypeRef(
         typeName: String,
-        vararg arguments: JimmerDtoTypeArgument,
-    ): JimmerDtoTypeRef {
-        return JimmerDtoTypeRef(
+        vararg arguments: DtoTypeArgument,
+    ): DtoTypeRef {
+        return DtoTypeRef(
             typeName = typeName,
             arguments = arguments.toList(),
             nullable = false,
@@ -1127,7 +1144,7 @@ class JimmerDtoAnnotationContractTest {
     private data class Fixture(
         val workspace: LsiWorkspace,
         val schema: ImmutableSchema,
-        val graph: JimmerDtoRenderGraph,
+        val graph: DtoGraph,
     )
 
     companion object {
@@ -1141,10 +1158,10 @@ class JimmerDtoAnnotationContractTest {
         private val STORE_PROP = LsiSymbolId.property(BOOK_TYPE, "store")
         private val STORE_NAME_PROP = LsiSymbolId.property(STORE_TYPE, "name")
 
-        private val ROOT_DTO_TYPE = JimmerDtoTypeId("dto/Book.dto#root")
-        private val NAME_DTO_PROP = JimmerDtoPropId("dto/Book.dto#root/name")
-        private val CHAIN_DTO_PROP = JimmerDtoPropId("dto/Book.dto#root/storeName")
-        private val CHAIN_TAIL_DTO_PROP = JimmerDtoPropId("dto/Book.dto#root/storeName/tail")
+        private val ROOT_DTO_TYPE = DtoTypeId("dto/Book.dto#root")
+        private val NAME_DTO_PROP = DtoPropId("dto/Book.dto#root/name")
+        private val CHAIN_DTO_PROP = DtoPropId("dto/Book.dto#root/storeName")
+        private val CHAIN_TAIL_DTO_PROP = DtoPropId("dto/Book.dto#root/storeName/tail")
 
         private val JAVA_TAG = LsiSymbolId.type("demo.JavaTag")
         private val KOTLIN_TAG = LsiSymbolId.type("demo.KotlinTag")

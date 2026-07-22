@@ -23,6 +23,18 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.annotationTargetPolicy
 import site.addzero.lsi.model.stableSignature
+import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropId
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeArgument
+import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.DtoVariance
 
 internal data class JimmerDtoAnnotationContract(
     val declarations: List<JimmerDtoAnnotationDeclaration>,
@@ -33,10 +45,10 @@ internal data class JimmerDtoAnnotationContract(
     val declarationsByTypeId: Map<LsiSymbolId, JimmerDtoAnnotationDeclaration> =
         declarations.associateBy(JimmerDtoAnnotationDeclaration::typeId)
 
-    val typePlansByTypeId: Map<JimmerDtoTypeId, JimmerDtoTypeAnnotationPlan> =
+    val typePlansByTypeId: Map<DtoTypeId, JimmerDtoTypeAnnotationPlan> =
         typePlans.associateBy(JimmerDtoTypeAnnotationPlan::typeId)
 
-    val propPlansByPropId: Map<JimmerDtoPropId, JimmerDtoPropAnnotationPlan> =
+    val propPlansByPropId: Map<DtoPropId, JimmerDtoPropAnnotationPlan> =
         propPlans.associateBy(JimmerDtoPropAnnotationPlan::propId)
 
     init {
@@ -133,12 +145,12 @@ internal enum class JimmerDtoAnnotationPlacement {
 }
 
 internal data class JimmerDtoTypeAnnotationPlan(
-    val typeId: JimmerDtoTypeId,
+    val typeId: DtoTypeId,
     val applications: List<JimmerDtoAnnotationApplication>,
 )
 
 internal data class JimmerDtoPropAnnotationPlan(
-    val propId: JimmerDtoPropId,
+    val propId: DtoPropId,
     val propertyApplications: List<JimmerDtoAnnotationApplication>,
     val builderSetterApplications: List<JimmerDtoBuilderSetterAnnotationApplication>,
 ) {
@@ -279,7 +291,7 @@ internal class JimmerDtoAnnotationContractFreezer(
     private val workspace: LsiWorkspace,
     private val immutableSchema: ImmutableSchema,
 ) {
-    fun freeze(graph: JimmerDtoRenderGraph): JimmerDtoAnnotationContract {
+    fun freeze(graph: DtoGraph): JimmerDtoAnnotationContract {
         val diagnostics = mutableListOf<LsiDiagnostic>()
         val typeCandidates = graph.types.map { type ->
             typeCandidates(type, diagnostics)
@@ -303,7 +315,7 @@ internal class JimmerDtoAnnotationContractFreezer(
         val declarationsByTypeId = declarations.associateBy(JimmerDtoAnnotationDeclaration::typeId)
         val typePlans = typeCandidates.map { target ->
             JimmerDtoTypeAnnotationPlan(
-                typeId = JimmerDtoTypeId(target.targetId),
+                typeId = DtoTypeId(target.targetId),
                 applications = freezeApplications(
                     target = target,
                     targetKind = AnnotationPlanTargetKind.TYPE,
@@ -315,7 +327,7 @@ internal class JimmerDtoAnnotationContractFreezer(
         }.sortedBy(JimmerDtoTypeAnnotationPlan::typeId)
         val propPlans = propCandidates.map { candidates ->
             JimmerDtoPropAnnotationPlan(
-                propId = JimmerDtoPropId(candidates.property.targetId),
+                propId = DtoPropId(candidates.property.targetId),
                 propertyApplications = freezeApplications(
                     target = candidates.property,
                     targetKind = AnnotationPlanTargetKind.PROP,
@@ -341,16 +353,17 @@ internal class JimmerDtoAnnotationContractFreezer(
     }
 
     private fun typeCandidates(
-        type: JimmerDtoType,
+        type: DtoType,
         diagnostics: MutableList<LsiDiagnostic>,
     ): AnnotationTargetCandidates {
-        val baseType = type.baseTypeId?.let(immutableSchema.typesById::get)
-        if (type.baseTypeId != null && baseType == null) {
+        val baseTypeId = type.baseTypeId
+        val baseType = baseTypeId?.let(immutableSchema.typesById::get)
+        if (baseTypeId != null && baseType == null) {
             diagnostics += missingImmutableTargetDiagnostic(
                 code = "jimmer.dto.annotation.base-type-missing",
-                message = "DTO 注解冻结无法找到不可变基础类型 ${type.baseTypeId.value}",
+                message = "DTO 注解冻结无法找到不可变基础类型 ${baseTypeId.value}",
                 targetId = type.id.value,
-                symbolId = type.baseTypeId,
+                symbolId = baseTypeId,
                 location = type.location,
             )
         }
@@ -380,12 +393,12 @@ internal class JimmerDtoAnnotationContractFreezer(
     }
 
     private fun propertyCandidates(
-        graph: JimmerDtoRenderGraph,
-        prop: JimmerDtoProp,
+        graph: DtoGraph,
+        prop: DtoProp,
         diagnostics: MutableList<LsiDiagnostic>,
     ): AnnotationTargetCandidates {
-        val baseProp = if (prop is JimmerDtoBaseProp) {
-            val tailProp = graph.propsById.getValue(prop.tailPropId) as JimmerDtoBaseProp
+        val baseProp = if (prop is DtoBaseProp) {
+            val tailProp = graph.propsById.getValue(prop.tailPropId) as DtoBaseProp
             val basePropId = tailProp.baseProps.first().propId
             immutableSchema.propsById[basePropId].also { immutableProp ->
                 if (immutableProp == null) {
@@ -427,8 +440,8 @@ internal class JimmerDtoAnnotationContractFreezer(
     }
 
     private fun builderSetterCandidates(
-        graph: JimmerDtoRenderGraph,
-        prop: JimmerDtoProp,
+        graph: DtoGraph,
+        prop: DtoProp,
         diagnostics: MutableList<LsiDiagnostic>,
     ): AnnotationTargetCandidates {
         val ownerType = graph.typesById.getValue(prop.ownerTypeId)
@@ -443,7 +456,7 @@ internal class JimmerDtoAnnotationContractFreezer(
                 location = prop.aliasLocation,
             )
         }
-        val baseProp = if (prop is JimmerDtoBaseProp) {
+        val baseProp = if (prop is DtoBaseProp) {
             val basePropId = prop.baseProps.first().propId
             immutableSchema.propsById[basePropId].also { immutableProp ->
                 if (immutableProp == null) {
@@ -782,16 +795,16 @@ private data class AnnotationCandidate(
 
 }
 
-private fun JimmerDtoType.requiresInputBuilder(graph: JimmerDtoRenderGraph): Boolean {
-    if (polymorphism != null || JimmerDtoModifier.INPUT !in modifiers) {
+private fun DtoType.requiresInputBuilder(graph: DtoGraph): Boolean {
+    if (polymorphism != null || DtoModifier.INPUT !in modifiers) {
         return false
     }
     return propIds.asSequence()
         .map(graph.propsById::getValue)
-        .filterIsInstance<JimmerDtoBaseProp>()
+        .filterIsInstance<DtoBaseProp>()
         .any { prop ->
-            prop.inputModifier == JimmerDtoModifier.FIXED ||
-                prop.inputModifier == JimmerDtoModifier.DYNAMIC
+            prop.inputModifier == DtoModifier.FIXED ||
+                prop.inputModifier == DtoModifier.DYNAMIC
         }
 }
 
@@ -833,7 +846,7 @@ private fun LsiAnnotation.toAppliedAnnotation(): JimmerDtoAppliedAnnotation {
     )
 }
 
-private fun JimmerDtoAnnotation.toAppliedAnnotation(): JimmerDtoAppliedAnnotation {
+private fun DtoAnnotation.toAppliedAnnotation(): JimmerDtoAppliedAnnotation {
     return JimmerDtoAppliedAnnotation(
         typeId = typeId,
         arguments = arguments.map { argument ->
@@ -864,17 +877,17 @@ private fun LsiAnnotationValue.toAppliedAnnotationValue(): JimmerDtoAppliedAnnot
     }
 }
 
-private fun JimmerDtoAnnotationValue.toAppliedAnnotationValue(): JimmerDtoAppliedAnnotationValue {
+private fun DtoAnnotationValue.toAppliedAnnotationValue(): JimmerDtoAppliedAnnotationValue {
     return when (this) {
-        is JimmerDtoAnnotationValue.ArrayValue -> JimmerDtoAppliedAnnotationValue.ArrayValue(
-            elements.map(JimmerDtoAnnotationValue::toAppliedAnnotationValue)
+        is DtoAnnotationValue.ArrayValue -> JimmerDtoAppliedAnnotationValue.ArrayValue(
+            elements.map(DtoAnnotationValue::toAppliedAnnotationValue)
         )
-        is JimmerDtoAnnotationValue.AnnotationValue -> {
+        is DtoAnnotationValue.AnnotationValue -> {
             JimmerDtoAppliedAnnotationValue.AnnotationValue(annotation.toAppliedAnnotation())
         }
-        is JimmerDtoAnnotationValue.EnumValue -> JimmerDtoAppliedAnnotationValue.EnumValue(enumTypeId, constant)
-        is JimmerDtoAnnotationValue.TypeValue -> JimmerDtoAppliedAnnotationValue.TypeValue(type.toLsiType())
-        is JimmerDtoAnnotationValue.LiteralValue -> JimmerDtoAppliedAnnotationValue.SourceLiteralValue(code)
+        is DtoAnnotationValue.EnumValue -> JimmerDtoAppliedAnnotationValue.EnumValue(enumTypeId, constant)
+        is DtoAnnotationValue.TypeValue -> JimmerDtoAppliedAnnotationValue.TypeValue(type.toLsiType())
+        is DtoAnnotationValue.LiteralValue -> JimmerDtoAppliedAnnotationValue.SourceLiteralValue(code)
     }
 }
 
@@ -885,7 +898,7 @@ private fun scalar(
     return JimmerDtoAppliedAnnotationValue.ScalarValue(kind, value.toString())
 }
 
-private fun JimmerDtoTypeRef.toLsiType(): LsiTypeRef {
+private fun DtoTypeRef.toLsiType(): LsiTypeRef {
     val nullability = if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
     val primitiveKind = DTO_PRIMITIVE_KINDS[typeName]
     if (primitiveKind != null && arguments.isEmpty()) {
@@ -903,17 +916,17 @@ private fun JimmerDtoTypeRef.toLsiType(): LsiTypeRef {
     val canonicalTypeName = DTO_STANDARD_DECLARED_TYPES[typeName] ?: typeName
     return LsiDeclaredType(
         declarationId = LsiSymbolId.type(canonicalTypeName),
-        arguments = arguments.map(JimmerDtoTypeArgument::toLsiTypeArgument),
+        arguments = arguments.map(DtoTypeArgument::toLsiTypeArgument),
         nullability = nullability,
     )
 }
 
-private fun JimmerDtoTypeArgument.toLsiTypeArgument(): LsiTypeArgument {
+private fun DtoTypeArgument.toLsiTypeArgument(): LsiTypeArgument {
     return when (variance) {
-        JimmerDtoVariance.INVARIANT -> LsiTypeArgument.invariant(requireNotNull(type).toLsiType())
-        JimmerDtoVariance.IN -> LsiTypeArgument.input(requireNotNull(type).toLsiType())
-        JimmerDtoVariance.OUT -> LsiTypeArgument.output(requireNotNull(type).toLsiType())
-        JimmerDtoVariance.STAR -> LsiTypeArgument.STAR
+        DtoVariance.INVARIANT -> LsiTypeArgument.invariant(requireNotNull(type).toLsiType())
+        DtoVariance.IN -> LsiTypeArgument.input(requireNotNull(type).toLsiType())
+        DtoVariance.OUT -> LsiTypeArgument.output(requireNotNull(type).toLsiType())
+        DtoVariance.STAR -> LsiTypeArgument.STAR
     }
 }
 

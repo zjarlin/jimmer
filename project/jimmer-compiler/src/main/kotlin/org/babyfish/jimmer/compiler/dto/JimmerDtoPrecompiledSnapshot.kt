@@ -5,6 +5,23 @@ import java.security.MessageDigest
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.model.stableSignature
+import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
+import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
+import site.addzero.lsi.jimmer.dto.DtoConfigValue
+import site.addzero.lsi.jimmer.dto.DtoEnumType
+import site.addzero.lsi.jimmer.dto.DtoFoldProp
+import site.addzero.lsi.jimmer.dto.DtoLikeOption
+import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoPredicate
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropConfig
+import site.addzero.lsi.jimmer.dto.DtoPropPathNode
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.DtoUserProp
 
 internal fun JimmerDtoPrecompiledSchema.normalizedSnapshot(): String {
     return buildString {
@@ -30,7 +47,7 @@ internal fun JimmerDtoPrecompiledSchema.normalizedSnapshot(): String {
                     reference.location.end.column.toString(),
                 )
             }
-            document.renderGraph.rootTypeIds.forEachIndexed { index, typeId ->
+            document.graph.rootTypeIds.forEachIndexed { index, typeId ->
                 appendRecord(
                     "root",
                     inputDocument.source.path,
@@ -38,8 +55,8 @@ internal fun JimmerDtoPrecompiledSchema.normalizedSnapshot(): String {
                     typeId.value,
                 )
             }
-            document.renderGraph.types.forEach { type -> appendType(type) }
-            document.renderGraph.props.forEach { prop -> appendProp(prop) }
+            document.graph.types.forEach { type -> appendType(type) }
+            document.graph.props.forEach { prop -> appendProp(prop) }
             appendAnnotationContract(inputDocument.source.path, document.annotationContract)
             appendInterfaceContractResolution(
                 inputDocument.source.path,
@@ -71,7 +88,7 @@ private fun StringBuilder.appendRecord(
     append('\n')
 }
 
-private fun StringBuilder.appendType(type: JimmerDtoType) {
+private fun StringBuilder.appendType(type: DtoType) {
     appendRecord(
         "type",
         type.id.value,
@@ -79,8 +96,8 @@ private fun StringBuilder.appendType(type: JimmerDtoType) {
         type.packageName,
         type.name.orEmpty(),
         type.modifiers
-            .sortedWith(compareBy(JimmerDtoModifier::order, JimmerDtoModifier::name))
-            .joinToString(",", transform = JimmerDtoModifier::name),
+            .sortedWith(compareBy(DtoModifier::order, DtoModifier::name))
+            .joinToString(",", transform = DtoModifier::name),
         type.annotations.annotationListCanonicalText(),
         type.superInterfaces.typeRefListCanonicalText(),
         type.documentation.orEmpty(),
@@ -107,7 +124,7 @@ private fun StringBuilder.appendType(type: JimmerDtoType) {
     }
 }
 
-private fun StringBuilder.appendProp(prop: JimmerDtoProp) {
+private fun StringBuilder.appendProp(prop: DtoProp) {
     val commonFields = arrayOf(
         prop.id.value,
         prop.ownerTypeId.value,
@@ -119,7 +136,7 @@ private fun StringBuilder.appendProp(prop: JimmerDtoProp) {
         prop.aliasLocation.canonicalText(),
     )
     when (prop) {
-        is JimmerDtoBaseProp -> appendRecord(
+        is DtoBaseProp -> appendRecord(
             "base-prop",
             *commonFields,
             prop.baseLocation.canonicalText(),
@@ -134,15 +151,15 @@ private fun StringBuilder.appendProp(prop: JimmerDtoProp) {
             prop.enumType?.canonicalText().orEmpty(),
             prop.config?.canonicalText().orEmpty(),
             prop.recursive.toString(),
-            prop.likeOptions.sortedBy(JimmerDtoLikeOption::name).joinToString(",", transform = JimmerDtoLikeOption::name),
+            prop.likeOptions.sortedBy(DtoLikeOption::name).joinToString(",", transform = DtoLikeOption::name),
         )
-        is JimmerDtoUserProp -> appendRecord(
+        is DtoUserProp -> appendRecord(
             "user-prop",
             *commonFields,
             prop.type.canonicalText(),
             prop.defaultValueText.orEmpty(),
         )
-        is JimmerDtoFoldProp -> appendRecord(
+        is DtoFoldProp -> appendRecord(
             "fold-prop",
             *commonFields,
             prop.nullGuardPropId?.value.orEmpty(),
@@ -294,14 +311,14 @@ private fun LsiDiagnostic.canonicalText(): String = canonicalValue(
 private fun Map<String, String>.canonicalText(): String =
     toSortedMap().entries.canonicalList { (name, value) -> canonicalValue("detail", name, value) }
 
-private fun List<JimmerDtoBasePropBinding>.baseBindingListCanonicalText(): String = canonicalList { binding ->
+private fun List<DtoBasePropBinding>.baseBindingListCanonicalText(): String = canonicalList { binding ->
     canonicalValue("binding", binding.name, binding.propId.value)
 }
 
-private fun List<JimmerDtoAnnotation>.annotationListCanonicalText(): String =
-    canonicalList(JimmerDtoAnnotation::canonicalText)
+private fun List<DtoAnnotation>.annotationListCanonicalText(): String =
+    canonicalList(DtoAnnotation::canonicalText)
 
-private fun JimmerDtoAnnotation.canonicalText(): String = canonicalValue(
+private fun DtoAnnotation.canonicalText(): String = canonicalValue(
     "annotation",
     typeId.value,
     arguments.canonicalList { argument ->
@@ -309,20 +326,20 @@ private fun JimmerDtoAnnotation.canonicalText(): String = canonicalValue(
     },
 )
 
-private fun JimmerDtoAnnotationValue.canonicalText(): String = when (this) {
-    is JimmerDtoAnnotationValue.ArrayValue -> canonicalValue(
+private fun DtoAnnotationValue.canonicalText(): String = when (this) {
+    is DtoAnnotationValue.ArrayValue -> canonicalValue(
         "array",
-        elements.canonicalList(JimmerDtoAnnotationValue::canonicalText),
+        elements.canonicalList(DtoAnnotationValue::canonicalText),
     )
-    is JimmerDtoAnnotationValue.AnnotationValue -> canonicalValue("annotation", annotation.canonicalText())
-    is JimmerDtoAnnotationValue.EnumValue -> canonicalValue("enum", enumTypeId.value, constant)
-    is JimmerDtoAnnotationValue.TypeValue -> canonicalValue("type", type.canonicalText())
-    is JimmerDtoAnnotationValue.LiteralValue -> canonicalValue("literal", code)
+    is DtoAnnotationValue.AnnotationValue -> canonicalValue("annotation", annotation.canonicalText())
+    is DtoAnnotationValue.EnumValue -> canonicalValue("enum", enumTypeId.value, constant)
+    is DtoAnnotationValue.TypeValue -> canonicalValue("type", type.canonicalText())
+    is DtoAnnotationValue.LiteralValue -> canonicalValue("literal", code)
 }
 
-private fun List<JimmerDtoTypeRef>.typeRefListCanonicalText(): String = canonicalList(JimmerDtoTypeRef::canonicalText)
+private fun List<DtoTypeRef>.typeRefListCanonicalText(): String = canonicalList(DtoTypeRef::canonicalText)
 
-private fun JimmerDtoTypeRef.canonicalText(): String = canonicalValue(
+private fun DtoTypeRef.canonicalText(): String = canonicalValue(
     "type",
     typeName,
     nullable.toString(),
@@ -336,13 +353,13 @@ private fun JimmerDtoTypeRef.canonicalText(): String = canonicalValue(
     },
 )
 
-private fun JimmerDtoEnumType.canonicalText(): String = canonicalValue(
+private fun DtoEnumType.canonicalText(): String = canonicalValue(
     "enum",
     numeric.toString(),
     mappings.canonicalList { mapping -> canonicalValue("mapping", mapping.constant, mapping.value) },
 )
 
-private fun JimmerDtoPropConfig.canonicalText(): String = canonicalValue(
+private fun DtoPropConfig.canonicalText(): String = canonicalValue(
     "config",
     predicate?.canonicalText().orEmpty(),
     orderItems.canonicalList { orderItem ->
@@ -361,43 +378,43 @@ private fun JimmerDtoPropConfig.canonicalText(): String = canonicalValue(
     depth.toString(),
 )
 
-private fun JimmerDtoConfigTypeRef.canonicalText(): String = canonicalValue(
+private fun DtoConfigTypeRef.canonicalText(): String = canonicalValue(
     "config-type",
     typeId.value,
     location.canonicalText(),
 )
 
-private fun JimmerDtoPredicate.canonicalText(): String = when (this) {
-    is JimmerDtoPredicate.And -> canonicalValue(
+private fun DtoPredicate.canonicalText(): String = when (this) {
+    is DtoPredicate.And -> canonicalValue(
         "and",
-        predicates.canonicalList(JimmerDtoPredicate::canonicalText),
+        predicates.canonicalList(DtoPredicate::canonicalText),
     )
-    is JimmerDtoPredicate.Or -> canonicalValue(
+    is DtoPredicate.Or -> canonicalValue(
         "or",
-        predicates.canonicalList(JimmerDtoPredicate::canonicalText),
+        predicates.canonicalList(DtoPredicate::canonicalText),
     )
-    is JimmerDtoPredicate.Comparison -> canonicalValue(
+    is DtoPredicate.Comparison -> canonicalValue(
         "comparison",
         path.propPathCanonicalText(),
         operator,
         value.canonicalText(),
     )
-    is JimmerDtoPredicate.Nullity -> canonicalValue(
+    is DtoPredicate.Nullity -> canonicalValue(
         "nullity",
         path.propPathCanonicalText(),
         negative.toString(),
     )
 }
 
-private fun JimmerDtoConfigValue.canonicalText(): String = when (this) {
-    is JimmerDtoConfigValue.BooleanValue -> canonicalValue("boolean", value.toString())
-    is JimmerDtoConfigValue.LongValue -> canonicalValue("long", value.toString())
-    is JimmerDtoConfigValue.BigIntegerValue -> canonicalValue("big-integer", value)
-    is JimmerDtoConfigValue.DecimalValue -> canonicalValue("decimal", value)
-    is JimmerDtoConfigValue.StringValue -> canonicalValue("string", value)
+private fun DtoConfigValue.canonicalText(): String = when (this) {
+    is DtoConfigValue.BooleanValue -> canonicalValue("boolean", value.toString())
+    is DtoConfigValue.LongValue -> canonicalValue("long", value.toString())
+    is DtoConfigValue.BigIntegerValue -> canonicalValue("big-integer", value)
+    is DtoConfigValue.DecimalValue -> canonicalValue("decimal", value)
+    is DtoConfigValue.StringValue -> canonicalValue("string", value)
 }
 
-private fun List<JimmerDtoPropPathNode>.propPathCanonicalText(): String = canonicalList { node ->
+private fun List<DtoPropPathNode>.propPathCanonicalText(): String = canonicalList { node ->
     canonicalValue("path", node.propId.value, node.associatedId.toString())
 }
 

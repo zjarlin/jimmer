@@ -1,16 +1,16 @@
 package org.babyfish.jimmer.compiler.client
 
-import org.babyfish.jimmer.compiler.dto.JimmerDtoBaseProp
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPrecompiledSchema
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
 
 internal fun JimmerDtoPrecompiledSchema.toClientDefinitionDocumentation(
     immutableSchema: ImmutableSchema,
 ): Map<LsiSymbolId, ClientDefinitionDocumentation> {
     val documentationByTypeId = linkedMapOf<LsiSymbolId, ClientDefinitionDocumentation>()
     documents.forEach { document ->
-        val graph = document.renderGraph
+        val graph = document.graph
         graph.rootTypeIds.forEach { rootTypeId ->
             val type = graph.typesById.getValue(rootTypeId)
             val typeName = type.name ?: return@forEach
@@ -21,9 +21,9 @@ internal fun JimmerDtoPrecompiledSchema.toClientDefinitionDocumentation(
             }
             val propertyDocumentation = type.propIds.mapNotNull { propId ->
                 val prop = graph.propsById.getValue(propId)
-                val documentation = if (prop is JimmerDtoBaseProp) {
+                val documentation = if (prop is DtoBaseProp) {
                     prop.dtoDocumentation ?: run {
-                        val tailProp = graph.propsById.getValue(prop.tailPropId) as JimmerDtoBaseProp
+                        val tailProp = graph.propsById.getValue(prop.tailPropId) as DtoBaseProp
                         tailProp.baseProps.firstNotNullOfOrNull { binding ->
                             immutableSchema.propsById[binding.propId]?.documentation
                         }

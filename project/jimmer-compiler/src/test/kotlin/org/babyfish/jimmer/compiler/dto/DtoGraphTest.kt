@@ -33,7 +33,7 @@ import site.addzero.lsi.jimmer.InheritanceStrategy
 import site.addzero.lsi.jimmer.JoinedTableDissociateAction
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
-import org.babyfish.jimmer.dto.compiler.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier as AstDtoModifier
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiOrigin
@@ -50,26 +50,55 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
+import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
+import site.addzero.lsi.jimmer.dto.DtoConfigValue
+import site.addzero.lsi.jimmer.dto.DtoEnumMapping
+import site.addzero.lsi.jimmer.dto.DtoEnumType
+import site.addzero.lsi.jimmer.dto.DtoFetchType
+import site.addzero.lsi.jimmer.dto.DtoFoldProp
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoLikeOption
+import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoOrderItem
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import site.addzero.lsi.jimmer.dto.DtoPolymorphism
+import site.addzero.lsi.jimmer.dto.DtoPredicate
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropConfig
+import site.addzero.lsi.jimmer.dto.DtoPropId
+import site.addzero.lsi.jimmer.dto.DtoPropPathNode
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeArgument
+import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.DtoUserProp
+import site.addzero.lsi.jimmer.dto.DtoVariance
 
-class JimmerDtoRenderGraphTest {
+class DtoGraphTest {
     @Test
-    fun `complex render graph is self contained frozen data`() {
+    fun `complex DTO graph is self contained frozen data`() {
         val graph = complexGraph()
-        val forbiddenTypes = graph.reachableTypeNames().filter(::isForbiddenRenderStateType)
+        val forbiddenTypes = graph.reachableTypeNames().filter(::isForbiddenCompilerStateType)
 
-        assertTrue(forbiddenTypes.isEmpty(), "DTO render graph retains forbidden state: $forbiddenTypes")
+        assertTrue(forbiddenTypes.isEmpty(), "DTO graph retains forbidden state: $forbiddenTypes")
         assertEquals(graph.types, graph.typesById.values.toList())
         assertEquals(graph.props, graph.propsById.values.toList())
         assertEquals(setOf(ROOT_TYPE_ID), graph.rootTypeIds.toSet())
     }
 
     @Test
-    fun `complex render graph captures nested enum config polymorphism and recursion`() {
+    fun `complex DTO graph captures nested enum config polymorphism and recursion`() {
         val graph = complexGraph()
         val rootType = graph.typesById.getValue(ROOT_TYPE_ID)
-        val statusProp = graph.propsById.getValue(STATUS_PROP_ID) as JimmerDtoBaseProp
-        val storeProp = graph.propsById.getValue(STORE_PROP_ID) as JimmerDtoBaseProp
-        val childrenProp = graph.propsById.getValue(CHILDREN_PROP_ID) as JimmerDtoBaseProp
+        val statusProp = graph.propsById.getValue(STATUS_PROP_ID) as DtoBaseProp
+        val storeProp = graph.propsById.getValue(STORE_PROP_ID) as DtoBaseProp
+        val childrenProp = graph.propsById.getValue(CHILDREN_PROP_ID) as DtoBaseProp
         val polymorphism = requireNotNull(rootType.polymorphism)
 
         assertEquals(NESTED_TYPE_ID, storeProp.targetTypeId)
@@ -80,8 +109,8 @@ class JimmerDtoRenderGraphTest {
         assertTrue(childrenProp.recursive)
         assertFalse(polymorphism.exhaustive)
         assertEquals(
-            listOf(JimmerDtoPolymorphicBranchKind.DEFAULT, JimmerDtoPolymorphicBranchKind.TYPE),
-            polymorphism.branches.map(JimmerDtoPolymorphicBranch::kind),
+            listOf(DtoPolymorphicBranchKind.DEFAULT, DtoPolymorphicBranchKind.TYPE),
+            polymorphism.branches.map(DtoPolymorphicBranch::kind),
         )
     }
 
@@ -94,7 +123,7 @@ class JimmerDtoRenderGraphTest {
             schema = schema,
             unresolvedDocuments = emptyList(),
             failures = emptyList(),
-            defaultNullableInputModifier = DtoModifier.STATIC,
+            defaultNullableInputModifier = AstDtoModifier.STATIC,
             rendererOptions = JimmerDtoRendererOptions(
                 jacksonVersion = JimmerDtoJacksonVersion.JACKSON_2,
                 hibernateValidatorEnhancement = false,
@@ -102,12 +131,12 @@ class JimmerDtoRenderGraphTest {
                 kspMutable = false,
             ),
             effectiveKspMutableByRootTypeId = schema.documents
-                .flatMap { document -> document.renderGraph.rootTypeIds }
+                .flatMap { document -> document.graph.rootTypeIds }
                 .sorted()
                 .associateWith { false },
             immutableDependencyFingerprint = "immutable-fingerprint",
         )
-        val forbiddenTypes = state.reachableTypeNames().filter(::isForbiddenRenderStateType)
+        val forbiddenTypes = state.reachableTypeNames().filter(::isForbiddenCompilerStateType)
 
         assertTrue(forbiddenTypes.isEmpty(), "DTO feature state retains forbidden state: $forbiddenTypes")
         assertTrue(schema.fingerprint() in state.fingerprint)
@@ -146,24 +175,24 @@ class JimmerDtoRenderGraphTest {
     }
 
     @Test
-    fun `complex graph fingerprint changes for every renderer semantic mutation`() {
+    fun `complex graph fingerprint changes for every DTO semantic mutation`() {
         val graph = complexGraph()
         val baseline = schema(graph).fingerprint()
         val semanticMutations = listOf(
-            graph.withRootType { type -> type.copy(documentation = "Changed render contract") },
+            graph.withRootType { type -> type.copy(documentation = "Changed DTO contract") },
             graph.withProp(STATUS_PROP_ID) { prop ->
-                val baseProp = prop as JimmerDtoBaseProp
+                val baseProp = prop as DtoBaseProp
                 baseProp.copy(
                     enumType = requireNotNull(baseProp.enumType).copy(
                         mappings = listOf(
-                            JimmerDtoEnumMapping("DRAFT", "draft"),
-                            JimmerDtoEnumMapping("PUBLISHED", "released"),
+                            DtoEnumMapping("DRAFT", "draft"),
+                            DtoEnumMapping("PUBLISHED", "released"),
                         ),
                     ),
                 )
             },
             graph.withProp(STORE_PROP_ID) { prop ->
-                val baseProp = prop as JimmerDtoBaseProp
+                val baseProp = prop as DtoBaseProp
                 baseProp.copy(config = requireNotNull(baseProp.config).copy(depth = 7))
             },
             graph.withRootType { type ->
@@ -171,7 +200,7 @@ class JimmerDtoRenderGraphTest {
                 type.copy(
                     polymorphism = polymorphism.copy(
                         branches = polymorphism.branches.map { branch ->
-                            if (branch.kind == JimmerDtoPolymorphicBranchKind.TYPE) {
+                            if (branch.kind == DtoPolymorphicBranchKind.TYPE) {
                                 branch.copy(className = "demo.dto.ChangedSpecialBookView")
                             } else {
                                 branch
@@ -187,7 +216,7 @@ class JimmerDtoRenderGraphTest {
                             arguments = annotation.arguments.map { argument ->
                                 if (argument.name == "nested") {
                                     argument.copy(
-                                        value = JimmerDtoAnnotationValue.LiteralValue("\"changed\""),
+                                        value = DtoAnnotationValue.LiteralValue("\"changed\""),
                                     )
                                 } else {
                                     argument
@@ -206,7 +235,7 @@ class JimmerDtoRenderGraphTest {
     }
 
     @Test
-    fun `real dto precompiler freezes nested flat and polymorphic renderer graph`() {
+    fun `real dto precompiler freezes nested flat and polymorphic DTO graph`() {
         val fixture = realPrecompilerFixture()
         val outcome = JimmerDtoPrecompiler().compile(
             inputDocumentSnapshots = listOf(CompilerInputDocumentReferenceFreezer().freeze(fixture.document)),
@@ -214,17 +243,17 @@ class JimmerDtoRenderGraphTest {
             immutableSemanticRootTypeIds = fixture.schema.types.mapTo(sortedSetOf(), ImmutableType::id),
             workspace = fixture.workspace,
             sourceFilter = JimmerCompilerSourceFilter(),
-            defaultNullableInputModifier = DtoModifier.STATIC,
+            defaultNullableInputModifier = AstDtoModifier.STATIC,
             platform = CompilerPlatform.APT,
         )
 
         assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString { failure -> failure.message })
         assertTrue(outcome.unresolvedDocuments.isEmpty())
         val document = outcome.schema.documents.single()
-        val graph = document.renderGraph
+        val graph = document.graph
         val rootType = graph.typesById.getValue(graph.rootTypeIds.single())
         val rootProps = rootType.propIds.map(graph.propsById::getValue)
-        val nestedProp = rootProps.single { prop -> prop.name == "publisher" } as JimmerDtoBaseProp
+        val nestedProp = rootProps.single { prop -> prop.name == "publisher" } as DtoBaseProp
         val nestedType = graph.typesById.getValue(assertNotNull(nestedProp.targetTypeId))
         val nestedPropNames = nestedType.propIds.map { propId -> graph.propsById.getValue(propId).name }
         val polymorphism = assertNotNull(rootType.polymorphism)
@@ -234,7 +263,7 @@ class JimmerDtoRenderGraphTest {
             "DTO client documentation\n@param name DTO name documentation\n",
             rootType.documentation,
         )
-        val nameProp = rootProps.single { prop -> prop.name == "name" } as JimmerDtoBaseProp
+        val nameProp = rootProps.single { prop -> prop.name == "name" } as DtoBaseProp
         assertEquals("DTO name documentation", nameProp.documentation)
         assertEquals("DTO name documentation", nameProp.dtoDocumentation)
         assertEquals(
@@ -248,7 +277,7 @@ class JimmerDtoRenderGraphTest {
                 .single { prop -> prop.name == "name" }
                 .documentation,
         )
-        val storeNameProp = rootProps.single { prop -> prop.name == "storeName" } as JimmerDtoBaseProp
+        val storeNameProp = rootProps.single { prop -> prop.name == "storeName" } as DtoBaseProp
         assertEquals("Store name documentation\n", storeNameProp.documentation)
         assertNull(storeNameProp.dtoDocumentation)
         val rootTypeName = assertNotNull(rootType.name)
@@ -262,34 +291,34 @@ class JimmerDtoRenderGraphTest {
         assertTrue(rootType.hiddenFlatPropIds.isNotEmpty())
         assertTrue(rootProps.any { prop -> prop.name == "storeId" })
         assertTrue(rootProps.any { prop -> prop.name == "storeName" })
-        assertTrue(polymorphism.branches.any { branch -> branch.kind == JimmerDtoPolymorphicBranchKind.TYPE })
+        assertTrue(polymorphism.branches.any { branch -> branch.kind == DtoPolymorphicBranchKind.TYPE })
         polymorphism.branches.forEach { branch ->
             assertTrue(branch.bodyTypeId in graph.typesById)
             assertTrue(branch.mergedTypeId in graph.typesById)
         }
-        assertTrue(graph.reachableTypeNames().none(::isForbiddenRenderStateType))
+        assertTrue(graph.reachableTypeNames().none(::isForbiddenCompilerStateType))
         assertTrue("taxCode" in outcome.schema.normalizedSnapshot())
     }
 
-    private fun complexGraph(): JimmerDtoRenderGraph {
+    private fun complexGraph(): DtoGraph {
         val source = LsiSource.of(
             path = "demo-project/src/main/dto/demo/Book.dto",
             language = LsiLanguage.UNKNOWN,
         )
-        val rootType = JimmerDtoType(
+        val rootType = DtoType(
             id = ROOT_TYPE_ID,
             baseTypeId = BOOK_TYPE_ID,
             packageName = "demo.dto",
             name = "BookView",
-            modifiers = linkedSetOf(JimmerDtoModifier.INPUT, JimmerDtoModifier.FIXED),
+            modifiers = linkedSetOf(DtoModifier.INPUT, DtoModifier.FIXED),
             annotations = listOf(markerAnnotation(source)),
             superInterfaces = listOf(
-                JimmerDtoTypeRef(
+                DtoTypeRef(
                     typeName = "demo.View",
                     arguments = listOf(
-                        JimmerDtoTypeArgument(
-                            variance = JimmerDtoVariance.OUT,
-                            type = JimmerDtoTypeRef(
+                        DtoTypeArgument(
+                            variance = DtoVariance.OUT,
+                            type = DtoTypeRef(
                                 typeName = "java.lang.String",
                                 arguments = emptyList(),
                                 nullable = true,
@@ -301,7 +330,7 @@ class JimmerDtoRenderGraphTest {
                     location = location(source, 2, 21),
                 )
             ),
-            documentation = "Book render contract",
+            documentation = "Book DTO contract",
             location = location(source, 2, 1),
             focusedRecursion = true,
             propIds = listOf(
@@ -313,11 +342,11 @@ class JimmerDtoRenderGraphTest {
                 SUMMARY_PROP_ID,
             ),
             hiddenFlatPropIds = listOf(HIDDEN_STORE_ID_PROP_ID),
-            polymorphism = JimmerDtoPolymorphism(
+            polymorphism = DtoPolymorphism(
                 exhaustive = false,
                 branches = listOf(
-                    JimmerDtoPolymorphicBranch(
-                        kind = JimmerDtoPolymorphicBranchKind.DEFAULT,
+                    DtoPolymorphicBranch(
+                        kind = DtoPolymorphicBranchKind.DEFAULT,
                         targetBaseTypeId = null,
                         declaredClassName = null,
                         className = "demo.dto.BookView.Default",
@@ -326,8 +355,8 @@ class JimmerDtoRenderGraphTest {
                         implicit = true,
                         location = location(source, 21, 5),
                     ),
-                    JimmerDtoPolymorphicBranch(
-                        kind = JimmerDtoPolymorphicBranchKind.TYPE,
+                    DtoPolymorphicBranch(
+                        kind = DtoPolymorphicBranchKind.TYPE,
                         targetBaseTypeId = SPECIAL_BOOK_TYPE_ID,
                         declaredClassName = "Special",
                         className = "demo.dto.SpecialBookView",
@@ -339,12 +368,12 @@ class JimmerDtoRenderGraphTest {
                 ),
             ),
         )
-        val nestedType = JimmerDtoType(
+        val nestedType = DtoType(
             id = NESTED_TYPE_ID,
             baseTypeId = STORE_TYPE_ID,
             packageName = "demo.dto",
             name = null,
-            modifiers = setOf(JimmerDtoModifier.DYNAMIC),
+            modifiers = setOf(DtoModifier.DYNAMIC),
             annotations = emptyList(),
             superInterfaces = emptyList(),
             documentation = "Nested store",
@@ -369,7 +398,7 @@ class JimmerDtoRenderGraphTest {
                 line = 4,
                 basePropId = LsiSymbolId.property(BOOK_TYPE_ID, "id"),
             ),
-            JimmerDtoBaseProp(
+            DtoBaseProp(
                 id = STATUS_PROP_ID,
                 ownerTypeId = ROOT_TYPE_ID,
                 name = "status",
@@ -380,27 +409,27 @@ class JimmerDtoRenderGraphTest {
                 aliasLocation = location(source, 5, 5),
                 baseLocation = location(source, 5, 5),
                 baseProps = listOf(
-                    JimmerDtoBasePropBinding("status", LsiSymbolId.property(BOOK_TYPE_ID, "status"))
+                    DtoBasePropBinding("status", LsiSymbolId.property(BOOK_TYPE_ID, "status"))
                 ),
                 basePath = "status",
                 nextPropId = null,
                 tailPropId = STATUS_PROP_ID,
                 baseNullable = false,
-                inputModifier = JimmerDtoModifier.FIXED,
+                inputModifier = DtoModifier.FIXED,
                 functionName = null,
                 targetTypeId = null,
-                enumType = JimmerDtoEnumType(
+                enumType = DtoEnumType(
                     numeric = false,
                     mappings = listOf(
-                        JimmerDtoEnumMapping("DRAFT", "draft"),
-                        JimmerDtoEnumMapping("PUBLISHED", "published"),
+                        DtoEnumMapping("DRAFT", "draft"),
+                        DtoEnumMapping("PUBLISHED", "published"),
                     ),
                 ),
                 config = null,
                 recursive = false,
                 likeOptions = emptySet(),
             ),
-            JimmerDtoBaseProp(
+            DtoBaseProp(
                 id = STORE_PROP_ID,
                 ownerTypeId = ROOT_TYPE_ID,
                 name = "store",
@@ -411,32 +440,32 @@ class JimmerDtoRenderGraphTest {
                 aliasLocation = location(source, 7, 14),
                 baseLocation = location(source, 7, 5),
                 baseProps = listOf(
-                    JimmerDtoBasePropBinding("store", LsiSymbolId.property(BOOK_TYPE_ID, "store"))
+                    DtoBasePropBinding("store", LsiSymbolId.property(BOOK_TYPE_ID, "store"))
                 ),
                 basePath = "store",
                 nextPropId = null,
                 tailPropId = STORE_PROP_ID,
                 baseNullable = true,
-                inputModifier = JimmerDtoModifier.DYNAMIC,
+                inputModifier = DtoModifier.DYNAMIC,
                 functionName = "flat",
                 targetTypeId = NESTED_TYPE_ID,
                 enumType = null,
-                config = JimmerDtoPropConfig(
-                    predicate = JimmerDtoPredicate.And(
+                config = DtoPropConfig(
+                    predicate = DtoPredicate.And(
                         listOf(
-                            JimmerDtoPredicate.Comparison(
+                            DtoPredicate.Comparison(
                                 path = listOf(
-                                    JimmerDtoPropPathNode(
+                                    DtoPropPathNode(
                                         propId = LsiSymbolId.property(STORE_TYPE_ID, "name"),
                                         associatedId = false,
                                     )
                                 ),
                                 operator = "like",
-                                value = JimmerDtoConfigValue.StringValue("MANNING"),
+                                value = DtoConfigValue.StringValue("MANNING"),
                             ),
-                            JimmerDtoPredicate.Nullity(
+                            DtoPredicate.Nullity(
                                 path = listOf(
-                                    JimmerDtoPropPathNode(
+                                    DtoPropPathNode(
                                         propId = LsiSymbolId.property(STORE_TYPE_ID, "website"),
                                         associatedId = false,
                                     )
@@ -446,9 +475,9 @@ class JimmerDtoRenderGraphTest {
                         )
                     ),
                     orderItems = listOf(
-                        JimmerDtoOrderItem(
+                        DtoOrderItem(
                             path = listOf(
-                                JimmerDtoPropPathNode(
+                                DtoPropPathNode(
                                     propId = LsiSymbolId.property(STORE_TYPE_ID, "name"),
                                     associatedId = false,
                                 )
@@ -456,9 +485,9 @@ class JimmerDtoRenderGraphTest {
                             descending = true,
                         )
                     ),
-                    filter = JimmerDtoConfigTypeRef(FILTER_TYPE_ID, location(source, 10, 14)),
-                    recursion = JimmerDtoConfigTypeRef(RECURSION_TYPE_ID, location(source, 10, 32)),
-                    fetchType = JimmerDtoFetchType.JOIN_ALWAYS,
+                    filter = DtoConfigTypeRef(FILTER_TYPE_ID, location(source, 10, 14)),
+                    recursion = DtoConfigTypeRef(RECURSION_TYPE_ID, location(source, 10, 32)),
+                    fetchType = DtoFetchType.JOIN_ALWAYS,
                     limit = 20,
                     offset = 5,
                     batch = 16,
@@ -466,11 +495,11 @@ class JimmerDtoRenderGraphTest {
                 ),
                 recursive = false,
                 likeOptions = linkedSetOf(
-                    JimmerDtoLikeOption.INSENSITIVE,
-                    JimmerDtoLikeOption.MATCH_START,
+                    DtoLikeOption.INSENSITIVE,
+                    DtoLikeOption.MATCH_START,
                 ),
             ),
-            JimmerDtoBaseProp(
+            DtoBaseProp(
                 id = CHILDREN_PROP_ID,
                 ownerTypeId = ROOT_TYPE_ID,
                 name = "children",
@@ -481,22 +510,22 @@ class JimmerDtoRenderGraphTest {
                 aliasLocation = location(source, 12, 5),
                 baseLocation = location(source, 12, 5),
                 baseProps = listOf(
-                    JimmerDtoBasePropBinding("children", LsiSymbolId.property(BOOK_TYPE_ID, "children"))
+                    DtoBasePropBinding("children", LsiSymbolId.property(BOOK_TYPE_ID, "children"))
                 ),
                 basePath = "children",
                 nextPropId = null,
                 tailPropId = CHILDREN_PROP_ID,
                 baseNullable = false,
-                inputModifier = JimmerDtoModifier.STATIC,
+                inputModifier = DtoModifier.STATIC,
                 functionName = null,
                 targetTypeId = ROOT_TYPE_ID,
                 enumType = null,
-                config = JimmerDtoPropConfig(
+                config = DtoPropConfig(
                     predicate = null,
                     orderItems = emptyList(),
                     filter = null,
-                    recursion = JimmerDtoConfigTypeRef(RECURSION_TYPE_ID, location(source, 12, 18)),
-                    fetchType = JimmerDtoFetchType.AUTO,
+                    recursion = DtoConfigTypeRef(RECURSION_TYPE_ID, location(source, 12, 18)),
+                    fetchType = DtoFetchType.AUTO,
                     limit = 0,
                     offset = 0,
                     batch = 8,
@@ -505,7 +534,7 @@ class JimmerDtoRenderGraphTest {
                 recursive = true,
                 likeOptions = emptySet(),
             ),
-            JimmerDtoUserProp(
+            DtoUserProp(
                 id = DISPLAY_NAME_PROP_ID,
                 ownerTypeId = ROOT_TYPE_ID,
                 name = "displayName",
@@ -514,7 +543,7 @@ class JimmerDtoRenderGraphTest {
                 annotations = emptyList(),
                 documentation = "Computed label",
                 aliasLocation = location(source, 14, 5),
-                type = JimmerDtoTypeRef(
+                type = DtoTypeRef(
                     typeName = "java.lang.String",
                     arguments = emptyList(),
                     nullable = true,
@@ -522,7 +551,7 @@ class JimmerDtoRenderGraphTest {
                 ),
                 defaultValueText = "\"unknown\"",
             ),
-            JimmerDtoFoldProp(
+            DtoFoldProp(
                 id = SUMMARY_PROP_ID,
                 ownerTypeId = ROOT_TYPE_ID,
                 name = "summary",
@@ -550,11 +579,11 @@ class JimmerDtoRenderGraphTest {
                 line = 9,
                 basePropId = LsiSymbolId.property(STORE_TYPE_ID, "name"),
             ),
-        ).sortedBy(JimmerDtoProp::id)
-        return JimmerDtoRenderGraph(
+        ).sortedBy(DtoProp::id)
+        return DtoGraph(
             source = source,
             rootTypeIds = listOf(ROOT_TYPE_ID),
-            types = (listOf(rootType, nestedType) + branchTypes).sortedBy(JimmerDtoType::id),
+            types = (listOf(rootType, nestedType) + branchTypes).sortedBy(DtoType::id),
             props = props,
         )
     }
@@ -801,21 +830,21 @@ class JimmerDtoRenderGraphTest {
         )
     }
 
-    private fun reorderedSetGraph(): JimmerDtoRenderGraph {
+    private fun reorderedSetGraph(): DtoGraph {
         val graph = complexGraph()
         val types = graph.types.map { type ->
             if (type.id == ROOT_TYPE_ID) {
-                type.copy(modifiers = linkedSetOf(JimmerDtoModifier.FIXED, JimmerDtoModifier.INPUT))
+                type.copy(modifiers = linkedSetOf(DtoModifier.FIXED, DtoModifier.INPUT))
             } else {
                 type
             }
         }
         val props = graph.props.map { prop ->
             if (prop.id == STORE_PROP_ID) {
-                (prop as JimmerDtoBaseProp).copy(
+                (prop as DtoBaseProp).copy(
                     likeOptions = linkedSetOf(
-                        JimmerDtoLikeOption.MATCH_START,
-                        JimmerDtoLikeOption.INSENSITIVE,
+                        DtoLikeOption.MATCH_START,
+                        DtoLikeOption.INSENSITIVE,
                     ),
                 )
             } else {
@@ -825,21 +854,21 @@ class JimmerDtoRenderGraphTest {
         return graph.copy(types = types, props = props)
     }
 
-    private fun schema(graph: JimmerDtoRenderGraph): JimmerDtoPrecompiledSchema {
+    private fun schema(graph: DtoGraph): JimmerDtoPrecompiledSchema {
         val document = CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
             projectName = "demo-project",
             sourceRoot = "src/main/dto",
             relativePath = "demo/Book.dto",
-            content = "frozen render graph fixture",
+            content = "frozen DTO graph fixture",
         )
         return JimmerDtoPrecompiledSchema(
             listOf(
                 JimmerDtoPrecompiledDocument(
                     inputSnapshot = CompilerInputDocumentSnapshot(document, emptyList()),
                     targetTypeIds = listOf(BOOK_TYPE_ID),
-                    renderGraph = graph,
+                    graph = graph,
                     annotationContract = JimmerDtoAnnotationContract(
                         declarations = emptyList(),
                         typePlans = graph.types.map { type ->
@@ -865,9 +894,9 @@ class JimmerDtoRenderGraphTest {
         )
     }
 
-    private fun JimmerDtoRenderGraph.withRootType(
-        transform: (JimmerDtoType) -> JimmerDtoType,
-    ): JimmerDtoRenderGraph {
+    private fun DtoGraph.withRootType(
+        transform: (DtoType) -> DtoType,
+    ): DtoGraph {
         return copy(
             types = types.map { type ->
                 if (type.id == ROOT_TYPE_ID) {
@@ -879,10 +908,10 @@ class JimmerDtoRenderGraphTest {
         )
     }
 
-    private fun JimmerDtoRenderGraph.withProp(
-        propId: JimmerDtoPropId,
-        transform: (JimmerDtoProp) -> JimmerDtoProp,
-    ): JimmerDtoRenderGraph {
+    private fun DtoGraph.withProp(
+        propId: DtoPropId,
+        transform: (DtoProp) -> DtoProp,
+    ): DtoGraph {
         return copy(
             props = props.map { prop ->
                 if (prop.id == propId) {
@@ -895,14 +924,14 @@ class JimmerDtoRenderGraphTest {
     }
 
     private fun baseProp(
-        id: JimmerDtoPropId,
-        ownerTypeId: JimmerDtoTypeId,
+        id: DtoPropId,
+        ownerTypeId: DtoTypeId,
         name: String,
         source: LsiSource,
         line: Int,
         basePropId: LsiSymbolId,
-    ): JimmerDtoBaseProp {
-        return JimmerDtoBaseProp(
+    ): DtoBaseProp {
+        return DtoBaseProp(
             id = id,
             ownerTypeId = ownerTypeId,
             name = name,
@@ -912,12 +941,12 @@ class JimmerDtoRenderGraphTest {
             documentation = null,
             aliasLocation = location(source, line, 5),
             baseLocation = location(source, line, 5),
-            baseProps = listOf(JimmerDtoBasePropBinding(name, basePropId)),
+            baseProps = listOf(DtoBasePropBinding(name, basePropId)),
             basePath = name,
             nextPropId = null,
             tailPropId = id,
             baseNullable = false,
-            inputModifier = JimmerDtoModifier.FIXED,
+            inputModifier = DtoModifier.FIXED,
             functionName = null,
             targetTypeId = null,
             enumType = null,
@@ -928,12 +957,12 @@ class JimmerDtoRenderGraphTest {
     }
 
     private fun branchType(
-        id: JimmerDtoTypeId,
+        id: DtoTypeId,
         baseTypeId: LsiSymbolId,
         source: LsiSource,
         line: Int,
-    ): JimmerDtoType {
-        return JimmerDtoType(
+    ): DtoType {
+        return DtoType(
             id = id,
             baseTypeId = baseTypeId,
             packageName = "demo.dto",
@@ -950,39 +979,39 @@ class JimmerDtoRenderGraphTest {
         )
     }
 
-    private fun markerAnnotation(source: LsiSource): JimmerDtoAnnotation {
-        return JimmerDtoAnnotation(
+    private fun markerAnnotation(source: LsiSource): DtoAnnotation {
+        return DtoAnnotation(
             typeId = MARKER_ANNOTATION_ID,
             arguments = listOf(
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     name = "modes",
-                    value = JimmerDtoAnnotationValue.ArrayValue(
+                    value = DtoAnnotationValue.ArrayValue(
                         listOf(
-                            JimmerDtoAnnotationValue.EnumValue(MODE_ENUM_ID, "READ"),
-                            JimmerDtoAnnotationValue.EnumValue(MODE_ENUM_ID, "WRITE"),
+                            DtoAnnotationValue.EnumValue(MODE_ENUM_ID, "READ"),
+                            DtoAnnotationValue.EnumValue(MODE_ENUM_ID, "WRITE"),
                         )
                     ),
                 ),
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     name = "payload",
-                    value = JimmerDtoAnnotationValue.TypeValue(
-                        JimmerDtoTypeRef(
+                    value = DtoAnnotationValue.TypeValue(
+                        DtoTypeRef(
                             typeName = "demo.Payload",
-                            arguments = listOf(JimmerDtoTypeArgument(JimmerDtoVariance.STAR, null)),
+                            arguments = listOf(DtoTypeArgument(DtoVariance.STAR, null)),
                             nullable = false,
                             location = location(source, 1, 20),
                         )
                     ),
                 ),
-                JimmerDtoAnnotationArgument(
+                DtoAnnotationArgument(
                     name = "nested",
-                    value = JimmerDtoAnnotationValue.AnnotationValue(
-                        JimmerDtoAnnotation(
+                    value = DtoAnnotationValue.AnnotationValue(
+                        DtoAnnotation(
                             typeId = NESTED_ANNOTATION_ID,
                             arguments = listOf(
-                                JimmerDtoAnnotationArgument(
+                                DtoAnnotationArgument(
                                     name = "value",
-                                    value = JimmerDtoAnnotationValue.LiteralValue("\"stable\""),
+                                    value = DtoAnnotationValue.LiteralValue("\"stable\""),
                                 )
                             ),
                         )
@@ -1064,26 +1093,26 @@ class JimmerDtoRenderGraphTest {
         else -> emptySequence()
     }
 
-    private fun isForbiddenRenderStateType(typeName: String): Boolean {
+    private fun isForbiddenCompilerStateType(typeName: String): Boolean {
         return typeName in FORBIDDEN_RENDER_STATE_TYPE_NAMES
     }
 
     private companion object {
-        val ROOT_TYPE_ID = JimmerDtoTypeId("demo.dto.BookView")
-        val NESTED_TYPE_ID = JimmerDtoTypeId("demo.dto.BookView#store")
-        val DEFAULT_BRANCH_TYPE_ID = JimmerDtoTypeId("demo.dto.BookView#types:default:body")
-        val DEFAULT_MERGED_TYPE_ID = JimmerDtoTypeId("demo.dto.BookView#types:default:merged")
-        val SPECIAL_BRANCH_TYPE_ID = JimmerDtoTypeId("demo.dto.BookView#types:special:body")
-        val SPECIAL_MERGED_TYPE_ID = JimmerDtoTypeId("demo.dto.BookView#types:special:merged")
+        val ROOT_TYPE_ID = DtoTypeId("demo.dto.BookView")
+        val NESTED_TYPE_ID = DtoTypeId("demo.dto.BookView#store")
+        val DEFAULT_BRANCH_TYPE_ID = DtoTypeId("demo.dto.BookView#types:default:body")
+        val DEFAULT_MERGED_TYPE_ID = DtoTypeId("demo.dto.BookView#types:default:merged")
+        val SPECIAL_BRANCH_TYPE_ID = DtoTypeId("demo.dto.BookView#types:special:body")
+        val SPECIAL_MERGED_TYPE_ID = DtoTypeId("demo.dto.BookView#types:special:merged")
 
-        val ID_PROP_ID = JimmerDtoPropId("demo.dto.BookView#prop:00:id")
-        val STATUS_PROP_ID = JimmerDtoPropId("demo.dto.BookView#prop:01:status")
-        val STORE_PROP_ID = JimmerDtoPropId("demo.dto.BookView#prop:02:store")
-        val CHILDREN_PROP_ID = JimmerDtoPropId("demo.dto.BookView#prop:03:children")
-        val DISPLAY_NAME_PROP_ID = JimmerDtoPropId("demo.dto.BookView#prop:04:displayName")
-        val SUMMARY_PROP_ID = JimmerDtoPropId("demo.dto.BookView#prop:05:summary")
-        val HIDDEN_STORE_ID_PROP_ID = JimmerDtoPropId("demo.dto.BookView#prop:06:storeId:hidden")
-        val STORE_NAME_PROP_ID = JimmerDtoPropId("demo.dto.BookView#store#prop:00:name")
+        val ID_PROP_ID = DtoPropId("demo.dto.BookView#prop:00:id")
+        val STATUS_PROP_ID = DtoPropId("demo.dto.BookView#prop:01:status")
+        val STORE_PROP_ID = DtoPropId("demo.dto.BookView#prop:02:store")
+        val CHILDREN_PROP_ID = DtoPropId("demo.dto.BookView#prop:03:children")
+        val DISPLAY_NAME_PROP_ID = DtoPropId("demo.dto.BookView#prop:04:displayName")
+        val SUMMARY_PROP_ID = DtoPropId("demo.dto.BookView#prop:05:summary")
+        val HIDDEN_STORE_ID_PROP_ID = DtoPropId("demo.dto.BookView#prop:06:storeId:hidden")
+        val STORE_NAME_PROP_ID = DtoPropId("demo.dto.BookView#store#prop:00:name")
 
         val BOOK_TYPE_ID = LsiSymbolId.type("demo.Book")
         val CLIENT_TYPE_ID = LsiSymbolId.type("demo.Client")

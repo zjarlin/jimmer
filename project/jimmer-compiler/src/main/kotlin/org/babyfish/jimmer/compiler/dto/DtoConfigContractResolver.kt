@@ -26,6 +26,9 @@ import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
+import site.addzero.lsi.jimmer.dto.DtoGraph
 
 internal class DtoConfigContractResolver(
     private val workspace: LsiWorkspace,
@@ -39,11 +42,11 @@ internal class DtoConfigContractResolver(
         }
     }
 
-    fun resolve(graph: JimmerDtoRenderGraph): DtoConfigContractResolution {
+    fun resolve(graph: DtoGraph): DtoConfigContractResolution {
         val contracts = mutableListOf<DtoConfigContract>()
         val diagnostics = mutableListOf<LsiDiagnostic>()
         val unresolvedTypeIds = sortedSetOf<LsiSymbolId>()
-        graph.props.filterIsInstance<JimmerDtoBaseProp>().forEach { prop ->
+        graph.props.filterIsInstance<DtoBaseProp>().forEach { prop ->
             val config = prop.config ?: return@forEach
             val targetEntityTypeId = targetEntityTypeId(graph, prop)
             if (targetEntityTypeId == null) {
@@ -81,10 +84,10 @@ internal class DtoConfigContractResolver(
     }
 
     private fun resolveContract(
-        graph: JimmerDtoRenderGraph,
-        prop: JimmerDtoBaseProp,
+        graph: DtoGraph,
+        prop: DtoBaseProp,
         kind: DtoConfigContractKind,
-        typeRef: JimmerDtoConfigTypeRef,
+        typeRef: DtoConfigTypeRef,
         expectedTargetTypeId: LsiSymbolId,
     ): ContractResult {
         val implementation = workspace[typeRef.typeId] as? LsiTypeDeclaration
@@ -339,10 +342,10 @@ internal class DtoConfigContractResolver(
     }
 
     private fun targetEntityTypeId(
-        graph: JimmerDtoRenderGraph,
-        prop: JimmerDtoBaseProp,
+        graph: DtoGraph,
+        prop: DtoBaseProp,
     ): LsiSymbolId? {
-        val tailProp = graph.propsById[prop.tailPropId] as? JimmerDtoBaseProp ?: return null
+        val tailProp = graph.propsById[prop.tailPropId] as? DtoBaseProp ?: return null
         return tailProp.baseProps
             .mapNotNull { binding -> immutableSchema.propsById[binding.propId]?.targetTypeId }
             .distinct()
@@ -798,8 +801,8 @@ internal class DtoConfigContractResolver(
 
     private fun unresolvedArgumentDiagnostic(
         kind: DtoConfigContractKind,
-        prop: JimmerDtoBaseProp,
-        typeRef: JimmerDtoConfigTypeRef,
+        prop: DtoBaseProp,
+        typeRef: DtoConfigTypeRef,
         expectedTargetTypeId: LsiSymbolId,
         reason: String,
         path: List<LsiSymbolId>,
@@ -822,8 +825,8 @@ internal class DtoConfigContractResolver(
     private fun diagnostic(
         code: String,
         kind: DtoConfigContractKind,
-        prop: JimmerDtoBaseProp,
-        typeRef: JimmerDtoConfigTypeRef,
+        prop: DtoBaseProp,
+        typeRef: DtoConfigTypeRef,
         expectedTargetTypeId: LsiSymbolId?,
         message: String,
         extraDetails: Map<String, String> = emptyMap(),
