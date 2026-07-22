@@ -12,6 +12,7 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetBracedExpressionCompletion
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetCodePart
 import site.addzero.lsi.poet.LsiPoetConstructor
@@ -203,6 +204,7 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
                 "\$L",
                 part.header.toJavaCodeBlock(),
             )
+            is LsiPoetCodePart.BracedExpression -> builder.addJavaBracedExpression(part)
             is LsiPoetCodePart.CharacterLiteral -> builder.add("\$L", part.value.javaCharacterLiteral())
             LsiPoetCodePart.EndControlFlow -> builder.endControlFlow()
             LsiPoetCodePart.Indent -> builder.indent()
@@ -224,6 +226,22 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
         }
     }
     return builder.build()
+}
+
+private fun CodeBlock.Builder.addJavaBracedExpression(
+    expression: LsiPoetCodePart.BracedExpression,
+) {
+    if (expression.completion == LsiPoetBracedExpressionCompletion.RETURN) {
+        add("return ")
+    }
+    add("\$L", expression.prefix.toJavaCodeBlock())
+    add(" {\n")
+    indent()
+    add("\$L", expression.body.toJavaCodeBlock())
+    unindent()
+    add("}")
+    add("\$L", expression.suffix.toJavaCodeBlock())
+    add(";\n")
 }
 
 private fun List<LsiPoetCodeBlock>.toJavaArgumentList(): CodeBlock {

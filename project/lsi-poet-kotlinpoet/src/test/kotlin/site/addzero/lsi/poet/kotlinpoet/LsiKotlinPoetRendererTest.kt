@@ -251,6 +251,30 @@ class LsiKotlinPoetRendererTest {
         assertContains(content, "public fun message(): String = \"ok\"")
     }
 
+    @Test
+    fun `renders a returned braced expression as a Kotlin expression body`() {
+        val type = LsiPoetType(
+            name = "ReturnsBlock",
+            kind = LsiPoetTypeKind.CLASS,
+            members = listOf(
+                LsiPoetFunction(
+                    name = "message",
+                    returnType = stringType,
+                    body = LsiPoetCodeBlock.build {
+                        returnBracedExpression(
+                            prefix = { text("call()") },
+                            body = { statement { string("ok") } },
+                        )
+                    },
+                )
+            ),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact(type, "ReturnsBlock")).content
+
+        assertContains(content, "public fun message(): String = call() {")
+    }
+
     private fun artifact(type: LsiPoetType, fileName: String): LsiPoetArtifact {
         return LsiPoetArtifact(
             file = LsiPoetFile(

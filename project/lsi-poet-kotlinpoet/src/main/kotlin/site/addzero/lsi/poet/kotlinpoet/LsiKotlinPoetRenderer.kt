@@ -13,6 +13,7 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.poet.LsiPoetAccessor
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetBracedExpressionCompletion
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetCodePart
 import site.addzero.lsi.poet.LsiPoetConstructor
@@ -228,6 +229,7 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
                 "%L",
                 part.header.toKotlinCodeBlock(),
             )
+            is LsiPoetCodePart.BracedExpression -> builder.addKotlinBracedExpression(part)
             is LsiPoetCodePart.CharacterLiteral -> builder.add("%L", part.value.kotlinCharacterLiteral())
             LsiPoetCodePart.EndControlFlow -> builder.endControlFlow()
             LsiPoetCodePart.Indent -> builder.indent()
@@ -249,6 +251,22 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(): CodeBlock {
         }
     }
     return builder.build()
+}
+
+private fun CodeBlock.Builder.addKotlinBracedExpression(
+    expression: LsiPoetCodePart.BracedExpression,
+) {
+    if (expression.completion == LsiPoetBracedExpressionCompletion.RETURN) {
+        add("return ")
+    }
+    add("%L", expression.prefix.toKotlinCodeBlock())
+    add(" {\n")
+    indent()
+    add("%L", expression.body.toKotlinCodeBlock())
+    unindent()
+    add("}")
+    add("%L", expression.suffix.toKotlinCodeBlock())
+    add("\n")
 }
 
 private fun FunSpec.Builder.addThrownTypes(thrownTypes: List<LsiTypeRef>) {

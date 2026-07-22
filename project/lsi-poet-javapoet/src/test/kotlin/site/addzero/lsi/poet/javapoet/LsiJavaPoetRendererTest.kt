@@ -306,6 +306,31 @@ class LsiJavaPoetRendererTest {
         assertContains(content, "return \"ok\";")
     }
 
+    @Test
+    fun `renders a returned braced expression with an inline suffix`() {
+        val type = LsiPoetType(
+            name = "ReturnsBlock",
+            kind = LsiPoetTypeKind.CLASS,
+            members = listOf(
+                LsiPoetFunction(
+                    name = "message",
+                    returnType = stringType,
+                    body = LsiPoetCodeBlock.build {
+                        returnBracedExpression(
+                            prefix = { text("call(") },
+                            body = { statement { string("ok") } },
+                            suffix = { text(")") },
+                        )
+                    },
+                )
+            ),
+        )
+
+        val content = LsiJavaPoetRenderer().render(artifact(type, "ReturnsBlock")).content
+
+        assertContains(content, "return call( {\n            \"ok\";\n        });")
+    }
+
     private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {
         val type = if (member is LsiPoetType) member else {
             LsiPoetType(fileName, LsiPoetTypeKind.CLASS, members = listOf(member))

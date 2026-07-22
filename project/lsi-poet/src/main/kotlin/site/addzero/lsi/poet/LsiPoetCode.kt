@@ -37,6 +37,16 @@ sealed interface LsiPoetCodePart {
     data class Return(val value: LsiPoetCodeBlock?) : LsiPoetCodePart
 
     /**
+     * 表达带花括号主体、可选尾部调用以及语句完成方式的结构。
+     */
+    data class BracedExpression(
+        val completion: LsiPoetBracedExpressionCompletion,
+        val prefix: LsiPoetCodeBlock,
+        val body: LsiPoetCodeBlock,
+        val suffix: LsiPoetCodeBlock,
+    ) : LsiPoetCodePart
+
+    /**
      * 开始一个由具体 Poet 实现负责排版的控制流。
      */
     data class BeginControlFlow(val header: LsiPoetCodeBlock) : LsiPoetCodePart
@@ -53,6 +63,11 @@ sealed interface LsiPoetCodePart {
     data object Indent : LsiPoetCodePart
 
     data object Unindent : LsiPoetCodePart
+}
+
+enum class LsiPoetBracedExpressionCompletion {
+    RETURN,
+    STATEMENT,
 }
 
 data class LsiPoetCodeBlock(
@@ -146,6 +161,36 @@ class LsiPoetCodeBuilder internal constructor() {
 
     fun returnVoid() {
         parts += LsiPoetCodePart.Return(null)
+    }
+
+    fun returnBracedExpression(
+        prefix: LsiPoetCodeBuilder.() -> Unit,
+        body: LsiPoetCodeBuilder.() -> Unit,
+        suffix: LsiPoetCodeBuilder.() -> Unit = {},
+    ) {
+        bracedExpression(LsiPoetBracedExpressionCompletion.RETURN, prefix, body, suffix)
+    }
+
+    fun statementBracedExpression(
+        prefix: LsiPoetCodeBuilder.() -> Unit,
+        body: LsiPoetCodeBuilder.() -> Unit,
+        suffix: LsiPoetCodeBuilder.() -> Unit = {},
+    ) {
+        bracedExpression(LsiPoetBracedExpressionCompletion.STATEMENT, prefix, body, suffix)
+    }
+
+    private fun bracedExpression(
+        completion: LsiPoetBracedExpressionCompletion,
+        prefix: LsiPoetCodeBuilder.() -> Unit,
+        body: LsiPoetCodeBuilder.() -> Unit,
+        suffix: LsiPoetCodeBuilder.() -> Unit,
+    ) {
+        parts += LsiPoetCodePart.BracedExpression(
+            completion = completion,
+            prefix = LsiPoetCodeBlock.build(prefix),
+            body = LsiPoetCodeBlock.build(body),
+            suffix = LsiPoetCodeBlock.build(suffix),
+        )
     }
 
     fun beginControlFlow(block: LsiPoetCodeBuilder.() -> Unit) {

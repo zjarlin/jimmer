@@ -125,6 +125,30 @@ class LsiPoetModelTest {
     }
 
     @Test
+    fun `models returned and statement braced expressions`() {
+        val body = LsiPoetCodeBlock.build {
+            returnBracedExpression(
+                prefix = { text("transaction()") },
+                body = { statement { text("run()") } },
+            )
+            statementBracedExpression(
+                prefix = { text("consume(") },
+                body = { statement { text("run()") } },
+                suffix = { text(")") },
+            )
+        }
+
+        val expressions = body.parts.filterIsInstance<LsiPoetCodePart.BracedExpression>()
+        assertEquals(
+            listOf(
+                LsiPoetBracedExpressionCompletion.RETURN,
+                LsiPoetBracedExpressionCompletion.STATEMENT,
+            ),
+            expressions.map(LsiPoetCodePart.BracedExpression::completion),
+        )
+    }
+
+    @Test
     fun `rejects source extension and non trailing vararg`() {
         assertFailsWith<IllegalArgumentException> {
             LsiPoetFile(
