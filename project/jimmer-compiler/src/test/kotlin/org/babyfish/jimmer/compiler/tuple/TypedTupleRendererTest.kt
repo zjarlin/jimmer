@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.tuple
 
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import javax.tools.DiagnosticCollector
 import javax.tools.JavaFileObject
@@ -9,8 +11,8 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.tuple.apt.TypedTupleJavaRenderer
-import org.babyfish.jimmer.compiler.tuple.ksp.TypedTupleKotlinRenderer
+import org.jetbrains.kotlin.cli.common.ExitCode
+import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.core.LsiLanguage
@@ -24,34 +26,47 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class TypedTupleRendererTest {
 
     @Test
     fun `java renderer matches legacy golden and compiles`() {
         val fixture = fixture(TypedTuplePlatform.JAVA)
-        val artifact = TypedTupleJavaRenderer().render(fixture.schema, fixture.workspace).single()
+        val artifact = fixture.schema
+            .toLsiPoetArtifacts(fixture.workspace)
+            .map(LsiJavaPoetRenderer()::render)
+            .single()
 
         assertEquals(ArtifactKind.JAVA_SOURCE, artifact.kind)
         assertEquals(ArtifactAggregationMode.ISOLATING, artifact.aggregationMode)
         assertEquals("demo/BookSummaryMapper.java", artifact.path)
         assertEquals(setOf(TUPLE_ID), artifact.originatingSymbols)
         assertEquals(setOf(fixture.tupleSource), artifact.originatingSources)
+        assertEquals(fixture.dependencySymbols, artifact.dependencySymbols)
+        assertEquals(setOf(fixture.tupleSource), artifact.dependencySources)
         assertEquals(golden("BookSummaryMapper.java"), artifact.content)
         compileJava(artifact.content)
     }
 
     @Test
-    fun `kotlin renderer matches legacy golden`() {
+    fun `kotlin renderer matches legacy golden and compiles`() {
         val fixture = fixture(TypedTuplePlatform.KOTLIN)
-        val artifact = TypedTupleKotlinRenderer().render(fixture.schema, fixture.workspace).single()
+        val artifact = fixture.schema
+            .toLsiPoetArtifacts(fixture.workspace)
+            .map(LsiKotlinPoetRenderer()::render)
+            .single()
 
         assertEquals(ArtifactKind.KOTLIN_SOURCE, artifact.kind)
         assertEquals(ArtifactAggregationMode.ISOLATING, artifact.aggregationMode)
         assertEquals("demo/BookSummaryMapper.kt", artifact.path)
         assertEquals(setOf(TUPLE_ID), artifact.originatingSymbols)
         assertEquals(setOf(fixture.tupleSource), artifact.originatingSources)
+        assertEquals(fixture.dependencySymbols, artifact.dependencySymbols)
+        assertEquals(setOf(fixture.tupleSource), artifact.dependencySources)
         assertEquals(golden("BookSummaryMapper.kt"), artifact.content)
+        compileKotlin(artifact.content)
     }
 
     private fun fixture(platform: TypedTuplePlatform): Fixture {
@@ -164,7 +179,12 @@ class TypedTupleRendererTest {
             sources = listOf(tupleSource, unrelatedSource),
             declarations = listOf(tupleDeclaration),
         )
-        return Fixture(schema, workspace, tupleSource)
+        return Fixture(
+            schema = schema,
+            workspace = workspace,
+            tupleSource = tupleSource,
+            dependencySymbols = schema.tuples.single().dependencies.symbolIds.toSet(),
+        )
     }
 
     private fun golden(name: String): String {
@@ -204,10 +224,40 @@ class TypedTupleRendererTest {
         assertTrue(success, diagnostics.diagnostics.joinToString("\n"))
     }
 
+    private fun compileKotlin(content: String) {
+        val projectDir = createTempDirectory(prefix = "jimmer-tuple-kotlin-renderer-test").toFile()
+        val sourceRoot = projectDir.resolve("src/demo").apply { mkdirs() }
+        val output = projectDir.resolve("classes").apply { mkdirs() }
+        val mapperSource = sourceRoot.resolve("BookSummaryMapper.kt").apply { writeText(content) }
+        val tupleSource = sourceRoot.resolve("BookSummary.kt").apply {
+            writeText(
+                "package demo\n" +
+                    "data class BookSummary(val book: BookView, val authorCount: Long)\n" +
+                    "class BookView\n"
+            )
+        }
+        val messages = ByteArrayOutputStream()
+        val exitCode = PrintStream(messages, true, StandardCharsets.UTF_8).use { stream ->
+            K2JVMCompiler().exec(
+                stream,
+                "-no-stdlib",
+                "-no-reflect",
+                "-classpath",
+                System.getProperty("java.class.path"),
+                "-d",
+                output.absolutePath,
+                mapperSource.absolutePath,
+                tupleSource.absolutePath,
+            )
+        }
+        assertEquals(ExitCode.OK, exitCode, messages.toString(StandardCharsets.UTF_8))
+    }
+
     private data class Fixture(
         val schema: TypedTuplePrecompiledSchema,
         val workspace: LsiWorkspace,
         val tupleSource: LsiSource,
+        val dependencySymbols: Set<LsiSymbolId>,
     )
 
     private companion object {
