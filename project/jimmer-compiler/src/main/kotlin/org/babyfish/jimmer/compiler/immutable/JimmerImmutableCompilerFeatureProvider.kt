@@ -14,9 +14,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
 import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableDraftJavaRenderer
-import org.babyfish.jimmer.compiler.immutable.apt.JimmerImmutableQueryJavaRenderer
 import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableDraftKotlinRenderer
-import org.babyfish.jimmer.compiler.immutable.ksp.JimmerImmutableQueryKotlinRenderer
 import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.fingerprint
@@ -118,7 +116,6 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> {
                 val draftRenderer = JimmerImmutableDraftJavaRenderer()
-                val queryRenderer = JimmerImmutableQueryJavaRenderer()
                 val sharedRenderer: LsiPoetRenderer = LsiJavaPoetRenderer()
                 val queryTypes = state.schema.generatedPropsTypes(state.targetTypeIds)
                 draftTypes.map { type ->
@@ -131,13 +128,14 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     types = embeddableTypes,
                     language = LsiLanguage.JAVA,
                     workspace = context.round.workspace,
-                ).map(sharedRenderer::render) + queryTypes.flatMap { type ->
-                    queryRenderer.render(state.schema, type, context.round.workspace)
-                }
+                ).map(sharedRenderer::render) + state.schema.toQueryPoetArtifacts(
+                    types = queryTypes,
+                    language = LsiLanguage.JAVA,
+                    workspace = context.round.workspace,
+                ).map(sharedRenderer::render)
             }
             CompilerPlatform.KSP -> {
                 val draftRenderer = JimmerImmutableDraftKotlinRenderer()
-                val queryRenderer = JimmerImmutableQueryKotlinRenderer()
                 val sharedRenderer: LsiPoetRenderer = LsiKotlinPoetRenderer()
                 val queryTypes = state.schema.generatedQueryTypes(state.targetTypeIds)
                 draftTypes.map { type ->
@@ -150,9 +148,11 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     types = embeddableTypes,
                     language = LsiLanguage.KOTLIN,
                     workspace = context.round.workspace,
-                ).map(sharedRenderer::render) + queryTypes.map { type ->
-                    queryRenderer.render(state.schema, type, context.round.workspace)
-                }
+                ).map(sharedRenderer::render) + state.schema.toQueryPoetArtifacts(
+                    types = queryTypes,
+                    language = LsiLanguage.KOTLIN,
+                    workspace = context.round.workspace,
+                ).map(sharedRenderer::render)
             }
             CompilerPlatform.UNKNOWN -> emptyList()
         }

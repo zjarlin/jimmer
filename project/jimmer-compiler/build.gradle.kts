@@ -58,8 +58,6 @@ val verifySharedCompilerArchitecture by tasks.registering(VerifyCompilerArchitec
             "JimmerImmutableDraftKotlinRenderer.kt",
             "JimmerImmutableDraftKotlinRuntimeRenderer.kt",
             "JimmerImmutableDraftKotlinValidationRenderer.kt",
-            "JimmerImmutableQueryJavaRenderer.kt",
-            "JimmerImmutableQueryKotlinRenderer.kt",
         )
     )
 }
