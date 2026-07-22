@@ -20,6 +20,7 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetConstructor
@@ -365,6 +366,21 @@ class LsiJavaPoetRendererTest {
         }
         assertContains(escapedTypeException.message.orEmpty(), "escaped Kotlin type name")
 
+        val escapedParameter = LsiPoetFunction(
+            name = "consume",
+            parameters = listOf(
+                LsiPoetParameter(
+                    name = "display-name",
+                    type = stringType,
+                    nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                )
+            ),
+        )
+        val escapedParameterException = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(escapedParameter, "EscapedParameter"))
+        }
+        assertContains(escapedParameterException.message.orEmpty(), "escaped Kotlin parameter name")
+
         val importedArtifact = LsiPoetArtifact(
             file = LsiPoetFile(
                 language = LsiLanguage.JAVA,
@@ -380,6 +396,34 @@ class LsiJavaPoetRendererTest {
             LsiJavaPoetRenderer().render(importedArtifact)
         }
         assertContains(importException.message.orEmpty(), "explicit imports")
+    }
+
+    @Test
+    fun `rejects annotation array factory call source style`() {
+        val type = LsiPoetType(
+            name = "FactoryArray",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Container"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "groups",
+                            value = LsiPoetAnnotationValue.ArrayValue(
+                                elements = emptyList(),
+                                sourceStyle = LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF,
+                            ),
+                        )
+                    ),
+                )
+            ),
+        )
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().render(artifact(type, "FactoryArray"))
+        }
+
+        assertContains(exception.message.orEmpty(), "annotation array factory call")
     }
 
     @Test

@@ -24,6 +24,7 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 
 internal fun LsiTypeRef.toJavaTypeName(): TypeName {
@@ -203,18 +204,23 @@ private fun LsiPoetAnnotationValue.toJavaSourceAnnotationValue(): CodeBlock {
             "\$L",
             annotation.toJavaSourceAnnotationSpec(),
         )
-        is LsiPoetAnnotationValue.ArrayValue -> CodeBlock.builder()
-            .add("{")
-            .apply {
-                elements.forEachIndexed { index, element ->
-                    if (index != 0) {
-                        add(", ")
-                    }
-                    add("\$L", element.toJavaSourceAnnotationValue())
-                }
+        is LsiPoetAnnotationValue.ArrayValue -> {
+            require(sourceStyle == LsiPoetAnnotationArrayStyle.LITERAL) {
+                "JavaPoet renderer cannot emit an annotation array factory call"
             }
-            .add("}")
-            .build()
+            CodeBlock.builder()
+                .add("{")
+                .apply {
+                    elements.forEachIndexed { index, element ->
+                        if (index != 0) {
+                            add(", ")
+                        }
+                        add("\$L", element.toJavaSourceAnnotationValue())
+                    }
+                }
+                .add("}")
+                .build()
+        }
     }
 }
 

@@ -185,6 +185,9 @@ private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
 }
 
 private fun LsiPoetParameter.toJavaParameter(): ParameterSpec {
+    require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
+        "JavaPoet renderer cannot emit an escaped Kotlin parameter name: $name"
+    }
     require(defaultValue == null) {
         "JavaPoet renderer cannot emit a default parameter value: $name"
     }

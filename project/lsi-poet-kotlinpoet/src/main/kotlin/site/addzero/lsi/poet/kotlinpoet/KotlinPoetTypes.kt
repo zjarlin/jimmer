@@ -40,6 +40,7 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 
 internal fun LsiTypeRef.toKotlinTypeName(): TypeName {
@@ -275,7 +276,12 @@ private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(): CodeBlock {
         is LsiPoetAnnotationValue.ClassValue -> type.toKotlinClassLiteral()
         is LsiPoetAnnotationValue.NestedAnnotationValue -> annotation.toKotlinNestedSourceAnnotationValue()
         is LsiPoetAnnotationValue.ArrayValue -> CodeBlock.builder()
-            .add("[")
+            .add(
+                when (sourceStyle) {
+                    LsiPoetAnnotationArrayStyle.LITERAL -> "["
+                    LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF -> "arrayOf("
+                }
+            )
             .apply {
                 elements.forEachIndexed { index, element ->
                     if (index != 0) {
@@ -284,7 +290,12 @@ private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(): CodeBlock {
                     add("%L", element.toKotlinSourceAnnotationValue())
                 }
             }
-            .add("]")
+            .add(
+                when (sourceStyle) {
+                    LsiPoetAnnotationArrayStyle.LITERAL -> "]"
+                    LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF -> ")"
+                }
+            )
             .build()
     }
 }

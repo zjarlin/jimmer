@@ -92,7 +92,16 @@ sealed interface LsiPoetAnnotationValue {
 
     data class ArrayValue(
         val elements: List<LsiPoetAnnotationValue>,
+        val sourceStyle: LsiPoetAnnotationArrayStyle = LsiPoetAnnotationArrayStyle.LITERAL,
     ) : LsiPoetAnnotationValue
+}
+
+/**
+ * 控制注解数组值的源码表示，避免在共享层保存具体 Poet 对象。
+ */
+enum class LsiPoetAnnotationArrayStyle {
+    LITERAL,
+    KOTLIN_ARRAY_OF,
 }
 
 /**

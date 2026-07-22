@@ -203,11 +203,23 @@ class LsiPoetModelTest {
             mutable = false,
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
         )
+        val parameter = LsiPoetParameter(
+            name = "display-name",
+            type = LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
+            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+        )
+        val setter = LsiPoetAccessor(
+            setterParameterName = "display-name",
+            setterParameterNameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+        )
         val sourceImport = LsiPoetImport("demo.child", "by")
 
         assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, type.nameStyle)
         assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, function.nameStyle)
         assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, property.nameStyle)
+        assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, parameter.nameStyle)
+        assertEquals("display-name", setter.setterParameterName)
+        assertEquals(LsiPoetNameStyle.KOTLIN_ESCAPED, setter.setterParameterNameStyle)
         assertEquals("demo.child", sourceImport.packageName)
         assertFailsWith<IllegalArgumentException> {
             LsiPoetType(
@@ -231,8 +243,33 @@ class LsiPoetModelTest {
             )
         }
         assertFailsWith<IllegalArgumentException> {
+            LsiPoetParameter(
+                name = "broken`name",
+                type = LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
+                nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            LsiPoetAccessor(
+                setterParameterName = "broken`name",
+                setterParameterNameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
             LsiPoetImport("demo.child", "broken-name")
         }
+    }
+
+    @Test
+    fun `models annotation array source styles without changing the default`() {
+        val literal = LsiPoetAnnotationValue.ArrayValue(emptyList())
+        val factoryCall = LsiPoetAnnotationValue.ArrayValue(
+            elements = emptyList(),
+            sourceStyle = LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF,
+        )
+
+        assertEquals(LsiPoetAnnotationArrayStyle.LITERAL, literal.sourceStyle)
+        assertEquals(LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF, factoryCall.sourceStyle)
     }
 
     @Test

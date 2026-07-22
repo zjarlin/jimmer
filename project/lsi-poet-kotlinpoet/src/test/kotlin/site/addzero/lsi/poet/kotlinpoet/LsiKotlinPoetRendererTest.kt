@@ -19,8 +19,10 @@ import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetAccessor
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
+import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetConstructor
@@ -332,6 +334,71 @@ class LsiKotlinPoetRendererTest {
             """.trimIndent(),
             content.trimIndent(),
         )
+    }
+
+    @Test
+    fun `renders escaped parameters named setters and annotation array factory calls`() {
+        val type = LsiPoetType(
+            name = "EscapedParameters",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Container"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "literalValues",
+                            value = LsiPoetAnnotationValue.ArrayValue(
+                                listOf(LsiPoetAnnotationValue.StringValue("literal"))
+                            ),
+                        ),
+                        LsiPoetAnnotationArgument.Named(
+                            name = "factoryValues",
+                            value = LsiPoetAnnotationValue.ArrayValue(
+                                elements = listOf(LsiPoetAnnotationValue.StringValue("factory")),
+                                sourceStyle = LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF,
+                            ),
+                        ),
+                    ),
+                )
+            ),
+            members = listOf(
+                LsiPoetProperty(
+                    name = "display-name",
+                    type = stringType,
+                    mutable = true,
+                    nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                    initializer = LsiPoetCodeBlock.build { string("") },
+                    setter = LsiPoetAccessor(
+                        setterParameterName = "display-name",
+                        setterParameterNameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                        body = LsiPoetCodeBlock.build {
+                            statement {
+                                text("println(")
+                                name("display-name")
+                                text(")")
+                            }
+                        },
+                    ),
+                ),
+                LsiPoetFunction(
+                    name = "update",
+                    parameters = listOf(
+                        LsiPoetParameter(
+                            name = "display-name",
+                            type = stringType,
+                            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                        )
+                    ),
+                ),
+            ),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact(type, "EscapedParameters")).content
+
+        assertContains(content, "literalValues = [\"literal\"]")
+        assertContains(content, "factoryValues = arrayOf(\"factory\")")
+        assertContains(content, "set(`display-name`)")
+        assertContains(content, "fun update(`display-name`: String)")
     }
 
     @Test

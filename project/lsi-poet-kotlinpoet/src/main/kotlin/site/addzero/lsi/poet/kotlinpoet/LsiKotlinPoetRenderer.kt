@@ -217,7 +217,7 @@ private fun LsiPoetAccessor.toKotlinGetter(): FunSpec {
 }
 
 private fun LsiPoetAccessor.toKotlinSetter(type: LsiTypeRef): FunSpec {
-    val parameter = ParameterSpec.builder("value", type.toKotlinTypeName())
+    val parameter = ParameterSpec.builder(setterParameterName, type.toKotlinTypeName())
         .apply {
             parameterAnnotations.forEach { annotation ->
                 addAnnotation(annotation.toKotlinSourceAnnotationSpec())

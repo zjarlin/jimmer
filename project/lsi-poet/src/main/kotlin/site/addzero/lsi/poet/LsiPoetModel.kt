@@ -250,12 +250,13 @@ data class LsiPoetFunction(
 data class LsiPoetParameter(
     val name: String,
     val type: LsiTypeRef,
+    val nameStyle: LsiPoetNameStyle = LsiPoetNameStyle.IDENTIFIER,
     val annotations: List<LsiPoetAnnotation> = emptyList(),
     val modifiers: Set<LsiPoetModifier> = emptySet(),
     val defaultValue: LsiPoetCodeBlock? = null,
 ) {
     init {
-        require(name.isJvmIdentifier()) { "LSI Poet parameter name must be a JVM identifier: '$name'" }
+        requirePoetDeclarationName(name, nameStyle, "parameter")
         require(LsiPoetModifier.VARARG !in modifiers || defaultValue == null) {
             "LSI Poet vararg parameter cannot declare a default value: $name"
         }
@@ -299,9 +300,15 @@ data class LsiPoetProperty(
 data class LsiPoetAccessor(
     val annotations: List<LsiPoetAnnotation> = emptyList(),
     val modifiers: Set<LsiPoetModifier> = emptySet(),
+    val setterParameterName: String = "value",
+    val setterParameterNameStyle: LsiPoetNameStyle = LsiPoetNameStyle.IDENTIFIER,
     val parameterAnnotations: List<LsiPoetAnnotation> = emptyList(),
     val body: LsiPoetCodeBlock = LsiPoetCodeBlock.EMPTY,
-)
+) {
+    init {
+        requirePoetDeclarationName(setterParameterName, setterParameterNameStyle, "setter parameter")
+    }
+}
 
 data class LsiPoetInitializerBlock(
     val static: Boolean,
