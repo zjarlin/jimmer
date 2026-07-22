@@ -8,10 +8,11 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
-import org.babyfish.jimmer.compiler.transactional.apt.TransactionalJavaRenderer
-import org.babyfish.jimmer.compiler.transactional.ksp.TransactionalKotlinRenderer
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.poet.LsiPoetRenderer
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class TransactionalCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
@@ -56,11 +57,14 @@ class TransactionalCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         if (state.invalid || state.schema.types.isEmpty()) {
             return JimmerCompilerFeatureRenderResult()
         }
-        val artifacts = when (context.round.platform) {
-            CompilerPlatform.APT -> TransactionalJavaRenderer().render(state.schema, context.round.workspace)
-            CompilerPlatform.KSP -> TransactionalKotlinRenderer().render(state.schema, context.round.workspace)
-            CompilerPlatform.UNKNOWN -> emptyList()
+        val renderer: LsiPoetRenderer = when (context.round.platform) {
+            CompilerPlatform.APT -> LsiJavaPoetRenderer()
+            CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
+            CompilerPlatform.UNKNOWN -> return JimmerCompilerFeatureRenderResult()
         }
+        val artifacts = state.schema
+            .toLsiPoetArtifacts(context.round.workspace)
+            .map(renderer::render)
         return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
     }
 }
