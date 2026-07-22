@@ -51,7 +51,23 @@ val verifySharedCompilerArchitecture by tasks.registering(VerifyCompilerArchitec
     })
     allowedPlatformPathSegments.set(setOf("apt", "ksp"))
     allowedPoetPathSegments.set(setOf("render"))
-    allowedPoetFileSuffixes.set(setOf("Renderer.kt"))
+    allowedPoetFileSuffixes.set(
+        setOf(
+            "ErrorJavaRenderer.kt",
+            "ErrorKotlinRenderer.kt",
+            "JimmerImmutableDraftJavaRenderer.kt",
+            "JimmerImmutableDraftJavaValidationRenderer.kt",
+            "JimmerImmutableDraftKotlinRenderer.kt",
+            "JimmerImmutableDraftKotlinRuntimeRenderer.kt",
+            "JimmerImmutableDraftKotlinValidationRenderer.kt",
+            "JimmerImmutableEmbeddableJavaRenderer.kt",
+            "JimmerImmutableEmbeddableKotlinRenderer.kt",
+            "JimmerImmutableFetcherJavaRenderer.kt",
+            "JimmerImmutableFetcherKotlinRenderer.kt",
+            "JimmerImmutableQueryJavaRenderer.kt",
+            "JimmerImmutableQueryKotlinRenderer.kt",
+        )
+    )
 }
 
 tasks.named("check") {
