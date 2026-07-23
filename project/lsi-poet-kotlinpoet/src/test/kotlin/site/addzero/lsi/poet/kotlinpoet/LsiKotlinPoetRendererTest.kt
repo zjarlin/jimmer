@@ -1,5 +1,6 @@
 package site.addzero.lsi.poet.kotlinpoet
 
+import com.squareup.kotlinpoet.TypeSpec
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -47,6 +48,25 @@ class LsiKotlinPoetRendererTest {
     private val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
 
     @Test
+    fun `renders an embeddable Kotlin type structure exactly`() {
+        val type = LsiPoetType(
+            name = "Marker",
+            kind = LsiPoetTypeKind.INTERFACE,
+            modifiers = setOf(LsiPoetModifier.PUBLIC),
+        )
+
+        val rendered = LsiKotlinPoetRenderer().renderType(type)
+
+        assertEquals(
+            TypeSpec::class.java,
+            LsiKotlinPoetRenderer::class.java
+                .getDeclaredMethod("renderType", LsiPoetType::class.java)
+                .returnType,
+        )
+        assertEquals("public interface Marker\n", rendered.toString())
+    }
+
+    @Test
     fun `renders a Kotlin class through a GeneratedArtifact boundary`() {
         val type = LsiPoetType(
             name = "Greeting",
@@ -83,7 +103,7 @@ class LsiKotlinPoetRendererTest {
 
         assertEquals(GeneratedArtifact::class.java, LsiKotlinPoetRenderer::class.java
             .getDeclaredMethod("render", LsiPoetArtifact::class.java).returnType)
-        assertPublicApiDoesNotExposePoet(LsiKotlinPoetRenderer::class.java)
+        assertPublicApiDoesNotExposeOtherPoet(LsiKotlinPoetRenderer::class.java)
         assertEquals("demo/generated/Greeting.kt", generated.path)
         assertEquals(
             """
@@ -557,7 +577,7 @@ class LsiKotlinPoetRendererTest {
         )
     }
 
-    private fun assertPublicApiDoesNotExposePoet(type: Class<*>) {
+    private fun assertPublicApiDoesNotExposeOtherPoet(type: Class<*>) {
         val methodTypes = type.declaredMethods
             .filter { method -> java.lang.reflect.Modifier.isPublic(method.modifiers) }
             .flatMap { method -> listOf(method.returnType) + method.parameterTypes }
@@ -569,6 +589,6 @@ class LsiKotlinPoetRendererTest {
             .map { field -> field.type }
         val exposedTypes = methodTypes + constructorTypes + fieldTypes
 
-        assertTrue(exposedTypes.none { exposedType -> exposedType.name.startsWith("com.squareup.") })
+        assertTrue(exposedTypes.none { exposedType -> exposedType.name.startsWith("com.squareup.javapoet.") })
     }
 }

@@ -5,7 +5,7 @@ plugins {
 dependencies {
     api(projects.lsiPoet)
 
-    implementation(libs.kotlinpoet)
+    api(libs.kotlinpoet)
     implementation(libs.kotlin.stdlib)
 
     testImplementation(libs.kotlin.test)

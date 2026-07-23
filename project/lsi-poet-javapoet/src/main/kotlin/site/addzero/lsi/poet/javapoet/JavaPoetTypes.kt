@@ -83,7 +83,7 @@ internal fun LsiTypeRef.toJavaTypeName(): TypeName {
  */
 internal fun LsiTypeRef.toJavaTypeName(
     referenceStyle: LsiPoetTypeReferenceStyle,
-    currentPackageName: String,
+    currentPackageName: String?,
 ): TypeName {
     if (referenceStyle == LsiPoetTypeReferenceStyle.IMPORTED) {
         return toJavaTypeName()
@@ -95,6 +95,9 @@ internal fun LsiTypeRef.toJavaTypeName(
         LsiPoetTypeReferenceStyle.IMPORTED -> error("Imported Java type is handled before source qualification")
         LsiPoetTypeReferenceStyle.FULLY_QUALIFIED -> qualifiedName.split('.')
         LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED -> {
+            requireNotNull(currentPackageName) {
+                "Same-package outer-qualified Java type requires file package context: $qualifiedName"
+            }
             val packagePrefix = currentPackageName.takeIf(String::isNotEmpty)?.plus('.') ?: ""
             require(qualifiedName.startsWith(packagePrefix)) {
                 "Same-package outer-qualified Java type must belong to '$currentPackageName': $qualifiedName"

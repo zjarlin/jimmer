@@ -4,4 +4,4 @@
 
 坐标：`org.babyfish.jimmer:lsi-poet`
 
-Java 和 Kotlin 的源码落地分别由 `lsi-poet-javapoet` 与 `lsi-poet-kotlinpoet` 完成；两个适配器的公共 renderer 都只返回 `GeneratedArtifact`。
+Java 和 Kotlin 的源码落地分别由 `lsi-poet-javapoet` 与 `lsi-poet-kotlinpoet` 完成。中立 `LsiPoetRenderer` 只返回 `GeneratedArtifact`；具体后端 renderer 还提供原生类型结构输出，用于把 LSI 类型组合进同一后端的其他声明。

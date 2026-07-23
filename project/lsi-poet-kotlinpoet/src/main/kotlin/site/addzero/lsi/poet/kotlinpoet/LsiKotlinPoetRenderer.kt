@@ -39,6 +39,11 @@ import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
  */
 class LsiKotlinPoetRenderer : LsiPoetRenderer {
 
+    /** 将单个 LSI 类型渲染为可嵌入现有 KotlinPoet 声明的结构。 */
+    fun renderType(type: LsiPoetType): TypeSpec {
+        return type.toKotlinTypeSpec()
+    }
+
     override fun render(artifact: LsiPoetArtifact): GeneratedArtifact {
         val file = artifact.file
         require(file.language == LsiLanguage.KOTLIN) {

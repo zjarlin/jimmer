@@ -1,5 +1,6 @@
 package site.addzero.lsi.poet.javapoet
 
+import com.squareup.javapoet.TypeSpec
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -42,6 +43,72 @@ import site.addzero.lsi.poet.LsiPoetFile
 class LsiJavaPoetRendererTest {
 
     private val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+
+    @Test
+    fun `renders an embeddable Java type structure exactly`() {
+        val type = LsiPoetType(
+            name = "Marker",
+            kind = LsiPoetTypeKind.INTERFACE,
+            modifiers = setOf(LsiPoetModifier.PUBLIC),
+        )
+
+        val rendered = LsiJavaPoetRenderer().renderType(type)
+
+        assertEquals(
+            TypeSpec::class.java,
+            LsiJavaPoetRenderer::class.java
+                .getDeclaredMethod("renderType", LsiPoetType::class.java)
+                .returnType,
+        )
+        assertEquals("public interface Marker {\n}\n", rendered.toString())
+    }
+
+    @Test
+    fun `rejects package-relative type references without file context`() {
+        val type = LsiPoetType(
+            name = "Owner",
+            kind = LsiPoetTypeKind.CLASS,
+            members = listOf(
+                LsiPoetField(
+                    name = "nested",
+                    type = LsiDeclaredType(LsiSymbolId.type("demo.generated.Owner.Nested")),
+                    typeReferenceStyle = LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED,
+                ),
+            ),
+        )
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().renderType(type)
+        }
+
+        assertContains(exception.message.orEmpty(), "requires file package context")
+    }
+
+    @Test
+    fun `preserves package-relative nested type references in the default package`() {
+        val type = LsiPoetType(
+            name = "Owner",
+            kind = LsiPoetTypeKind.CLASS,
+            members = listOf(
+                LsiPoetField(
+                    name = "nested",
+                    type = LsiDeclaredType(LsiSymbolId.type("Owner.Nested")),
+                    typeReferenceStyle = LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED,
+                ),
+                LsiPoetType(
+                    name = "Nested",
+                    kind = LsiPoetTypeKind.CLASS,
+                    modifiers = setOf(LsiPoetModifier.STATIC),
+                ),
+            ),
+        )
+
+        val content = LsiJavaPoetRenderer().render(
+            artifact(type, "Owner", packageName = "")
+        ).content
+
+        assertContains(content, "Nested nested;")
+    }
 
     @Test
     fun `renders a Java class through a GeneratedArtifact boundary`() {
@@ -98,7 +165,7 @@ class LsiJavaPoetRendererTest {
 
         assertEquals(GeneratedArtifact::class.java, LsiJavaPoetRenderer::class.java
             .getDeclaredMethod("render", LsiPoetArtifact::class.java).returnType)
-        assertPublicApiDoesNotExposePoet(LsiJavaPoetRenderer::class.java)
+        assertPublicApiDoesNotExposeOtherPoet(LsiJavaPoetRenderer::class.java)
         assertEquals("demo/generated/Greeting.java", generated.path)
         assertEquals(
             """
@@ -562,14 +629,18 @@ class LsiJavaPoetRendererTest {
         assertContains(indentationException.message.orEmpty(), "explicit Kotlin code indentation")
     }
 
-    private fun artifact(member: LsiPoetMember, fileName: String): LsiPoetArtifact {
+    private fun artifact(
+        member: LsiPoetMember,
+        fileName: String,
+        packageName: String = "demo.generated",
+    ): LsiPoetArtifact {
         val type = if (member is LsiPoetType) member else {
             LsiPoetType(fileName, LsiPoetTypeKind.CLASS, members = listOf(member))
         }
         return LsiPoetArtifact(
             file = LsiPoetFile(
                 language = LsiLanguage.JAVA,
-                packageName = "demo.generated",
+                packageName = packageName,
                 fileName = fileName,
                 members = listOf(type),
             ),
@@ -578,7 +649,7 @@ class LsiJavaPoetRendererTest {
         )
     }
 
-    private fun assertPublicApiDoesNotExposePoet(type: Class<*>) {
+    private fun assertPublicApiDoesNotExposeOtherPoet(type: Class<*>) {
         val methodTypes = type.declaredMethods
             .filter { method -> java.lang.reflect.Modifier.isPublic(method.modifiers) }
             .flatMap { method -> listOf(method.returnType) + method.parameterTypes }
@@ -590,6 +661,6 @@ class LsiJavaPoetRendererTest {
             .map { field -> field.type }
         val exposedTypes = methodTypes + constructorTypes + fieldTypes
 
-        assertTrue(exposedTypes.none { exposedType -> exposedType.name.startsWith("com.squareup.") })
+        assertTrue(exposedTypes.none { exposedType -> exposedType.name.startsWith("com.squareup.kotlinpoet.") })
     }
 }

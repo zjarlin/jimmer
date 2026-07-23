@@ -38,6 +38,11 @@ import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
  */
 class LsiJavaPoetRenderer : LsiPoetRenderer {
 
+    /** 将单个 LSI 类型渲染为可嵌入现有 JavaPoet 声明的结构。 */
+    fun renderType(type: LsiPoetType): TypeSpec {
+        return type.toJavaTypeSpec(currentPackageName = null)
+    }
+
     override fun render(artifact: LsiPoetArtifact): GeneratedArtifact {
         val file = artifact.file
         require(file.language == LsiLanguage.JAVA) {
@@ -64,7 +69,7 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
     }
 }
 
-private fun LsiPoetType.toJavaTypeSpec(currentPackageName: String): TypeSpec {
+private fun LsiPoetType.toJavaTypeSpec(currentPackageName: String?): TypeSpec {
     require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
         "JavaPoet renderer cannot emit an escaped Kotlin type name: $name"
     }
@@ -93,7 +98,7 @@ private fun LsiPoetType.toJavaTypeSpec(currentPackageName: String): TypeSpec {
 
 private fun TypeSpec.Builder.addJavaEnumConstant(
     constant: LsiPoetEnumConstant,
-    currentPackageName: String,
+    currentPackageName: String?,
 ) {
     if (constant.constructorArguments.isEmpty() && constant.anonymousType == null) {
         addEnumConstant(constant.name)
@@ -116,7 +121,7 @@ private fun TypeSpec.Builder.addJavaEnumConstant(
 
 private fun TypeSpec.Builder.addJavaMember(
     member: LsiPoetMember,
-    currentPackageName: String,
+    currentPackageName: String?,
 ) {
     when (member) {
         is LsiPoetConstructor -> addMethod(member.toJavaConstructor())
@@ -211,7 +216,7 @@ private fun LsiPoetParameter.toJavaParameter(): ParameterSpec {
     return builder.build()
 }
 
-private fun LsiPoetField.toJavaField(currentPackageName: String): FieldSpec {
+private fun LsiPoetField.toJavaField(currentPackageName: String?): FieldSpec {
     val javaModifiers = modifiers.toJavaModifiers(JavaModifierContext.FIELD).toMutableSet()
     if (LsiPoetModifier.CONST in modifiers) {
         javaModifiers += Modifier.STATIC
