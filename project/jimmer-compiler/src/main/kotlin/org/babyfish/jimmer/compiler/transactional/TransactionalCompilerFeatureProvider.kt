@@ -10,6 +10,10 @@ import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.transactional.TransactionalSchema
+import site.addzero.lsi.jimmer.transactional.TransactionalValidationException
+import site.addzero.lsi.jimmer.transactional.fingerprint
+import site.addzero.lsi.jimmer.transactional.toTransactionalSchema
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
@@ -23,16 +27,16 @@ class TransactionalCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     ): JimmerCompilerFeaturePrecompileResult {
         if (context.round.options["jimmer.buddy.ignoreResourceGeneration"] == "true") {
             return JimmerCompilerFeaturePrecompileResult(
-                state = TransactionalCompilerFeatureState(TransactionalPrecompiledSchema(emptyList())),
+                state = TransactionalCompilerFeatureState(TransactionalSchema(emptyList())),
             )
         }
         return try {
-            val schema = TransactionalPrecompiler().compile(context.round.workspace)
+            val schema = context.round.workspace.toTransactionalSchema()
             JimmerCompilerFeaturePrecompileResult(
                 state = TransactionalCompilerFeatureState(schema),
                 processedSymbols = schema.types.mapTo(sortedSetOf()) { type -> type.id },
             )
-        } catch (exception: TransactionalPrecompileException) {
+        } catch (exception: TransactionalValidationException) {
             JimmerCompilerFeaturePrecompileResult(
                 state = TransactionalCompilerFeatureState.invalid(exception),
                 diagnostics = listOf(
@@ -70,15 +74,15 @@ class TransactionalCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 }
 
 private data class TransactionalCompilerFeatureState(
-    val schema: TransactionalPrecompiledSchema,
+    val schema: TransactionalSchema,
     val invalid: Boolean = false,
     override val fingerprint: String = schema.fingerprint(),
 ) : JimmerCompilerFeatureState {
 
     companion object {
-        fun invalid(exception: TransactionalPrecompileException): TransactionalCompilerFeatureState {
+        fun invalid(exception: TransactionalValidationException): TransactionalCompilerFeatureState {
             return TransactionalCompilerFeatureState(
-                schema = TransactionalPrecompiledSchema(emptyList()),
+                schema = TransactionalSchema(emptyList()),
                 invalid = true,
                 fingerprint = "invalid:${exception.declarationId.value}:${exception.message.orEmpty()}",
             )

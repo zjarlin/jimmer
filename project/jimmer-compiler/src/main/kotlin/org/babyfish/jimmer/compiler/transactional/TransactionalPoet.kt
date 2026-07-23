@@ -3,8 +3,13 @@ package org.babyfish.jimmer.compiler.transactional
 import site.addzero.lsi.codegen.classifyArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.transactional.TransactionalConstructor
+import site.addzero.lsi.jimmer.transactional.TransactionalMethod
+import site.addzero.lsi.jimmer.transactional.TransactionalParameter
+import site.addzero.lsi.jimmer.transactional.TransactionalPlatform
+import site.addzero.lsi.jimmer.transactional.TransactionalSchema
+import site.addzero.lsi.jimmer.transactional.TransactionalType
 import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationTarget
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
@@ -13,14 +18,12 @@ import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.annotationTargetPolicy
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
@@ -38,7 +41,7 @@ import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.toLsiPoetAnnotation
 
-internal fun TransactionalPrecompiledSchema.toLsiPoetArtifacts(
+internal fun TransactionalSchema.toLsiPoetArtifacts(
     workspace: LsiWorkspace,
 ): List<LsiPoetArtifact> {
     return types.map { type -> type.toLsiPoetArtifact(workspace) }
@@ -59,7 +62,7 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
             } else {
                 emptyList()
             },
-            members = listOf(toLsiPoetType(workspace)),
+            members = listOf(toLsiPoetType()),
         ),
         aggregationMode = classifyArtifactAggregationMode(
             originatingSymbols = originatingSymbols,
@@ -73,10 +76,10 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
     )
 }
 
-private fun TransactionalType.toLsiPoetType(workspace: LsiWorkspace): LsiPoetType {
+private fun TransactionalType.toLsiPoetType(): LsiPoetType {
     return when (sqlClient.platform) {
         TransactionalPlatform.JAVA -> toJavaPoetType()
-        TransactionalPlatform.KOTLIN -> toKotlinPoetType(workspace)
+        TransactionalPlatform.KOTLIN -> toKotlinPoetType()
     }
 }
 
@@ -101,7 +104,7 @@ private fun TransactionalType.toJavaPoetType(): LsiPoetType {
     )
 }
 
-private fun TransactionalType.toKotlinPoetType(workspace: LsiWorkspace): LsiPoetType {
+private fun TransactionalType.toKotlinPoetType(): LsiPoetType {
     val primaryConstructor = constructors.singleOrNull(TransactionalConstructor::primary)
     return LsiPoetType(
         name = generatedSimpleName,
@@ -122,14 +125,14 @@ private fun TransactionalType.toKotlinPoetType(workspace: LsiWorkspace): LsiPoet
             ?.parameters
             ?.map(TransactionalParameter::toKotlinArgument)
             .orEmpty(),
-        primaryConstructor = primaryConstructor?.toKotlinPoetConstructor(workspace),
+        primaryConstructor = primaryConstructor?.toKotlinPoetConstructor(),
         members = buildList {
             if (primaryConstructor == null) {
                 constructors.forEach { constructor ->
-                    add(constructor.toKotlinPoetConstructor(workspace, secondary = true))
+                    add(constructor.toKotlinPoetConstructor(secondary = true))
                 }
             }
-            methods.forEach { method -> add(method.toKotlinPoetFunction(this@toKotlinPoetType, workspace)) }
+            methods.forEach { method -> add(method.toKotlinPoetFunction(this@toKotlinPoetType)) }
         },
     )
 }
@@ -168,7 +171,6 @@ private fun TransactionalConstructor.toJavaPoetConstructor(): LsiPoetConstructor
 }
 
 private fun TransactionalConstructor.toKotlinPoetConstructor(
-    workspace: LsiWorkspace,
     secondary: Boolean = false,
 ): LsiPoetConstructor {
     return LsiPoetConstructor(
@@ -187,7 +189,7 @@ private fun TransactionalConstructor.toKotlinPoetConstructor(
             }
         },
         documentation = documentation.withTrailingLineBreak(),
-        parameters = parameters.map { parameter -> parameter.toKotlinPoetParameter(workspace) },
+        parameters = parameters.map(TransactionalParameter::toKotlinPoetParameter),
         delegationCall = if (secondary) {
             LsiPoetDelegationCall(
                 target = LsiPoetDelegationTarget.SUPER,
@@ -231,7 +233,6 @@ private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): Lsi
 
 private fun TransactionalMethod.toKotlinPoetFunction(
     type: TransactionalType,
-    workspace: LsiWorkspace,
 ): LsiPoetFunction {
     return LsiPoetFunction(
         name = name,
@@ -251,15 +252,16 @@ private fun TransactionalMethod.toKotlinPoetFunction(
         },
         documentation = documentation.withTrailingLineBreak(),
         typeParameters = typeParameters,
-        parameters = parameters.map { parameter -> parameter.toKotlinPoetParameter(workspace) },
+        parameters = parameters.map(TransactionalParameter::toKotlinPoetParameter),
         returnType = returnType.withReturnAnnotations(copiedAnnotations),
         body = kotlinTransactionBody(type),
     )
 }
 
 private fun TransactionalMethod.javaTransactionBody(type: TransactionalType): LsiPoetCodeBlock {
-    val returnsVoid = returnType is LsiPrimitiveType &&
-        returnType.kind in setOf(LsiPrimitiveKind.UNIT, LsiPrimitiveKind.VOID)
+    val methodReturnType = returnType
+    val returnsVoid = methodReturnType is LsiPrimitiveType &&
+        methodReturnType.kind in setOf(LsiPrimitiveKind.UNIT, LsiPrimitiveKind.VOID)
     return code {
         val prefix: LsiPoetCodeBuilder.() -> Unit = {
             name(type.sqlClient.name)
@@ -336,30 +338,16 @@ private fun TransactionalParameter.toJavaPoetParameter(): LsiPoetParameter {
     return LsiPoetParameter(
         name = name,
         type = type,
-        annotations = annotations
-            .filter { annotation ->
-                annotation.useSiteTarget == null ||
-                    annotation.useSiteTarget == LsiAnnotationUseSiteTarget.PARAMETER
-            }
-            .map(LsiAnnotation::toLsiPoetAnnotation),
+        annotations = annotations.map(LsiAnnotation::toLsiPoetAnnotation),
         modifiers = if (vararg) setOf(LsiPoetModifier.VARARG) else emptySet(),
     )
 }
 
-private fun TransactionalParameter.toKotlinPoetParameter(workspace: LsiWorkspace): LsiPoetParameter {
+private fun TransactionalParameter.toKotlinPoetParameter(): LsiPoetParameter {
     return LsiPoetParameter(
         name = name,
         type = type,
-        annotations = annotations
-            .filter { annotation ->
-                annotation.useSiteTarget == null ||
-                    annotation.useSiteTarget == LsiAnnotationUseSiteTarget.PARAMETER ||
-                    annotation.useSiteTarget == LsiAnnotationUseSiteTarget.ALL &&
-                    workspace.allowsParameterTarget(annotation.type)
-            }
-            .map { annotation ->
-                annotation.copy(useSiteTarget = null).toLsiPoetAnnotation()
-            },
+        annotations = annotations.map(LsiAnnotation::toLsiPoetAnnotation),
         modifiers = if (vararg) setOf(LsiPoetModifier.VARARG) else emptySet(),
     )
 }
@@ -375,11 +363,6 @@ private fun TransactionalParameter.toKotlinArgument(): LsiPoetCodeBlock {
         }
         name(this@toKotlinArgument.name)
     }
-}
-
-private fun LsiWorkspace.allowsParameterTarget(annotationTypeId: LsiSymbolId): Boolean {
-    val declaration = this[annotationTypeId] as? LsiTypeDeclaration ?: return false
-    return declaration.annotationTargetPolicy().allows(LsiAnnotationTarget.PARAMETER)
 }
 
 private fun LsiTypeRef.withReturnAnnotations(annotations: List<LsiAnnotation>): LsiTypeRef {
@@ -437,6 +420,7 @@ private fun MutableSet<LsiSymbolId>.addParameter(parameter: TransactionalParamet
     add(parameter.id)
     addType(parameter.type)
     parameter.annotations.forEach(::addAnnotation)
+    addAll(parameter.annotationProjectionTypeIds)
 }
 
 private fun MutableSet<LsiSymbolId>.addTypeParameter(parameter: LsiTypeParameter) {

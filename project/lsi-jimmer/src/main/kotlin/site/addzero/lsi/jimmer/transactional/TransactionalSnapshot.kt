@@ -1,19 +1,23 @@
-package org.babyfish.jimmer.compiler.transactional
+package site.addzero.lsi.jimmer.transactional
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.stableSignature
 
-fun TransactionalPrecompiledSchema.normalizedSnapshot(): String {
+/** 生成跨前端比较使用的 Transactional 规范化快照。 */
+fun TransactionalSchema.normalizedSnapshot(): String {
     return buildString {
         types.sortedBy(TransactionalType::id).forEach { type ->
             appendRecord(
@@ -39,9 +43,9 @@ fun TransactionalPrecompiledSchema.normalizedSnapshot(): String {
                     type.id.value,
                     constructor.id.value,
                     constructor.visibility.name,
-                    constructor.parameters.joinToString(",") { parameter -> parameter.canonicalText() },
-                    constructor.typeParameters.joinToString(",") { parameter -> parameter.id.value },
-                    constructor.thrownTypes.joinToString(",") { thrownType -> thrownType.canonicalText() },
+                    constructor.parameters.map(TransactionalParameter::canonicalText).canonicalListText(),
+                    constructor.typeParameters.map { parameter -> parameter.id.value }.canonicalListText(),
+                    constructor.thrownTypes.map(LsiTypeRef::canonicalText).canonicalListText(),
                 )
             }
             type.methods.sortedBy(TransactionalMethod::id).forEach { method ->
@@ -54,9 +58,9 @@ fun TransactionalPrecompiledSchema.normalizedSnapshot(): String {
                     method.visibility.name,
                     method.modality.name,
                     method.returnType.canonicalText(),
-                    method.parameters.joinToString(",") { parameter -> parameter.canonicalText() },
-                    method.typeParameters.joinToString(",") { parameter -> parameter.id.value },
-                    method.thrownTypes.joinToString(",") { thrownType -> thrownType.canonicalText() },
+                    method.parameters.map(TransactionalParameter::canonicalText).canonicalListText(),
+                    method.typeParameters.map { parameter -> parameter.id.value }.canonicalListText(),
+                    method.thrownTypes.map(LsiTypeRef::canonicalText).canonicalListText(),
                     method.propagation,
                     method.classLevel.toString(),
                 )
@@ -65,13 +69,14 @@ fun TransactionalPrecompiledSchema.normalizedSnapshot(): String {
     }
 }
 
-fun TransactionalPrecompiledSchema.fingerprint(): String {
+/** 计算完整 Transactional 生成语义的 SHA-256 指纹。 */
+fun TransactionalSchema.fingerprint(): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes = digest.digest(renderSnapshot().toByteArray(StandardCharsets.UTF_8))
     return bytes.joinToString("") { byte -> "%02x".format(byte) }
 }
 
-private fun TransactionalPrecompiledSchema.renderSnapshot(): String {
+private fun TransactionalSchema.renderSnapshot(): String {
     return buildString {
         types.forEach { type ->
             appendRecord(
@@ -102,9 +107,9 @@ private fun TransactionalPrecompiledSchema.renderSnapshot(): String {
                     constructor.id.value,
                     constructor.primary.toString(),
                     constructor.visibility.name,
-                    constructor.parameters.joinToString(",") { parameter -> parameter.renderSignature() },
+                    constructor.parameters.map(TransactionalParameter::renderSignature).canonicalListText(),
                     constructor.typeParameters.typeParameterSignatures(),
-                    constructor.thrownTypes.joinToString(",") { thrownType -> thrownType.stableSignature() },
+                    constructor.thrownTypes.map(LsiTypeRef::stableSignature).canonicalListText(),
                     constructor.documentation.orEmpty(),
                     constructor.copiedAnnotations.annotationSignatures(),
                 )
@@ -119,9 +124,9 @@ private fun TransactionalPrecompiledSchema.renderSnapshot(): String {
                     method.visibility.name,
                     method.modality.name,
                     method.returnType.stableSignature(),
-                    method.parameters.joinToString(",") { parameter -> parameter.renderSignature() },
+                    method.parameters.map(TransactionalParameter::renderSignature).canonicalListText(),
                     method.typeParameters.typeParameterSignatures(),
-                    method.thrownTypes.joinToString(",") { thrownType -> thrownType.stableSignature() },
+                    method.thrownTypes.map(LsiTypeRef::stableSignature).canonicalListText(),
                     method.documentation.orEmpty(),
                     method.copiedAnnotations.annotationSignatures(),
                     method.propagation,
@@ -139,7 +144,7 @@ private fun TransactionalParameter.canonicalText(): String {
         type.canonicalText(),
         vararg.toString(),
         hasDefault.toString(),
-    ).joinToString(":")
+    ).canonicalListText()
 }
 
 private fun TransactionalParameter.renderSignature(): String {
@@ -151,15 +156,19 @@ private fun TransactionalParameter.renderSignature(): String {
         vararg.toString(),
         hasDefault.toString(),
         annotations.annotationSignatures(),
-    ).joinToString(":")
+        annotationProjectionTypeIds
+            .map(LsiSymbolId::value)
+            .sorted()
+            .canonicalListText(),
+    ).canonicalListText()
 }
 
 private fun Iterable<LsiAnnotation>.annotationSignatures(): String {
-    return joinToString(",") { annotation -> annotation.stableSignature() }
+    return map(LsiAnnotation::stableSignature).canonicalListText()
 }
 
 private fun Iterable<LsiTypeParameter>.typeParameterSignatures(): String {
-    return joinToString(",") { parameter -> parameter.stableSignature() }
+    return map(LsiTypeParameter::stableSignature).canonicalListText()
 }
 
 private fun LsiTypeRef.canonicalText(): String {
@@ -168,7 +177,11 @@ private fun LsiTypeRef.canonicalText(): String {
             append(declarationId.value)
             if (arguments.isNotEmpty()) {
                 append('<')
-                append(arguments.joinToString(",") { argument -> argument.type?.canonicalText() ?: "*" })
+                append(
+                    arguments
+                        .map(LsiTypeArgument::canonicalText)
+                        .canonicalListText()
+                )
                 append('>')
             }
         }
@@ -186,7 +199,7 @@ private fun LsiTypeRef.canonicalText(): String {
                 append('.')
             }
             append('(')
-            append(parameterTypes.joinToString(",", transform = LsiTypeRef::canonicalText))
+            append(parameterTypes.map(LsiTypeRef::canonicalText).canonicalListText())
             append(")->")
             append(returnType.canonicalText())
         }
@@ -194,6 +207,15 @@ private fun LsiTypeRef.canonicalText(): String {
         is LsiUnresolvedType -> "unresolved:${displayName.filterNot(Char::isWhitespace)}"
     }
     return base + if (nullability == site.addzero.lsi.model.LsiNullability.NULLABLE) "?" else "!"
+}
+
+private fun LsiTypeArgument.canonicalText(): String {
+    return when (variance) {
+        LsiVariance.STAR -> "*"
+        LsiVariance.INVARIANT -> requireNotNull(type).canonicalText()
+        LsiVariance.IN -> "in:${requireNotNull(type).canonicalText()}"
+        LsiVariance.OUT -> "out:${requireNotNull(type).canonicalText()}"
+    }
 }
 
 private fun StringBuilder.appendRecord(
@@ -220,6 +242,16 @@ private fun String.escapeSnapshotField(): String {
                 ':' -> append("\\:")
                 else -> append(character)
             }
+        }
+    }
+}
+
+private fun Iterable<String>.canonicalListText(): String {
+    return buildString {
+        this@canonicalListText.forEach { value ->
+            append(value.length)
+            append(':')
+            append(value)
         }
     }
 }

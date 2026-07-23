@@ -21,6 +21,14 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.transactional.TransactionalConstructor
+import site.addzero.lsi.jimmer.transactional.TransactionalMethod
+import site.addzero.lsi.jimmer.transactional.TransactionalMethodSourceKind
+import site.addzero.lsi.jimmer.transactional.TransactionalParameter
+import site.addzero.lsi.jimmer.transactional.TransactionalPlatform
+import site.addzero.lsi.jimmer.transactional.TransactionalSchema
+import site.addzero.lsi.jimmer.transactional.TransactionalSqlClient
+import site.addzero.lsi.jimmer.transactional.TransactionalType
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
@@ -105,18 +113,9 @@ class TransactionalRendererTest {
     }
 
     @Test
-    fun `kotlin renderer projects all annotations only onto allowed constructor parameters`() {
+    fun `kotlin renderer consumes frozen constructor parameter annotations`() {
         val parameterMarker = annotationDeclaration("ParameterMarker", "VALUE_PARAMETER")
-        val getterMarker = annotationDeclaration("GetterMarker", "PROPERTY_GETTER")
-        val annotations = listOf(parameterMarker, getterMarker).map { declaration ->
-            LsiAnnotation(
-                type = declaration.id,
-                useSiteTarget = LsiAnnotationUseSiteTarget.ALL,
-            )
-        } + LsiAnnotation(
-            type = LsiSymbolId.type("demo.MissingMarker"),
-            useSiteTarget = LsiAnnotationUseSiteTarget.ALL,
-        )
+        val getterOnlyMarker = annotationDeclaration("ParameterMarker", "PROPERTY_GETTER")
         val (schema, workspace) = kotlinFixture()
         val annotatedSchema = schema.copy(
             types = schema.types.map { type ->
@@ -124,7 +123,7 @@ class TransactionalRendererTest {
                     constructors = type.constructors.map { constructor ->
                         constructor.copy(
                             parameters = constructor.parameters.map { parameter ->
-                                parameter.copy(annotations = parameter.annotations + annotations)
+                                parameter.copy(annotations = listOf(LsiAnnotation(parameterMarker.id)))
                             },
                         )
                     },
@@ -132,17 +131,23 @@ class TransactionalRendererTest {
             },
         )
 
-        val annotatedWorkspace = LsiWorkspace(
-            sources = workspace.sources + listOf(parameterMarker, getterMarker).mapNotNull { it.origin.source },
-            declarations = workspace.declarations + parameterMarker + getterMarker,
+        val parameterWorkspace = LsiWorkspace(
+            sources = workspace.sources + listOfNotNull(parameterMarker.origin.source),
+            declarations = workspace.declarations + parameterMarker,
         )
-        val artifact = LsiKotlinPoetRenderer().render(
-            annotatedSchema.toLsiPoetArtifacts(annotatedWorkspace).single()
+        val getterWorkspace = LsiWorkspace(
+            sources = workspace.sources + listOfNotNull(getterOnlyMarker.origin.source),
+            declarations = workspace.declarations + getterOnlyMarker,
+        )
+        val parameterArtifact = LsiKotlinPoetRenderer().render(
+            annotatedSchema.toLsiPoetArtifacts(parameterWorkspace).single()
+        )
+        val getterArtifact = LsiKotlinPoetRenderer().render(
+            annotatedSchema.toLsiPoetArtifacts(getterWorkspace).single()
         )
 
-        assertContains(artifact.content, "@ParameterMarker")
-        assertFalse("@GetterMarker" in artifact.content)
-        assertFalse("@MissingMarker" in artifact.content)
+        assertContains(parameterArtifact.content, "@ParameterMarker")
+        assertEquals(parameterArtifact.content, getterArtifact.content)
     }
 
     @Test
@@ -224,7 +229,7 @@ class TransactionalRendererTest {
         assertFalse("@Throws" in kotlinArtifact.content)
     }
 
-    private fun javaFixture(): Pair<TransactionalPrecompiledSchema, LsiWorkspace> {
+    private fun javaFixture(): Pair<TransactionalSchema, LsiWorkspace> {
         val source = LsiSource.of("org/babyfish/jimmer/sql/transaction/ServiceA.java", LsiLanguage.JAVA)
         val constructorId = LsiSymbolId.constructor(
             JAVA_SERVICE_ID,
@@ -270,10 +275,10 @@ class TransactionalRendererTest {
                 ),
             ),
         )
-        return TransactionalPrecompiledSchema(listOf(type)) to workspace(JAVA_SERVICE_ID, source)
+        return TransactionalSchema(listOf(type)) to workspace(JAVA_SERVICE_ID, source)
     }
 
-    private fun kotlinFixture(): Pair<TransactionalPrecompiledSchema, LsiWorkspace> {
+    private fun kotlinFixture(): Pair<TransactionalSchema, LsiWorkspace> {
         val source = LsiSource.of("org/babyfish/jimmer/sql/kt/transaction/ServiceA.kt", LsiLanguage.KOTLIN)
         val constructorId = LsiSymbolId.constructor(
             KOTLIN_SERVICE_ID,
@@ -318,7 +323,7 @@ class TransactionalRendererTest {
                 ),
             ),
         )
-        return TransactionalPrecompiledSchema(listOf(type)) to workspace(KOTLIN_SERVICE_ID, source)
+        return TransactionalSchema(listOf(type)) to workspace(KOTLIN_SERVICE_ID, source)
     }
 
     private fun transactionalType(
@@ -440,9 +445,9 @@ class TransactionalRendererTest {
         )
     }
 
-    private fun TransactionalPrecompiledSchema.withAnnotatedReturnType(
+    private fun TransactionalSchema.withAnnotatedReturnType(
         annotation: LsiAnnotation,
-    ): TransactionalPrecompiledSchema {
+    ): TransactionalSchema {
         return copy(
             types = types.map { type ->
                 type.copy(

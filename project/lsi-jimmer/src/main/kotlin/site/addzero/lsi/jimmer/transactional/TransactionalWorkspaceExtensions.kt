@@ -1,9 +1,11 @@
-package org.babyfish.jimmer.compiler.transactional
+package site.addzero.lsi.jimmer.transactional
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationTarget
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiDeclaredType
@@ -18,21 +20,28 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.annotationTargetPolicy
 
-class TransactionalPrecompileException(
+/** Transactional 语义校验失败。 */
+class TransactionalValidationException(
     val declarationId: LsiSymbolId,
     message: String,
 ) : IllegalArgumentException(message)
 
-class TransactionalPrecompiler {
-    fun compile(workspace: LsiWorkspace): TransactionalPrecompiledSchema {
+/** 将当前工作区解析为 Transactional 共享语义模型。 */
+fun LsiWorkspace.toTransactionalSchema(): TransactionalSchema {
+    return TransactionalSchemaBuilder().build(this)
+}
+
+private class TransactionalSchemaBuilder {
+    fun build(workspace: LsiWorkspace): TransactionalSchema {
         val types = workspace.declarationsOfType<LsiTypeDeclaration>()
             .sortedBy(LsiTypeDeclaration::qualifiedName)
         val typeSystem = LsiTypeSystem(workspace)
         val transactionalTypes = types
             .filter { type -> type.isTransactionalType(workspace) }
             .map { type -> compileType(type, types, workspace, typeSystem) }
-        return TransactionalPrecompiledSchema(transactionalTypes)
+        return TransactionalSchema(transactionalTypes)
     }
 
     private fun compileType(
@@ -47,9 +56,11 @@ class TransactionalPrecompiler {
         val sqlClient = determineSqlClient(type, members, typeSystem)
         val constructors = members.filterIsInstance<LsiConstructor>()
             .filter { constructor -> constructor.visibility != LsiVisibility.PRIVATE }
-            .map(LsiConstructor::toTransactionalConstructor)
+            .map { constructor ->
+                constructor.toTransactionalConstructor(workspace, sqlClient.platform)
+            }
         val methods = members.mapNotNull { member ->
-            compileMethod(member, classTx, typeSystem)
+            compileMethod(member, classTx, typeSystem, workspace, sqlClient.platform)
         }
         val packageName = type.qualifiedName
             .removeSuffix(".${type.name}")
@@ -79,7 +90,7 @@ class TransactionalPrecompiler {
         workspace: LsiWorkspace,
     ) {
         if (type.kind != LsiTypeDeclarationKind.CLASS) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = type.id,
                 message = "Type using '@${TX_ANNOTATION.value}' must be a class",
             )
@@ -90,19 +101,19 @@ class TransactionalPrecompiler {
             .filter { candidate -> type.qualifiedName.startsWith(candidate.qualifiedName + ".") }
             .maxByOrNull { candidate -> candidate.qualifiedName.length }
         if (enclosingType != null) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = type.id,
                 message = "Transactional class '${type.qualifiedName}' must be top-level",
             )
         }
         if (type.modality == LsiModality.FINAL || type.modality == LsiModality.SEALED) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = type.id,
                 message = "Transactional class '${type.qualifiedName}' must be open or abstract",
             )
         }
         if (type.typeParameters.isNotEmpty()) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = type.id,
                 message = "Transactional class '${type.qualifiedName}' cannot declare type parameters",
             )
@@ -113,7 +124,7 @@ class TransactionalPrecompiler {
             }
             val hierarchyEntry = workspace.typeHierarchyEntry(superType.declarationId) ?: return@forEach
             if (hierarchyEntry.kind in CLASS_LIKE_TYPE_KINDS) {
-                throw TransactionalPrecompileException(
+                throw TransactionalValidationException(
                     declarationId = type.id,
                     message = "Transactional class '${type.qualifiedName}' cannot inherit class " +
                         "'${hierarchyEntry.qualifiedName}'",
@@ -151,14 +162,14 @@ class TransactionalPrecompiler {
             !member.static && member.type.isSubtypeOf(targetTypeId, typeSystem)
         }
         if (candidates.isEmpty()) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = type.id,
                 message = "Transactional class '${type.qualifiedName}' must declare exactly one non-static " +
                     "${targetTypeId.value} member",
             )
         }
         if (candidates.size > 1) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = type.id,
                 message = "Transactional class '${type.qualifiedName}' declares multiple non-static " +
                     "${targetTypeId.value} members",
@@ -166,7 +177,7 @@ class TransactionalPrecompiler {
         }
         val candidate = candidates.single()
         if (candidate.visibility == LsiVisibility.PRIVATE) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = candidate.id,
                 message = "Transactional sql client member '${candidate.id.value}' cannot be private",
             )
@@ -184,13 +195,15 @@ class TransactionalPrecompiler {
         declaration: LsiDeclaration,
         classTx: LsiAnnotation?,
         typeSystem: LsiTypeSystem,
+        workspace: LsiWorkspace,
+        platform: TransactionalPlatform,
     ): TransactionalMethod? {
         val directTx = declaration.annotations.annotation(TX_ANNOTATION)
         val supportedCallable = declaration is LsiFunction ||
             declaration is LsiProperty && declaration.origin.source?.language == LsiLanguage.JAVA
         if (!supportedCallable) {
             if (directTx != null) {
-                throw TransactionalPrecompileException(
+                throw TransactionalValidationException(
                     declarationId = declaration.id,
                     message = "Only methods can be decorated by '@${TX_ANNOTATION.value}'",
                 )
@@ -208,37 +221,37 @@ class TransactionalPrecompiler {
             return null
         }
         if (callable.static) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = declaration.id,
                 message = "Transactional method '${declaration.id.value}' cannot be static",
             )
         }
         if (callable.receiverType != null) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = declaration.id,
                 message = "Transactional method '${declaration.id.value}' cannot be an extension function",
             )
         }
         if (callable.suspending) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = declaration.id,
                 message = "Transactional method '${declaration.id.value}' cannot be suspend",
             )
         }
         if (callable.visibility == LsiVisibility.PRIVATE) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = declaration.id,
                 message = "Transactional method '${declaration.id.value}' cannot be private",
             )
         }
         if (callable.modality == LsiModality.FINAL) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = declaration.id,
                 message = "Transactional method '${declaration.id.value}' must be open",
             )
         }
         if (callable.modality == LsiModality.ABSTRACT) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = declaration.id,
                 message = "Transactional method '${declaration.id.value}' cannot be abstract",
             )
@@ -247,7 +260,7 @@ class TransactionalPrecompiler {
             !thrownType.isSubtypeOf(RUNTIME_EXCEPTION_TYPE, typeSystem)
         }
         if (checkedThrownType != null) {
-            throw TransactionalPrecompileException(
+            throw TransactionalValidationException(
                 declarationId = declaration.id,
                 message = "Transactional method '${declaration.id.value}' can only throw RuntimeException, " +
                     "but declares '$checkedThrownType'",
@@ -260,7 +273,9 @@ class TransactionalPrecompiler {
             visibility = callable.visibility,
             modality = callable.modality,
             returnType = callable.returnType,
-            parameters = callable.parameters.map(LsiParameter::toTransactionalParameter),
+            parameters = callable.parameters.map { parameter ->
+                parameter.toTransactionalParameter(workspace, platform)
+            },
             typeParameters = callable.typeParameters,
             thrownTypes = callable.thrownTypes,
             documentation = declaration.documentation,
@@ -282,12 +297,17 @@ private fun LsiTypeDeclaration.isTransactionalType(workspace: LsiWorkspace): Boo
     }
 }
 
-private fun LsiConstructor.toTransactionalConstructor(): TransactionalConstructor {
+private fun LsiConstructor.toTransactionalConstructor(
+    workspace: LsiWorkspace,
+    platform: TransactionalPlatform,
+): TransactionalConstructor {
     return TransactionalConstructor(
         id = id,
         primary = primary,
         visibility = visibility,
-        parameters = parameters.map(LsiParameter::toTransactionalParameter),
+        parameters = parameters.map { parameter ->
+            parameter.toTransactionalParameter(workspace, platform)
+        },
         typeParameters = typeParameters,
         thrownTypes = thrownTypes,
         documentation = documentation,
@@ -295,7 +315,11 @@ private fun LsiConstructor.toTransactionalConstructor(): TransactionalConstructo
     )
 }
 
-private fun LsiParameter.toTransactionalParameter(): TransactionalParameter {
+private fun LsiParameter.toTransactionalParameter(
+    workspace: LsiWorkspace,
+    platform: TransactionalPlatform,
+): TransactionalParameter {
+    val annotationProjection = annotations.transactionalParameterAnnotationProjection(workspace, platform)
     return TransactionalParameter(
         id = id,
         name = name,
@@ -303,9 +327,46 @@ private fun LsiParameter.toTransactionalParameter(): TransactionalParameter {
         type = type,
         vararg = vararg,
         hasDefault = hasDefault,
-        annotations = annotations,
+        annotations = annotationProjection.annotations,
+        annotationProjectionTypeIds = annotationProjection.dependencyTypeIds,
     )
 }
+
+private fun List<LsiAnnotation>.transactionalParameterAnnotationProjection(
+    workspace: LsiWorkspace,
+    platform: TransactionalPlatform,
+): TransactionalParameterAnnotationProjection {
+    return when (platform) {
+        TransactionalPlatform.JAVA -> TransactionalParameterAnnotationProjection(
+            annotations = filter { annotation ->
+                annotation.useSiteTarget == null ||
+                    annotation.useSiteTarget == LsiAnnotationUseSiteTarget.PARAMETER
+            },
+            dependencyTypeIds = emptySet(),
+        )
+        TransactionalPlatform.KOTLIN -> TransactionalParameterAnnotationProjection(
+            annotations = filter { annotation ->
+                annotation.useSiteTarget == null ||
+                    annotation.useSiteTarget == LsiAnnotationUseSiteTarget.PARAMETER ||
+                    annotation.useSiteTarget == LsiAnnotationUseSiteTarget.ALL &&
+                    workspace.allowsParameterTarget(annotation.type)
+            }.map { annotation -> annotation.copy(useSiteTarget = null) },
+            dependencyTypeIds = asSequence()
+                .filter { annotation -> annotation.useSiteTarget == LsiAnnotationUseSiteTarget.ALL }
+                .mapTo(sortedSetOf(), LsiAnnotation::type),
+        )
+    }
+}
+
+private fun LsiWorkspace.allowsParameterTarget(annotationTypeId: LsiSymbolId): Boolean {
+    val declaration = this[annotationTypeId] as? LsiTypeDeclaration ?: return false
+    return declaration.annotationTargetPolicy().allows(LsiAnnotationTarget.PARAMETER)
+}
+
+private data class TransactionalParameterAnnotationProjection(
+    val annotations: List<LsiAnnotation>,
+    val dependencyTypeIds: Set<LsiSymbolId>,
+)
 
 private fun LsiDeclaration.toCallable(): CallableModel? {
     return when (this) {
