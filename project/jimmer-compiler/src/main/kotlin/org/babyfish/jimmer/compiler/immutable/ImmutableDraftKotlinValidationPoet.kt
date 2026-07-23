@@ -2,6 +2,15 @@ package org.babyfish.jimmer.compiler.immutable
 
 import kotlin.math.abs
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableDraftComparison
+import site.addzero.lsi.jimmer.ImmutableDraftDigitsComponent
+import site.addzero.lsi.jimmer.ImmutableDraftDigitsTarget
+import site.addzero.lsi.jimmer.ImmutableDraftNumericTarget
+import site.addzero.lsi.jimmer.ImmutableDraftSizeMeasure
+import site.addzero.lsi.jimmer.ImmutableDraftTemporalConstraint
+import site.addzero.lsi.jimmer.ImmutableDraftTemporalTarget
+import site.addzero.lsi.jimmer.ImmutableDraftValidationFailure
+import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiDeclaredType
@@ -28,12 +37,12 @@ internal object ImmutableDraftKotlinValidationPoet {
         return draftCode {
             prop.validationPlan.steps.forEach { step ->
                 when (step) {
-                    is JimmerImmutableDraftValidationStep.BuiltIn -> {
+                    is ImmutableDraftValidationStep.BuiltIn -> {
                         if (step.isKotlinRuntimeValidation()) {
                             addBuiltInValidation(typePlan, prop, valueName, step)
                         }
                     }
-                    is JimmerImmutableDraftValidationStep.CustomValidator -> {
+                    is ImmutableDraftValidationStep.CustomValidator -> {
                         if (!step.isKotlinRuntimeValidation()) {
                             return@forEach
                         }
@@ -75,14 +84,15 @@ internal object ImmutableDraftKotlinValidationPoet {
         val props = typePlan.propsInKotlinDeclarationOrder()
         val email = props.any { prop ->
             prop.validationPlan.builtInSteps.any { step ->
-                step is JimmerImmutableDraftValidationStep.Email && step.isKotlinRuntimeValidation()
+                step is ImmutableDraftValidationStep.Email && step.isKotlinRuntimeValidation()
             }
         }
         val patterns = props.flatMap { prop ->
             prop.validationPlan.builtInSteps
-                .filterIsInstance<JimmerImmutableDraftValidationStep.Pattern>()
-                .filter { step -> step.isKotlinRuntimeValidation() }
-                .map { pattern -> prop to pattern }
+                .filterIsInstance<ImmutableDraftValidationStep.Pattern>()
+                .withIndex()
+                .filter { indexedPattern -> indexedPattern.value.isKotlinRuntimeValidation() }
+                .map { indexedPattern -> prop to indexedPattern }
         }
         val propValidators = props.flatMap { prop ->
             prop.validationPlan.customValidatorSteps
@@ -109,10 +119,11 @@ internal object ImmutableDraftKotlinValidationPoet {
                     )
                 )
             }
-            patterns.forEach { (prop, pattern) ->
+            patterns.forEach { (prop, indexedPattern) ->
+                val pattern = indexedPattern.value
                 add(
                     LsiPoetProperty(
-                        name = prop.kotlinPatternFieldName(pattern.index),
+                        name = prop.kotlinPatternFieldName(indexedPattern.index),
                         nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
                         type = PATTERN_TYPE,
                         mutable = false,
@@ -121,8 +132,9 @@ internal object ImmutableDraftKotlinValidationPoet {
                             type(PATTERN_TYPE)
                             text(".compile(")
                             string(pattern.regexp)
-                            if (pattern.flagMask != 0) {
-                                text(", ${pattern.flagMask}")
+                            val flagMask = pattern.flags.toJvmPatternFlagMask()
+                            if (flagMask != 0) {
+                                text(", $flagMask")
                             }
                             text(")")
                         },
@@ -146,43 +158,43 @@ internal object ImmutableDraftKotlinValidationPoet {
         typePlan: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
-        step: JimmerImmutableDraftValidationStep.BuiltIn,
+        step: ImmutableDraftValidationStep.BuiltIn,
     ) {
         val condition = when (step) {
-            is JimmerImmutableDraftValidationStep.NotEmpty -> draftCode {
+            is ImmutableDraftValidationStep.NotEmpty -> draftCode {
                 name(valueName)
                 text(".isEmpty()")
             }
-            is JimmerImmutableDraftValidationStep.NotBlank -> draftCode {
+            is ImmutableDraftValidationStep.NotBlank -> draftCode {
                 name(valueName)
                 text(".trim().isEmpty()")
             }
-            is JimmerImmutableDraftValidationStep.Size -> draftCode {
+            is ImmutableDraftValidationStep.Size -> draftCode {
                 name(valueName)
-                text(if (step.measure == JimmerImmutableDraftSizeMeasure.LENGTH) ".length" else ".size")
+                text(if (step.measure == ImmutableDraftSizeMeasure.LENGTH) ".length" else ".size")
                 text(" ${step.comparison.operator} ${step.limit}")
             }
-            is JimmerImmutableDraftValidationStep.NumericBound -> numericBoundCondition(valueName, step)
-            is JimmerImmutableDraftValidationStep.Email -> draftCode {
+            is ImmutableDraftValidationStep.NumericBound -> numericBoundCondition(valueName, step)
+            is ImmutableDraftValidationStep.Email -> draftCode {
                 text("!")
                 name(EMAIL_PATTERN_FIELD)
                 text(".matcher(")
                 name(valueName)
                 text(").matches()")
             }
-            is JimmerImmutableDraftValidationStep.Pattern -> draftCode {
+            is ImmutableDraftValidationStep.Pattern -> draftCode {
                 text("!")
-                name(prop.kotlinPatternFieldName(step.index))
+                name(prop.kotlinPatternFieldName(prop.validationPlan.patternIndexOf(step)))
                 text(".matcher(")
                 name(valueName)
                 text(").matches()")
             }
-            is JimmerImmutableDraftValidationStep.Assert -> draftCode {
+            is ImmutableDraftValidationStep.Assert -> draftCode {
                 name(valueName)
                 text(" != ${step.expected}")
             }
-            is JimmerImmutableDraftValidationStep.Digits -> digitsCondition(valueName, step)
-            is JimmerImmutableDraftValidationStep.Temporal -> temporalCondition(valueName, step)
+            is ImmutableDraftValidationStep.Digits -> digitsCondition(valueName, step)
+            is ImmutableDraftValidationStep.Temporal -> temporalCondition(valueName, step)
         }
         beginControlFlow {
             text("if (")
@@ -202,11 +214,11 @@ internal object ImmutableDraftKotlinValidationPoet {
 
     private fun numericBoundCondition(
         valueName: String,
-        step: JimmerImmutableDraftValidationStep.NumericBound,
+        step: ImmutableDraftValidationStep.NumericBound,
     ): LsiPoetCodeBlock {
         return draftCode {
             when (step.target) {
-                JimmerImmutableDraftNumericTarget.PRIMITIVE -> {
+                ImmutableDraftNumericTarget.PRIMITIVE -> {
                     type(BIG_DECIMAL_TYPE)
                     text("(")
                     name(valueName)
@@ -216,7 +228,7 @@ internal object ImmutableDraftKotlinValidationPoet {
                     string(step.bound)
                     text(")) ${step.comparison.operator} 0")
                 }
-                JimmerImmutableDraftNumericTarget.BIG_INTEGER -> {
+                ImmutableDraftNumericTarget.BIG_INTEGER -> {
                     name(valueName)
                     text(".compareTo(")
                     type(BIG_INTEGER_TYPE)
@@ -224,7 +236,7 @@ internal object ImmutableDraftKotlinValidationPoet {
                     string(step.bound.substringBefore('.'))
                     text(")) ${step.comparison.operator} 0")
                 }
-                JimmerImmutableDraftNumericTarget.BIG_DECIMAL -> {
+                ImmutableDraftNumericTarget.BIG_DECIMAL -> {
                     name(valueName)
                     text(".compareTo(")
                     type(BIG_DECIMAL_TYPE)
@@ -238,23 +250,23 @@ internal object ImmutableDraftKotlinValidationPoet {
 
     private fun digitsCondition(
         valueName: String,
-        step: JimmerImmutableDraftValidationStep.Digits,
+        step: ImmutableDraftValidationStep.Digits,
     ): LsiPoetCodeBlock {
         return draftCode {
             name(valueName)
             when (step.target) {
-                JimmerImmutableDraftDigitsTarget.BIG_DECIMAL -> when (step.component) {
-                    JimmerImmutableDraftDigitsComponent.INTEGER -> {
+                ImmutableDraftDigitsTarget.BIG_DECIMAL -> when (step.component) {
+                    ImmutableDraftDigitsComponent.INTEGER -> {
                         text(".precision() - ")
                         name(valueName)
                         text(".scale() > ${step.limit}")
                     }
-                    JimmerImmutableDraftDigitsComponent.FRACTION -> text(".scale() > ${step.limit}")
+                    ImmutableDraftDigitsComponent.FRACTION -> text(".scale() > ${step.limit}")
                 }
-                JimmerImmutableDraftDigitsTarget.BIG_INTEGER ->
+                ImmutableDraftDigitsTarget.BIG_INTEGER ->
                     text(".abs().toString().length > ${step.limit}")
-                JimmerImmutableDraftDigitsTarget.PRIMITIVE,
-                JimmerImmutableDraftDigitsTarget.CHAR_SEQUENCE,
+                ImmutableDraftDigitsTarget.PRIMITIVE,
+                ImmutableDraftDigitsTarget.CHAR_SEQUENCE,
                 -> text(".toString().substringBefore('.').trimStart('-').length > ${step.limit}")
             }
         }
@@ -262,30 +274,30 @@ internal object ImmutableDraftKotlinValidationPoet {
 
     private fun temporalCondition(
         valueName: String,
-        step: JimmerImmutableDraftValidationStep.Temporal,
+        step: ImmutableDraftValidationStep.Temporal,
     ): LsiPoetCodeBlock {
         val temporalType = when (step.target) {
-            JimmerImmutableDraftTemporalTarget.LOCAL_DATE -> LOCAL_DATE_TYPE
-            JimmerImmutableDraftTemporalTarget.LOCAL_DATE_TIME -> LOCAL_DATE_TIME_TYPE
-            JimmerImmutableDraftTemporalTarget.LOCAL_TIME -> LOCAL_TIME_TYPE
-            JimmerImmutableDraftTemporalTarget.INSTANT -> INSTANT_TYPE
+            ImmutableDraftTemporalTarget.LOCAL_DATE -> LOCAL_DATE_TYPE
+            ImmutableDraftTemporalTarget.LOCAL_DATE_TIME -> LOCAL_DATE_TIME_TYPE
+            ImmutableDraftTemporalTarget.LOCAL_TIME -> LOCAL_TIME_TYPE
+            ImmutableDraftTemporalTarget.INSTANT -> INSTANT_TYPE
         }
         return draftCode {
             when (step.constraint) {
-                JimmerImmutableDraftTemporalConstraint.PAST_OR_PRESENT -> {
+                ImmutableDraftTemporalConstraint.PAST_OR_PRESENT -> {
                     name(valueName)
                     text(".isAfter(")
                 }
-                JimmerImmutableDraftTemporalConstraint.PAST -> {
+                ImmutableDraftTemporalConstraint.PAST -> {
                     text("!")
                     name(valueName)
                     text(".isBefore(")
                 }
-                JimmerImmutableDraftTemporalConstraint.FUTURE_OR_PRESENT -> {
+                ImmutableDraftTemporalConstraint.FUTURE_OR_PRESENT -> {
                     name(valueName)
                     text(".isBefore(")
                 }
-                JimmerImmutableDraftTemporalConstraint.FUTURE -> {
+                ImmutableDraftTemporalConstraint.FUTURE -> {
                     text("!")
                     name(valueName)
                     text(".isAfter(")
@@ -300,7 +312,7 @@ internal object ImmutableDraftKotlinValidationPoet {
         typePlan: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
-        failure: JimmerImmutableDraftValidationFailure,
+        failure: ImmutableDraftValidationFailure,
     ) {
         statement {
             text("throw ")
@@ -344,7 +356,7 @@ internal object ImmutableDraftKotlinValidationPoet {
     private fun propValidatorProperty(
         typePlan: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
-        validation: JimmerImmutableDraftValidationStep.CustomValidator,
+        validation: ImmutableDraftValidationStep.CustomValidator,
     ): LsiPoetProperty {
         return LsiPoetProperty(
             name = propValidatorFieldName(prop, validation.annotationTypeId),
@@ -378,11 +390,11 @@ internal object ImmutableDraftKotlinValidationPoet {
         }
     }
 
-    private fun JimmerImmutableDraftValidationStep.BuiltIn.isKotlinRuntimeValidation(): Boolean {
+    private fun ImmutableDraftValidationStep.BuiltIn.isKotlinRuntimeValidation(): Boolean {
         return sourceAnnotationUseSiteTarget == LsiAnnotationUseSiteTarget.RETURN_TYPE
     }
 
-    private fun JimmerImmutableDraftValidationStep.CustomValidator.isKotlinRuntimeValidation(): Boolean {
+    private fun ImmutableDraftValidationStep.CustomValidator.isKotlinRuntimeValidation(): Boolean {
         return sourceAnnotationUseSiteTarget == LsiAnnotationUseSiteTarget.PROPERTY
     }
 
@@ -423,10 +435,10 @@ private fun String.legacyKotlinClassNameHash(): Int {
     return result
 }
 
-private val JimmerImmutableDraftComparison.operator: String
+private val ImmutableDraftComparison.operator: String
     get() = when (this) {
-        JimmerImmutableDraftComparison.LESS_THAN -> "<"
-        JimmerImmutableDraftComparison.GREATER_THAN -> ">"
+        ImmutableDraftComparison.LESS_THAN -> "<"
+        ImmutableDraftComparison.GREATER_THAN -> ">"
     }
 
 private val PRIVATE = setOf(LsiPoetModifier.PRIVATE)

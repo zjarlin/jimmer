@@ -13,7 +13,12 @@ import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.classTypeIds
+import site.addzero.lsi.jimmer.elementTypeOrSelf
+import site.addzero.lsi.jimmer.isImmutableReference
 import site.addzero.lsi.jimmer.jimmerTypeSignature
+import site.addzero.lsi.jimmer.toDraftAnnotationProjection
+import site.addzero.lsi.jimmer.toDraftRuntimeProp
+import site.addzero.lsi.jimmer.toDraftValidationPlan
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
@@ -227,8 +232,7 @@ private data class JimmerImmutableDraftSlotAssignment(
         val targetIdPropId = prop.targetTypeId
             ?.let(schema.typesById::get)
             ?.idPropId
-        val immutableReference = prop.association ||
-            prop.targetTypeId?.let(schema.typesById::containsKey) == true
+        val immutableReference = schema.isImmutableReference(prop)
         val codegenName = declaration.codegenName(prop)
         val associatedIdName = StringUtil.identifier(codegenName, "Id")
         val associatedId = if (
@@ -248,13 +252,12 @@ private data class JimmerImmutableDraftSlotAssignment(
         val javaSetterName = "set$javaMethodSuffix"
         val javaBeanGetterName = declaration.javaBeanGetterName(accessorStyle, primitive)
         val slotName = "SLOT_${codegenName.legacyUpper()}"
-        val elementType = prop.elementType()
-        val annotationPlan = JimmerImmutableDraftAnnotationProjector().project(
-            effectiveAnnotations = prop.annotations,
+        val elementType = prop.elementTypeOrSelf()
+        val annotationPlan = prop.toDraftAnnotationProjection(
             workspace = workspace,
             excludedUserAnnotationPrefixes = options.excludedUserAnnotationPrefixes,
         )
-        val validationPlan = JimmerImmutableDraftValidationPrecompiler().compile(prop, workspace)
+        val validationPlan = prop.toDraftValidationPlan(workspace)
         val writable = !languageFormula &&
             prop.primaryMapping != PrimaryMapping.DISCRIMINATOR &&
             manyToManyView == null
@@ -305,7 +308,7 @@ private data class JimmerImmutableDraftSlotAssignment(
             },
             type = prop.type,
             elementType = elementType,
-            runtimeProp = prop.compileDraftRuntimeProp(elementType, immutableReference),
+            runtimeProp = schema.toDraftRuntimeProp(prop),
             targetTypeId = prop.targetTypeId,
             targetIdPropId = targetIdPropId,
             primitive = primitive,
@@ -331,17 +334,6 @@ private data class JimmerImmutableDraftSlotAssignment(
             validationPlan = validationPlan,
         )
     }
-}
-
-private fun ImmutableProp.elementType(): LsiTypeRef {
-    if (!list) {
-        return type
-    }
-    return (type as? LsiDeclaredType)
-        ?.arguments
-        ?.singleOrNull()
-        ?.type
-        ?: type
 }
 
 private fun ImmutableProp.genericSourceTarget(

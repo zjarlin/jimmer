@@ -1,5 +1,9 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.ImmutableDraftAnnotationProjection
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimeProp
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimeValueCategory
+import site.addzero.lsi.jimmer.ImmutableDraftValidationPlan
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.core.LsiLanguage
@@ -107,14 +111,14 @@ internal data class JimmerImmutableDraftPropPlan(
     val javaBeanGetterName: String,
     val javaApplierName: String,
     val javaAdderByName: String,
-    val annotationPlan: JimmerImmutableDraftAnnotationPlan,
+    val annotationPlan: ImmutableDraftAnnotationProjection,
     val valueFieldName: String?,
     val loadedStateFieldName: String?,
     val javaDeeperPropIdName: String?,
     val kotlinDeeperPropIdName: String?,
     val type: LsiTypeRef,
     val elementType: LsiTypeRef,
-    val runtimeProp: JimmerImmutableDraftRuntimeProp,
+    val runtimeProp: ImmutableDraftRuntimeProp,
     val targetTypeId: LsiSymbolId?,
     val targetIdPropId: LsiSymbolId?,
     val primitive: Boolean,
@@ -135,7 +139,7 @@ internal data class JimmerImmutableDraftPropPlan(
     val manyToManyDeeperPropId: LsiSymbolId?,
     val formulaDependencyPaths: List<List<LsiSymbolId>>,
     val associatedId: JimmerImmutableAssociatedIdContract?,
-    val validationPlan: JimmerImmutableDraftValidationPlan,
+    val validationPlan: ImmutableDraftValidationPlan,
 ) {
 
     fun javaPatternFieldName(index: Int): String {
@@ -160,10 +164,10 @@ internal data class JimmerImmutableDraftPropPlan(
             "Immutable draft primitive flag must match its LSI type: ${propId.value}"
         }
         require(runtimeProp.valueCategory == when {
-            list && immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST
-            list -> JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST
-            immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE
-            else -> JimmerImmutableDraftRuntimeValueCategory.SCALAR
+            list && immutableReference -> ImmutableDraftRuntimeValueCategory.REFERENCE_LIST
+            list -> ImmutableDraftRuntimeValueCategory.SCALAR_LIST
+            immutableReference -> ImmutableDraftRuntimeValueCategory.REFERENCE
+            else -> ImmutableDraftRuntimeValueCategory.SCALAR
         }) {
             "Immutable draft runtime value category must match property shape: ${propId.value}"
         }

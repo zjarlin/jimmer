@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.immutable
+package site.addzero.lsi.jimmer
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
@@ -8,22 +8,23 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.annotationTargetPolicy
 
-internal data class JimmerImmutableDraftAnnotationPlan(
+/** 已冻结、可投影到 Draft 方法的有效属性注解。 */
+data class ImmutableDraftAnnotationProjection(
     val builderMethodAnnotations: List<LsiAnnotation>,
-    val beanBridgeMethodAnnotations: List<LsiAnnotation>,
+    val methodAnnotations: List<LsiAnnotation>,
 ) {
     init {
         require(builderMethodAnnotations.all { annotation -> annotation.useSiteTarget == null }) {
             "Immutable draft builder annotations must not retain use-site targets"
         }
-        require(beanBridgeMethodAnnotations.all { annotation -> annotation.useSiteTarget == null }) {
-            "Immutable draft bean-bridge annotations must not retain use-site targets"
+        require(methodAnnotations.all { annotation -> annotation.useSiteTarget == null }) {
+            "Immutable draft method annotations must not retain use-site targets"
         }
         require(builderMethodAnnotations.none { annotation -> annotation.isGloballyExcluded() }) {
             "Immutable draft builder annotations cannot contain Jimmer or override annotations"
         }
-        require(beanBridgeMethodAnnotations.none { annotation -> annotation.isGloballyExcluded() }) {
-            "Immutable draft bean-bridge annotations cannot contain Jimmer or override annotations"
+        require(methodAnnotations.none { annotation -> annotation.isGloballyExcluded() }) {
+            "Immutable draft method annotations cannot contain Jimmer or override annotations"
         }
         require(builderMethodAnnotations.none { annotation -> annotation.isNullableMarker() }) {
             "Immutable draft builder annotations cannot contain nullable markers"
@@ -31,37 +32,38 @@ internal data class JimmerImmutableDraftAnnotationPlan(
     }
 }
 
-internal class JimmerImmutableDraftAnnotationProjector {
-
-    fun project(
-        effectiveAnnotations: List<LsiAnnotation>,
-        workspace: LsiWorkspace,
-        excludedUserAnnotationPrefixes: Collection<String>,
-    ): JimmerImmutableDraftAnnotationPlan {
-        val excludedPrefixes = excludedUserAnnotationPrefixes
-            .asSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .distinct()
-            .toList()
-        val beanBridgeMethodAnnotations = effectiveAnnotations
-            .asSequence()
-            .filter(LsiAnnotation::isMethodProjectionSource)
-            .filterNot(LsiAnnotation::isGloballyExcluded)
-            .filterNot { annotation ->
-                val qualifiedName = annotation.type.requireTypeQualifiedName()
-                excludedPrefixes.any(qualifiedName::startsWith)
-            }
-            .filter { annotation -> workspace.allowsMethodTarget(annotation.type) }
-            .sortedBy(LsiAnnotation::methodProjectionPriority)
-            .map { annotation -> annotation.copy(useSiteTarget = null) }
-            .distinct()
-            .toList()
-        return JimmerImmutableDraftAnnotationPlan(
-            builderMethodAnnotations = beanBridgeMethodAnnotations.filterNot(LsiAnnotation::isNullableMarker),
-            beanBridgeMethodAnnotations = beanBridgeMethodAnnotations,
-        )
-    }
+/**
+ * 将属性覆盖合并后的有效注解冻结为 Draft 方法投影。
+ *
+ * 注解目标策略在此处完成解析，后续 renderer 不再访问 [LsiWorkspace]。
+ */
+fun ImmutableProp.toDraftAnnotationProjection(
+    workspace: LsiWorkspace,
+    excludedUserAnnotationPrefixes: Collection<String> = emptyList(),
+): ImmutableDraftAnnotationProjection {
+    val excludedPrefixes = excludedUserAnnotationPrefixes
+        .asSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .distinct()
+        .toList()
+    val methodAnnotations = annotations
+        .asSequence()
+        .filter(LsiAnnotation::isMethodProjectionSource)
+        .filterNot(LsiAnnotation::isGloballyExcluded)
+        .filterNot { annotation ->
+            val qualifiedName = annotation.type.requireTypeQualifiedName()
+            excludedPrefixes.any(qualifiedName::startsWith)
+        }
+        .filter { annotation -> workspace.allowsMethodTarget(annotation.type) }
+        .sortedBy(LsiAnnotation::methodProjectionPriority)
+        .map { annotation -> annotation.copy(useSiteTarget = null) }
+        .distinct()
+        .toList()
+    return ImmutableDraftAnnotationProjection(
+        builderMethodAnnotations = methodAnnotations.filterNot(LsiAnnotation::isNullableMarker),
+        methodAnnotations = methodAnnotations,
+    )
 }
 
 private fun LsiAnnotation.isMethodProjectionSource(): Boolean {

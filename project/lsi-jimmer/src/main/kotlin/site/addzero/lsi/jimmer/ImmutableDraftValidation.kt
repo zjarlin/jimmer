@@ -1,8 +1,6 @@
-package org.babyfish.jimmer.compiler.immutable
+package site.addzero.lsi.jimmer
 
 import java.math.BigDecimal
-import site.addzero.lsi.jimmer.ImmutablePrecompileException
-import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
@@ -14,99 +12,100 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
-internal data class JimmerImmutableDraftValidationPlan(
+/** 不可变属性在 Draft 写入阶段执行的语言无关校验计划。 */
+data class ImmutableDraftValidationPlan(
     val propId: LsiSymbolId,
-    val requiredNullCheck: JimmerImmutableDraftRequiredNullCheck?,
-    val steps: List<JimmerImmutableDraftValidationStep>,
+    val requiredNullCheck: ImmutableDraftRequiredNullCheck?,
+    val steps: List<ImmutableDraftValidationStep>,
 ) {
 
-    val builtInSteps: List<JimmerImmutableDraftValidationStep.BuiltIn> =
-        steps.filterIsInstance<JimmerImmutableDraftValidationStep.BuiltIn>()
+    val builtInSteps: List<ImmutableDraftValidationStep.BuiltIn> =
+        steps.filterIsInstance<ImmutableDraftValidationStep.BuiltIn>()
 
-    val customValidatorSteps: List<JimmerImmutableDraftValidationStep.CustomValidator> =
-        steps.filterIsInstance<JimmerImmutableDraftValidationStep.CustomValidator>()
+    val customValidatorSteps: List<ImmutableDraftValidationStep.CustomValidator> =
+        steps.filterIsInstance<ImmutableDraftValidationStep.CustomValidator>()
 }
 
-internal data class JimmerImmutableDraftRequiredNullCheck(
+/** 非空属性在 Draft 写入阶段执行的必填校验。 */
+data class ImmutableDraftRequiredNullCheck(
     val message: String,
 )
 
-internal sealed interface JimmerImmutableDraftValidationStep {
+/** Draft 校验计划中的一个规范化校验步骤。 */
+sealed interface ImmutableDraftValidationStep {
 
-    sealed interface BuiltIn : JimmerImmutableDraftValidationStep {
+    sealed interface BuiltIn : ImmutableDraftValidationStep {
         val sourceAnnotationTypeId: LsiSymbolId
         val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?
-        val failure: JimmerImmutableDraftValidationFailure
+        val failure: ImmutableDraftValidationFailure
     }
 
     data class NotEmpty(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class NotBlank(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class Size(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        val measure: JimmerImmutableDraftSizeMeasure,
-        val comparison: JimmerImmutableDraftComparison,
+        val measure: ImmutableDraftSizeMeasure,
+        val comparison: ImmutableDraftComparison,
         val limit: Int,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class NumericBound(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        val target: JimmerImmutableDraftNumericTarget,
-        val comparison: JimmerImmutableDraftComparison,
+        val target: ImmutableDraftNumericTarget,
+        val comparison: ImmutableDraftComparison,
         val bound: String,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class Email(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class Pattern(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        val index: Int,
         val regexp: String,
-        val flags: List<JimmerImmutableDraftPatternFlag>,
-        val flagMask: Int,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        val flags: List<ImmutableDraftPatternFlag>,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class Assert(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
         val expected: Boolean,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class Digits(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        val target: JimmerImmutableDraftDigitsTarget,
-        val component: JimmerImmutableDraftDigitsComponent,
+        val target: ImmutableDraftDigitsTarget,
+        val component: ImmutableDraftDigitsComponent,
         val limit: Int,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class Temporal(
         override val sourceAnnotationTypeId: LsiSymbolId,
         override val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-        val target: JimmerImmutableDraftTemporalTarget,
-        val constraint: JimmerImmutableDraftTemporalConstraint,
-        override val failure: JimmerImmutableDraftValidationFailure,
+        val target: ImmutableDraftTemporalTarget,
+        val constraint: ImmutableDraftTemporalConstraint,
+        override val failure: ImmutableDraftValidationFailure,
     ) : BuiltIn
 
     data class CustomValidator(
@@ -114,10 +113,11 @@ internal sealed interface JimmerImmutableDraftValidationStep {
         val validatorTypeIds: List<LsiSymbolId>,
         val message: String,
         val sourceAnnotationUseSiteTarget: LsiAnnotationUseSiteTarget?,
-    ) : JimmerImmutableDraftValidationStep
+    ) : ImmutableDraftValidationStep
 }
 
-internal data class JimmerImmutableDraftValidationFailure(
+/** 校验失败时使用的异常族与消息语义。 */
+data class ImmutableDraftValidationFailure(
     val exceptionTypeId: LsiSymbolId,
     val declaredMessage: String,
     val defaultMessage: String,
@@ -129,68 +129,81 @@ internal data class JimmerImmutableDraftValidationFailure(
         declaredMessage.startsWith("{jakarta.validation.constraints.")
 }
 
-internal enum class JimmerImmutableDraftSizeMeasure {
+/** 尺寸校验读取字符串长度或集合大小。 */
+enum class ImmutableDraftSizeMeasure {
     LENGTH,
     SIZE,
 }
 
-internal enum class JimmerImmutableDraftComparison {
+/** 数值和尺寸校验的失败比较方向。 */
+enum class ImmutableDraftComparison {
     LESS_THAN,
     GREATER_THAN,
 }
 
-internal enum class JimmerImmutableDraftNumericTarget {
+/** 数值边界校验的运行时值类别。 */
+enum class ImmutableDraftNumericTarget {
     PRIMITIVE,
     BIG_INTEGER,
     BIG_DECIMAL,
 }
 
-internal enum class JimmerImmutableDraftDigitsTarget {
+/** 数字位数校验的运行时值类别。 */
+enum class ImmutableDraftDigitsTarget {
     PRIMITIVE,
     BIG_INTEGER,
     BIG_DECIMAL,
     CHAR_SEQUENCE,
 }
 
-internal enum class JimmerImmutableDraftDigitsComponent {
+/** 数字位数校验的整数或小数部分。 */
+enum class ImmutableDraftDigitsComponent {
     INTEGER,
     FRACTION,
 }
 
-internal enum class JimmerImmutableDraftTemporalTarget {
+/** 时间校验的运行时值类别。 */
+enum class ImmutableDraftTemporalTarget {
     LOCAL_DATE,
     LOCAL_DATE_TIME,
     LOCAL_TIME,
     INSTANT,
 }
 
-internal enum class JimmerImmutableDraftTemporalConstraint {
+/** 相对于当前时间的校验约束。 */
+enum class ImmutableDraftTemporalConstraint {
     PAST_OR_PRESENT,
     PAST,
     FUTURE_OR_PRESENT,
     FUTURE,
 }
 
-internal enum class JimmerImmutableDraftPatternFlag(
-    val mask: Int,
-) {
-    UNIX_LINES(1),
-    CASE_INSENSITIVE(2),
-    COMMENTS(4),
-    MULTILINE(8),
-    LITERAL(16),
-    DOTALL(32),
-    UNICODE_CASE(64),
-    CANON_EQ(128),
-    UNICODE_CHARACTER_CLASS(256),
+/** 正则校验声明的语言无关标志。 */
+enum class ImmutableDraftPatternFlag {
+    UNIX_LINES,
+    CASE_INSENSITIVE,
+    COMMENTS,
+    MULTILINE,
+    LITERAL,
+    DOTALL,
+    UNICODE_CASE,
+    CANON_EQ,
+    UNICODE_CHARACTER_CLASS,
 }
 
-internal class JimmerImmutableDraftValidationPrecompiler {
+/** 将不可变属性冻结为 Draft 写入阶段的校验计划。 */
+fun ImmutableProp.toDraftValidationPlan(
+    workspace: LsiWorkspace,
+): ImmutableDraftValidationPlan {
+    return DraftValidationPlanCompiler(this, workspace).compile()
+}
 
-    fun compile(
-        prop: ImmutableProp,
-        workspace: LsiWorkspace,
-    ): JimmerImmutableDraftValidationPlan {
+private class DraftValidationPlanCompiler(
+    private val prop: ImmutableProp,
+    private val workspace: LsiWorkspace,
+) {
+
+    fun compile(): ImmutableDraftValidationPlan {
         val annotations = prop.annotations
             .filter(LsiAnnotation::isBuiltInValidationAnnotation)
             .distinctBy { annotation -> annotation.type to annotation.arguments }
@@ -216,10 +229,10 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             addDigits(prop, annotationsByName, skipWhenNull)
             addTemporal(prop, annotationsByName, skipWhenNull)
         }
-        return JimmerImmutableDraftValidationPlan(
+        return ImmutableDraftValidationPlan(
             propId = prop.id,
             requiredNullCheck = if (!prop.nullable && !prop.isUnboxedPrimitive()) {
-                JimmerImmutableDraftRequiredNullCheck(
+                ImmutableDraftRequiredNullCheck(
                     message = "'${prop.name}' cannot be null, please specify non-null value or use nullable " +
                         "annotation to decorate this property",
                 )
@@ -230,7 +243,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         )
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addNotEmpty(
+    private fun MutableList<ImmutableDraftValidationStep>.addNotEmpty(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -239,14 +252,14 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         if (!prop.isString() && !prop.list) {
             throw invalidType(prop, annotation, "its type is neither string nor list")
         }
-        this += JimmerImmutableDraftValidationStep.NotEmpty(
+        this += ImmutableDraftValidationStep.NotEmpty(
             sourceAnnotationTypeId = annotation.type,
             sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
             failure = annotation.failure("it cannot be empty", skipWhenNull),
         )
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addNotBlank(
+    private fun MutableList<ImmutableDraftValidationStep>.addNotBlank(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -255,14 +268,14 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         if (!prop.isString()) {
             throw invalidType(prop, annotation, "its type is not string")
         }
-        this += JimmerImmutableDraftValidationStep.NotBlank(
+        this += ImmutableDraftValidationStep.NotBlank(
             sourceAnnotationTypeId = annotation.type,
             sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
             failure = annotation.failure("it cannot be empty", skipWhenNull),
         )
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addSize(
+    private fun MutableList<ImmutableDraftValidationStep>.addSize(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -292,16 +305,16 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             throw invalid(prop, "its size validation rules are illegal because there is no valid length")
         }
         val measure = if (prop.isString()) {
-            JimmerImmutableDraftSizeMeasure.LENGTH
+            ImmutableDraftSizeMeasure.LENGTH
         } else {
-            JimmerImmutableDraftSizeMeasure.SIZE
+            ImmutableDraftSizeMeasure.SIZE
         }
         if (min.value > 0) {
-            this += JimmerImmutableDraftValidationStep.Size(
+            this += ImmutableDraftValidationStep.Size(
                 sourceAnnotationTypeId = min.annotation.type,
                 sourceAnnotationUseSiteTarget = min.annotation.useSiteTarget,
                 measure = measure,
-                comparison = JimmerImmutableDraftComparison.LESS_THAN,
+                comparison = ImmutableDraftComparison.LESS_THAN,
                 limit = min.value,
                 failure = min.annotation.failure(
                     defaultMessage = "it cannot be less than ${min.value}",
@@ -310,11 +323,11 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             )
         }
         if (max.value < Int.MAX_VALUE) {
-            this += JimmerImmutableDraftValidationStep.Size(
+            this += ImmutableDraftValidationStep.Size(
                 sourceAnnotationTypeId = max.annotation.type,
                 sourceAnnotationUseSiteTarget = max.annotation.useSiteTarget,
                 measure = measure,
-                comparison = JimmerImmutableDraftComparison.GREATER_THAN,
+                comparison = ImmutableDraftComparison.GREATER_THAN,
                 limit = max.value,
                 failure = max.annotation.failure(
                     defaultMessage = "it cannot be greater than ${max.value}",
@@ -324,7 +337,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addBounds(
+    private fun MutableList<ImmutableDraftValidationStep>.addBounds(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -383,11 +396,11 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
         if (min != null) {
             val bound = min.value.toString()
-            this += JimmerImmutableDraftValidationStep.NumericBound(
+            this += ImmutableDraftValidationStep.NumericBound(
                 sourceAnnotationTypeId = min.annotation.type,
                 sourceAnnotationUseSiteTarget = min.annotation.useSiteTarget,
                 target = target,
-                comparison = JimmerImmutableDraftComparison.LESS_THAN,
+                comparison = ImmutableDraftComparison.LESS_THAN,
                 bound = bound,
                 failure = min.annotation.failure(
                     defaultMessage = "it cannot be less than $bound",
@@ -397,11 +410,11 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
         if (max != null) {
             val bound = max.value.toString()
-            this += JimmerImmutableDraftValidationStep.NumericBound(
+            this += ImmutableDraftValidationStep.NumericBound(
                 sourceAnnotationTypeId = max.annotation.type,
                 sourceAnnotationUseSiteTarget = max.annotation.useSiteTarget,
                 target = target,
-                comparison = JimmerImmutableDraftComparison.GREATER_THAN,
+                comparison = ImmutableDraftComparison.GREATER_THAN,
                 bound = bound,
                 failure = max.annotation.failure(
                     defaultMessage = "it cannot be greater than $bound",
@@ -411,7 +424,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addEmail(
+    private fun MutableList<ImmutableDraftValidationStep>.addEmail(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -420,14 +433,14 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         if (!prop.isString()) {
             throw invalidType(prop, annotation, "its type is not string")
         }
-        this += JimmerImmutableDraftValidationStep.Email(
+        this += ImmutableDraftValidationStep.Email(
             sourceAnnotationTypeId = annotation.type,
             sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
             failure = annotation.failure("it is not email address", skipWhenNull),
         )
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addPatterns(
+    private fun MutableList<ImmutableDraftValidationStep>.addPatterns(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -439,17 +452,15 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         if (!prop.isString()) {
             throw invalidType(prop, annotations.first(), "its type is not string")
         }
-        annotations.forEachIndexed { index, annotation ->
+        annotations.forEach { annotation ->
             val regexp = annotation.stringArgument(prop, "regexp", null)
                 ?: throw invalidArgument(prop, annotation, "regexp", "a string value")
             val flags = annotation.patternFlags(prop)
-            this += JimmerImmutableDraftValidationStep.Pattern(
+            this += ImmutableDraftValidationStep.Pattern(
                 sourceAnnotationTypeId = annotation.type,
                 sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
-                index = index,
                 regexp = regexp,
                 flags = flags,
-                flagMask = flags.fold(0) { mask, flag -> mask or flag.mask },
                 failure = annotation.failure(
                     defaultMessage = "it does not match the regexp '${regexp.replace("\\", "\\\\")}'",
                     skipWhenNull = skipWhenNull,
@@ -458,7 +469,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addCustomValidators(
+    private fun MutableList<ImmutableDraftValidationStep>.addCustomValidators(
         prop: ImmutableProp,
         workspace: LsiWorkspace,
     ) {
@@ -478,7 +489,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             validation.validatorTypeIds.forEach { validatorTypeId ->
                 validateTypeSymbol(prop, validatorTypeId, "validator", workspace)
             }
-            this += JimmerImmutableDraftValidationStep.CustomValidator(
+            this += ImmutableDraftValidationStep.CustomValidator(
                 annotationTypeId = validation.annotationTypeId,
                 validatorTypeIds = validation.validatorTypeIds,
                 message = validation.message,
@@ -487,7 +498,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addAsserts(
+    private fun MutableList<ImmutableDraftValidationStep>.addAsserts(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -499,7 +510,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             throw invalidType(prop, firstAnnotation, "its type is not boolean")
         }
         falseAnnotations.forEach { annotation ->
-            this += JimmerImmutableDraftValidationStep.Assert(
+            this += ImmutableDraftValidationStep.Assert(
                 sourceAnnotationTypeId = annotation.type,
                 sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
                 expected = false,
@@ -507,7 +518,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             )
         }
         trueAnnotations.forEach { annotation ->
-            this += JimmerImmutableDraftValidationStep.Assert(
+            this += ImmutableDraftValidationStep.Assert(
                 sourceAnnotationTypeId = annotation.type,
                 sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
                 expected = true,
@@ -516,7 +527,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addDigits(
+    private fun MutableList<ImmutableDraftValidationStep>.addDigits(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -537,23 +548,23 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             if (integer < 0 || fraction < 0 || integer == 0 && fraction == 0) {
                 throw invalid(prop, "its digits validation rules are illegal because there is no valid number")
             }
-            this += JimmerImmutableDraftValidationStep.Digits(
+            this += ImmutableDraftValidationStep.Digits(
                 sourceAnnotationTypeId = annotation.type,
                 sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
                 target = target,
-                component = JimmerImmutableDraftDigitsComponent.INTEGER,
+                component = ImmutableDraftDigitsComponent.INTEGER,
                 limit = integer,
                 failure = annotation.failure(
                     defaultMessage = "its integer digits is greater than $integer",
                     skipWhenNull = skipWhenNull,
                 ),
             )
-            if (target == JimmerImmutableDraftDigitsTarget.BIG_DECIMAL) {
-                this += JimmerImmutableDraftValidationStep.Digits(
+            if (target == ImmutableDraftDigitsTarget.BIG_DECIMAL) {
+                this += ImmutableDraftValidationStep.Digits(
                     sourceAnnotationTypeId = annotation.type,
                     sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
                     target = target,
-                    component = JimmerImmutableDraftDigitsComponent.FRACTION,
+                    component = ImmutableDraftDigitsComponent.FRACTION,
                     limit = fraction,
                     failure = annotation.failure(
                         defaultMessage = "its fraction digits is greater than $fraction",
@@ -564,7 +575,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
         }
     }
 
-    private fun MutableList<JimmerImmutableDraftValidationStep>.addTemporal(
+    private fun MutableList<ImmutableDraftValidationStep>.addTemporal(
         prop: ImmutableProp,
         annotationsByName: Map<String, List<LsiAnnotation>>,
         skipWhenNull: Boolean,
@@ -581,7 +592,7 @@ internal class JimmerImmutableDraftValidationPrecompiler {
             )
         TEMPORAL_ANNOTATIONS.forEach { (name, contract) ->
             annotationsByName[name].orEmpty().forEach { annotation ->
-                this += JimmerImmutableDraftValidationStep.Temporal(
+                this += ImmutableDraftValidationStep.Temporal(
                     sourceAnnotationTypeId = annotation.type,
                     sourceAnnotationUseSiteTarget = annotation.useSiteTarget,
                     target = target,
@@ -651,8 +662,8 @@ internal class JimmerImmutableDraftValidationPrecompiler {
     private fun LsiAnnotation.failure(
         defaultMessage: String,
         skipWhenNull: Boolean,
-    ): JimmerImmutableDraftValidationFailure {
-        return JimmerImmutableDraftValidationFailure(
+    ): ImmutableDraftValidationFailure {
+        return ImmutableDraftValidationFailure(
             exceptionTypeId = if (type.requireTypeQualifiedName().startsWith(JAVAX_VALIDATION_PREFIX)) {
                 JAVAX_VALIDATION_EXCEPTION
             } else {
@@ -666,14 +677,14 @@ internal class JimmerImmutableDraftValidationPrecompiler {
 
     private fun LsiAnnotation.patternFlags(
         prop: ImmutableProp,
-    ): List<JimmerImmutableDraftPatternFlag> {
+    ): List<ImmutableDraftPatternFlag> {
         val value = arguments["flags"]?.value ?: return emptyList()
         val elements = (value as? LsiAnnotationValue.ArrayValue)?.elements
             ?: throw invalidArgument(prop, this, "flags", "an enum array")
         return elements.map { element ->
             val enumValue = element as? LsiAnnotationValue.EnumValue
                 ?: throw invalidArgument(prop, this, "flags", "an enum array")
-            JimmerImmutableDraftPatternFlag.entries.firstOrNull { flag -> flag.name == enumValue.entryName }
+            ImmutableDraftPatternFlag.entries.firstOrNull { flag -> flag.name == enumValue.entryName }
                 ?: throw invalid(
                     prop,
                     "annotation @${type.requireTypeQualifiedName()} argument 'flags' contains unsupported value " +
@@ -763,7 +774,7 @@ private data class DecimalCandidate(
 )
 
 private data class TemporalContract(
-    val constraint: JimmerImmutableDraftTemporalConstraint,
+    val constraint: ImmutableDraftTemporalConstraint,
     val defaultMessage: String,
 )
 
@@ -797,37 +808,37 @@ private fun ImmutableProp.isBoolean(): Boolean {
     return (type as? LsiPrimitiveType)?.kind == LsiPrimitiveKind.BOOLEAN
 }
 
-private fun ImmutableProp.numericTarget(): JimmerImmutableDraftNumericTarget? {
+private fun ImmutableProp.numericTarget(): ImmutableDraftNumericTarget? {
     val primitive = type as? LsiPrimitiveType
     if (primitive != null && primitive.kind in NUMERIC_PRIMITIVE_KINDS) {
-        return JimmerImmutableDraftNumericTarget.PRIMITIVE
+        return ImmutableDraftNumericTarget.PRIMITIVE
     }
     return when (type.declarationIdOrNull()) {
-        BIG_INTEGER_TYPE -> JimmerImmutableDraftNumericTarget.BIG_INTEGER
-        BIG_DECIMAL_TYPE -> JimmerImmutableDraftNumericTarget.BIG_DECIMAL
+        BIG_INTEGER_TYPE -> ImmutableDraftNumericTarget.BIG_INTEGER
+        BIG_DECIMAL_TYPE -> ImmutableDraftNumericTarget.BIG_DECIMAL
         else -> null
     }
 }
 
-private fun ImmutableProp.digitsTarget(): JimmerImmutableDraftDigitsTarget? {
+private fun ImmutableProp.digitsTarget(): ImmutableDraftDigitsTarget? {
     val propType = type
     if (propType is LsiPrimitiveType && propType.kind !in NON_VALUE_PRIMITIVE_KINDS) {
-        return JimmerImmutableDraftDigitsTarget.PRIMITIVE
+        return ImmutableDraftDigitsTarget.PRIMITIVE
     }
     return when (type.declarationIdOrNull()) {
-        BIG_INTEGER_TYPE -> JimmerImmutableDraftDigitsTarget.BIG_INTEGER
-        BIG_DECIMAL_TYPE -> JimmerImmutableDraftDigitsTarget.BIG_DECIMAL
-        CHAR_SEQUENCE_TYPE -> JimmerImmutableDraftDigitsTarget.CHAR_SEQUENCE
+        BIG_INTEGER_TYPE -> ImmutableDraftDigitsTarget.BIG_INTEGER
+        BIG_DECIMAL_TYPE -> ImmutableDraftDigitsTarget.BIG_DECIMAL
+        CHAR_SEQUENCE_TYPE -> ImmutableDraftDigitsTarget.CHAR_SEQUENCE
         else -> null
     }
 }
 
-private fun ImmutableProp.temporalTarget(): JimmerImmutableDraftTemporalTarget? {
+private fun ImmutableProp.temporalTarget(): ImmutableDraftTemporalTarget? {
     return when (type.declarationIdOrNull()) {
-        LOCAL_DATE_TYPE -> JimmerImmutableDraftTemporalTarget.LOCAL_DATE
-        LOCAL_DATE_TIME_TYPE -> JimmerImmutableDraftTemporalTarget.LOCAL_DATE_TIME
-        LOCAL_TIME_TYPE -> JimmerImmutableDraftTemporalTarget.LOCAL_TIME
-        INSTANT_TYPE -> JimmerImmutableDraftTemporalTarget.INSTANT
+        LOCAL_DATE_TYPE -> ImmutableDraftTemporalTarget.LOCAL_DATE
+        LOCAL_DATE_TIME_TYPE -> ImmutableDraftTemporalTarget.LOCAL_DATE_TIME
+        LOCAL_TIME_TYPE -> ImmutableDraftTemporalTarget.LOCAL_TIME
+        INSTANT_TYPE -> ImmutableDraftTemporalTarget.INSTANT
         else -> null
     }
 }
@@ -889,19 +900,19 @@ private val BOUND_ANNOTATION_NAMES = listOf(
 
 private val TEMPORAL_ANNOTATIONS = listOf(
     "PastOrPresent" to TemporalContract(
-        JimmerImmutableDraftTemporalConstraint.PAST_OR_PRESENT,
+        ImmutableDraftTemporalConstraint.PAST_OR_PRESENT,
         "it is not before or equal to now",
     ),
     "Past" to TemporalContract(
-        JimmerImmutableDraftTemporalConstraint.PAST,
+        ImmutableDraftTemporalConstraint.PAST,
         "it is not before now",
     ),
     "FutureOrPresent" to TemporalContract(
-        JimmerImmutableDraftTemporalConstraint.FUTURE_OR_PRESENT,
+        ImmutableDraftTemporalConstraint.FUTURE_OR_PRESENT,
         "it is not after or equal to now",
     ),
     "Future" to TemporalContract(
-        JimmerImmutableDraftTemporalConstraint.FUTURE,
+        ImmutableDraftTemporalConstraint.FUTURE,
         "it is not after now",
     ),
 )

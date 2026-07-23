@@ -1,8 +1,5 @@
-package org.babyfish.jimmer.compiler.immutable
+package site.addzero.lsi.jimmer
 
-import site.addzero.lsi.jimmer.AssociationKind
-import site.addzero.lsi.jimmer.ImmutableProp
-import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -13,16 +10,21 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 
-internal data class JimmerImmutableDraftRuntimeProp(
-    val kind: JimmerImmutableDraftRuntimePropKind,
-    val valueCategory: JimmerImmutableDraftRuntimeValueCategory,
+/**
+ * 不可变属性注册到 Draft 运行时所需的语言无关语义。
+ *
+ * 该模型只描述属性角色、值形态和擦除后的运行时类型，不包含 Java 或 Kotlin 生成细节。
+ */
+data class ImmutableDraftRuntimeProp(
+    val kind: ImmutableDraftRuntimePropKind,
+    val valueCategory: ImmutableDraftRuntimeValueCategory,
     val associationAnnotationTypeId: LsiSymbolId?,
     val metadataElementType: LsiTypeRef,
 ) {
     init {
         require(
-            (kind == JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE ||
-                kind == JimmerImmutableDraftRuntimePropKind.ASSOCIATION) ==
+            (kind == ImmutableDraftRuntimePropKind.KEY_REFERENCE ||
+                kind == ImmutableDraftRuntimePropKind.ASSOCIATION) ==
                 (associationAnnotationTypeId != null)
         ) {
             "Immutable draft runtime association metadata must match its property kind"
@@ -33,7 +35,8 @@ internal data class JimmerImmutableDraftRuntimeProp(
     }
 }
 
-internal enum class JimmerImmutableDraftRuntimePropKind {
+/** Draft 运行时中的属性角色。 */
+enum class ImmutableDraftRuntimePropKind {
     ID,
     VERSION,
     LOGICAL_DELETED,
@@ -43,54 +46,68 @@ internal enum class JimmerImmutableDraftRuntimePropKind {
     VALUE,
 }
 
-internal enum class JimmerImmutableDraftRuntimeValueCategory {
+/** Draft 运行时中的属性值形态。 */
+enum class ImmutableDraftRuntimeValueCategory {
     SCALAR,
     SCALAR_LIST,
     REFERENCE,
     REFERENCE_LIST,
 }
 
-internal fun ImmutableProp.compileDraftRuntimeProp(
+/**
+ * 将 schema 中的不可变属性冻结为 Draft 运行时语义。
+ */
+fun ImmutableSchema.toDraftRuntimeProp(prop: ImmutableProp): ImmutableDraftRuntimeProp {
+    require(propsById[prop.id] == prop) {
+        "Immutable draft runtime property must belong to its schema: ${prop.id.value}"
+    }
+    return prop.freezeDraftRuntimeProp(
+        elementType = prop.elementTypeOrSelf(),
+        immutableReference = isImmutableReference(prop),
+    )
+}
+
+private fun ImmutableProp.freezeDraftRuntimeProp(
     elementType: LsiTypeRef,
     immutableReference: Boolean,
-): JimmerImmutableDraftRuntimeProp {
+): ImmutableDraftRuntimeProp {
     val key = annotations.any { annotation ->
         annotation.type == KEY_ANNOTATION_TYPE_ID || annotation.type == KEYS_ANNOTATION_TYPE_ID
     }
     val kind = when {
-        primaryMapping == PrimaryMapping.ID -> JimmerImmutableDraftRuntimePropKind.ID
-        primaryMapping == PrimaryMapping.VERSION -> JimmerImmutableDraftRuntimePropKind.VERSION
+        primaryMapping == PrimaryMapping.ID -> ImmutableDraftRuntimePropKind.ID
+        primaryMapping == PrimaryMapping.VERSION -> ImmutableDraftRuntimePropKind.VERSION
         primaryMapping == PrimaryMapping.LOGICAL_DELETED -> {
-            JimmerImmutableDraftRuntimePropKind.LOGICAL_DELETED
+            ImmutableDraftRuntimePropKind.LOGICAL_DELETED
         }
-        key && immutableReference -> JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE
-        key -> JimmerImmutableDraftRuntimePropKind.KEY_SCALAR
-        associationKind.hasRuntimeAnnotation -> JimmerImmutableDraftRuntimePropKind.ASSOCIATION
-        else -> JimmerImmutableDraftRuntimePropKind.VALUE
+        key && immutableReference -> ImmutableDraftRuntimePropKind.KEY_REFERENCE
+        key -> ImmutableDraftRuntimePropKind.KEY_SCALAR
+        associationKind.hasRuntimeAnnotation -> ImmutableDraftRuntimePropKind.ASSOCIATION
+        else -> ImmutableDraftRuntimePropKind.VALUE
     }
     val valueCategory = when {
-        list && immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST
-        list -> JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST
-        immutableReference -> JimmerImmutableDraftRuntimeValueCategory.REFERENCE
-        else -> JimmerImmutableDraftRuntimeValueCategory.SCALAR
+        list && immutableReference -> ImmutableDraftRuntimeValueCategory.REFERENCE_LIST
+        list -> ImmutableDraftRuntimeValueCategory.SCALAR_LIST
+        immutableReference -> ImmutableDraftRuntimeValueCategory.REFERENCE
+        else -> ImmutableDraftRuntimeValueCategory.SCALAR
     }
     val associationAnnotationTypeId = when (kind) {
-        JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE -> {
+        ImmutableDraftRuntimePropKind.KEY_REFERENCE -> {
             if (associationKind == AssociationKind.ONE_TO_ONE) {
                 ONE_TO_ONE_ANNOTATION_TYPE_ID
             } else {
                 MANY_TO_ONE_ANNOTATION_TYPE_ID
             }
         }
-        JimmerImmutableDraftRuntimePropKind.ASSOCIATION -> associationKind.runtimeAnnotationTypeId()
-        JimmerImmutableDraftRuntimePropKind.ID,
-        JimmerImmutableDraftRuntimePropKind.VERSION,
-        JimmerImmutableDraftRuntimePropKind.LOGICAL_DELETED,
-        JimmerImmutableDraftRuntimePropKind.KEY_SCALAR,
-        JimmerImmutableDraftRuntimePropKind.VALUE,
+        ImmutableDraftRuntimePropKind.ASSOCIATION -> associationKind.runtimeAnnotationTypeId()
+        ImmutableDraftRuntimePropKind.ID,
+        ImmutableDraftRuntimePropKind.VERSION,
+        ImmutableDraftRuntimePropKind.LOGICAL_DELETED,
+        ImmutableDraftRuntimePropKind.KEY_SCALAR,
+        ImmutableDraftRuntimePropKind.VALUE,
         -> null
     }
-    return JimmerImmutableDraftRuntimeProp(
+    return ImmutableDraftRuntimeProp(
         kind = kind,
         valueCategory = valueCategory,
         associationAnnotationTypeId = associationAnnotationTypeId,

@@ -2,6 +2,15 @@ package org.babyfish.jimmer.compiler.immutable
 
 import kotlin.math.abs
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableDraftComparison
+import site.addzero.lsi.jimmer.ImmutableDraftDigitsComponent
+import site.addzero.lsi.jimmer.ImmutableDraftDigitsTarget
+import site.addzero.lsi.jimmer.ImmutableDraftNumericTarget
+import site.addzero.lsi.jimmer.ImmutableDraftSizeMeasure
+import site.addzero.lsi.jimmer.ImmutableDraftTemporalConstraint
+import site.addzero.lsi.jimmer.ImmutableDraftTemporalTarget
+import site.addzero.lsi.jimmer.ImmutableDraftValidationFailure
+import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiDeclaredType
@@ -22,19 +31,21 @@ internal object ImmutableDraftJavaValidationPoet {
         return buildList {
             type.propsBySlot.forEach { prop ->
                 prop.validationPlan.builtInSteps
-                    .filterIsInstance<JimmerImmutableDraftValidationStep.Pattern>()
-                    .filter { pattern -> pattern.isJavaRuntimeValidation() }
-                    .forEach { pattern ->
+                    .filterIsInstance<ImmutableDraftValidationStep.Pattern>()
+                    .withIndex()
+                    .filter { indexedPattern -> indexedPattern.value.isJavaRuntimeValidation() }
+                    .forEach { indexedPattern ->
+                        val pattern = indexedPattern.value
                         add(
                             LsiPoetField(
-                                name = prop.javaPatternFieldName(pattern.index),
+                                name = prop.javaPatternFieldName(indexedPattern.index),
                                 type = PATTERN_TYPE,
                                 modifiers = PRIVATE_STATIC_FINAL,
                                 initializer = draftCode {
                                     type(PATTERN_TYPE)
                                     text(".compile(")
                                     string(pattern.regexp)
-                                    text(", ${pattern.flagMask})")
+                                    text(", ${pattern.flags.toJvmPatternFlagMask()})")
                                 },
                             )
                         )
@@ -87,11 +98,11 @@ internal object ImmutableDraftJavaValidationPoet {
                 endControlFlow()
             }
             prop.validationPlan.steps.forEach { step ->
-                if (step is JimmerImmutableDraftValidationStep.BuiltIn && !step.isJavaRuntimeValidation()) {
+                if (step is ImmutableDraftValidationStep.BuiltIn && !step.isJavaRuntimeValidation()) {
                     return@forEach
                 }
                 when (step) {
-                    is JimmerImmutableDraftValidationStep.NotEmpty -> addFailure(
+                    is ImmutableDraftValidationStep.NotEmpty -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
@@ -101,7 +112,7 @@ internal object ImmutableDraftJavaValidationPoet {
                         },
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.NotBlank -> addFailure(
+                    is ImmutableDraftValidationStep.NotBlank -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
@@ -111,14 +122,14 @@ internal object ImmutableDraftJavaValidationPoet {
                         },
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.Size -> addFailure(
+                    is ImmutableDraftValidationStep.Size -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
                         condition = draftCode {
                             name(valueName)
                             text(
-                                if (step.measure == JimmerImmutableDraftSizeMeasure.LENGTH) {
+                                if (step.measure == ImmutableDraftSizeMeasure.LENGTH) {
                                     ".length()"
                                 } else {
                                     ".size()"
@@ -128,14 +139,14 @@ internal object ImmutableDraftJavaValidationPoet {
                         },
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.NumericBound -> addFailure(
+                    is ImmutableDraftValidationStep.NumericBound -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
                         condition = numericCondition(step, valueName),
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.Email -> addFailure(
+                    is ImmutableDraftValidationStep.Email -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
@@ -148,20 +159,20 @@ internal object ImmutableDraftJavaValidationPoet {
                         },
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.Pattern -> addFailure(
+                    is ImmutableDraftValidationStep.Pattern -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
                         condition = draftCode {
                             text("!")
-                            name(prop.javaPatternFieldName(step.index))
+                            name(prop.javaPatternFieldName(prop.validationPlan.patternIndexOf(step)))
                             text(".matcher(")
                             name(valueName)
                             text(").matches()")
                         },
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.Assert -> addFailure(
+                    is ImmutableDraftValidationStep.Assert -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
@@ -171,21 +182,21 @@ internal object ImmutableDraftJavaValidationPoet {
                         },
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.Digits -> addFailure(
+                    is ImmutableDraftValidationStep.Digits -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
                         condition = digitsCondition(step, valueName),
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.Temporal -> addFailure(
+                    is ImmutableDraftValidationStep.Temporal -> addFailure(
                         type = type,
                         prop = prop,
                         valueName = valueName,
                         condition = temporalCondition(step, valueName),
                         failure = step.failure,
                     )
-                    is JimmerImmutableDraftValidationStep.CustomValidator -> {
+                    is ImmutableDraftValidationStep.CustomValidator -> {
                         if (step.isJavaRuntimeValidation()) {
                             statement {
                                 name(propValidatorFieldName(prop, step.annotationTypeId))
@@ -221,7 +232,7 @@ internal object ImmutableDraftJavaValidationPoet {
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
         condition: LsiPoetCodeBlock,
-        failure: JimmerImmutableDraftValidationFailure,
+        failure: ImmutableDraftValidationFailure,
     ) {
         beginControlFlow {
             text("if (")
@@ -274,7 +285,7 @@ internal object ImmutableDraftJavaValidationPoet {
     private fun propValidatorField(
         type: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
-        validation: JimmerImmutableDraftValidationStep.CustomValidator,
+        validation: ImmutableDraftValidationStep.CustomValidator,
     ): LsiPoetField {
         val originalType = LsiDeclaredType(type.typeId)
         val validatorType = draftDeclaredType(VALIDATOR_TYPE_ID, prop.type.boxedForJavaDraft())
@@ -299,21 +310,21 @@ internal object ImmutableDraftJavaValidationPoet {
     }
 
     private fun numericCondition(
-        step: JimmerImmutableDraftValidationStep.NumericBound,
+        step: ImmutableDraftValidationStep.NumericBound,
         valueName: String,
     ): LsiPoetCodeBlock {
         return draftCode {
             name(valueName)
             when (step.target) {
-                JimmerImmutableDraftNumericTarget.PRIMITIVE -> {
+                ImmutableDraftNumericTarget.PRIMITIVE -> {
                     text(" ${step.comparison.operator} ${step.bound}")
                 }
-                JimmerImmutableDraftNumericTarget.BIG_INTEGER -> {
+                ImmutableDraftNumericTarget.BIG_INTEGER -> {
                     text(".compareTo(")
                     add(bigIntegerLiteral(step.bound))
                     text(") ${step.comparison.operator} 0")
                 }
-                JimmerImmutableDraftNumericTarget.BIG_DECIMAL -> {
+                ImmutableDraftNumericTarget.BIG_DECIMAL -> {
                     text(".compareTo(")
                     add(bigDecimalLiteral(step.bound))
                     text(") ${step.comparison.operator} 0")
@@ -323,30 +334,30 @@ internal object ImmutableDraftJavaValidationPoet {
     }
 
     private fun digitsCondition(
-        step: JimmerImmutableDraftValidationStep.Digits,
+        step: ImmutableDraftValidationStep.Digits,
         valueName: String,
     ): LsiPoetCodeBlock {
         return draftCode {
             when (step.target) {
-                JimmerImmutableDraftDigitsTarget.BIG_DECIMAL -> {
+                ImmutableDraftDigitsTarget.BIG_DECIMAL -> {
                     name(valueName)
                     text(
-                        if (step.component == JimmerImmutableDraftDigitsComponent.INTEGER) {
+                        if (step.component == ImmutableDraftDigitsComponent.INTEGER) {
                             ".precision() > ${step.limit}"
                         } else {
                             ".scale() > ${step.limit}"
                         }
                     )
                 }
-                JimmerImmutableDraftDigitsTarget.BIG_INTEGER -> {
+                ImmutableDraftDigitsTarget.BIG_INTEGER -> {
                     name(valueName)
                     text(".bitLength() > ${step.limit}")
                 }
-                JimmerImmutableDraftDigitsTarget.CHAR_SEQUENCE -> {
+                ImmutableDraftDigitsTarget.CHAR_SEQUENCE -> {
                     name(valueName)
                     text(".length() > ${step.limit}")
                 }
-                JimmerImmutableDraftDigitsTarget.PRIMITIVE -> {
+                ImmutableDraftDigitsTarget.PRIMITIVE -> {
                     text("new ")
                     type(BIG_DECIMAL_TYPE)
                     text("(")
@@ -358,28 +369,28 @@ internal object ImmutableDraftJavaValidationPoet {
     }
 
     private fun temporalCondition(
-        step: JimmerImmutableDraftValidationStep.Temporal,
+        step: ImmutableDraftValidationStep.Temporal,
         valueName: String,
     ): LsiPoetCodeBlock {
         val temporalType = when (step.target) {
-            JimmerImmutableDraftTemporalTarget.LOCAL_DATE -> LOCAL_DATE_TYPE
-            JimmerImmutableDraftTemporalTarget.LOCAL_DATE_TIME -> LOCAL_DATE_TIME_TYPE
-            JimmerImmutableDraftTemporalTarget.LOCAL_TIME -> LOCAL_TIME_TYPE
-            JimmerImmutableDraftTemporalTarget.INSTANT -> INSTANT_TYPE
+            ImmutableDraftTemporalTarget.LOCAL_DATE -> LOCAL_DATE_TYPE
+            ImmutableDraftTemporalTarget.LOCAL_DATE_TIME -> LOCAL_DATE_TIME_TYPE
+            ImmutableDraftTemporalTarget.LOCAL_TIME -> LOCAL_TIME_TYPE
+            ImmutableDraftTemporalTarget.INSTANT -> INSTANT_TYPE
         }
         return draftCode {
             name(valueName)
             when (step.constraint) {
-                JimmerImmutableDraftTemporalConstraint.PAST_OR_PRESENT -> {
+                ImmutableDraftTemporalConstraint.PAST_OR_PRESENT -> {
                     text(".isAfter(")
                     type(temporalType)
                     text(".now())")
                 }
-                JimmerImmutableDraftTemporalConstraint.PAST -> {
+                ImmutableDraftTemporalConstraint.PAST -> {
                     text(".isAfter(")
                     type(temporalType)
                     text(".now())")
-                    if (step.target != JimmerImmutableDraftTemporalTarget.INSTANT) {
+                    if (step.target != ImmutableDraftTemporalTarget.INSTANT) {
                         text(" || ")
                         name(valueName)
                         text(".isEqual(")
@@ -387,16 +398,16 @@ internal object ImmutableDraftJavaValidationPoet {
                         text(".now())")
                     }
                 }
-                JimmerImmutableDraftTemporalConstraint.FUTURE_OR_PRESENT -> {
+                ImmutableDraftTemporalConstraint.FUTURE_OR_PRESENT -> {
                     text(".isBefore(")
                     type(temporalType)
                     text(".now())")
                 }
-                JimmerImmutableDraftTemporalConstraint.FUTURE -> {
+                ImmutableDraftTemporalConstraint.FUTURE -> {
                     text(".isBefore(")
                     type(temporalType)
                     text(".now())")
-                    if (step.target != JimmerImmutableDraftTemporalTarget.INSTANT) {
+                    if (step.target != ImmutableDraftTemporalTarget.INSTANT) {
                         text(" || ")
                         name(valueName)
                         text(".isEqual(")
@@ -483,19 +494,19 @@ internal object ImmutableDraftJavaValidationPoet {
     private fun JimmerImmutableDraftTypePlan.requiresJavaEmailPattern(): Boolean {
         return propsBySlot.any { prop ->
             prop.validationPlan.builtInSteps.any { step ->
-                step is JimmerImmutableDraftValidationStep.Email && step.isJavaRuntimeValidation()
+                step is ImmutableDraftValidationStep.Email && step.isJavaRuntimeValidation()
             }
         }
     }
 
-    private val JimmerImmutableDraftComparison.operator: String
-        get() = if (this == JimmerImmutableDraftComparison.LESS_THAN) "<" else ">"
+    private val ImmutableDraftComparison.operator: String
+        get() = if (this == ImmutableDraftComparison.LESS_THAN) "<" else ">"
 
-    private fun JimmerImmutableDraftValidationStep.BuiltIn.isJavaRuntimeValidation(): Boolean {
+    private fun ImmutableDraftValidationStep.BuiltIn.isJavaRuntimeValidation(): Boolean {
         return sourceAnnotationUseSiteTarget == LsiAnnotationUseSiteTarget.METHOD
     }
 
-    private fun JimmerImmutableDraftValidationStep.CustomValidator.isJavaRuntimeValidation(): Boolean {
+    private fun ImmutableDraftValidationStep.CustomValidator.isJavaRuntimeValidation(): Boolean {
         return sourceAnnotationUseSiteTarget == LsiAnnotationUseSiteTarget.METHOD
     }
 }

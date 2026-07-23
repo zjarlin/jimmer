@@ -1,5 +1,9 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.ImmutableDraftPatternFlag
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimePropKind
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimeValueCategory
+import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.toImmutableSchema
 import kotlin.test.Test
@@ -55,8 +59,8 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals("__idValue", id.valueFieldName)
         assertEquals("__idLoaded", id.loadedStateFieldName)
         assertEquals(JimmerImmutableDraftValueState.VALUE_AND_LOADED, id.valueState)
-        assertEquals(JimmerImmutableDraftRuntimePropKind.ID, id.runtimeProp.kind)
-        assertEquals(JimmerImmutableDraftRuntimeValueCategory.SCALAR, id.runtimeProp.valueCategory)
+        assertEquals(ImmutableDraftRuntimePropKind.ID, id.runtimeProp.kind)
+        assertEquals(ImmutableDraftRuntimeValueCategory.SCALAR, id.runtimeProp.valueCategory)
         assertEquals(LsiPrimitiveType(LsiPrimitiveKind.LONG), id.runtimeProp.metadataElementType)
 
         val active = book.propsById.getValue(LsiSymbolId.property(BOOK, "active"))
@@ -79,22 +83,23 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals(null, titleValidation.sourceAnnotationUseSiteTarget)
         assertEquals(
             listOf(
-                JimmerImmutableDraftValidationStep.NotBlank::class,
-                JimmerImmutableDraftValidationStep.Size::class,
-                JimmerImmutableDraftValidationStep.Size::class,
-                JimmerImmutableDraftValidationStep.Pattern::class,
+                ImmutableDraftValidationStep.NotBlank::class,
+                ImmutableDraftValidationStep.Size::class,
+                ImmutableDraftValidationStep.Size::class,
+                ImmutableDraftValidationStep.Pattern::class,
             ),
             title.validationPlan.builtInSteps.map { step -> step::class },
         )
         assertEquals(null, title.validationPlan.requiredNullCheck)
         val pattern = title.validationPlan.builtInSteps
-            .filterIsInstance<JimmerImmutableDraftValidationStep.Pattern>()
+            .filterIsInstance<ImmutableDraftValidationStep.Pattern>()
             .single()
         assertEquals("[A-Z].+", pattern.regexp)
-        assertEquals(listOf(JimmerImmutableDraftPatternFlag.CASE_INSENSITIVE), pattern.flags)
-        assertEquals(2, pattern.flagMask)
-        assertEquals("__TITLE_PATTER", title.javaPatternFieldName(pattern.index))
-        assertEquals("__TITLE_PATTERN", title.kotlinPatternFieldName(pattern.index))
+        assertEquals(listOf(ImmutableDraftPatternFlag.CASE_INSENSITIVE), pattern.flags)
+        assertEquals(2, pattern.flags.toJvmPatternFlagMask())
+        val patternIndex = title.validationPlan.patternIndexOf(pattern)
+        assertEquals("__TITLE_PATTER", title.javaPatternFieldName(patternIndex))
+        assertEquals("__TITLE_PATTERN", title.kotlinPatternFieldName(patternIndex))
         assertTrue(pattern.failure.skipWhenNull)
         assertEquals(
             LsiSymbolId.type("jakarta.validation.ValidationException"),
@@ -138,9 +143,9 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals(LsiSymbolId.property(AUTHOR, "id"), associatedId.targetIdPropId)
         assertTrue(author.autoCreateSupported)
         assertTrue(author.referenceMutationSupported)
-        assertEquals(JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE, author.runtimeProp.kind)
+        assertEquals(ImmutableDraftRuntimePropKind.KEY_REFERENCE, author.runtimeProp.kind)
         assertEquals(
-            JimmerImmutableDraftRuntimeValueCategory.REFERENCE,
+            ImmutableDraftRuntimeValueCategory.REFERENCE,
             author.runtimeProp.valueCategory,
         )
         assertEquals(MANY_TO_ONE, author.runtimeProp.associationAnnotationTypeId)
@@ -175,7 +180,7 @@ class JimmerImmutableDraftCodegenModelTest {
         assertTrue(excludedTitle.annotationPlan.builderMethodAnnotations.none { annotation ->
             annotation.type == VALID_BOOK
         })
-        assertTrue(excludedTitle.annotationPlan.beanBridgeMethodAnnotations.none { annotation ->
+        assertTrue(excludedTitle.annotationPlan.methodAnnotations.none { annotation ->
             annotation.type == VALID_BOOK
         })
         assertEquals(VALID_BOOK, excludedTitle.validationPlan.customValidatorSteps.single().annotationTypeId)
@@ -278,12 +283,12 @@ class JimmerImmutableDraftCodegenModelTest {
         assertTrue(addressPlan.immutableReference)
         assertTrue(addressPlan.autoCreateSupported)
         assertTrue(addressPlan.referenceMutationSupported)
-        assertEquals(JimmerImmutableDraftRuntimeValueCategory.REFERENCE, addressPlan.runtimeProp.valueCategory)
+        assertEquals(ImmutableDraftRuntimeValueCategory.REFERENCE, addressPlan.runtimeProp.valueCategory)
 
         val aliasesPlan = type.propsById.getValue(aliases)
         assertFalse(aliasesPlan.association)
         assertFalse(aliasesPlan.immutableReference)
-        assertEquals(JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST, aliasesPlan.runtimeProp.valueCategory)
+        assertEquals(ImmutableDraftRuntimeValueCategory.SCALAR_LIST, aliasesPlan.runtimeProp.valueCategory)
         assertEquals(LsiNullability.NULLABLE, aliasesPlan.elementType.nullability)
     }
 
@@ -329,14 +334,14 @@ class JimmerImmutableDraftCodegenModelTest {
         assertFalse(scalarPlan.association)
         assertFalse(scalarPlan.immutableReference)
         assertFalse(scalarPlan.autoCreateSupported)
-        assertEquals(JimmerImmutableDraftRuntimeValueCategory.SCALAR, scalarPlan.runtimeProp.valueCategory)
+        assertEquals(ImmutableDraftRuntimeValueCategory.SCALAR, scalarPlan.runtimeProp.valueCategory)
 
         val referencePlan = type.propsById.getValue(reference)
         assertTrue(referencePlan.genericTarget)
         assertTrue(referencePlan.association)
         assertTrue(referencePlan.immutableReference)
         assertFalse(referencePlan.autoCreateSupported)
-        assertEquals(JimmerImmutableDraftRuntimeValueCategory.REFERENCE, referencePlan.runtimeProp.valueCategory)
+        assertEquals(ImmutableDraftRuntimeValueCategory.REFERENCE, referencePlan.runtimeProp.valueCategory)
     }
 
     @Test

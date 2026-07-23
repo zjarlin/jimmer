@@ -2,6 +2,9 @@ package org.babyfish.jimmer.compiler.immutable
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import site.addzero.lsi.jimmer.ImmutableDraftPatternFlag
+import site.addzero.lsi.jimmer.ImmutableDraftValidationPlan
+import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.model.LsiAnnotation
@@ -96,7 +99,7 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                         ""
                     },
                     if (includePlatformSurface) {
-                        prop.annotationPlan.beanBridgeMethodAnnotations.annotationText(true)
+                        prop.annotationPlan.methodAnnotations.annotationText(true)
                     } else {
                         ""
                     },
@@ -153,7 +156,7 @@ private fun List<ImmutableValidation>.validationText(includePlatformSurface: Boo
     }
 }
 
-private fun JimmerImmutableDraftValidationPlan.validationText(includePlatformSurface: Boolean): String {
+private fun ImmutableDraftValidationPlan.validationText(includePlatformSurface: Boolean): String {
     return buildString {
         requiredNullCheck?.let { required ->
             append("required(")
@@ -162,9 +165,9 @@ private fun JimmerImmutableDraftValidationPlan.validationText(includePlatformSur
         }
         steps.forEach { step ->
             when (step) {
-                is JimmerImmutableDraftValidationStep.NotEmpty -> append("not-empty")
-                is JimmerImmutableDraftValidationStep.NotBlank -> append("not-blank")
-                is JimmerImmutableDraftValidationStep.Size -> {
+                is ImmutableDraftValidationStep.NotEmpty -> append("not-empty")
+                is ImmutableDraftValidationStep.NotBlank -> append("not-blank")
+                is ImmutableDraftValidationStep.Size -> {
                     append("size:")
                     append(step.measure.name)
                     append(':')
@@ -172,7 +175,7 @@ private fun JimmerImmutableDraftValidationPlan.validationText(includePlatformSur
                     append(':')
                     append(step.limit)
                 }
-                is JimmerImmutableDraftValidationStep.NumericBound -> {
+                is ImmutableDraftValidationStep.NumericBound -> {
                     append("numeric:")
                     append(step.target.name)
                     append(':')
@@ -180,22 +183,22 @@ private fun JimmerImmutableDraftValidationPlan.validationText(includePlatformSur
                     append(':')
                     append(step.bound)
                 }
-                is JimmerImmutableDraftValidationStep.Email -> append("email")
-                is JimmerImmutableDraftValidationStep.Pattern -> {
+                is ImmutableDraftValidationStep.Email -> append("email")
+                is ImmutableDraftValidationStep.Pattern -> {
                     append("pattern:")
-                    append(step.index)
+                    append(patternIndexOf(step))
                     append(':')
                     append(step.regexp)
                     append(':')
-                    append(step.flags.joinToString(",", transform = JimmerImmutableDraftPatternFlag::name))
+                    append(step.flags.joinToString(",", transform = ImmutableDraftPatternFlag::name))
                     append(':')
-                    append(step.flagMask)
+                    append(step.flags.toJvmPatternFlagMask())
                 }
-                is JimmerImmutableDraftValidationStep.Assert -> {
+                is ImmutableDraftValidationStep.Assert -> {
                     append("assert:")
                     append(step.expected)
                 }
-                is JimmerImmutableDraftValidationStep.Digits -> {
+                is ImmutableDraftValidationStep.Digits -> {
                     append("digits:")
                     append(step.target.name)
                     append(':')
@@ -203,13 +206,13 @@ private fun JimmerImmutableDraftValidationPlan.validationText(includePlatformSur
                     append(':')
                     append(step.limit)
                 }
-                is JimmerImmutableDraftValidationStep.Temporal -> {
+                is ImmutableDraftValidationStep.Temporal -> {
                     append("temporal:")
                     append(step.target.name)
                     append(':')
                     append(step.constraint.name)
                 }
-                is JimmerImmutableDraftValidationStep.CustomValidator -> {
+                is ImmutableDraftValidationStep.CustomValidator -> {
                     append("custom:")
                     append(step.annotationTypeId.value)
                     if (includePlatformSurface) {
@@ -222,7 +225,7 @@ private fun JimmerImmutableDraftValidationPlan.validationText(includePlatformSur
                     append(step.message)
                 }
             }
-            if (step is JimmerImmutableDraftValidationStep.BuiltIn) {
+            if (step is ImmutableDraftValidationStep.BuiltIn) {
                 append('@')
                 append(step.sourceAnnotationTypeId.value)
                 if (includePlatformSurface) {

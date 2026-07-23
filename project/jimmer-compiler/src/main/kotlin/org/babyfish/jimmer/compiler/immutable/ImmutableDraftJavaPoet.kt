@@ -3,6 +3,7 @@ package org.babyfish.jimmer.compiler.immutable
 import org.babyfish.jimmer.currentVersion
 import org.babyfish.jimmer.impl.util.StringUtil
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimePropKind
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
@@ -381,33 +382,33 @@ private class JavaDraftPoetContext(
     private fun LsiPoetCodeBuilder.addRuntimeProp(prop: JimmerImmutableDraftPropPlan) {
         val slot = prop.metadataSlotIndex?.let { prop.slotName } ?: "-1"
         when (prop.runtimeProp.kind) {
-            JimmerImmutableDraftRuntimePropKind.ID -> {
+            ImmutableDraftRuntimePropKind.ID -> {
                 text(".id($slot, ")
                 string(prop.name)
                 text(", ")
                 type(prop.runtimeProp.metadataElementType)
                 text(".class)\n")
             }
-            JimmerImmutableDraftRuntimePropKind.VERSION -> {
+            ImmutableDraftRuntimePropKind.VERSION -> {
                 text(".version($slot, ")
                 string(prop.name)
                 text(")\n")
             }
-            JimmerImmutableDraftRuntimePropKind.LOGICAL_DELETED -> {
+            ImmutableDraftRuntimePropKind.LOGICAL_DELETED -> {
                 text(".logicalDeleted($slot, ")
                 string(prop.name)
                 text(", ")
                 type(prop.runtimeProp.metadataElementType)
                 text(".class, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.KEY_SCALAR -> {
+            ImmutableDraftRuntimePropKind.KEY_SCALAR -> {
                 text(".key($slot, ")
                 string(prop.name)
                 text(", ")
                 type(prop.runtimeProp.metadataElementType)
                 text(".class, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE -> {
+            ImmutableDraftRuntimePropKind.KEY_REFERENCE -> {
                 text(".keyReference($slot, ")
                 string(prop.name)
                 text(", ")
@@ -416,7 +417,7 @@ private class JavaDraftPoetContext(
                 type(prop.runtimeProp.metadataElementType)
                 text(".class, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.ASSOCIATION -> {
+            ImmutableDraftRuntimePropKind.ASSOCIATION -> {
                 text(".add($slot, ")
                 string(prop.name)
                 text(", ")
@@ -425,7 +426,7 @@ private class JavaDraftPoetContext(
                 type(prop.runtimeProp.metadataElementType)
                 text(".class, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.VALUE -> {
+            ImmutableDraftRuntimePropKind.VALUE -> {
                 text(".add($slot, ")
                 string(prop.name)
                 text(", ")
@@ -600,7 +601,7 @@ private class JavaDraftPoetContext(
                 add(
                     LsiPoetFunction(
                         name = prop.javaBeanGetterName,
-                        annotations = prop.annotationPlan.beanBridgeMethodAnnotations
+                        annotations = prop.annotationPlan.methodAnnotations
                             .map(LsiAnnotation::toJavaDraftPoetAnnotation),
                         modifiers = PUBLIC_FINAL,
                         returnType = prop.type.withoutJavaDraftTypeAnnotations(),

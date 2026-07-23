@@ -3,6 +3,8 @@ package org.babyfish.jimmer.compiler.immutable
 import org.babyfish.jimmer.currentVersion
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimePropKind
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimeValueCategory
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
@@ -506,7 +508,7 @@ internal class ImmutableDraftKotlinPoetContext(
     private fun LsiPoetCodeBuilder.addRuntimeProp(prop: JimmerImmutableDraftPropPlan) {
         val metadataType = prop.runtimeProp.metadataElementType.withDraftRootNullability(false)
         when (prop.runtimeProp.kind) {
-            JimmerImmutableDraftRuntimePropKind.ID -> {
+            ImmutableDraftRuntimePropKind.ID -> {
                 text(".id(")
                 addRuntimeSlot(prop)
                 text(", ")
@@ -515,14 +517,14 @@ internal class ImmutableDraftKotlinPoetContext(
                 type(metadataType)
                 text("::class.java)\n")
             }
-            JimmerImmutableDraftRuntimePropKind.VERSION -> {
+            ImmutableDraftRuntimePropKind.VERSION -> {
                 text(".version(")
                 addRuntimeSlot(prop)
                 text(", ")
                 string(prop.name)
                 text(")\n")
             }
-            JimmerImmutableDraftRuntimePropKind.LOGICAL_DELETED -> {
+            ImmutableDraftRuntimePropKind.LOGICAL_DELETED -> {
                 text(".logicalDeleted(")
                 addRuntimeSlot(prop)
                 text(", ")
@@ -531,7 +533,7 @@ internal class ImmutableDraftKotlinPoetContext(
                 type(metadataType)
                 text("::class.java, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.KEY_SCALAR -> {
+            ImmutableDraftRuntimePropKind.KEY_SCALAR -> {
                 text(".key(")
                 addRuntimeSlot(prop)
                 text(", ")
@@ -540,7 +542,7 @@ internal class ImmutableDraftKotlinPoetContext(
                 type(metadataType)
                 text("::class.java, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.KEY_REFERENCE -> {
+            ImmutableDraftRuntimePropKind.KEY_REFERENCE -> {
                 text(".keyReference(")
                 addRuntimeSlot(prop)
                 text(", ")
@@ -551,7 +553,7 @@ internal class ImmutableDraftKotlinPoetContext(
                 type(metadataType)
                 text("::class.java, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.ASSOCIATION -> {
+            ImmutableDraftRuntimePropKind.ASSOCIATION -> {
                 text(".add(")
                 addRuntimeSlot(prop)
                 text(", ")
@@ -562,7 +564,7 @@ internal class ImmutableDraftKotlinPoetContext(
                 type(metadataType)
                 text("::class.java, ${prop.nullable})\n")
             }
-            JimmerImmutableDraftRuntimePropKind.VALUE -> {
+            ImmutableDraftRuntimePropKind.VALUE -> {
                 text(".add(")
                 addRuntimeSlot(prop)
                 text(", ")
@@ -986,12 +988,12 @@ internal fun draftReceiverFunctionType(receiverType: LsiTypeRef): LsiFunctionTyp
     )
 }
 
-internal val JimmerImmutableDraftRuntimeValueCategory.draftRuntimeName: String
+internal val ImmutableDraftRuntimeValueCategory.draftRuntimeName: String
     get() = when (this) {
-        JimmerImmutableDraftRuntimeValueCategory.SCALAR -> "SCALAR"
-        JimmerImmutableDraftRuntimeValueCategory.SCALAR_LIST -> "SCALAR_LIST"
-        JimmerImmutableDraftRuntimeValueCategory.REFERENCE -> "REFERENCE"
-        JimmerImmutableDraftRuntimeValueCategory.REFERENCE_LIST -> "REFERENCE_LIST"
+        ImmutableDraftRuntimeValueCategory.SCALAR -> "SCALAR"
+        ImmutableDraftRuntimeValueCategory.SCALAR_LIST -> "SCALAR_LIST"
+        ImmutableDraftRuntimeValueCategory.REFERENCE -> "REFERENCE"
+        ImmutableDraftRuntimeValueCategory.REFERENCE_LIST -> "REFERENCE_LIST"
     }
 
 internal const val KOTLIN_DRAFT_SUFFIX = "Draft"
