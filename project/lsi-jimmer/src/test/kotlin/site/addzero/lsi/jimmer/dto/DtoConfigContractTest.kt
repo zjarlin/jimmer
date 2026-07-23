@@ -1,14 +1,9 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerSourceSet
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
 import site.addzero.lsi.jimmer.FormulaKind
@@ -17,7 +12,6 @@ import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiOrigin
@@ -26,11 +20,16 @@ import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.diagnostic.LsiDiagnostic
+import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiArrayType
+import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
@@ -42,28 +41,13 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
-import site.addzero.lsi.jimmer.dto.DtoBaseProp
-import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
-import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
-import site.addzero.lsi.jimmer.dto.DtoFetchType
-import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
-import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
-import site.addzero.lsi.jimmer.dto.DtoModifier
-import site.addzero.lsi.jimmer.dto.DtoPropConfig
-import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
-import site.addzero.lsi.jimmer.dto.DtoPropId
-import site.addzero.lsi.jimmer.dto.DtoType
-import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
-import site.addzero.lsi.jimmer.dto.DtoTypeId
 
-class DtoConfigContractResolverTest {
+class DtoConfigContractTest {
 
     @Test
-    fun `apt filter requires exact generated table and freezes canonical dependencies`() {
+    fun `java filter requires exact generated table and freezes canonical dependencies`() {
         val resolution = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -73,14 +57,13 @@ class DtoConfigContractResolverTest {
         assertTrue(resolution.successful)
         val contract = resolution.contracts.single()
         assertEquals(AUTHOR_TYPE_ID, contract.targetEntityTypeId)
-        assertEquals(AUTHOR_TABLE_TYPE_ID, contract.contractArgumentTypeId)
         assertEquals(listOf(AUTHOR_TYPE_ID, FILTER_TYPE_ID), contract.dependencyTypeIds)
     }
 
     @Test
-    fun `apt filter rejects wrong table even when table entity is correct`() {
+    fun `java filter rejects wrong table even when table entity is correct`() {
         val resolution = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(OTHER_AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -93,41 +76,101 @@ class DtoConfigContractResolverTest {
         assertEquals(AUTHOR_TABLE_TYPE_ID.value, diagnostic.details["expectedContractArgumentTypeId"])
         assertEquals(OTHER_AUTHOR_TABLE_TYPE_ID.value, diagnostic.details["actualContractArgumentTypeId"])
         assertEquals(CONFIG_LOCATION, diagnostic.location)
+        val snapshot = resolution.normalizedSnapshot()
+        assertFalse(AUTHOR_TABLE_TYPE_ID.value in snapshot)
+        assertFalse(OTHER_AUTHOR_TABLE_TYPE_ID.value in snapshot)
     }
 
     @Test
-    fun `apt and ksp filter contracts have identical normalized snapshot and fingerprint`() {
-        val aptResolution = resolve(
-            platform = CompilerPlatform.APT,
+    fun `java and kotlin filter contracts have identical normalized snapshot and fingerprint`() {
+        val javaResolution = resolve(
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
             hierarchy = listOf(tableHierarchy(AUTHOR_TABLE_TYPE_ID, AUTHOR_TYPE_ID)),
         )
-        val kspResolution = resolve(
-            platform = CompilerPlatform.KSP,
+        val kotlinResolution = resolve(
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(
                 declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID)),
             ),
         )
 
-        assertEquals(AUTHOR_TABLE_TYPE_ID, aptResolution.contracts.single().contractArgumentTypeId)
-        assertEquals(AUTHOR_TYPE_ID, kspResolution.contracts.single().contractArgumentTypeId)
-        assertEquals(schema(aptResolution).normalizedSnapshot(), schema(kspResolution).normalizedSnapshot())
-        assertEquals(schema(aptResolution).fingerprint(), schema(kspResolution).fingerprint())
+        assertEquals(javaResolution.normalizedSnapshot(), kotlinResolution.normalizedSnapshot())
+        assertEquals(javaResolution.fingerprint(), kotlinResolution.fingerprint())
+    }
+
+    @Test
+    fun `invalid raw java and kotlin filters have identical semantic fingerprint`() {
+        val javaResolution = resolve(
+            targetLanguage = LsiLanguage.JAVA,
+            implementationSuperTypes = listOf(declared(FIELD_FILTER_TYPE_ID)),
+        )
+        val kotlinResolution = resolve(
+            targetLanguage = LsiLanguage.KOTLIN,
+            implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID)),
+        )
+
+        assertFalse(
+            javaResolution.diagnostics.single().details["path"] ==
+                kotlinResolution.diagnostics.single().details["path"],
+        )
+        assertEquals(javaResolution.normalizedSnapshot(), kotlinResolution.normalizedSnapshot())
+        assertEquals(javaResolution.fingerprint(), kotlinResolution.fingerprint())
+    }
+
+    @Test
+    fun `diagnostic input order cannot change normalized fingerprint`() {
+        val source = LsiSource.of("demo/src/main/dto/demo/Stable.dto")
+        val baseDiagnostic = LsiDiagnostic(
+            code = "jimmer.dto.config.stable-order",
+            severity = LsiDiagnosticSeverity.INFO,
+            message = "stable diagnostic",
+            symbolId = FILTER_TYPE_ID,
+            location = LsiLocation(
+                source = source,
+                start = LsiPosition(1, 1),
+                end = LsiPosition(1, 2),
+            ),
+        )
+        val diagnostics = listOf(
+            baseDiagnostic,
+            baseDiagnostic.copy(severity = LsiDiagnosticSeverity.WARNING),
+            baseDiagnostic.copy(
+                location = LsiLocation(
+                    source = LsiSource.of("demo/src/main/dto/demo/Other.dto"),
+                    start = LsiPosition(1, 1),
+                    end = LsiPosition(1, 2),
+                ),
+            ),
+            baseDiagnostic.copy(location = requireNotNull(baseDiagnostic.location).copy(end = LsiPosition(1, 3))),
+        )
+        val forward = DtoConfigContractResolution(
+            contracts = emptyList(),
+            diagnostics = diagnostics.sortedWith(DTO_CONFIG_DIAGNOSTIC_COMPARATOR),
+        )
+        val reversed = DtoConfigContractResolution(
+            contracts = emptyList(),
+            diagnostics = diagnostics.reversed().sortedWith(DTO_CONFIG_DIAGNOSTIC_COMPARATOR),
+        )
+
+        assertEquals(forward.diagnostics, reversed.diagnostics)
+        assertEquals(forward.normalizedSnapshot(), reversed.normalizedSnapshot())
+        assertEquals(forward.fingerprint(), reversed.fingerprint())
     }
 
     @Test
     fun `user generic dependency path participates in normalized fingerprint`() {
         val direct = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(
                 declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID)),
             ),
         )
         val baseTypeId = LsiSymbolId.type("demo.AuthorFilterBase")
         val throughBase = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(baseTypeId)),
             hierarchy = listOf(
                 hierarchy(
@@ -143,7 +186,7 @@ class DtoConfigContractResolverTest {
             listOf(AUTHOR_TYPE_ID, FILTER_TYPE_ID, baseTypeId).sorted(),
             throughBase.contracts.single().dependencyTypeIds,
         )
-        assertFalse(schema(direct).fingerprint() == schema(throughBase).fingerprint())
+        assertFalse(direct.fingerprint() == throughBase.fingerprint())
     }
 
     @Test
@@ -153,7 +196,7 @@ class DtoConfigContractResolverTest {
         val baseParameterId = LsiSymbolId.typeParameter(baseTypeId, "E")
         val middleParameterId = LsiSymbolId.typeParameter(middleTypeId, "T")
         val resolution = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(middleTypeId, declared(AUTHOR_TYPE_ID))),
             hierarchy = listOf(
                 hierarchy(
@@ -190,12 +233,12 @@ class DtoConfigContractResolverTest {
             hierarchy(rightTypeId, directSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID)))),
         )
         val first = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(leftTypeId), declared(rightTypeId)),
             hierarchy = identicalHierarchy,
         )
         val reversed = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(rightTypeId), declared(leftTypeId)),
             hierarchy = identicalHierarchy.reversed(),
         )
@@ -208,7 +251,7 @@ class DtoConfigContractResolverTest {
         )
 
         val conflicting = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(leftTypeId), declared(rightTypeId)),
             hierarchy = listOf(
                 hierarchy(
@@ -228,7 +271,7 @@ class DtoConfigContractResolverTest {
     @Test
     fun `raw and residual generic contracts have stable diagnostics`() {
         val raw = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID)),
         )
         assertEquals("jimmer.dto.config.raw-contract", raw.diagnostics.single().code)
@@ -236,7 +279,7 @@ class DtoConfigContractResolverTest {
         val genericBaseTypeId = LsiSymbolId.type("demo.GenericFilterBase")
         val parameterId = LsiSymbolId.typeParameter(genericBaseTypeId, "E")
         val residual = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(genericBaseTypeId)),
             hierarchy = listOf(
                 hierarchy(
@@ -257,7 +300,7 @@ class DtoConfigContractResolverTest {
     fun `nested construction only rejects declarations requiring enclosing instance`() {
         val enclosingTypeId = LsiSymbolId.type("demo.Filters")
         val nested = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             enclosingTypeId = enclosingTypeId,
             requiresEnclosingInstance = false,
@@ -265,7 +308,7 @@ class DtoConfigContractResolverTest {
         assertTrue(nested.successful)
 
         val inner = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             enclosingTypeId = enclosingTypeId,
             requiresEnclosingInstance = true,
@@ -276,9 +319,9 @@ class DtoConfigContractResolverTest {
     }
 
     @Test
-    fun `ksp internal construction accepts current source and rejects binary dependency`() {
+    fun `kotlin internal construction accepts current source and rejects binary dependency`() {
         val sourceInternal = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             visibility = LsiVisibility.INTERNAL,
             origin = SOURCE_ORIGIN,
@@ -286,7 +329,7 @@ class DtoConfigContractResolverTest {
         assertTrue(sourceInternal.successful)
 
         val binaryInternal = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             visibility = LsiVisibility.INTERNAL,
             origin = BINARY_ORIGIN,
@@ -299,7 +342,7 @@ class DtoConfigContractResolverTest {
     @Test
     fun `recursion contract validates canonical target entity`() {
         val success = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             kind = DtoConfigContractKind.RECURSION,
             implementationSuperTypes = listOf(
                 declared(RECURSION_STRATEGY_TYPE_ID, declared(AUTHOR_TYPE_ID)),
@@ -309,7 +352,7 @@ class DtoConfigContractResolverTest {
         assertEquals(AUTHOR_TYPE_ID, success.contracts.single().targetEntityTypeId)
 
         val mismatch = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             kind = DtoConfigContractKind.RECURSION,
             implementationSuperTypes = listOf(
                 declared(RECURSION_STRATEGY_TYPE_ID, declared(BOOK_TYPE_ID)),
@@ -322,14 +365,14 @@ class DtoConfigContractResolverTest {
     @Test
     fun `abstract and missing zero argument construction are rejected`() {
         val abstract = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             abstractDeclaration = true,
         )
         assertEquals("abstract-declaration", abstract.diagnostics.single().details["reason"])
 
         val parameterized = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -340,9 +383,9 @@ class DtoConfigContractResolverTest {
     }
 
     @Test
-    fun `ksp constructor with all default parameters supports zero argument call`() {
+    fun `kotlin constructor with all default parameters supports zero argument call`() {
         val resolution = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             constructorShapes = listOf(
                 ConstructorShape(
@@ -356,9 +399,9 @@ class DtoConfigContractResolverTest {
     }
 
     @Test
-    fun `vararg constructors support zero argument calls on both platforms`() {
-        val apt = resolve(
-            platform = CompilerPlatform.APT,
+    fun `vararg constructors support zero argument calls on both languages`() {
+        val java = resolve(
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -367,10 +410,10 @@ class DtoConfigContractResolverTest {
                 ConstructorShape(parameterCount = 1, varargParameterIndexes = setOf(0)),
             ),
         )
-        assertTrue(apt.successful)
+        assertTrue(java.successful)
 
-        val ksp = resolve(
-            platform = CompilerPlatform.KSP,
+        val kotlin = resolve(
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             constructorShapes = listOf(
                 ConstructorShape(
@@ -380,13 +423,13 @@ class DtoConfigContractResolverTest {
                 ),
             ),
         )
-        assertTrue(ksp.successful)
+        assertTrue(kotlin.successful)
     }
 
     @Test
     fun `exact zero constructor wins and ambiguous optional overloads fail`() {
         val exactWins = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             constructorShapes = listOf(
                 ConstructorShape(),
@@ -395,8 +438,8 @@ class DtoConfigContractResolverTest {
         )
         assertTrue(exactWins.successful)
 
-        val aptAmbiguous = resolve(
-            platform = CompilerPlatform.APT,
+        val javaAmbiguous = resolve(
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -406,21 +449,21 @@ class DtoConfigContractResolverTest {
                 ConstructorShape(parameterCount = 1, varargParameterIndexes = setOf(0)),
             ),
         )
-        assertEquals("jimmer.dto.config.constructor-ambiguous", aptAmbiguous.diagnostics.single().code)
-        assertTrue(aptAmbiguous.diagnostics.single().details.getValue("candidateConstructorIds").contains(','))
+        assertEquals("jimmer.dto.config.constructor-ambiguous", javaAmbiguous.diagnostics.single().code)
+        assertTrue(javaAmbiguous.diagnostics.single().details.getValue("candidateConstructorIds").contains(','))
 
-        val kspPreferred = resolve(
-            platform = CompilerPlatform.KSP,
+        val kotlinPreferred = resolve(
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             constructorShapes = listOf(
                 ConstructorShape(parameterCount = 1, defaultParameterIndexes = setOf(0)),
                 ConstructorShape(parameterCount = 2, defaultParameterIndexes = setOf(0, 1)),
             ),
         )
-        assertTrue(kspPreferred.successful)
+        assertTrue(kotlinPreferred.successful)
 
         val defaultsPreferredOverVararg = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             constructorShapes = listOf(
                 ConstructorShape(parameterCount = 2, defaultParameterIndexes = setOf(0, 1)),
@@ -430,7 +473,7 @@ class DtoConfigContractResolverTest {
         assertTrue(defaultsPreferredOverVararg.successful)
 
         val pureVarargPreferred = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             constructorShapes = listOf(
                 ConstructorShape(parameterCount = 1, varargParameterIndexes = setOf(0)),
@@ -443,23 +486,23 @@ class DtoConfigContractResolverTest {
         )
         assertTrue(pureVarargPreferred.successful)
 
-        val kspAmbiguous = resolve(
-            platform = CompilerPlatform.KSP,
+        val kotlinAmbiguous = resolve(
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             constructorShapes = listOf(
                 ConstructorShape(parameterCount = 1, defaultParameterIndexes = setOf(0)),
                 ConstructorShape(parameterCount = 1, defaultParameterIndexes = setOf(0)),
             ),
         )
-        assertEquals("jimmer.dto.config.constructor-ambiguous", kspAmbiguous.diagnostics.single().code)
+        assertEquals("jimmer.dto.config.constructor-ambiguous", kotlinAmbiguous.diagnostics.single().code)
     }
 
     @Test
-    fun `apt chooses the most specific zero-call vararg constructor`() {
+    fun `java chooses the most specific zero-call vararg constructor`() {
         val objectTypeId = LsiSymbolId.type("java.lang.Object")
         val stringTypeId = LsiSymbolId.type("java.lang.String")
         val resolution = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -485,9 +528,9 @@ class DtoConfigContractResolverTest {
     }
 
     @Test
-    fun `apt rejects checked constructor exceptions and permits unchecked exceptions`() {
+    fun `java rejects checked constructor exceptions and permits unchecked exceptions`() {
         val checked = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -502,7 +545,7 @@ class DtoConfigContractResolverTest {
         assertTrue(checkedDiagnostic.details.getValue("checkedThrownTypes").contains("java.io.IOException"))
 
         val unchecked = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -519,7 +562,7 @@ class DtoConfigContractResolverTest {
     @Test
     fun `unresolved constructor types defer config resolution`() {
         val resolution = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
             ),
@@ -537,7 +580,7 @@ class DtoConfigContractResolverTest {
     @Test
     fun `unresolved contract argument defers config resolution`() {
         val resolution = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationSuperTypes = listOf(
                 LsiDeclaredType(
                     declarationId = FIELD_FILTER_TYPE_ID,
@@ -552,9 +595,9 @@ class DtoConfigContractResolverTest {
     }
 
     @Test
-    fun `apt accepts zero component record implementation`() {
+    fun `java accepts zero component record implementation`() {
         val resolution = resolve(
-            platform = CompilerPlatform.APT,
+            targetLanguage = LsiLanguage.JAVA,
             implementationKind = LsiTypeDeclarationKind.RECORD,
             implementationSuperTypes = listOf(
                 declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)),
@@ -570,7 +613,7 @@ class DtoConfigContractResolverTest {
         val leftTypeId = LsiSymbolId.type("demo.CycleLeft")
         val rightTypeId = LsiSymbolId.type("demo.CycleRight")
         val resolution = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(declared(leftTypeId)),
             hierarchy = listOf(
                 hierarchy(leftTypeId, directSuperTypes = listOf(declared(rightTypeId))),
@@ -589,7 +632,7 @@ class DtoConfigContractResolverTest {
         val outerTypeId = LsiSymbolId.type("demo.Filters")
         val nestedFilterTypeId = LsiSymbolId.type("demo.Filters.AuthorFilter")
         val resolution = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationTypeId = nestedFilterTypeId,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             enclosingTypeId = outerTypeId,
@@ -605,16 +648,16 @@ class DtoConfigContractResolverTest {
     fun `protected construction follows Java package access only`() {
         val outerTypeId = LsiSymbolId.type("demo.Filters")
         val nestedFilterTypeId = LsiSymbolId.type("demo.Filters.AuthorFilter")
-        listOf(CompilerPlatform.APT, CompilerPlatform.KSP).forEach { platform ->
+        listOf(LsiLanguage.JAVA, LsiLanguage.KOTLIN).forEach { targetLanguage ->
             val javaSamePackage = resolve(
-                platform = platform,
+                targetLanguage = targetLanguage,
                 implementationTypeId = nestedFilterTypeId,
-                implementationSuperTypes = if (platform == CompilerPlatform.APT) {
+                implementationSuperTypes = if (targetLanguage == LsiLanguage.JAVA) {
                     listOf(declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)))
                 } else {
                     listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID)))
                 },
-                hierarchy = if (platform == CompilerPlatform.APT) {
+                hierarchy = if (targetLanguage == LsiLanguage.JAVA) {
                     listOf(tableHierarchy(AUTHOR_TABLE_TYPE_ID, AUTHOR_TYPE_ID))
                 } else {
                     emptyList()
@@ -624,17 +667,17 @@ class DtoConfigContractResolverTest {
                 origin = JAVA_SOURCE_ORIGIN,
                 targetPackageName = "demo",
             )
-            assertTrue(javaSamePackage.successful, platform.name)
+            assertTrue(javaSamePackage.successful, targetLanguage.name)
 
             val javaCrossPackage = resolve(
-                platform = platform,
+                targetLanguage = targetLanguage,
                 implementationTypeId = nestedFilterTypeId,
-                implementationSuperTypes = if (platform == CompilerPlatform.APT) {
+                implementationSuperTypes = if (targetLanguage == LsiLanguage.JAVA) {
                     listOf(declared(FIELD_FILTER_TYPE_ID, declared(AUTHOR_TABLE_TYPE_ID)))
                 } else {
                     listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID)))
                 },
-                hierarchy = if (platform == CompilerPlatform.APT) {
+                hierarchy = if (targetLanguage == LsiLanguage.JAVA) {
                     listOf(tableHierarchy(AUTHOR_TABLE_TYPE_ID, AUTHOR_TYPE_ID))
                 } else {
                     emptyList()
@@ -651,7 +694,7 @@ class DtoConfigContractResolverTest {
         }
 
         val kotlinProtected = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationTypeId = nestedFilterTypeId,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             enclosingTypeId = outerTypeId,
@@ -670,7 +713,7 @@ class DtoConfigContractResolverTest {
         val outerTypeId = LsiSymbolId.type("demo.Filters")
         val nestedFilterTypeId = LsiSymbolId.type("demo.Filters.AuthorFilter")
         val resolution = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationTypeId = nestedFilterTypeId,
             implementationSuperTypes = listOf(declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID))),
             enclosingTypeId = outerTypeId,
@@ -688,7 +731,7 @@ class DtoConfigContractResolverTest {
     fun `generic implementation is rejected before hierarchy traversal`() {
         val parameterId = LsiSymbolId.typeParameter(FILTER_TYPE_ID, "E")
         val resolution = resolve(
-            platform = CompilerPlatform.KSP,
+            targetLanguage = LsiLanguage.KOTLIN,
             implementationSuperTypes = listOf(
                 declared(K_FIELD_FILTER_TYPE_ID, LsiTypeParameterRef(parameterId)),
             ),
@@ -699,7 +742,7 @@ class DtoConfigContractResolverTest {
     }
 
     private fun resolve(
-        platform: CompilerPlatform,
+        targetLanguage: LsiLanguage,
         kind: DtoConfigContractKind = DtoConfigContractKind.FILTER,
         implementationTypeId: LsiSymbolId = FILTER_TYPE_ID,
         implementationKind: LsiTypeDeclarationKind = LsiTypeDeclarationKind.CLASS,
@@ -774,11 +817,11 @@ class DtoConfigContractResolverTest {
             declarations = listOfNotNull(enclosingDeclaration, implementation) + constructors,
             typeHierarchy = hierarchy,
         )
-        return DtoConfigContractResolver(
-            workspace = workspace,
+        return workspace.resolveDtoConfigContracts(
+            graph = graph(implementationTypeId, kind, targetPackageName),
             immutableSchema = IMMUTABLE_SCHEMA,
-            platform = platform,
-        ).resolve(graph(implementationTypeId, kind, targetPackageName))
+            targetLanguage = targetLanguage,
+        )
     }
 
     private data class ConstructorShape(
@@ -815,29 +858,6 @@ class DtoConfigContractResolverTest {
         return GRAPH.copy(types = listOf(type), props = listOf(prop))
     }
 
-    private fun schema(resolution: DtoConfigContractResolution): JimmerDtoPrecompiledSchema {
-        return JimmerDtoPrecompiledSchema(
-            listOf(
-                JimmerDtoPrecompiledDocument(
-                    inputSnapshot = CompilerInputDocumentSnapshot(DOCUMENT, emptyList()),
-                    targetTypeIds = listOf(BOOK_TYPE_ID),
-                    graph = GRAPH,
-                    annotationContract = DtoAnnotationContract(
-                        declarations = emptyList(),
-                        typePlans = listOf(DtoTypeAnnotationPlan(DTO_TYPE_ID, emptyList())),
-                        propPlans = listOf(DtoPropAnnotationPlan(DTO_PROP_ID, emptyList(), emptyList())),
-                        diagnostics = emptyList(),
-                    ),
-                    interfaceContractResolution = DtoInterfaceContractResolution(
-                        contracts = listOf(DtoInterfaceContract(DTO_TYPE_ID, emptyList(), emptyList())),
-                        diagnostics = emptyList(),
-                    ),
-                    configContractResolution = resolution,
-                ),
-            ),
-        )
-    }
-
     companion object {
         private val BOOK_TYPE_ID = LsiSymbolId.type("demo.Book")
         private val AUTHOR_TYPE_ID = LsiSymbolId.type("demo.Author")
@@ -850,6 +870,7 @@ class DtoConfigContractResolverTest {
         private val RECURSION_STRATEGY_TYPE_ID =
             LsiSymbolId.type("org.babyfish.jimmer.sql.fetcher.RecursionStrategy")
         private val TABLE_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.ast.table.Table")
+        private val ID_ANNOTATION_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         private val AUTHORS_PROP_ID = LsiSymbolId.property(BOOK_TYPE_ID, "authors")
         private val DTO_TYPE_ID = DtoTypeId("dto#BookView")
         private val DTO_PROP_ID = DtoPropId("dto#BookView/authors")
@@ -870,14 +891,6 @@ class DtoConfigContractResolverTest {
                 LsiLanguage.KOTLIN,
                 LsiSourceKind.BINARY,
             ),
-        )
-        private val DOCUMENT = CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
-            sourceSet = CompilerSourceSet.MAIN,
-            projectName = "demo",
-            sourceRoot = "src/main/dto",
-            relativePath = "demo/Book.dto",
-            content = "BookView { authors !filter(demo.AuthorFilter) }",
         )
         private val GRAPH = DtoGraph(
             source = DTO_SOURCE,
@@ -989,7 +1002,7 @@ class DtoConfigContractResolverTest {
             typeId: LsiSymbolId,
             props: List<ImmutableProp>,
         ): ImmutableType {
-            val completeProps = completeEntityProps(typeId, props)
+            val completeProps = listOf(immutableIdProp(typeId)) + props
             return ImmutableType(
                 id = typeId,
                 qualifiedName = typeId.requireTypeQualifiedName(),
@@ -1017,6 +1030,42 @@ class DtoConfigContractResolverTest {
                 }?.id,
                 acrossMicroServices = false,
                 microServiceName = "",
+            )
+        }
+
+        private fun immutableIdProp(ownerTypeId: LsiSymbolId): ImmutableProp {
+            val propId = LsiSymbolId.property(ownerTypeId, "id")
+            return ImmutableProp(
+                id = propId,
+                declarationId = propId,
+                ownerTypeId = ownerTypeId,
+                declaringTypeId = ownerTypeId,
+                name = "id",
+                documentation = null,
+                type = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                annotations = listOf(LsiAnnotation(ID_ANNOTATION_TYPE_ID)),
+                overrideChain = listOf(propId),
+                inherited = false,
+                overridden = false,
+                nullable = false,
+                list = false,
+                association = false,
+                embedded = false,
+                targetTypeId = null,
+                primaryMapping = PrimaryMapping.ID,
+                primaryAnnotationTypeId = ID_ANNOTATION_TYPE_ID,
+                defaultContract = null,
+                associationKind = AssociationKind.NONE,
+                formulaKind = FormulaKind.NONE,
+                mappedBy = null,
+                associationStorage = AssociationStorageKind.NONE,
+                transientResolver = null,
+                view = null,
+                genericTarget = false,
+                remote = false,
+                recursive = false,
+                validations = emptyList(),
+                converter = null,
             )
         }
 

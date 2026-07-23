@@ -13,6 +13,7 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.isJimmerImmutableType
 import site.addzero.lsi.jimmer.dto.resolveDtoAnnotationContract
+import site.addzero.lsi.jimmer.dto.resolveDtoConfigContracts
 import site.addzero.lsi.jimmer.dto.resolveDtoInterfaceContracts
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
@@ -22,6 +23,7 @@ import org.babyfish.jimmer.dto.compiler.DtoFile
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoTypeLinker
 import site.addzero.lsi.core.LsiLocation
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
@@ -292,11 +294,15 @@ internal class JimmerDtoPrecompiler {
                 )
                 val annotationContract = workspace.resolveDtoAnnotationContract(graph, immutableSchema)
                 val interfaceContractResolution = workspace.resolveDtoInterfaceContracts(graph)
-                val configContractResolution = DtoConfigContractResolver(
-                    workspace = workspace,
+                val configContractResolution = workspace.resolveDtoConfigContracts(
+                    graph = graph,
                     immutableSchema = immutableSchema,
-                    platform = platform,
-                ).resolve(graph)
+                    targetLanguage = when (platform) {
+                        CompilerPlatform.APT -> LsiLanguage.JAVA
+                        CompilerPlatform.KSP -> LsiLanguage.KOTLIN
+                        CompilerPlatform.UNKNOWN -> error("Unsupported DTO compiler platform")
+                    },
+                )
                 val semanticDiagnostics =
                     annotationContract.diagnostics +
                         interfaceContractResolution.diagnostics +

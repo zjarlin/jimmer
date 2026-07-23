@@ -57,6 +57,7 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoConfigValue
 import site.addzero.lsi.jimmer.dto.DtoEnumMapping
 import site.addzero.lsi.jimmer.dto.DtoEnumType

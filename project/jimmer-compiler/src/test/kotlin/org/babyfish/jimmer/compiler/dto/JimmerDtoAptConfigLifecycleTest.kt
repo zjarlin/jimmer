@@ -24,6 +24,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.dto.DtoConfigContract
 
 class JimmerDtoAptConfigLifecycleTest {
 
@@ -109,7 +110,7 @@ class JimmerDtoAptConfigLifecycleTest {
         assertTrue(secondRound.diagnosticCodes.isEmpty())
         assertEquals(FILTER_ID, secondRound.contract?.implementationTypeId)
         assertEquals(AUTHOR_ID, secondRound.contract?.targetEntityTypeId)
-        assertEquals(AUTHOR_TABLE_ID, secondRound.contract?.contractArgumentTypeId)
+        assertEquals(listOf(AUTHOR_ID, FILTER_ID), secondRound.contract?.dependencyTypeIds)
     }
 
     private class LifecycleDriverProcessor(

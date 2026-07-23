@@ -1265,7 +1265,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         val contract = second.dtoState().schema.documents.single().configContractResolution.contracts.single()
         assertEquals(FILTER_ID, contract.implementationTypeId)
         assertEquals(AUTHOR_ID, contract.targetEntityTypeId)
-        assertEquals(AUTHOR_TABLE_ID, contract.contractArgumentTypeId)
+        assertEquals(listOf(AUTHOR_ID, FILTER_ID), contract.dependencyTypeIds)
         assertTrue(second.diagnostics.isEmpty())
 
         val final = session("dto-apt-config-final").execute(

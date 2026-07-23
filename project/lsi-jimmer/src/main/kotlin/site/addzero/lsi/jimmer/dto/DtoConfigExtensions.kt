@@ -1,6 +1,5 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiLanguage
@@ -26,19 +25,29 @@ import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
-import site.addzero.lsi.jimmer.dto.DtoBaseProp
-import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
-import site.addzero.lsi.jimmer.dto.DtoGraph
 
-internal class DtoConfigContractResolver(
+/** 解析 DTO filter 与 recursion 实现的目标类型、构造方式和依赖闭包。 */
+fun LsiWorkspace.resolveDtoConfigContracts(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+): DtoConfigContractResolution {
+    return DtoConfigContractResolver(
+        workspace = this,
+        immutableSchema = immutableSchema,
+        targetLanguage = targetLanguage,
+    ).resolve(graph)
+}
+
+private class DtoConfigContractResolver(
     private val workspace: LsiWorkspace,
     private val immutableSchema: ImmutableSchema,
-    private val platform: CompilerPlatform,
+    private val targetLanguage: LsiLanguage,
     private val typeSystem: LsiTypeSystem = LsiTypeSystem(workspace),
 ) {
     init {
-        require(platform != CompilerPlatform.UNKNOWN) {
-            "DTO config contract resolution requires APT or KSP platform"
+        require(targetLanguage in setOf(LsiLanguage.JAVA, LsiLanguage.KOTLIN)) {
+            "DTO config contract resolution requires Java or Kotlin target language"
         }
     }
 
@@ -78,7 +87,7 @@ internal class DtoConfigContractResolver(
         }
         return DtoConfigContractResolution(
             contracts = contracts.sortedWith(compareBy(DtoConfigContract::propId, DtoConfigContract::kind)),
-            diagnostics = diagnostics.sortedWith(DIAGNOSTIC_COMPARATOR),
+            diagnostics = diagnostics.sortedWith(DTO_CONFIG_DIAGNOSTIC_COMPARATOR),
             unresolvedTypeIds = unresolvedTypeIds.toList(),
         )
     }
@@ -172,8 +181,8 @@ internal class DtoConfigContractResolver(
                     ),
                 )
             }
-            val target = if (kind == DtoConfigContractKind.FILTER && platform == CompilerPlatform.APT) {
-                resolveAptFilterTarget(match.type.arguments.single(), match.path)
+            val target = if (kind == DtoConfigContractKind.FILTER && targetLanguage == LsiLanguage.JAVA) {
+                resolveJavaFilterTarget(match.type.arguments.single(), match.path)
             } else {
                 resolveEntityTarget(match.type.arguments.single(), match.path)
             }
@@ -334,7 +343,6 @@ internal class DtoConfigContractResolver(
                 kind = kind,
                 implementationTypeId = implementation.id,
                 targetEntityTypeId = expectedTargetTypeId,
-                contractArgumentTypeId = expectedContractArgumentTypeId,
                 construction = DtoConfigConstructionKind.ZERO_ARGUMENT_CONSTRUCTOR,
                 dependencyTypeIds = dependencyTypeIds,
             ),
@@ -354,10 +362,10 @@ internal class DtoConfigContractResolver(
 
     private fun contractTypeId(kind: DtoConfigContractKind): LsiSymbolId {
         return when (kind) {
-            DtoConfigContractKind.FILTER -> when (platform) {
-                CompilerPlatform.APT -> FIELD_FILTER_TYPE_ID
-                CompilerPlatform.KSP -> K_FIELD_FILTER_TYPE_ID
-                CompilerPlatform.UNKNOWN -> error("Unsupported DTO config platform")
+            DtoConfigContractKind.FILTER -> when (targetLanguage) {
+                LsiLanguage.JAVA -> FIELD_FILTER_TYPE_ID
+                LsiLanguage.KOTLIN -> K_FIELD_FILTER_TYPE_ID
+                LsiLanguage.UNKNOWN -> error("Unsupported DTO config targetLanguage")
             }
             DtoConfigContractKind.RECURSION -> RECURSION_STRATEGY_TYPE_ID
         }
@@ -367,7 +375,7 @@ internal class DtoConfigContractResolver(
         kind: DtoConfigContractKind,
         targetEntityTypeId: LsiSymbolId,
     ): LsiSymbolId {
-        if (kind != DtoConfigContractKind.FILTER || platform != CompilerPlatform.APT) {
+        if (kind != DtoConfigContractKind.FILTER || targetLanguage != LsiLanguage.JAVA) {
             return targetEntityTypeId
         }
         val targetType = requireNotNull(immutableSchema.typesById[targetEntityTypeId]) {
@@ -382,7 +390,7 @@ internal class DtoConfigContractResolver(
         )
     }
 
-    private fun resolveAptFilterTarget(
+    private fun resolveJavaFilterTarget(
         argument: LsiTypeArgument,
         contractPath: List<LsiSymbolId>,
     ): TargetResolution {
@@ -550,13 +558,13 @@ internal class DtoConfigContractResolver(
         implementation: LsiTypeDeclaration,
         targetPackageName: String,
     ): ConstructionFailure? {
-        val supportedKind = when (platform) {
-            CompilerPlatform.APT -> implementation.kind in setOf(
+        val supportedKind = when (targetLanguage) {
+            LsiLanguage.JAVA -> implementation.kind in setOf(
                 LsiTypeDeclarationKind.CLASS,
                 LsiTypeDeclarationKind.RECORD,
             )
-            CompilerPlatform.KSP -> implementation.kind == LsiTypeDeclarationKind.CLASS
-            CompilerPlatform.UNKNOWN -> false
+            LsiLanguage.KOTLIN -> implementation.kind == LsiTypeDeclarationKind.CLASS
+            LsiLanguage.UNKNOWN -> false
         }
         if (!supportedKind) {
             return ConstructionFailure(
@@ -646,12 +654,12 @@ internal class DtoConfigContractResolver(
             return ambiguousConstructors(exactZeroConstructors)
         }
         val optionalZeroConstructors = accessibleConstructors.filter { constructor ->
-            when (platform) {
-                CompilerPlatform.APT ->
+            when (targetLanguage) {
+                LsiLanguage.JAVA ->
                     constructor.parameters.size == 1 && constructor.parameters.single().vararg
-                CompilerPlatform.KSP ->
+                LsiLanguage.KOTLIN ->
                     constructor.parameters.all { parameter -> parameter.hasDefault || parameter.vararg }
-                CompilerPlatform.UNKNOWN -> false
+                LsiLanguage.UNKNOWN -> false
             }
         }
         if (optionalZeroConstructors.isEmpty()) {
@@ -661,18 +669,18 @@ internal class DtoConfigContractResolver(
                 "it has no accessible zero-argument call",
             )
         }
-        val bestConstructors = when (platform) {
-            CompilerPlatform.APT -> optionalZeroConstructors.filter { candidate ->
+        val bestConstructors = when (targetLanguage) {
+            LsiLanguage.JAVA -> optionalZeroConstructors.filter { candidate ->
                 optionalZeroConstructors.none { other ->
                     other !== candidate &&
                         other.parameters.single().type.isStrictSubtypeOf(candidate.parameters.single().type)
                 }
             }
-            CompilerPlatform.KSP -> {
+            LsiLanguage.KOTLIN -> {
                 val bestCost = optionalZeroConstructors.minOf { constructor -> constructor.zeroCallCost() }
                 optionalZeroConstructors.filter { constructor -> constructor.zeroCallCost() == bestCost }
             }
-            CompilerPlatform.UNKNOWN -> emptyList()
+            LsiLanguage.UNKNOWN -> emptyList()
         }
         if (bestConstructors.size == 1) {
             return bestConstructors.single().checkedExceptionFailure()
@@ -681,7 +689,7 @@ internal class DtoConfigContractResolver(
     }
 
     private fun LsiConstructor.checkedExceptionFailure(): ConstructionFailure? {
-        if (platform != CompilerPlatform.APT) {
+        if (targetLanguage != LsiLanguage.JAVA) {
             return null
         }
         val checkedThrownTypes = thrownTypes.filterNot { thrownType ->
@@ -771,7 +779,7 @@ internal class DtoConfigContractResolver(
         return when (this) {
             LsiVisibility.PUBLIC -> true
             LsiVisibility.INTERNAL ->
-                platform == CompilerPlatform.KSP &&
+                targetLanguage == LsiLanguage.KOTLIN &&
                     origin.kind in setOf(LsiOriginKind.SOURCE, LsiOriginKind.GENERATED)
             LsiVisibility.PACKAGE_PRIVATE -> targetPackageName == implementationPackageName
             LsiVisibility.PROTECTED ->
@@ -947,15 +955,6 @@ internal class DtoConfigContractResolver(
         private const val CONSTRUCTOR_AMBIGUOUS_CODE = "jimmer.dto.config.constructor-ambiguous"
         private const val CYCLIC_HIERARCHY_CODE = "jimmer.dto.config.cyclic-hierarchy"
 
-        private val DIAGNOSTIC_COMPARATOR: Comparator<LsiDiagnostic> =
-            compareBy(
-                LsiDiagnostic::code,
-                { diagnostic -> diagnostic.symbolId?.value.orEmpty() },
-                { diagnostic -> diagnostic.location?.start?.line ?: 0 },
-                { diagnostic -> diagnostic.location?.start?.column ?: 0 },
-                LsiDiagnostic::message,
-                { diagnostic -> diagnostic.details.entries.joinToString("\u0000") { (name, value) -> "$name=$value" } },
-            )
     }
 }
 

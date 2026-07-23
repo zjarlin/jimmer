@@ -51,7 +51,9 @@ import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
+import site.addzero.lsi.jimmer.dto.fingerprint as dtoFingerprint
 
 class JimmerDtoFrontendParityTest {
 
@@ -84,8 +86,6 @@ class JimmerDtoFrontendParityTest {
         val aptConfigContract = aptDocument.configContractResolution.contracts.single()
         val kspConfigContract = kspDocument.configContractResolution.contracts.single()
         assertEquals(DtoConfigContractKind.FILTER, aptConfigContract.kind)
-        assertEquals(AUTHOR_TABLE_ID, aptConfigContract.contractArgumentTypeId)
-        assertEquals(AUTHOR_ID, kspConfigContract.contractArgumentTypeId)
         assertEquals(aptConfigContract.targetEntityTypeId, kspConfigContract.targetEntityTypeId)
         assertEquals(aptConfigContract.dependencyTypeIds, kspConfigContract.dependencyTypeIds)
         assertEquals(listOf(AUTHOR_ID, FILTER_ID), aptConfigContract.dependencyTypeIds)
@@ -156,6 +156,7 @@ class JimmerDtoFrontendParityTest {
         val aptSnapshot = apt.dtoSchema.normalizedSnapshot()
         assertTrue("interface-prop|" in aptSnapshot)
         assertTrue("type:demo.ViewContract/property:label" in aptSnapshot)
+        assertTrue(aptDocument.configContractResolution.dtoFingerprint() in aptSnapshot)
 
         val bookType = apt.immutableSchema.typesById.getValue(BOOK_ID)
         val nameProp = bookType.props.single { prop -> prop.name == "name" }

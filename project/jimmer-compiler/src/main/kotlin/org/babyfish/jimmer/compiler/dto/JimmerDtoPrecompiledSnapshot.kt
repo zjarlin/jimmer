@@ -11,6 +11,7 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoConfigValue
 import site.addzero.lsi.jimmer.dto.DtoEnumType
 import site.addzero.lsi.jimmer.dto.DtoFoldProp
@@ -250,30 +251,16 @@ private fun StringBuilder.appendConfigContractResolution(
     appendRecord(
         "config-contract-resolution",
         documentPath,
-        resolution.successful.toString(),
-        resolution.unresolvedTypeIds.joinToString(",") { typeId -> typeId.value },
+        resolution.fingerprint(),
     )
-    resolution.contracts.forEach { contract ->
+    resolution.normalizedSnapshot().lineSequence().filter(String::isNotEmpty).forEachIndexed { index, record ->
         appendRecord(
-            "config-contract",
+            "config-contract-record",
             documentPath,
-            contract.propId.value,
-            contract.kind.name,
-            contract.implementationTypeId.value,
-            contract.targetEntityTypeId.value,
-            contract.construction.name,
-            contract.dependencyTypeIds.joinToString(",") { typeId -> typeId.value },
+            index.toString(),
+            record,
         )
     }
-    resolution.diagnostics
-        .sortedBy(LsiDiagnostic::stableOrderKey)
-        .forEach { diagnostic ->
-            appendRecord(
-                "config-contract-diagnostic",
-                documentPath,
-                diagnostic.canonicalText(),
-            )
-        }
 }
 
 private fun DtoInterfaceAccessorContract.canonicalText(): String = canonicalValue(
