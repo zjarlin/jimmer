@@ -12,6 +12,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.isJimmerImmutableType
+import site.addzero.lsi.jimmer.dto.resolveDtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.resolveDtoInterfaceContracts
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
@@ -289,10 +290,7 @@ internal class JimmerDtoPrecompiler {
                 val graph = DtoGraphFreezer(snapshot).freeze(
                     compiledByCompiler.getValue(entry.compiler),
                 )
-                val annotationContract = JimmerDtoAnnotationContractFreezer(
-                    workspace = workspace,
-                    immutableSchema = immutableSchema,
-                ).freeze(graph)
+                val annotationContract = workspace.resolveDtoAnnotationContract(graph, immutableSchema)
                 val interfaceContractResolution = workspace.resolveDtoInterfaceContracts(graph)
                 val configContractResolution = DtoConfigContractResolver(
                     workspace = workspace,

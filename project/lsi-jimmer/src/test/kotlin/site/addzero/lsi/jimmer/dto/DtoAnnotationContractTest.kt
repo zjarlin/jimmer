@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
 import java.lang.reflect.GenericArrayType
 import java.lang.reflect.ParameterizedType
@@ -20,7 +20,6 @@ import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
-import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiOrigin
@@ -38,8 +37,11 @@ import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
+import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
@@ -59,7 +61,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoVariance
 
-class JimmerDtoAnnotationContractTest {
+class DtoAnnotationContractTest {
     @Test
     fun `freezes declaration kind placements and kotlin value vararg`() {
         val fixture = fixture()
@@ -67,26 +69,26 @@ class JimmerDtoAnnotationContractTest {
         val kotlinDeclaration = contract.declarationsByTypeId.getValue(KOTLIN_TAG)
         val javaDeclaration = contract.declarationsByTypeId.getValue(JAVA_TAG)
 
-        assertEquals(JimmerDtoAnnotationDeclarationKind.KOTLIN, kotlinDeclaration.kind)
+        assertEquals(DtoAnnotationDeclarationKind.KOTLIN, kotlinDeclaration.kind)
         assertTrue(kotlinDeclaration.targetDeclared)
         assertEquals(
             listOf(
-                JimmerDtoAnnotationPlacement.FIELD,
-                JimmerDtoAnnotationPlacement.GETTER,
-                JimmerDtoAnnotationPlacement.PROPERTY,
+                DtoAnnotationPlacement.FIELD,
+                DtoAnnotationPlacement.GETTER,
+                DtoAnnotationPlacement.PROPERTY,
             ),
             kotlinDeclaration.allowedPlacements,
         )
         assertEquals(listOf("value"), kotlinDeclaration.argumentNames)
         assertTrue(kotlinDeclaration.kotlinValueVararg)
 
-        assertEquals(JimmerDtoAnnotationDeclarationKind.JAVA, javaDeclaration.kind)
+        assertEquals(DtoAnnotationDeclarationKind.JAVA, javaDeclaration.kind)
         assertTrue(javaDeclaration.targetDeclared)
         assertEquals(
             listOf(
-                JimmerDtoAnnotationPlacement.TYPE,
-                JimmerDtoAnnotationPlacement.FIELD,
-                JimmerDtoAnnotationPlacement.GETTER,
+                DtoAnnotationPlacement.TYPE,
+                DtoAnnotationPlacement.FIELD,
+                DtoAnnotationPlacement.GETTER,
             ),
             javaDeclaration.allowedPlacements,
         )
@@ -130,17 +132,15 @@ class JimmerDtoAnnotationContractTest {
             listOf("FIELD", "METHOD"),
             emptyList(),
         )
-        val contract = JimmerDtoAnnotationContractFreezer(
-            LsiWorkspace(declarations = fixture.workspace.declarations + declarations),
-            schema,
-        ).freeze(graph)
+        val workspace = LsiWorkspace(declarations = fixture.workspace.declarations + declarations)
+        val contract = workspace.resolveDtoAnnotationContract(graph, schema)
         val validationApplications = contract.propPlansByPropId
             .getValue(NAME_DTO_PROP)
             .propertyApplications
-            .filter { application -> application.annotation.typeId in setOf(javaxNull, jakartaNotNull) }
+            .filter { application -> application.annotation.type in setOf(javaxNull, jakartaNotNull) }
 
-        assertEquals(setOf(javaxNull, jakartaNotNull), validationApplications.map { it.annotation.typeId }.toSet())
-        assertTrue(validationApplications.all { application -> application.origin == JimmerDtoAnnotationOrigin.DTO })
+        assertEquals(setOf(javaxNull, jakartaNotNull), validationApplications.map { it.annotation.type }.toSet())
+        assertTrue(validationApplications.all { application -> application.origin == DtoAnnotationOrigin.DTO })
         assertTrue(contract.declarationsByTypeId.keys.none { typeId -> typeId.value == "demo.Nullable" })
         assertTrue(contract.diagnostics.isEmpty(), contract.diagnostics.joinToString { diagnostic -> diagnostic.message })
     }
@@ -166,10 +166,8 @@ class JimmerDtoAnnotationContractTest {
             targetNames = null,
             argumentNames = emptyList(),
         )
-        val contract = JimmerDtoAnnotationContractFreezer(
-            LsiWorkspace(declarations = fixture.workspace.declarations + declaration),
-            fixture.schema,
-        ).freeze(graph)
+        val workspace = LsiWorkspace(declarations = fixture.workspace.declarations + declaration)
+        val contract = workspace.resolveDtoAnnotationContract(graph, fixture.schema)
         val frozenDeclaration = contract.declarationsByTypeId.getValue(annotationTypeId)
         val typeApplications = contract.typePlansByTypeId.getValue(ROOT_DTO_TYPE).applications
         val propApplications = contract.propPlansByPropId.getValue(NAME_DTO_PROP).propertyApplications
@@ -177,10 +175,10 @@ class JimmerDtoAnnotationContractTest {
         assertFalse(frozenDeclaration.targetDeclared)
         assertTrue(frozenDeclaration.allowedPlacements.isEmpty())
         assertEquals(
-            listOf(JimmerDtoAnnotationPlacement.TYPE),
-            typeApplications.single { application -> application.annotation.typeId == annotationTypeId }.placements,
+            listOf(DtoAnnotationPlacement.TYPE),
+            typeApplications.single { application -> application.annotation.type == annotationTypeId }.placements,
         )
-        assertTrue(propApplications.none { application -> application.annotation.typeId == annotationTypeId })
+        assertTrue(propApplications.none { application -> application.annotation.type == annotationTypeId })
         assertTrue(contract.diagnostics.isEmpty(), contract.diagnostics.joinToString { diagnostic -> diagnostic.message })
 
         val targetDeclaredContract = contract.copy(
@@ -206,10 +204,10 @@ class JimmerDtoAnnotationContractTest {
             .getValue(NAME_DTO_PROP)
             .propertyApplications
         val typeApplicationsByName = typeApplications.associateBy { application ->
-            application.annotation.typeId.requireTypeQualifiedName()
+            application.annotation.type.requireTypeQualifiedName()
         }
         val propApplicationsByName = propApplications.groupBy { application ->
-            application.annotation.typeId.requireTypeQualifiedName()
+            application.annotation.type.requireTypeQualifiedName()
         }
 
         assertEquals(
@@ -222,20 +220,20 @@ class JimmerDtoAnnotationContractTest {
             typeApplicationsByName.keys,
         )
         assertEquals(
-            JimmerDtoAnnotationOrigin.DTO,
+            DtoAnnotationOrigin.DTO,
             typeApplicationsByName.getValue("demo.Shared").origin,
         )
         assertEquals(
-            JimmerDtoAnnotationOrigin.DTO,
+            DtoAnnotationOrigin.DTO,
             typeApplicationsByName.getValue("other.demo.Shared").origin,
         )
         assertEquals(
-            JimmerDtoAnnotationOrigin.IMMUTABLE,
+            DtoAnnotationOrigin.IMMUTABLE,
             typeApplicationsByName.getValue("demo.BaseOnly").origin,
         )
         assertEquals(
             listOf("value"),
-            typeApplicationsByName.getValue("demo.BaseOnly").annotation.arguments.map { argument -> argument.name },
+            typeApplicationsByName.getValue("demo.BaseOnly").annotation.arguments.keys.toList(),
         )
         assertEquals(
             setOf("demo.JavaTag", "demo.KotlinTag"),
@@ -243,23 +241,23 @@ class JimmerDtoAnnotationContractTest {
         )
         assertEquals(1, propApplicationsByName.getValue("demo.JavaTag").size)
         assertEquals(
-            JimmerDtoAnnotationOrigin.DTO,
+            DtoAnnotationOrigin.DTO,
             propApplicationsByName.getValue("demo.JavaTag").single().origin,
         )
         assertEquals(
-            listOf(JimmerDtoAnnotationPlacement.FIELD, JimmerDtoAnnotationPlacement.GETTER),
+            listOf(DtoAnnotationPlacement.FIELD, DtoAnnotationPlacement.GETTER),
             propApplicationsByName.getValue("demo.JavaTag").single().placements,
         )
         assertEquals(
             listOf(
-                JimmerDtoAnnotationPlacement.FIELD,
-                JimmerDtoAnnotationPlacement.GETTER,
-                JimmerDtoAnnotationPlacement.PROPERTY,
+                DtoAnnotationPlacement.FIELD,
+                DtoAnnotationPlacement.GETTER,
+                DtoAnnotationPlacement.PROPERTY,
             ),
             propApplicationsByName.getValue("demo.KotlinTag").single().placements,
         )
         val allNames = (typeApplications + propApplications).map { application ->
-            application.annotation.typeId.requireTypeQualifiedName()
+            application.annotation.type.requireTypeQualifiedName()
         }
         assertTrue(allNames.none { name -> name.startsWith("org.babyfish.jimmer.sql.") })
         assertTrue(allNames.none { name -> name.substringAfterLast('.') in setOf("Nullable", "NotNull") })
@@ -273,12 +271,30 @@ class JimmerDtoAnnotationContractTest {
         val reordered = fixture(reversed = true).freeze()
         val changedTargets = fixture(kotlinTargets = listOf("FIELD", "PROPERTY_GETTER")).freeze()
         val changedVararg = fixture(kotlinValueVararg = false).freeze()
+        val changedMemberType = first.copy(
+            declarations = first.declarations.map { declaration ->
+                if (declaration.typeId != KOTLIN_TAG) {
+                    declaration
+                } else {
+                    declaration.copy(
+                        argumentTypes = declaration.argumentTypes.mapValues { (_, type) ->
+                            if (type is LsiArrayType) {
+                                LsiArrayType(LsiDeclaredType(LsiSymbolId.type("java.lang.Object")))
+                            } else {
+                                type
+                            }
+                        }
+                    )
+                }
+            },
+        )
 
         assertNotEquals(first.normalizedSnapshot(), reordered.normalizedSnapshot())
         assertNotEquals(first.fingerprint(), reordered.fingerprint())
         assertEquals(64, first.fingerprint().length)
         assertNotEquals(first.fingerprint(), changedTargets.fingerprint())
         assertNotEquals(first.fingerprint(), changedVararg.fingerprint())
+        assertNotEquals(first.fingerprint(), changedMemberType.fingerprint())
         assertTrue("KOTLIN" in first.normalizedSnapshot())
         assertTrue("PROPERTY" in first.normalizedSnapshot())
     }
@@ -319,24 +335,22 @@ class JimmerDtoAnnotationContractTest {
             listOf("TYPE"),
             listOf("value"),
         )
-        val contract = JimmerDtoAnnotationContractFreezer(
-            LsiWorkspace(declarations = fixture.workspace.declarations + declarations),
-            schema,
-        ).freeze(graph)
+        val workspace = LsiWorkspace(declarations = fixture.workspace.declarations + declarations)
+        val contract = workspace.resolveDtoAnnotationContract(graph, schema)
         val applications = contract.typePlansByTypeId.getValue(ROOT_DTO_TYPE).applications
 
         assertEquals(
             listOf("base-first", "base-first", "base-last"),
-            applications.filter { application -> application.annotation.typeId == inheritedOnly }
+            applications.filter { application -> application.annotation.type == inheritedOnly }
                 .map(::annotationStringValue),
         )
         assertEquals(
-            listOf("\"dto-first\"", "\"dto-first\"", "\"dto-last\""),
-            applications.filter { application -> application.annotation.typeId == overridden }
-                .map(::annotationSourceValue),
+            listOf("dto-first", "dto-first", "dto-last"),
+            applications.filter { application -> application.annotation.type == overridden }
+                .map(::annotationStringValue),
         )
         assertTrue(applications.none { application ->
-            application.annotation.typeId == overridden && application.origin == JimmerDtoAnnotationOrigin.IMMUTABLE
+            application.annotation.type == overridden && application.origin == DtoAnnotationOrigin.IMMUTABLE
         })
     }
 
@@ -381,23 +395,21 @@ class JimmerDtoAnnotationContractTest {
             listOf("FIELD", "METHOD"),
             emptyList(),
         )
-        val contract = JimmerDtoAnnotationContractFreezer(
-            LsiWorkspace(declarations = fixture.workspace.declarations + declarations),
-            schema,
-        ).freeze(graph)
+        val workspace = LsiWorkspace(declarations = fixture.workspace.declarations + declarations)
+        val contract = workspace.resolveDtoAnnotationContract(graph, schema)
         val applications = contract.propPlansByPropId.getValue(NAME_DTO_PROP).propertyApplications
 
         assertEquals(
             listOf(
-                listOf(JimmerDtoAnnotationPlacement.FIELD, JimmerDtoAnnotationPlacement.GETTER),
-                listOf(JimmerDtoAnnotationPlacement.FIELD, JimmerDtoAnnotationPlacement.GETTER),
+                listOf(DtoAnnotationPlacement.FIELD, DtoAnnotationPlacement.GETTER),
+                listOf(DtoAnnotationPlacement.FIELD, DtoAnnotationPlacement.GETTER),
             ),
-            applications.filter { application -> application.annotation.typeId == immutableTag }
-                .map(JimmerDtoAnnotationApplication::placements),
+            applications.filter { application -> application.annotation.type == immutableTag }
+                .map(DtoAnnotationApplication::placements),
         )
         assertEquals(
-            listOf(JimmerDtoAnnotationPlacement.FIELD, JimmerDtoAnnotationPlacement.GETTER),
-            applications.single { application -> application.annotation.typeId == dtoTag }.placements,
+            listOf(DtoAnnotationPlacement.FIELD, DtoAnnotationPlacement.GETTER),
+            applications.single { application -> application.annotation.type == dtoTag }.placements,
         )
         assertTrue(contract.diagnostics.isEmpty(), contract.diagnostics.joinToString { diagnostic -> diagnostic.message })
     }
@@ -407,8 +419,8 @@ class JimmerDtoAnnotationContractTest {
         val fixture = builderChainFixture(inputBuilder = true)
         val contract = fixture.freeze()
         val plan = contract.propPlansByPropId.getValue(CHAIN_DTO_PROP)
-        val propertyTypeIds = plan.propertyApplications.map { application -> application.annotation.typeId }
-        val builderTypeIds = plan.builderSetterApplications.map { application -> application.annotation.typeId }
+        val propertyTypeIds = plan.propertyApplications.map { application -> application.annotation.type }
+        val builderTypeIds = plan.builderSetterApplications.map { application -> application.annotation.type }
 
         assertEquals(
             listOf(
@@ -426,17 +438,17 @@ class JimmerDtoAnnotationContractTest {
         )
         assertEquals(
             STORE_NAME_PROP,
-            plan.propertyApplications.single { application -> application.annotation.typeId == JSON_SERIALIZE }
+            plan.propertyApplications.single { application -> application.annotation.type == JSON_SERIALIZE }
                 .sourceSymbolId,
         )
         assertEquals(
-            JimmerDtoAnnotationOrigin.DTO,
-            plan.builderSetterApplications.single { application -> application.annotation.typeId == JSON_DESERIALIZE }
+            DtoAnnotationOrigin.DTO,
+            plan.builderSetterApplications.single { application -> application.annotation.type == JSON_DESERIALIZE }
                 .origin,
         )
         assertEquals(
             STORE_PROP,
-            plan.builderSetterApplications.single { application -> application.annotation.typeId == JSON_IGNORE }
+            plan.builderSetterApplications.single { application -> application.annotation.type == JSON_IGNORE }
                 .sourceSymbolId,
         )
         assertTrue(JSON_IGNORE !in propertyTypeIds)
@@ -487,7 +499,7 @@ class JimmerDtoAnnotationContractTest {
                 )
             ),
         )
-        val contract = JimmerDtoAnnotationContractFreezer(fixture.workspace, fixture.schema).freeze(graph)
+        val contract = fixture.workspace.resolveDtoAnnotationContract(graph, fixture.schema)
 
         assertTrue(contract.propPlansByPropId.values.all { plan ->
             plan.builderSetterApplications.isEmpty()
@@ -551,36 +563,37 @@ class JimmerDtoAnnotationContractTest {
             qualifiedName = "demo.StandardTypes",
             targetNames = listOf("FIELD"),
             argumentNames = listOf("any", "array", "list", "string"),
+            argumentTypes = listOf("any", "array", "list", "string").associateWith {
+                LsiDeclaredType(CLASS_TYPE)
+            },
         )
-        val contract = JimmerDtoAnnotationContractFreezer(
-            workspace = LsiWorkspace(declarations = base.workspace.declarations + standardDeclarations),
-            immutableSchema = base.schema,
-        ).freeze(graph)
+        val workspace = LsiWorkspace(declarations = base.workspace.declarations + standardDeclarations)
+        val contract = workspace.resolveDtoAnnotationContract(graph, base.schema)
         val annotation = contract.propPlansByPropId
             .getValue(NAME_DTO_PROP)
             .propertyApplications
-            .single { application -> application.annotation.typeId == STANDARD_TYPES }
+            .single { application -> application.annotation.type == STANDARD_TYPES }
             .annotation
-        val values = annotation.arguments.associate { argument -> argument.name to argument.value }
+        val values = annotation.arguments.mapValues { (_, argument) -> argument.value }
 
         val stringType = assertIs<LsiDeclaredType>(
-            assertIs<JimmerDtoAppliedAnnotationValue.TypeValue>(values.getValue("string")).type
+            assertIs<LsiAnnotationValue.ClassValue>(values.getValue("string")).type
         )
         val anyType = assertIs<LsiDeclaredType>(
-            assertIs<JimmerDtoAppliedAnnotationValue.TypeValue>(values.getValue("any")).type
+            assertIs<LsiAnnotationValue.ClassValue>(values.getValue("any")).type
         )
         val listType = assertIs<LsiDeclaredType>(
-            assertIs<JimmerDtoAppliedAnnotationValue.TypeValue>(values.getValue("list")).type
+            assertIs<LsiAnnotationValue.ClassValue>(values.getValue("list")).type
         )
         val arrayType = assertIs<LsiArrayType>(
-            assertIs<JimmerDtoAppliedAnnotationValue.TypeValue>(values.getValue("array")).type
+            assertIs<LsiAnnotationValue.ClassValue>(values.getValue("array")).type
         )
 
-        assertEquals(LsiSymbolId.type("kotlin.String"), stringType.declarationId)
-        assertEquals(LsiSymbolId.type("kotlin.Any"), anyType.declarationId)
-        assertEquals(LsiSymbolId.type("kotlin.collections.List"), listType.declarationId)
+        assertEquals(LsiSymbolId.type("java.lang.String"), stringType.declarationId)
+        assertEquals(LsiSymbolId.type("java.lang.Object"), anyType.declarationId)
+        assertEquals(LsiSymbolId.type("java.util.List"), listType.declarationId)
         assertEquals(
-            LsiSymbolId.type("kotlin.String"),
+            LsiSymbolId.type("java.lang.String"),
             assertIs<LsiDeclaredType>(listType.arguments.single().type).declarationId,
         )
         assertEquals(
@@ -622,12 +635,11 @@ class JimmerDtoAnnotationContractTest {
     @Test
     fun `contract field graph contains no frontend or poet types`() {
         val signatures = reachableFieldTypeSignatures(
-            JimmerDtoAnnotationContract::class.java,
-            JimmerDtoAnnotationDeclaration::class.java,
-            JimmerDtoAnnotationApplication::class.java,
-            JimmerDtoBuilderSetterAnnotationApplication::class.java,
-            JimmerDtoAppliedAnnotation::class.java,
-            JimmerDtoAppliedAnnotationValue::class.java,
+            DtoAnnotationContract::class.java,
+            DtoAnnotationDeclaration::class.java,
+            DtoAnnotationApplication::class.java,
+            DtoBuilderSetterAnnotationApplication::class.java,
+            LsiAnnotation::class.java,
         )
         val forbidden = signatures.filter { signature ->
             FORBIDDEN_TYPE_PREFIXES.any(signature::contains)
@@ -636,8 +648,8 @@ class JimmerDtoAnnotationContractTest {
         assertTrue(forbidden.isEmpty(), "DTO annotation contract exposes platform types: $forbidden")
     }
 
-    private fun Fixture.freeze(): JimmerDtoAnnotationContract {
-        return JimmerDtoAnnotationContractFreezer(workspace, schema).freeze(graph)
+    private fun Fixture.freeze(): DtoAnnotationContract {
+        return workspace.resolveDtoAnnotationContract(graph, schema)
     }
 
     private fun fixture(
@@ -690,7 +702,14 @@ class JimmerDtoAnnotationContractTest {
         val declarations = buildList {
             addAll(javaAnnotationDeclaration("demo.Shared", listOf("TYPE"), listOf("value")))
             addAll(javaAnnotationDeclaration("other.demo.Shared", listOf("TYPE"), listOf("value")))
-            addAll(javaAnnotationDeclaration("demo.BaseOnly", listOf("TYPE"), listOf("ignored", "value")))
+            addAll(
+                javaAnnotationDeclaration(
+                    "demo.BaseOnly",
+                    listOf("TYPE"),
+                    listOf("ignored", "value"),
+                    defaultArgumentNames = setOf("ignored"),
+                )
+            )
             addAll(javaAnnotationDeclaration("org.babyfish.jimmer.client.ApiIgnore", listOf("TYPE"), emptyList()))
             addAll(javaAnnotationDeclaration("demo.JavaTag", listOf("TYPE", "FIELD", "METHOD"), listOf("value")))
             addAll(kotlinAnnotationDeclaration("demo.KotlinTag", kotlinTargets, kotlinValueVararg))
@@ -917,6 +936,50 @@ class JimmerDtoAnnotationContractTest {
         )
     }
 
+    private fun completeEntityProps(
+        ownerTypeId: LsiSymbolId,
+        props: List<ImmutableProp>,
+    ): List<ImmutableProp> {
+        if (props.any { prop -> prop.primaryMapping == PrimaryMapping.ID }) {
+            return props
+        }
+        val id = LsiSymbolId.property(ownerTypeId, "id")
+        return listOf(
+            ImmutableProp(
+                id = id,
+                declarationId = id,
+                ownerTypeId = ownerTypeId,
+                declaringTypeId = ownerTypeId,
+                name = "id",
+                documentation = null,
+                type = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+                annotations = listOf(LsiAnnotation(ID_ANNOTATION_TYPE)),
+                overrideChain = listOf(id),
+                inherited = false,
+                overridden = false,
+                nullable = false,
+                list = false,
+                association = false,
+                embedded = false,
+                targetTypeId = null,
+                primaryMapping = PrimaryMapping.ID,
+                primaryAnnotationTypeId = ID_ANNOTATION_TYPE,
+                defaultContract = null,
+                associationKind = AssociationKind.NONE,
+                formulaKind = FormulaKind.NONE,
+                mappedBy = null,
+                associationStorage = AssociationStorageKind.NONE,
+                transientResolver = null,
+                view = null,
+                genericTarget = false,
+                remote = false,
+                recursive = false,
+                validations = emptyList(),
+                converter = null,
+            )
+        ) + props
+    }
+
     private fun graph(
         typeAnnotations: List<DtoAnnotation>,
         propAnnotations: List<DtoAnnotation>,
@@ -971,13 +1034,19 @@ class JimmerDtoAnnotationContractTest {
         qualifiedName: String,
         targetNames: List<String>?,
         argumentNames: List<String>,
+        argumentTypes: Map<String, LsiTypeRef> = emptyMap(),
+        defaultArgumentNames: Set<String> = emptySet(),
     ): List<LsiDeclaration> {
         val declaration = typeDeclaration(
             qualifiedName = qualifiedName,
             kind = LsiTypeDeclarationKind.ANNOTATION,
             annotations = targetNames?.let { names -> listOf(javaTarget(names)) }.orEmpty(),
             annotationMembers = argumentNames.map { argumentName ->
-                LsiAnnotationMember(argumentName, LsiDeclaredType(STRING_TYPE))
+                LsiAnnotationMember(
+                    argumentName,
+                    argumentTypes[argumentName] ?: LsiDeclaredType(STRING_TYPE),
+                    hasDefault = argumentName in defaultArgumentNames,
+                )
             },
             language = LsiLanguage.JAVA,
         )
@@ -1088,14 +1157,9 @@ class JimmerDtoAnnotationContractTest {
         return LsiAnnotation(LsiSymbolId.type(qualifiedName), arguments, useSiteTarget)
     }
 
-    private fun annotationStringValue(application: JimmerDtoAnnotationApplication): String {
-        val argument = application.annotation.arguments.single { argument -> argument.name == "value" }
-        return assertIs<JimmerDtoAppliedAnnotationValue.ScalarValue>(argument.value).value
-    }
-
-    private fun annotationSourceValue(application: JimmerDtoAnnotationApplication): String {
-        val argument = application.annotation.arguments.single { argument -> argument.name == "value" }
-        return assertIs<JimmerDtoAppliedAnnotationValue.SourceLiteralValue>(argument.value).code
+    private fun annotationStringValue(application: DtoAnnotationApplication): String {
+        val argument = application.annotation.arguments.getValue("value")
+        return assertIs<LsiAnnotationValue.StringValue>(argument.value).value
     }
 
     private fun dtoAnnotation(
@@ -1154,6 +1218,8 @@ class JimmerDtoAnnotationContractTest {
         private val BOOK_TYPE = LsiSymbolId.type("demo.Book")
         private val STORE_TYPE = LsiSymbolId.type("demo.Store")
         private val STRING_TYPE = LsiSymbolId.type("java.lang.String")
+        private val CLASS_TYPE = LsiSymbolId.type("java.lang.Class")
+        private val ID_ANNOTATION_TYPE = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         private val NAME_PROP = LsiSymbolId.property(BOOK_TYPE, "name")
         private val STORE_PROP = LsiSymbolId.property(BOOK_TYPE, "store")
         private val STORE_NAME_PROP = LsiSymbolId.property(STORE_TYPE, "name")

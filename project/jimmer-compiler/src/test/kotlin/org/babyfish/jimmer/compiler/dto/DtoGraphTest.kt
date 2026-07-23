@@ -52,6 +52,7 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
@@ -72,10 +73,12 @@ import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoPredicate
 import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoPropConfig
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoPropPathNode
 import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoTypeArgument
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
@@ -871,13 +874,13 @@ class DtoGraphTest {
                     inputSnapshot = CompilerInputDocumentSnapshot(document, emptyList()),
                     targetTypeIds = listOf(BOOK_TYPE_ID),
                     graph = graph,
-                    annotationContract = JimmerDtoAnnotationContract(
+                    annotationContract = DtoAnnotationContract(
                         declarations = emptyList(),
                         typePlans = graph.types.map { type ->
-                            JimmerDtoTypeAnnotationPlan(type.id, emptyList())
+                            DtoTypeAnnotationPlan(type.id, emptyList())
                         },
                         propPlans = graph.props.map { prop ->
-                            JimmerDtoPropAnnotationPlan(prop.id, emptyList(), emptyList())
+                            DtoPropAnnotationPlan(prop.id, emptyList(), emptyList())
                         },
                         diagnostics = emptyList(),
                     ),

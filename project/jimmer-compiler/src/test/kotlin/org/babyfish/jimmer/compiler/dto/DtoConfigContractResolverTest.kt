@@ -42,6 +42,7 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
@@ -51,8 +52,10 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPropConfig
+import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class DtoConfigContractResolverTest {
@@ -819,10 +822,10 @@ class DtoConfigContractResolverTest {
                     inputSnapshot = CompilerInputDocumentSnapshot(DOCUMENT, emptyList()),
                     targetTypeIds = listOf(BOOK_TYPE_ID),
                     graph = GRAPH,
-                    annotationContract = JimmerDtoAnnotationContract(
+                    annotationContract = DtoAnnotationContract(
                         declarations = emptyList(),
-                        typePlans = listOf(JimmerDtoTypeAnnotationPlan(DTO_TYPE_ID, emptyList())),
-                        propPlans = listOf(JimmerDtoPropAnnotationPlan(DTO_PROP_ID, emptyList(), emptyList())),
+                        typePlans = listOf(DtoTypeAnnotationPlan(DTO_TYPE_ID, emptyList())),
+                        propPlans = listOf(DtoPropAnnotationPlan(DTO_PROP_ID, emptyList(), emptyList())),
                         diagnostics = emptyList(),
                     ),
                     interfaceContractResolution = DtoInterfaceContractResolution(

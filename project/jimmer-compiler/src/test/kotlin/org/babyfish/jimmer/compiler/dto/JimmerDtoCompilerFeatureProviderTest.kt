@@ -56,12 +56,19 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
+import site.addzero.lsi.jimmer.dto.DtoAnnotationApplication
+import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclaration
+import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
+import site.addzero.lsi.jimmer.dto.DtoAnnotationOrigin
+import site.addzero.lsi.jimmer.dto.DtoAnnotationPlacement
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoInterfaceAccessorContract
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
 import site.addzero.lsi.jimmer.dto.DtoInterfacePropContract
 import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 
 class JimmerDtoCompilerFeatureProviderTest {
     @Test
@@ -278,11 +285,11 @@ class JimmerDtoCompilerFeatureProviderTest {
         assertTrue(document.annotationContract.diagnostics.isEmpty())
         assertEquals(
             document.graph.types.map(DtoType::id),
-            document.annotationContract.typePlans.map(JimmerDtoTypeAnnotationPlan::typeId),
+            document.annotationContract.typePlans.map(DtoTypeAnnotationPlan::typeId),
         )
         assertEquals(
             document.graph.props.map(DtoProp::id),
-            document.annotationContract.propPlans.map(JimmerDtoPropAnnotationPlan::propId),
+            document.annotationContract.propPlans.map(DtoPropAnnotationPlan::propId),
         )
         assertTrue(document.interfaceContractResolution.successful)
         assertEquals(
@@ -504,13 +511,13 @@ class JimmerDtoCompilerFeatureProviderTest {
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, state.status)
         assertFalse(noTargetDeclaration.targetDeclared)
         assertEquals(
-            listOf(JimmerDtoAnnotationPlacement.TYPE),
-            typeApplications.single { application -> application.annotation.typeId == noTargetTypeId }.placements,
+            listOf(DtoAnnotationPlacement.TYPE),
+            typeApplications.single { application -> application.annotation.type == noTargetTypeId }.placements,
         )
-        assertTrue(propApplications.none { application -> application.annotation.typeId == noTargetTypeId })
+        assertTrue(propApplications.none { application -> application.annotation.type == noTargetTypeId })
         assertEquals(
-            JimmerDtoAnnotationOrigin.DTO,
-            propApplications.single { application -> application.annotation.typeId == notNullTypeId }.origin,
+            DtoAnnotationOrigin.DTO,
+            propApplications.single { application -> application.annotation.type == notNullTypeId }.origin,
         )
         assertTrue(contract.diagnostics.isEmpty(), contract.diagnostics.joinToString { diagnostic -> diagnostic.message })
         assertTrue("annotation-contract-record|" in state.schema.normalizedSnapshot())
@@ -628,12 +635,12 @@ class JimmerDtoCompilerFeatureProviderTest {
         val rootTypeId = document.graph.rootTypeIds.single()
         val annotationContract = document.annotationContract.copy(
             declarations = listOf(
-                JimmerDtoAnnotationDeclaration(
+                DtoAnnotationDeclaration(
                     typeId = markerTypeId,
-                    kind = JimmerDtoAnnotationDeclarationKind.JAVA,
+                    kind = DtoAnnotationDeclarationKind.JAVA,
                     targetDeclared = true,
-                    allowedPlacements = listOf(JimmerDtoAnnotationPlacement.TYPE),
-                    argumentNames = emptyList(),
+                    allowedPlacements = listOf(DtoAnnotationPlacement.TYPE),
+                    argumentTypes = emptyMap(),
                     kotlinValueVararg = false,
                 )
             ),
@@ -643,11 +650,11 @@ class JimmerDtoCompilerFeatureProviderTest {
                 } else {
                     plan.copy(
                         applications = listOf(
-                            JimmerDtoAnnotationApplication(
-                                annotation = JimmerDtoAppliedAnnotation(markerTypeId, emptyList()),
-                                origin = JimmerDtoAnnotationOrigin.DTO,
+                            DtoAnnotationApplication(
+                                annotation = LsiAnnotation(markerTypeId),
+                                origin = DtoAnnotationOrigin.DTO,
                                 sourceSymbolId = null,
-                                placements = listOf(JimmerDtoAnnotationPlacement.TYPE),
+                                placements = listOf(DtoAnnotationPlacement.TYPE),
                             )
                         ),
                     )

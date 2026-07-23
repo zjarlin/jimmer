@@ -49,6 +49,7 @@ import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
+import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 
@@ -90,10 +91,10 @@ class JimmerDtoFrontendParityTest {
         assertEquals(listOf(AUTHOR_ID, FILTER_ID), aptConfigContract.dependencyTypeIds)
         val aptMarkerDeclaration = aptDocument.annotationContract.declarationsByTypeId.getValue(MARKER_ID)
         val kspMarkerDeclaration = kspDocument.annotationContract.declarationsByTypeId.getValue(MARKER_ID)
-        assertEquals(JimmerDtoAnnotationDeclarationKind.JAVA, aptMarkerDeclaration.kind)
-        assertEquals(JimmerDtoAnnotationDeclarationKind.KOTLIN, kspMarkerDeclaration.kind)
+        assertEquals(DtoAnnotationDeclarationKind.JAVA, aptMarkerDeclaration.kind)
+        assertEquals(DtoAnnotationDeclarationKind.KOTLIN, kspMarkerDeclaration.kind)
         assertEquals(
-            aptMarkerDeclaration.copy(kind = JimmerDtoAnnotationDeclarationKind.KOTLIN),
+            aptMarkerDeclaration.copy(kind = DtoAnnotationDeclarationKind.KOTLIN),
             kspMarkerDeclaration,
         )
         val canonicalAptSchema = JimmerDtoPrecompiledSchema(
@@ -102,7 +103,7 @@ class JimmerDtoFrontendParityTest {
                     annotationContract = aptDocument.annotationContract.copy(
                         declarations = aptDocument.annotationContract.declarations.map { declaration ->
                             if (declaration.typeId == MARKER_ID) {
-                                declaration.copy(kind = JimmerDtoAnnotationDeclarationKind.KOTLIN)
+                                declaration.copy(kind = DtoAnnotationDeclarationKind.KOTLIN)
                             } else {
                                 declaration
                             }

@@ -2,6 +2,7 @@ package site.addzero.lsi.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -49,6 +50,407 @@ class LsiTypeSystemTest {
         assertEquals(
             "type:sample.Base<type:java.lang.String!non-null>!non-null",
             typeSystem.resolveSuperType(entityId, baseId)?.stableSignature(),
+        )
+    }
+
+    @Test
+    fun `resolves generic super type from parameterized subtype`() {
+        val baseId = LsiSymbolId.type("sample.Base")
+        val childId = LsiSymbolId.type("sample.Child")
+        val baseParameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val childParameterId = LsiSymbolId.typeParameter(childId, "T")
+        val base = type(
+            id = baseId,
+            parameters = listOf(LsiTypeParameter(baseParameterId, "T")),
+        )
+        val child = type(
+            id = childId,
+            parameters = listOf(LsiTypeParameter(childParameterId, "T")),
+            superTypes = listOf(
+                LsiDeclaredType(
+                    declarationId = baseId,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiTypeParameterRef(childParameterId)),
+                    ),
+                )
+            ),
+        )
+        val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val childOfString = LsiDeclaredType(
+            declarationId = childId,
+            arguments = listOf(LsiTypeArgument.invariant(stringType)),
+        )
+        val typeSystem = LsiTypeSystem(LsiWorkspace(declarations = listOf(base, child)))
+
+        assertEquals(
+            LsiDeclaredType(
+                declarationId = baseId,
+                arguments = listOf(LsiTypeArgument.invariant(stringType)),
+            ),
+            typeSystem.resolveSuperType(childOfString, baseId),
+        )
+    }
+
+    @Test
+    fun `preserves projected arguments while resolving generic super types`() {
+        val baseId = LsiSymbolId.type("sample.Base")
+        val childId = LsiSymbolId.type("sample.Child")
+        val baseParameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val childParameterId = LsiSymbolId.typeParameter(childId, "T")
+        val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val base = type(
+            id = baseId,
+            parameters = listOf(LsiTypeParameter(baseParameterId, "T")),
+        )
+        val child = type(
+            id = childId,
+            parameters = listOf(LsiTypeParameter(childParameterId, "T")),
+            superTypes = listOf(
+                LsiDeclaredType(
+                    declarationId = baseId,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(LsiTypeParameterRef(childParameterId)),
+                    ),
+                )
+            ),
+        )
+        val typeSystem = LsiTypeSystem(LsiWorkspace(declarations = listOf(base, child)))
+
+        listOf(
+            LsiTypeArgument.STAR,
+            LsiTypeArgument.input(stringType),
+            LsiTypeArgument.output(stringType),
+        ).forEach { argument ->
+            assertEquals(
+                LsiDeclaredType(baseId, listOf(argument)),
+                typeSystem.resolveSuperType(LsiDeclaredType(childId, listOf(argument)), baseId),
+            )
+        }
+    }
+
+    @Test
+    fun `collapses conflicting projected arguments to star`() {
+        val baseId = LsiSymbolId.type("sample.Base")
+        val childId = LsiSymbolId.type("sample.Child")
+        val baseParameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val childParameterId = LsiSymbolId.typeParameter(childId, "T")
+        val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    id = baseId,
+                    parameters = listOf(LsiTypeParameter(baseParameterId, "T")),
+                ),
+                type(
+                    id = childId,
+                    parameters = listOf(LsiTypeParameter(childParameterId, "T")),
+                    superTypes = listOf(
+                        LsiDeclaredType(
+                            declarationId = baseId,
+                            arguments = listOf(
+                                LsiTypeArgument.output(LsiTypeParameterRef(childParameterId)),
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            LsiDeclaredType(baseId, listOf(LsiTypeArgument.STAR)),
+            LsiTypeSystem(workspace).resolveSuperType(
+                LsiDeclaredType(childId, listOf(LsiTypeArgument.input(stringType))),
+                baseId,
+            ),
+        )
+    }
+
+    @Test
+    fun `normalizes raw generic types and rejects invalid argument counts`() {
+        val baseId = LsiSymbolId.type("sample.Base")
+        val childId = LsiSymbolId.type("sample.Child")
+        val baseParameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val firstParameterId = LsiSymbolId.typeParameter(childId, "A")
+        val secondParameterId = LsiSymbolId.typeParameter(childId, "B")
+        val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    id = baseId,
+                    parameters = listOf(LsiTypeParameter(baseParameterId, "T")),
+                ),
+                type(
+                    id = childId,
+                    parameters = listOf(
+                        LsiTypeParameter(firstParameterId, "A"),
+                        LsiTypeParameter(secondParameterId, "B"),
+                    ),
+                    superTypes = listOf(
+                        LsiDeclaredType(
+                            declarationId = baseId,
+                            arguments = listOf(
+                                LsiTypeArgument.invariant(LsiTypeParameterRef(firstParameterId)),
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        )
+        val typeSystem = LsiTypeSystem(workspace)
+
+        assertEquals(
+            LsiDeclaredType(baseId, listOf(LsiTypeArgument.STAR)),
+            typeSystem.resolveSuperType(LsiDeclaredType(childId), baseId),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            typeSystem.resolveSuperType(
+                LsiDeclaredType(childId, listOf(LsiTypeArgument.invariant(stringType))),
+                baseId,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            typeSystem.resolveSuperType(
+                LsiDeclaredType(
+                    childId,
+                    List(3) { LsiTypeArgument.invariant(stringType) },
+                ),
+                baseId,
+            )
+        }
+    }
+
+    @Test
+    fun `checks nominal generic assignability with use site variance`() {
+        val baseId = LsiSymbolId.type("sample.Base")
+        val childId = LsiSymbolId.type("sample.Child")
+        val charSequenceId = LsiSymbolId.type("java.lang.CharSequence")
+        val stringId = LsiSymbolId.type("java.lang.String")
+        val baseParameterId = LsiSymbolId.typeParameter(baseId, "T")
+        val childParameterId = LsiSymbolId.typeParameter(childId, "T")
+        val charSequenceType = LsiDeclaredType(charSequenceId)
+        val stringType = LsiDeclaredType(stringId)
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(charSequenceId),
+                type(stringId, superTypes = listOf(charSequenceType)),
+                type(
+                    id = baseId,
+                    parameters = listOf(LsiTypeParameter(baseParameterId, "T")),
+                ),
+                type(
+                    id = childId,
+                    parameters = listOf(LsiTypeParameter(childParameterId, "T")),
+                    superTypes = listOf(
+                        LsiDeclaredType(
+                            baseId,
+                            listOf(LsiTypeArgument.invariant(LsiTypeParameterRef(childParameterId))),
+                        )
+                    ),
+                ),
+            ),
+        )
+        val typeSystem = LsiTypeSystem(workspace)
+        val childOfString = LsiDeclaredType(
+            childId,
+            listOf(LsiTypeArgument.invariant(stringType)),
+        )
+
+        assertTrue(
+            typeSystem.isAssignable(
+                childOfString,
+                LsiDeclaredType(baseId, listOf(LsiTypeArgument.output(charSequenceType))),
+            )
+        )
+        assertFalse(
+            typeSystem.isAssignable(
+                childOfString,
+                LsiDeclaredType(baseId, listOf(LsiTypeArgument.invariant(charSequenceType))),
+            )
+        )
+        assertTrue(
+            typeSystem.isAssignable(
+                LsiDeclaredType(baseId, listOf(LsiTypeArgument.invariant(charSequenceType))),
+                LsiDeclaredType(baseId, listOf(LsiTypeArgument.input(stringType))),
+            )
+        )
+        assertTrue(
+            typeSystem.isAssignable(
+                childOfString,
+                LsiDeclaredType(baseId, listOf(LsiTypeArgument.STAR)),
+            )
+        )
+        assertFalse(
+            typeSystem.isAssignable(
+                LsiDeclaredType(baseId),
+                LsiDeclaredType(baseId, listOf(LsiTypeArgument.invariant(stringType))),
+            )
+        )
+        assertTrue(typeSystem.isAssignable(childOfString, LsiDeclaredType(baseId)))
+    }
+
+    @Test
+    fun `honors declaration site variance and resolved nullability`() {
+        val covariantId = LsiSymbolId.type("sample.Source")
+        val contravariantId = LsiSymbolId.type("sample.Sink")
+        val charSequenceId = LsiSymbolId.type("java.lang.CharSequence")
+        val stringId = LsiSymbolId.type("java.lang.String")
+        val sourceParameterId = LsiSymbolId.typeParameter(covariantId, "T")
+        val sinkParameterId = LsiSymbolId.typeParameter(contravariantId, "T")
+        val charSequenceType = LsiDeclaredType(charSequenceId)
+        val stringType = LsiDeclaredType(stringId)
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(charSequenceId),
+                type(stringId, superTypes = listOf(charSequenceType)),
+                type(
+                    covariantId,
+                    parameters = listOf(
+                        LsiTypeParameter(sourceParameterId, "T", variance = LsiVariance.OUT),
+                    ),
+                ),
+                type(
+                    contravariantId,
+                    parameters = listOf(
+                        LsiTypeParameter(sinkParameterId, "T", variance = LsiVariance.IN),
+                    ),
+                ),
+            ),
+        )
+        val typeSystem = LsiTypeSystem(workspace)
+
+        assertTrue(
+            typeSystem.isAssignable(
+                LsiDeclaredType(covariantId, listOf(LsiTypeArgument.invariant(stringType))),
+                LsiDeclaredType(covariantId, listOf(LsiTypeArgument.invariant(charSequenceType))),
+            )
+        )
+        assertTrue(
+            typeSystem.isAssignable(
+                LsiDeclaredType(contravariantId, listOf(LsiTypeArgument.invariant(charSequenceType))),
+                LsiDeclaredType(contravariantId, listOf(LsiTypeArgument.invariant(stringType))),
+            )
+        )
+
+        val nullableString = stringType.copy(nullability = LsiNullability.NULLABLE)
+        assertTrue(typeSystem.isAssignable(nullableString, charSequenceType.copy(nullability = LsiNullability.NULLABLE)))
+        assertFalse(typeSystem.isAssignable(nullableString, charSequenceType))
+        assertEquals(
+            LsiNullability.NULLABLE,
+            typeSystem.resolveSuperType(nullableString, charSequenceId)?.nullability,
+        )
+    }
+
+    @Test
+    fun `checks primitive array function and type parameter assignability`() {
+        val charSequenceId = LsiSymbolId.type("java.lang.CharSequence")
+        val stringId = LsiSymbolId.type("java.lang.String")
+        val ownerId = LsiSymbolId.type("sample.Owner")
+        val parameterId = LsiSymbolId.typeParameter(ownerId, "T")
+        val charSequenceType = LsiDeclaredType(charSequenceId)
+        val stringType = LsiDeclaredType(stringId)
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(charSequenceId),
+                type(stringId, superTypes = listOf(charSequenceType)),
+                type(
+                    ownerId,
+                    parameters = listOf(
+                        LsiTypeParameter(
+                            id = parameterId,
+                            name = "T",
+                            upperBounds = listOf(charSequenceType),
+                        )
+                    ),
+                ),
+            ),
+        )
+        val typeSystem = LsiTypeSystem(workspace)
+        val intType = LsiPrimitiveType(LsiPrimitiveKind.INT)
+
+        assertTrue(typeSystem.isAssignable(intType, intType))
+        assertFalse(typeSystem.isAssignable(intType, intType.copy(boxed = true)))
+        assertFalse(
+            typeSystem.isAssignable(
+                intType,
+                LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            )
+        )
+        assertTrue(
+            typeSystem.isAssignable(
+                LsiArrayType(stringType),
+                LsiArrayType(stringType),
+            )
+        )
+        assertFalse(
+            typeSystem.isAssignable(
+                LsiArrayType(stringType),
+                LsiArrayType(charSequenceType),
+            )
+        )
+        assertTrue(
+            typeSystem.isAssignable(
+                LsiFunctionType(
+                    returnType = stringType,
+                    parameterTypes = listOf(charSequenceType),
+                ),
+                LsiFunctionType(
+                    returnType = charSequenceType,
+                    parameterTypes = listOf(stringType),
+                ),
+            )
+        )
+        assertFalse(
+            typeSystem.isAssignable(
+                LsiFunctionType(returnType = stringType),
+                LsiFunctionType(returnType = stringType, suspending = true),
+            )
+        )
+        assertTrue(
+            typeSystem.isAssignable(
+                LsiTypeParameterRef(parameterId),
+                charSequenceType,
+            )
+        )
+        assertTrue(
+            typeSystem.isAssignable(
+                LsiTypeParameterRef(parameterId),
+                LsiTypeParameterRef(parameterId),
+            )
+        )
+        assertFalse(typeSystem.isAssignable(stringType, LsiTypeParameterRef(parameterId)))
+        assertFalse(
+            typeSystem.isAssignable(
+                LsiUnresolvedType("Missing"),
+                LsiUnresolvedType("Missing"),
+            )
+        )
+    }
+
+    @Test
+    fun `uses fallback hierarchy only when workspace has no entry`() {
+        val childId = LsiSymbolId.type("sample.Child")
+        val baseId = LsiSymbolId.type("sample.Base")
+        val fallback = LsiTypeHierarchyEntry(
+            id = childId,
+            qualifiedName = "sample.Child",
+            kind = LsiTypeDeclarationKind.CLASS,
+            directSuperTypes = listOf(LsiDeclaredType(baseId)),
+        )
+
+        assertTrue(
+            LsiTypeSystem(LsiWorkspace(), listOf(fallback)).isAssignable(
+                LsiDeclaredType(childId),
+                LsiDeclaredType(baseId),
+            )
+        )
+        assertFalse(
+            LsiTypeSystem(
+                workspace = LsiWorkspace(declarations = listOf(type(childId))),
+                fallbackTypeHierarchy = listOf(fallback),
+            ).isAssignable(
+                LsiDeclaredType(childId),
+                LsiDeclaredType(baseId),
+            )
         )
     }
 

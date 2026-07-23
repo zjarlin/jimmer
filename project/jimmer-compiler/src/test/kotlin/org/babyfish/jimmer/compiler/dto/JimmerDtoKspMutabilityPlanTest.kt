@@ -17,11 +17,13 @@ import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class JimmerDtoKspMutabilityPlanTest {
@@ -94,10 +96,10 @@ class JimmerDtoKspMutabilityPlanTest {
                     inputSnapshot = CompilerInputDocumentSnapshot(DOCUMENT, emptyList()),
                     targetTypeIds = listOf(BASE_TYPE_ID),
                     graph = graph,
-                    annotationContract = JimmerDtoAnnotationContract(
+                    annotationContract = DtoAnnotationContract(
                         declarations = emptyList(),
                         typePlans = graph.types.map { type ->
-                            JimmerDtoTypeAnnotationPlan(type.id, emptyList())
+                            DtoTypeAnnotationPlan(type.id, emptyList())
                         },
                         propPlans = emptyList(),
                         diagnostics = emptyList(),

@@ -41,11 +41,21 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
+import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
+import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.resolveDtoAnnotationContract
 
 class DtoAnnotationBinaryFrontendParityTest {
 
@@ -66,22 +76,85 @@ class DtoAnnotationBinaryFrontendParityTest {
 
         val aptContract = freezeContract(aptWorkspace, JAVA_USE_ID)
         val kspContract = freezeContract(kspWorkspace, KOTLIN_USE_ID)
+        val aptTagDeclaration = aptContract.declarationsByTypeId.getValue(TAGS_ID)
+        val kspTagDeclaration = kspContract.declarationsByTypeId.getValue(TAGS_ID)
+        val aptTag = aptContract.typePlans.single().applications
+            .single { application -> application.annotation.type == TAGS_ID }
+            .annotation
+        val kspTag = kspContract.typePlans.single().applications
+            .single { application -> application.annotation.type == TAGS_ID }
+            .annotation
 
-        assertEquals(aptContract, kspContract)
-        assertEquals(JimmerDtoAnnotationDeclarationKind.KOTLIN, aptContract.kind)
-        assertEquals(listOf("value"), aptContract.argumentNames)
-        assertTrue(aptContract.kotlinValueVararg)
+        assertEquals(aptTagDeclaration, kspTagDeclaration)
+        assertEquals(aptTag, kspTag)
+        assertEquals(
+            LsiAnnotationValue.ArrayValue(
+                listOf(
+                    LsiAnnotationValue.StringValue("first"),
+                    LsiAnnotationValue.StringValue("second"),
+                )
+            ),
+            aptTag.arguments.getValue("value").value,
+        )
+        assertEquals(DtoAnnotationDeclarationKind.KOTLIN, aptTagDeclaration.kind)
+        assertEquals(listOf("value"), aptTagDeclaration.argumentNames)
+        assertTrue(aptTagDeclaration.kotlinValueVararg)
     }
 
     @Test
     fun `ksp freezes java binary annotation members exposed as properties`() {
         val library = compileJavaAnnotation()
-        val workspace = compileKspJavaAnnotationConsumer(library)
-        val declaration = assertIs<LsiTypeDeclaration>(workspace[JAVA_ANNOTATION_ID])
+        val aptWorkspace = compileAptJavaAnnotationConsumer(library)
+        val kspWorkspace = compileKspJavaAnnotationConsumer(library)
+        val declaration = assertIs<LsiTypeDeclaration>(kspWorkspace[JAVA_ANNOTATION_ID])
+        assertTrue(aptWorkspace.typeHierarchyEntry(JAVA_INTEGER_ID) == null)
+        assertTrue(kspWorkspace.typeHierarchyEntry(JAVA_INTEGER_ID) == null)
+        val aptContract = freezeContract(aptWorkspace, JAVA_JAVA_USE_ID)
+        val kspContract = freezeContract(kspWorkspace, KOTLIN_JAVA_USE_ID)
+        val aptDeclaration = aptContract.declarationsByTypeId.getValue(JAVA_ANNOTATION_ID)
+        val kspDeclaration = kspContract.declarationsByTypeId.getValue(JAVA_ANNOTATION_ID)
+        val aptAnnotation = aptContract.typePlans.single().applications.single().annotation
+        val kspAnnotation = kspContract.typePlans.single().applications.single().annotation
 
         assertEquals(
-            listOf("pattern", "value"),
+            listOf("number", "pattern", "value"),
             declaration.annotationMembers.map { member -> member.name },
+        )
+        assertEquals(aptDeclaration, kspDeclaration)
+        assertEquals(aptAnnotation, kspAnnotation)
+        assertEquals(setOf("pattern"), aptAnnotation.arguments.keys)
+        assertEquals(
+            LsiAnnotationValue.StringValue("first"),
+            aptAnnotation.arguments.getValue("pattern").value,
+        )
+
+        val dtoAnnotation = DtoAnnotation(
+            typeId = JAVA_ANNOTATION_ID,
+            arguments = listOf(
+                DtoAnnotationArgument(
+                    name = "number",
+                    value = DtoAnnotationValue.TypeValue(
+                        DtoTypeRef(
+                            typeName = "Int",
+                            arguments = emptyList(),
+                            nullable = false,
+                            location = DTO_LOCATION,
+                        )
+                    ),
+                )
+            ),
+        )
+        val aptDtoContract = freezeContract(aptWorkspace, JAVA_JAVA_USE_ID, listOf(dtoAnnotation))
+        val kspDtoContract = freezeContract(kspWorkspace, KOTLIN_JAVA_USE_ID, listOf(dtoAnnotation))
+        val aptNumberValue = aptDtoContract.typePlans.single().applications.single()
+            .annotation.arguments.getValue("number").value
+        val kspNumberValue = kspDtoContract.typePlans.single().applications.single()
+            .annotation.arguments.getValue("number").value
+
+        assertEquals(aptNumberValue, kspNumberValue)
+        assertEquals(
+            LsiPrimitiveKind.INT,
+            assertIs<LsiPrimitiveType>(assertIs<LsiAnnotationValue.ClassValue>(aptNumberValue).type).kind,
         )
     }
 
@@ -128,6 +201,7 @@ class DtoAnnotationBinaryFrontendParityTest {
 
                     @Retention(RetentionPolicy.RUNTIME)
                     public @interface JavaTags {
+                        Class<? extends Number> number() default Integer.class;
                         String pattern();
                         String[] value() default {};
                     }
@@ -162,7 +236,7 @@ class DtoAnnotationBinaryFrontendParityTest {
                 """
                     package demo
 
-                    @JavaTags(pattern = "first", value = ["second"])
+                    @JavaTags(pattern = "first")
                     interface KotlinJavaUse
                 """.trimIndent()
             )
@@ -189,6 +263,41 @@ class DtoAnnotationBinaryFrontendParityTest {
         val exitCode = KotlinSymbolProcessing(configuration, listOf(provider), logger).execute()
         assertEquals(KotlinSymbolProcessing.ExitCode.OK, exitCode, logger.messages.joinToString("\n"))
         return provider.workspaces.single { workspace -> workspace.declarations.isNotEmpty() }
+    }
+
+    private fun compileAptJavaAnnotationConsumer(library: File): LsiWorkspace {
+        val projectDir = createTempDirectory(prefix = "jimmer-dto-java-annotation-apt").toFile()
+        val source = projectDir.resolve("src/main/java/demo/JavaJavaUse.java").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText(
+                """
+                    package demo;
+
+                    @JavaTags(pattern = "first")
+                    public interface JavaJavaUse {}
+                """.trimIndent()
+            )
+        }
+        val output = projectDir.resolve("build/classes").apply(File::mkdirs)
+        val diagnostics = DiagnosticCollector<JavaFileObject>()
+        val processor = CapturingAptProcessor()
+        val compiler = ToolProvider.getSystemJavaCompiler()
+            ?: error("APT binary annotation parity requires a JDK compiler")
+        val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
+            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, listOf(output))
+            val task = compiler.getTask(
+                null,
+                fileManager,
+                diagnostics,
+                listOf("-proc:only", "-classpath", testClasspath(listOf(library))),
+                null,
+                fileManager.getJavaFileObjects(source),
+            )
+            task.setProcessors(listOf(processor))
+            task.call()
+        }
+        assertTrue(success, diagnostics.toErrorMessage())
+        return processor.workspaces.single { workspace -> workspace.declarations.isNotEmpty() }
     }
 
     private fun compileAptConsumer(library: File): LsiWorkspace {
@@ -267,7 +376,8 @@ class DtoAnnotationBinaryFrontendParityTest {
     private fun freezeContract(
         workspace: LsiWorkspace,
         baseTypeId: LsiSymbolId,
-    ): JimmerDtoAnnotationDeclaration {
+        dtoAnnotations: List<DtoAnnotation> = emptyList(),
+    ): DtoAnnotationContract {
         val baseType = assertIs<LsiTypeDeclaration>(workspace[baseTypeId])
         val props = completeEntityProps(baseTypeId)
         val immutableSchema = ImmutableSchema(
@@ -302,7 +412,7 @@ class DtoAnnotationBinaryFrontendParityTest {
             packageName = "demo.dto",
             name = "UseView",
             modifiers = emptySet(),
-            annotations = emptyList(),
+            annotations = dtoAnnotations,
             superInterfaces = emptyList(),
             documentation = null,
             location = DTO_LOCATION,
@@ -317,9 +427,9 @@ class DtoAnnotationBinaryFrontendParityTest {
             types = listOf(dtoType),
             props = emptyList(),
         )
-        val contract = JimmerDtoAnnotationContractFreezer(workspace, immutableSchema).freeze(graph)
+        val contract = workspace.resolveDtoAnnotationContract(graph, immutableSchema)
         assertTrue(contract.diagnostics.isEmpty(), contract.diagnostics.joinToString { diagnostic -> diagnostic.message })
-        return contract.declarationsByTypeId.getValue(TAGS_ID)
+        return contract
     }
 
     private fun testClasspath(additional: List<File> = emptyList()): String {
@@ -407,8 +517,11 @@ class DtoAnnotationBinaryFrontendParityTest {
     companion object {
         private val TAGS_ID = LsiSymbolId.type("demo.Tags")
         private val JAVA_ANNOTATION_ID = LsiSymbolId.type("demo.JavaTags")
+        private val JAVA_INTEGER_ID = LsiSymbolId.type("java.lang.Integer")
         private val JAVA_USE_ID = LsiSymbolId.type("demo.JavaUse")
         private val KOTLIN_USE_ID = LsiSymbolId.type("demo.KotlinUse")
+        private val JAVA_JAVA_USE_ID = LsiSymbolId.type("demo.JavaJavaUse")
+        private val KOTLIN_JAVA_USE_ID = LsiSymbolId.type("demo.KotlinJavaUse")
         private val DTO_SOURCE = LsiSource.of("dto/Use.dto")
         private val DTO_LOCATION = LsiLocation(DTO_SOURCE, LsiPosition(1, 1))
         private val DTO_TYPE_ID = DtoTypeId("dto/Use.dto#root")

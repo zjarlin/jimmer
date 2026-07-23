@@ -4,10 +4,13 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 
 internal data class JimmerDtoPrecompiledSchema(
     val documents: List<JimmerDtoPrecompiledDocument>,
@@ -28,7 +31,7 @@ internal data class JimmerDtoPrecompiledDocument(
     val inputSnapshot: CompilerInputDocumentSnapshot,
     val targetTypeIds: List<LsiSymbolId>,
     val graph: DtoGraph,
-    val annotationContract: JimmerDtoAnnotationContract,
+    val annotationContract: DtoAnnotationContract,
     val interfaceContractResolution: DtoInterfaceContractResolution,
     val configContractResolution: DtoConfigContractResolution,
 ) {
@@ -45,10 +48,10 @@ internal data class JimmerDtoPrecompiledDocument(
         }) {
             "DTO types must reference a document target type: ${inputSnapshot.document.source.path}"
         }
-        require(annotationContract.typePlans.map(JimmerDtoTypeAnnotationPlan::typeId) == graph.types.map(DtoType::id)) {
+        require(annotationContract.typePlans.map(DtoTypeAnnotationPlan::typeId) == graph.types.map(DtoType::id)) {
             "DTO annotation contract must cover every frozen DTO type: ${inputSnapshot.document.source.path}"
         }
-        require(annotationContract.propPlans.map(JimmerDtoPropAnnotationPlan::propId) == graph.props.map(DtoProp::id)) {
+        require(annotationContract.propPlans.map(DtoPropAnnotationPlan::propId) == graph.props.map(DtoProp::id)) {
             "DTO annotation contract must cover every frozen DTO property: ${inputSnapshot.document.source.path}"
         }
         require(interfaceContractResolution.contracts.all { contract -> contract.typeId in graph.typesById }) {

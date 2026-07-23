@@ -6,6 +6,7 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
@@ -24,6 +25,8 @@ import site.addzero.lsi.jimmer.dto.DtoPropPathNode
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoUserProp
+import site.addzero.lsi.jimmer.dto.fingerprint
+import site.addzero.lsi.jimmer.dto.normalizedSnapshot
 
 internal fun JimmerDtoPrecompiledSchema.normalizedSnapshot(): String {
     return buildString {
@@ -172,7 +175,7 @@ private fun StringBuilder.appendProp(prop: DtoProp) {
 
 private fun StringBuilder.appendAnnotationContract(
     documentPath: String,
-    contract: JimmerDtoAnnotationContract,
+    contract: DtoAnnotationContract,
 ) {
     appendRecord(
         "annotation-contract",
