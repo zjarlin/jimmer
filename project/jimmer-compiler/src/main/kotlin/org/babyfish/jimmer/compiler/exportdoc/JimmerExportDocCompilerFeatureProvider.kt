@@ -11,6 +11,10 @@ import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.exportdoc.ExportDocSchema
+import site.addzero.lsi.jimmer.exportdoc.ExportDocValidationException
+import site.addzero.lsi.jimmer.exportdoc.fingerprint
+import site.addzero.lsi.jimmer.exportdoc.toExportDocSchema
 
 class JimmerExportDocCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
@@ -20,13 +24,13 @@ class JimmerExportDocCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         context: JimmerCompilerPrecompileContext,
     ): JimmerCompilerFeaturePrecompileResult {
         return try {
-            val schema = ExportDocPrecompiler().compile(context.round.workspace)
+            val schema = context.round.workspace.toExportDocSchema()
             JimmerCompilerFeaturePrecompileResult(
                 state = JimmerExportDocCompilerFeatureState.resolved(schema),
                 processedSymbols = schema.exportedTypeIds
                     .filterTo(sortedSetOf(), context.round.currentWorkspace::contains),
             )
-        } catch (exception: ExportDocPrecompileException) {
+        } catch (exception: ExportDocValidationException) {
             val failure = ExportDocCompilerFailure(
                 configurationIds = exception.scopeIds,
                 location = exception.location,
@@ -90,7 +94,7 @@ internal data class ExportDocCompilerFailure(
 
 internal data class JimmerExportDocCompilerFeatureState(
     val status: JimmerExportDocCompilerFeatureStatus,
-    val schema: ExportDocPrecompiledSchema,
+    val schema: ExportDocSchema,
     val failures: List<ExportDocCompilerFailure>,
     override val fingerprint: String = buildString {
         append(status.name)
@@ -119,7 +123,7 @@ internal data class JimmerExportDocCompilerFeatureState(
     }
 
     companion object {
-        fun resolved(schema: ExportDocPrecompiledSchema): JimmerExportDocCompilerFeatureState {
+        fun resolved(schema: ExportDocSchema): JimmerExportDocCompilerFeatureState {
             return JimmerExportDocCompilerFeatureState(
                 status = JimmerExportDocCompilerFeatureStatus.RESOLVED,
                 schema = schema,
@@ -139,8 +143,8 @@ internal data class JimmerExportDocCompilerFeatureState(
 
 const val EXPORT_DOC_FEATURE_ID = "export-doc"
 
-private val EMPTY_EXPORT_DOC_SCHEMA = ExportDocPrecompiledSchema(
+private val EMPTY_EXPORT_DOC_SCHEMA = ExportDocSchema(
     effectiveConfigurationIds = emptyList(),
     exportedTypeIds = emptyList(),
-    docs = emptyList(),
+    entries = emptyList(),
 )

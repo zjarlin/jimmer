@@ -12,6 +12,8 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.exportdoc.ExportDocEntry
+import site.addzero.lsi.jimmer.exportdoc.ExportDocSchema
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPackageAnnotationScope
@@ -27,11 +29,11 @@ class ExportDocResourceRendererTest {
         val scope = packageScope()
         val type = type("demo.Special")
         val property = property(type.id, "value")
-        val schema = ExportDocPrecompiledSchema(
+        val schema = ExportDocSchema(
             effectiveConfigurationIds = listOf(scope.id),
             exportedTypeIds = listOf(type.id),
-            docs = listOf(
-                ExportedDoc(
+            entries = listOf(
+                ExportDocEntry(
                     declarationId = property.id,
                     key = "demo.Special key",
                     content = " leading\nline\t=:#!",
@@ -69,10 +71,10 @@ class ExportDocResourceRendererTest {
     @Test
     fun `exports header only when configured types have no docs`() {
         val type = type("demo.Empty")
-        val schema = ExportDocPrecompiledSchema(
+        val schema = ExportDocSchema(
             effectiveConfigurationIds = listOf(type.id),
             exportedTypeIds = listOf(type.id),
-            docs = emptyList(),
+            entries = emptyList(),
         )
 
         val artifact = requireNotNull(
@@ -90,10 +92,10 @@ class ExportDocResourceRendererTest {
 
     @Test
     fun `does not render when no types are exported`() {
-        val schema = ExportDocPrecompiledSchema(
+        val schema = ExportDocSchema(
             effectiveConfigurationIds = listOf(LsiSymbolId.packageScope("demo")),
             exportedTypeIds = emptyList(),
-            docs = emptyList(),
+            entries = emptyList(),
         )
 
         assertNull(ExportDocResourceRenderer().render(schema, LsiWorkspace.EMPTY))

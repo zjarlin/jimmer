@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.exportdoc
+package site.addzero.lsi.jimmer.exportdoc
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
@@ -15,67 +15,66 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
-class ExportDocPrecompiler {
+/** 将冻结的 LSI 工作区解析为 ExportDoc 领域语义。 */
+fun LsiWorkspace.toExportDocSchema(): ExportDocSchema {
+    val packageConfigurations = exportDocPackageConfigurations()
+    val typesById = declarationsOfType<LsiTypeDeclaration>().associateBy(LsiTypeDeclaration::id)
+    val decisions = mutableMapOf<LsiSymbolId, ExportDocDecision?>()
+    val effectiveConfigurationIds = sortedSetOf<LsiSymbolId>()
+    val exportedTypes = mutableListOf<LsiTypeDeclaration>()
 
-    fun compile(workspace: LsiWorkspace): ExportDocPrecompiledSchema {
-        val packageConfigurations = workspace.packageConfigurations()
-        val typesById = workspace.declarationsOfType<LsiTypeDeclaration>().associateBy(LsiTypeDeclaration::id)
-        val decisions = mutableMapOf<LsiSymbolId, ExportDocDecision?>()
-        val effectiveConfigurationIds = sortedSetOf<LsiSymbolId>()
-        val exportedTypes = mutableListOf<LsiTypeDeclaration>()
-
-        fun decision(type: LsiTypeDeclaration): ExportDocDecision? {
-            if (type.id in decisions) {
-                return decisions[type.id]
-            }
-            val directDecision = type.exportDocConfiguration()?.let { exported ->
-                ExportDocDecision(type.id, exported)
-            }
-            val inheritedDecision = if (directDecision == null) {
-                type.enclosingTypeId
-                    ?.let(typesById::get)
-                    ?.let(::decision)
-                    ?: type.nearestPackageConfiguration(typesById, packageConfigurations)
-            } else {
-                null
-            }
-            return (directDecision ?: inheritedDecision).also { resolved ->
-                decisions[type.id] = resolved
-            }
+    fun decision(type: LsiTypeDeclaration): ExportDocDecision? {
+        if (type.id in decisions) {
+            return decisions[type.id]
         }
-
-        typesById.values
-            .asSequence()
-            .filter { type -> type.isExportDocCandidate(typesById) }
-            .sortedBy(LsiTypeDeclaration::id)
-            .forEach { type ->
-                val typeDecision = decision(type) ?: return@forEach
-                effectiveConfigurationIds += typeDecision.configurationId
-                if (typeDecision.exported) {
-                    exportedTypes += type
-                }
-            }
-
-        val docsByKey = sortedMapOf<String, ExportedDoc>()
-        exportedTypes.forEach { type ->
-            type.sourceDocumentation.standardDocumentation()?.let { documentation ->
-                docsByKey[type.qualifiedName] = ExportedDoc(
-                    declarationId = type.id,
-                    key = type.qualifiedName,
-                    content = documentation,
-                )
-            }
-            type.exportMemberDocs(workspace, docsByKey)
+        val directDecision = type.exportDocConfiguration()?.let { exported ->
+            ExportDocDecision(type.id, exported)
         }
-        return ExportDocPrecompiledSchema(
-            effectiveConfigurationIds = effectiveConfigurationIds.toList(),
-            exportedTypeIds = exportedTypes.map(LsiTypeDeclaration::id).sorted(),
-            docs = docsByKey.values.toList(),
-        )
+        val inheritedDecision = if (directDecision == null) {
+            type.enclosingTypeId
+                ?.let(typesById::get)
+                ?.let(::decision)
+                ?: type.nearestPackageConfiguration(typesById, packageConfigurations)
+        } else {
+            null
+        }
+        return (directDecision ?: inheritedDecision).also { resolved ->
+            decisions[type.id] = resolved
+        }
     }
+
+    typesById.values
+        .asSequence()
+        .filter { type -> type.isExportDocCandidate(typesById) }
+        .sortedBy(LsiTypeDeclaration::id)
+        .forEach { type ->
+            val typeDecision = decision(type) ?: return@forEach
+            effectiveConfigurationIds += typeDecision.configurationId
+            if (typeDecision.exported) {
+                exportedTypes += type
+            }
+        }
+
+    val entriesByKey = sortedMapOf<String, ExportDocEntry>()
+    exportedTypes.forEach { type ->
+        type.sourceDocumentation.standardDocumentation()?.let { documentation ->
+            entriesByKey[type.qualifiedName] = ExportDocEntry(
+                declarationId = type.id,
+                key = type.qualifiedName,
+                content = documentation,
+            )
+        }
+        type.exportMemberDocs(this, entriesByKey)
+    }
+    return ExportDocSchema(
+        effectiveConfigurationIds = effectiveConfigurationIds.toList(),
+        exportedTypeIds = exportedTypes.map(LsiTypeDeclaration::id).sorted(),
+        entries = entriesByKey.values.toList(),
+    )
 }
 
-class ExportDocPrecompileException(
+/** 表示冻结工作区内相互冲突的 ExportDoc 配置。 */
+class ExportDocValidationException(
     val scopeIds: List<LsiSymbolId>,
     val location: LsiLocation?,
     message: String,
@@ -95,7 +94,7 @@ private data class ExportDocDecision(
     val exported: Boolean,
 )
 
-private fun LsiWorkspace.packageConfigurations(): Map<String, ExportDocPackageConfiguration> {
+private fun LsiWorkspace.exportDocPackageConfigurations(): Map<String, ExportDocPackageConfiguration> {
     return annotationScopes
         .mapNotNull { scope ->
             scope.exportDocConfiguration()?.let { exported ->
@@ -108,7 +107,7 @@ private fun LsiWorkspace.packageConfigurations(): Map<String, ExportDocPackageCo
             val sortedConfigurations = configurations.sortedBy { configuration -> configuration.scope.id }
             if (sortedConfigurations.size > 1) {
                 val scopes = sortedConfigurations.map { configuration -> configuration.scope }
-                throw ExportDocPrecompileException(
+                throw ExportDocValidationException(
                     scopeIds = scopes.map(LsiAnnotationScope::id),
                     location = scopes.first().location,
                     message = "Conflicting @ExportDoc configurations for package '$packageName': " +
@@ -144,7 +143,7 @@ private fun LsiTypeDeclaration.nearestPackageConfiguration(
 
 private fun LsiTypeDeclaration.exportMemberDocs(
     workspace: LsiWorkspace,
-    destination: MutableMap<String, ExportedDoc>,
+    destination: MutableMap<String, ExportDocEntry>,
 ) {
     memberIds
         .mapNotNull(workspace::get)
@@ -153,7 +152,7 @@ private fun LsiTypeDeclaration.exportMemberDocs(
         .forEach { field ->
             field.sourceDocumentation.standardDocumentation()?.let { documentation ->
                 val key = "$qualifiedName.${field.name}"
-                destination[key] = ExportedDoc(field.id, key, documentation)
+                destination[key] = ExportDocEntry(field.id, key, documentation)
             }
         }
     memberIds
@@ -164,7 +163,7 @@ private fun LsiTypeDeclaration.exportMemberDocs(
             val propertyName = property.exportedPropertyName() ?: return@forEach
             property.sourceDocumentation.standardDocumentation()?.let { documentation ->
                 val key = "$qualifiedName.$propertyName"
-                destination[key] = ExportedDoc(property.id, key, documentation)
+                destination[key] = ExportDocEntry(property.id, key, documentation)
             }
         }
 }

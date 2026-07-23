@@ -1,9 +1,10 @@
-package org.babyfish.jimmer.compiler.exportdoc
+package site.addzero.lsi.jimmer.exportdoc
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-fun ExportDocPrecompiledSchema.normalizedSnapshot(): String {
+/** 返回与输入顺序无关的 ExportDoc 规范快照。 */
+fun ExportDocSchema.normalizedSnapshot(): String {
     return buildString {
         effectiveConfigurationIds.forEach { configurationId ->
             appendRecord("configuration", configurationId.value)
@@ -11,18 +12,19 @@ fun ExportDocPrecompiledSchema.normalizedSnapshot(): String {
         exportedTypeIds.forEach { typeId ->
             appendRecord("type", typeId.value)
         }
-        docs.forEach { doc ->
+        entries.forEach { entry ->
             appendRecord(
                 "doc",
-                doc.declarationId.value,
-                doc.key,
-                doc.content,
+                entry.declarationId.value,
+                entry.key,
+                entry.content,
             )
         }
     }
 }
 
-fun ExportDocPrecompiledSchema.fingerprint(): String {
+/** 返回 ExportDoc 规范快照的 SHA-256 指纹。 */
+fun ExportDocSchema.fingerprint(): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes = digest.digest(normalizedSnapshot().toByteArray(StandardCharsets.UTF_8))
     return bytes.joinToString("") { byte -> "%02x".format(byte) }

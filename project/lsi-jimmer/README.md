@@ -4,6 +4,6 @@ Jimmer 的语言无关领域语义模型，以及基于 LSI 模型的领域扩�
 
 模块只依赖 `lsi-core`，不得引用编译器 SPI、APT、KSP、JavaPoet 或 KotlinPoet。
 
-当前公开模型包含 `ImmutableSchema`、`ImmutableType`、`ImmutableProp`、DTO 图，以及 DTO interface、annotation、config contract。扩展函数负责图关系、属性语义、接口解析、注解类型校验、config 实现校验和来源闭包；有效注解统一冻结为结构化 `LsiAnnotation`，只保存显式参数，声明默认值继续由注解类型负责。生成目标筛选、产物命名、增量聚合及平台写出由 `jimmer-compiler` 负责。
+当前公开模型包含 `ImmutableSchema`、`ImmutableType`、`ImmutableProp`、DTO 图、ExportDoc schema，以及 DTO interface、annotation、config contract。扩展函数负责图关系、属性语义、接口解析、注解类型校验、config 实现校验、ExportDoc 解析和来源闭包；有效注解统一冻结为结构化 `LsiAnnotation`，只保存显式参数，声明默认值继续由注解类型负责。生成目标筛选、产物命名、增量聚合及平台写出由 `jimmer-compiler` 负责。
 
 Maven 坐标：`org.babyfish.jimmer:lsi-jimmer`。

@@ -3,12 +3,14 @@ package org.babyfish.jimmer.compiler.exportdoc
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
+import site.addzero.lsi.jimmer.exportdoc.ExportDocEntry
+import site.addzero.lsi.jimmer.exportdoc.ExportDocSchema
 import site.addzero.lsi.model.LsiWorkspace
 
 class ExportDocResourceRenderer {
 
     fun render(
-        schema: ExportDocPrecompiledSchema,
+        schema: ExportDocSchema,
         workspace: LsiWorkspace,
     ): GeneratedArtifact? {
         if (schema.exportedTypeIds.isEmpty()) {
@@ -17,7 +19,7 @@ class ExportDocResourceRenderer {
         val originatingSymbols = buildSet {
             addAll(schema.effectiveConfigurationIds)
             addAll(schema.exportedTypeIds)
-            schema.docs.mapTo(this, ExportedDoc::declarationId)
+            schema.entries.mapTo(this, ExportDocEntry::declarationId)
         }
         return GeneratedArtifact.create(
             kind = ArtifactKind.RESOURCE,
@@ -30,14 +32,14 @@ class ExportDocResourceRenderer {
     }
 }
 
-private fun ExportDocPrecompiledSchema.propertiesContent(): String {
+private fun ExportDocSchema.propertiesContent(): String {
     return buildString {
         append(EXPORT_DOC_HEADER)
         append('\n')
-        docs.forEach { doc ->
-            append(doc.key.escapeProperty(convertSpace = true))
+        entries.forEach { entry ->
+            append(entry.key.escapeProperty(convertSpace = true))
             append('=')
-            append(doc.content.escapeProperty(convertSpace = false))
+            append(entry.content.escapeProperty(convertSpace = false))
             append('\n')
         }
     }

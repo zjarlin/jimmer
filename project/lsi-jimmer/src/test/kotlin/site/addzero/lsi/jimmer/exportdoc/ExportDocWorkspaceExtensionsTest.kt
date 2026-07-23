@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.exportdoc
+package site.addzero.lsi.jimmer.exportdoc
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,7 +26,7 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 
-class ExportDocPrecompilerTest {
+class ExportDocWorkspaceExtensionsTest {
 
     @Test
     fun `package and file configurations use nearest package while type overrides and nested types inherit`() {
@@ -56,12 +56,10 @@ class ExportDocPrecompilerTest {
             sourceDocumentation = "Secret.",
         )
 
-        val schema = ExportDocPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(book, hidden, forced, outer, nested, secret),
-                annotationScopes = listOf(demoScope, internalScope),
-            )
-        )
+        val schema = LsiWorkspace(
+            declarations = listOf(book, hidden, forced, outer, nested, secret),
+            annotationScopes = listOf(demoScope, internalScope),
+        ).toExportDocSchema()
 
         assertEquals(
             listOf(demoScope.id, internalScope.id, forced.id, outer.id, secret.id).sorted(),
@@ -73,9 +71,9 @@ class ExportDocPrecompilerTest {
         )
         assertEquals(
             listOf("demo.Book", "demo.internal.Forced", "demo.internal.Outer", "demo.internal.Outer.Nested"),
-            schema.docs.map(ExportedDoc::key),
+            schema.entries.map(ExportDocEntry::key),
         )
-        assertFalse(schema.docs.any { doc -> doc.key.endsWith("Hidden") || doc.key.endsWith("Secret") })
+        assertFalse(schema.entries.any { entry -> entry.key.endsWith("Hidden") || entry.key.endsWith("Secret") })
     }
 
     @Test
@@ -83,10 +81,8 @@ class ExportDocPrecompilerTest {
         val packageScope = packageScope("demo", exported = true)
         val fileScope = fileScope("demo", "Exports.kt", exported = false)
 
-        val exception = assertFailsWith<ExportDocPrecompileException> {
-            ExportDocPrecompiler().compile(
-                LsiWorkspace(annotationScopes = listOf(fileScope, packageScope))
-            )
+        val exception = assertFailsWith<ExportDocValidationException> {
+            LsiWorkspace(annotationScopes = listOf(fileScope, packageScope)).toExportDocSchema()
         }
 
         assertEquals(listOf(packageScope.id, fileScope.id).sorted(), exception.scopeIds)
@@ -147,24 +143,22 @@ class ExportDocPrecompilerTest {
             sourceDocumentation = "Nested annotation member docs.",
         )
 
-        val schema = ExportDocPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(
-                    sourceType,
-                    descriptionOnlyProperty,
-                    generatedType,
-                    binaryType,
-                    objectType,
-                    annotationType,
-                    nestedInObject,
-                    nestedInAnnotation,
-                ),
-                annotationScopes = listOf(scope),
-            )
-        )
+        val schema = LsiWorkspace(
+            declarations = listOf(
+                sourceType,
+                descriptionOnlyProperty,
+                generatedType,
+                binaryType,
+                objectType,
+                annotationType,
+                nestedInObject,
+                nestedInAnnotation,
+            ),
+            annotationScopes = listOf(scope),
+        ).toExportDocSchema()
 
         assertEquals(listOf(generatedType.id, sourceType.id).sorted(), schema.exportedTypeIds)
-        assertEquals(listOf("demo.GeneratedType"), schema.docs.map(ExportedDoc::key))
+        assertEquals(listOf("demo.GeneratedType"), schema.entries.map(ExportDocEntry::key))
     }
 
     @Test
@@ -210,17 +204,15 @@ class ExportDocPrecompilerTest {
             sourceDocumentation = "\r\n Model. \r\n",
         )
 
-        val schema = ExportDocPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(
-                    model,
-                    javaField,
-                    javaGetter,
-                    javaBooleanGetter,
-                    kotlinIsProperty,
-                )
+        val schema = LsiWorkspace(
+            declarations = listOf(
+                model,
+                javaField,
+                javaGetter,
+                javaBooleanGetter,
+                kotlinIsProperty,
             )
-        )
+        ).toExportDocSchema()
 
         assertEquals(
             mapOf(
@@ -229,9 +221,12 @@ class ExportDocPrecompilerTest {
                 "demo.Model.isReady" to "Ready.",
                 "demo.Model.name" to "Getter name.",
             ),
-            schema.docs.associate { doc -> doc.key to doc.content },
+            schema.entries.associate { entry -> entry.key to entry.content },
         )
-        assertEquals(javaGetter.id, schema.docs.single { doc -> doc.key == "demo.Model.name" }.declarationId)
+        assertEquals(
+            javaGetter.id,
+            schema.entries.single { entry -> entry.key == "demo.Model.name" }.declarationId,
+        )
     }
 
     private fun packageScope(

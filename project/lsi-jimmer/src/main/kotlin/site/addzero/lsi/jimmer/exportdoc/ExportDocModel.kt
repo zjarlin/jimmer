@@ -1,11 +1,12 @@
-package org.babyfish.jimmer.compiler.exportdoc
+package site.addzero.lsi.jimmer.exportdoc
 
 import site.addzero.lsi.core.LsiSymbolId
 
-data class ExportDocPrecompiledSchema(
+/** 描述当前工作区最终导出的文档语义。 */
+data class ExportDocSchema(
     val effectiveConfigurationIds: List<LsiSymbolId>,
     val exportedTypeIds: List<LsiSymbolId>,
-    val docs: List<ExportedDoc>,
+    val entries: List<ExportDocEntry>,
 ) {
     init {
         require(effectiveConfigurationIds == effectiveConfigurationIds.distinct().sorted()) {
@@ -14,16 +15,17 @@ data class ExportDocPrecompiledSchema(
         require(exportedTypeIds == exportedTypeIds.distinct().sorted()) {
             "ExportDoc exported type ids must be distinct and sorted"
         }
-        require(docs == docs.sortedBy(ExportedDoc::key)) {
+        require(entries == entries.sortedBy(ExportDocEntry::key)) {
             "ExportDoc entries must use stable key order"
         }
-        require(docs.map(ExportedDoc::key).distinct().size == docs.size) {
+        require(entries.map(ExportDocEntry::key).distinct().size == entries.size) {
             "ExportDoc entries cannot contain duplicate keys"
         }
     }
 }
 
-data class ExportedDoc(
+/** 描述一个稳定键对应的导出文档。 */
+data class ExportDocEntry(
     val declarationId: LsiSymbolId,
     val key: String,
     val content: String,
