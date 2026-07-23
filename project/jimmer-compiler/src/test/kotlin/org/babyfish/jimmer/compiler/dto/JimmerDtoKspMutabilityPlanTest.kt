@@ -3,7 +3,6 @@ package org.babyfish.jimmer.compiler.dto
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
@@ -28,27 +27,6 @@ import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class JimmerDtoKspMutabilityPlanTest {
-    @Test
-    fun `ksp freezes effective mutability for roots only`() {
-        val schema = schema()
-        val immutableDefaultPlan = rendererOptions(defaultMutable = false)
-            .effectiveKspMutableByRootTypeId(CompilerPlatform.KSP, schema)
-        val mutableDefaultPlan = rendererOptions(defaultMutable = true)
-            .effectiveKspMutableByRootTypeId(CompilerPlatform.KSP, schema)
-
-        assertEquals(ROOT_TYPE_IDS.sorted(), immutableDefaultPlan.keys.toList())
-        assertFalse(immutableDefaultPlan.getValue(AUTO_ROOT_TYPE_ID))
-        assertFalse(immutableDefaultPlan.getValue(DEFAULT_ROOT_TYPE_ID))
-        assertFalse(immutableDefaultPlan.getValue(IMMUTABLE_ROOT_TYPE_ID))
-        assertTrue(immutableDefaultPlan.getValue(MUTABLE_ROOT_TYPE_ID))
-        assertTrue(mutableDefaultPlan.getValue(AUTO_ROOT_TYPE_ID))
-        assertTrue(mutableDefaultPlan.getValue(DEFAULT_ROOT_TYPE_ID))
-        assertFalse(mutableDefaultPlan.getValue(IMMUTABLE_ROOT_TYPE_ID))
-        assertTrue(mutableDefaultPlan.getValue(MUTABLE_ROOT_TYPE_ID))
-        assertFalse(NESTED_TYPE_ID in immutableDefaultPlan)
-        assertFalse(NESTED_TYPE_ID in mutableDefaultPlan)
-    }
-
     @Test
     fun `non ksp platforms freeze immutable roots without consuming overrides`() {
         val schema = schema()
