@@ -5,14 +5,13 @@ import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
+import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
+import org.babyfish.jimmer.compiler.input.toDtoFile
 import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
-import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
 import org.babyfish.jimmer.dto.compiler.DtoModifier
-import org.babyfish.jimmer.dto.compiler.DtoUtils
 import org.babyfish.jimmer.ksp.Context
-import org.babyfish.jimmer.ksp.GeneratorException
 import org.babyfish.jimmer.ksp.MetaException
 import org.babyfish.jimmer.ksp.dto.DtoProcessor
 
@@ -21,15 +20,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
         val lsiDriver = KspLsiCompilerDriver(environment)
         return object : SymbolProcessor {
-
-            private val dtoDirs =
-                dtoDir("jimmer.dto.dirs", "src/main/") ?: listOf("src/main/dto")
-
-            private val dtoTestDirs =
-                dtoDir("jimmer.dto.testDirs", "src/test/") ?: listOf("src/test/dto")
-
-            private val dtoBundleEnabled =
-                DtoBundleLoader.isEnabled(environment.options)
 
             private val defaultNullableInputModifier =
                 environment.options["jimmer.dto.defaultNullableInputModifier"]
@@ -85,15 +75,12 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                         val generatedDto = DtoProcessor(
                             context,
                             dtoMutable,
-                            if (
-                                resolver.getAllFiles().toList().isNotEmpty() &&
-                                isTest(context.resolver.getAllFiles().first().filePath)
-                            ) {
-                                dtoTestDirs
-                            } else {
-                                dtoDirs
-                            },
-                            dtoBundleEnabled,
+                            lsiRoundResult.round.inputDocumentSnapshots
+                                .asSequence()
+                                .map { snapshot -> snapshot.document }
+                                .filter { document -> document.kind == CompilerInputDocumentKind.DTO }
+                                .map { document -> document.toDtoFile() }
+                                .toList(),
                             defaultNullableInputModifier,
                         ).process()
                         generated = generated || generatedDto
@@ -107,44 +94,6 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                     environment.logger.error(ex.message ?: ex.javaClass.name)
                 }
             }
-
-            private fun dtoDir(configurationName: String, prefix: String): Collection<String>? =
-                environment.options[configurationName]
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { text ->
-                        text.split("\\s*[,:;]\\s*")
-                            .map {
-                                when {
-                                    it == "" || it == "/" -> null
-                                    it.startsWith("/") -> it.substring(1)
-                                    it.endsWith("/") -> it.substring(0, it.length - 1)
-                                    else -> it.takeIf { value -> value.isNotEmpty() }
-                                }?.also { dir ->
-                                    if (!dir.startsWith(prefix)) {
-                                        throw GeneratorException(
-                                            "Illegal KSP configuration \"$configurationName\", it contains an " +
-                                                "illegal path \"$dir\" which does not start with \"$prefix\"",
-                                        )
-                                    }
-                                }
-                            }
-                            .filterNotNull()
-                            .toSet()
-                    }
-                    ?.let { DtoUtils.standardDtoDirs(it) }
-        }
-    }
-
-    companion object {
-
-        private fun isTest(path: String): Boolean {
-            val testIndex = path.indexOf("/src/test/")
-            if (testIndex == -1) {
-                return false
-            }
-            val mainIndex = path.indexOf("/src/main/")
-            return mainIndex == -1 || testIndex < mainIndex
         }
     }
 }

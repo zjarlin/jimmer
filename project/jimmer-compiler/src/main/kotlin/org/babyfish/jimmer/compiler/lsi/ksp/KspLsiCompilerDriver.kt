@@ -16,7 +16,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.resolveLsiTypeSeedFixedPoint
-import org.babyfish.jimmer.compiler.input.FileSystemCompilerInputDocumentScanner
+import org.babyfish.jimmer.compiler.input.CompilerInputDocumentScanner
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
@@ -56,7 +56,7 @@ class KspLsiCompilerDriver(
 
     private val inputResourceReader = KspCompilerInputResourceReader(environment.codeGenerator)
 
-    private val inputDocumentScanner = FileSystemCompilerInputDocumentScanner()
+    private val inputDocumentScanner = CompilerInputDocumentScanner(inputDocumentKinds, options)
 
     private var nextRoundNumber = 0
 
@@ -67,6 +67,8 @@ class KspLsiCompilerDriver(
     private var availableTypeIds = emptySet<LsiSymbolId>()
 
     private var inputDocumentSnapshots = emptyList<CompilerInputDocumentSnapshot>()
+
+    private var inputDocumentDiscoveryComplete = inputDocumentKinds.isEmpty()
 
     private var pendingFileScopeSourcePaths = emptySet<String>()
 
@@ -87,12 +89,12 @@ class KspLsiCompilerDriver(
         if (inputDocumentKinds.isNotEmpty()) {
             val sourceFiles = currentRoundSymbols.allSourceFiles
                 .map { file -> File(file.filePath) }
+            val sourceSet = sourceFiles.compilerSourceSet()
             inputDocumentSnapshots = inputDocumentScanner.scan(
                 startPaths = sourceFiles,
-                requestedKinds = inputDocumentKinds,
-                sourceSet = sourceFiles.compilerSourceSet(),
-                options = options,
+                sourceSet = sourceSet,
             )
+            inputDocumentDiscoveryComplete = inputDocumentScanner.isFileSystemDiscoveryComplete(sourceSet)
         }
         val documentSeeds = inputDocumentSnapshots.flatMap { snapshot -> snapshot.typeSeeds }
         val initialWorkspace = currentRoundSymbols.allValidRootTypes.toLsiWorkspace(
@@ -167,6 +169,7 @@ class KspLsiCompilerDriver(
             options = options,
             availableTypeIds = availableTypeIds,
             frontendDeferred = frontendDeferred,
+            inputDocumentDiscoveryComplete = inputDocumentDiscoveryComplete,
             inputResources = inputResources,
             inputDocumentSnapshots = inputDocumentSnapshots,
         )
@@ -185,6 +188,7 @@ class KspLsiCompilerDriver(
                 options = options,
                 availableTypeIds = availableTypeIds,
                 frontendDeferred = frontendDeferred,
+                inputDocumentDiscoveryComplete = inputDocumentDiscoveryComplete,
                 inputResources = inputResources,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),

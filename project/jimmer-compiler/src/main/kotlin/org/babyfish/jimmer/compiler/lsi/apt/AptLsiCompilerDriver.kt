@@ -16,7 +16,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.resolveLsiTypeSeedFixedPoint
-import org.babyfish.jimmer.compiler.input.FileSystemCompilerInputDocumentScanner
+import org.babyfish.jimmer.compiler.input.CompilerInputDocumentScanner
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.core.LsiSymbolId
@@ -70,7 +70,7 @@ class AptLsiCompilerDriver(
 
     private val inputResourceReader = AptCompilerInputResourceReader(processingEnvironment.filer)
 
-    private val inputDocumentScanner = FileSystemCompilerInputDocumentScanner()
+    private val inputDocumentScanner = CompilerInputDocumentScanner(inputDocumentKinds, options)
 
     private var nextRoundNumber = 0
 
@@ -100,9 +100,7 @@ class AptLsiCompilerDriver(
             val marker = classOutputMarker()
             inputDocumentSnapshots = inputDocumentScanner.scan(
                 startPaths = listOf(marker),
-                requestedKinds = inputDocumentKinds,
                 sourceSet = marker.compilerSourceSet(),
-                options = options,
             )
         }
         val currentRoundSymbols = if (isFinal) {

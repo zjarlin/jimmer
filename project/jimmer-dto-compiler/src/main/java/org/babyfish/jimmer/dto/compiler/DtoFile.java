@@ -2,46 +2,55 @@ package org.babyfish.jimmer.dto.compiler;
 
 import java.io.Reader;
 import java.io.StringReader;
-import java.util.List;
+import java.util.Arrays;
 
 public final class DtoFile {
 
-    private final String absolutePath;
+    private final String sourcePath;
 
     private final String content;
 
-    private final String projectDir;
-
-    private final String dtoDir;
+    private final String relativePath;
 
     private final String packageName;
 
     private final String name;
 
-    private final String path;
-
     public DtoFile(
-            String absolutePath,
-            String content,
-            String projectDir,
-            String dtoDir,
-            List<String> packagePaths,
-            String name
+            String sourcePath,
+            String relativePath,
+            String content
     ) {
-        this.absolutePath = absolutePath;
+        if (sourcePath == null || sourcePath.trim().isEmpty()) {
+            throw new IllegalArgumentException("DTO source path cannot be blank");
+        }
+        if (!sourcePath.equals(sourcePath.trim().replace('\\', '/'))) {
+            throw new IllegalArgumentException("DTO source path must be normalized: '" + sourcePath + '\'');
+        }
+        if (relativePath == null || relativePath.trim().isEmpty()) {
+            throw new IllegalArgumentException("DTO relative path cannot be blank");
+        }
+        if (!relativePath.equals(relativePath.trim().replace('\\', '/')) || relativePath.startsWith("/")) {
+            throw new IllegalArgumentException("DTO relative path must be normalized: '" + relativePath + '\'');
+        }
+        String[] parts = relativePath.split("/", -1);
+        for (String part : parts) {
+            if (part.isEmpty() || part.equals(".") || part.equals("..")) {
+                throw new IllegalArgumentException("DTO relative path must be normalized: '" + relativePath + '\'');
+            }
+        }
+        if (content == null) {
+            throw new IllegalArgumentException("DTO content cannot be null");
+        }
+        this.sourcePath = sourcePath;
         this.content = content;
-        this.projectDir = projectDir;
-        this.dtoDir = dtoDir;
-        this.packageName = String.join(".", packagePaths);
-        this.name = name;
-        this.path = '<' + projectDir + '>' +
-                (dtoDir.isEmpty() ? "" : '/' + dtoDir) +
-                (packagePaths.isEmpty() ? "" : '/' + String.join("/", packagePaths)) +
-                '/' + name;
+        this.relativePath = relativePath;
+        this.packageName = String.join(".", Arrays.copyOf(parts, parts.length - 1));
+        this.name = parts[parts.length - 1];
     }
 
-    public String getAbsolutePath() {
-        return absolutePath;
+    public String getSourcePath() {
+        return sourcePath;
     }
 
     public String getContent() {
@@ -52,12 +61,8 @@ public final class DtoFile {
         return new StringReader(content);
     }
 
-    public String getProjectDir() {
-        return projectDir;
-    }
-
-    public String getDtoDir() {
-        return dtoDir;
+    public String getRelativePath() {
+        return relativePath;
     }
 
     public String getPackageName() {
@@ -68,29 +73,8 @@ public final class DtoFile {
         return name;
     }
 
-    public String getPath() {
-        return path;
-    }
-
-    @Override
-    public int hashCode() {
-        return path.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        DtoFile dtoFile = (DtoFile) o;
-        return path.equals(dtoFile.path);
-    }
-
     @Override
     public String toString() {
-        return path;
+        return sourcePath;
     }
 }

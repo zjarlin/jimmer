@@ -7,6 +7,7 @@ import kotlin.test.assertNotEquals
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
+import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
@@ -19,15 +20,27 @@ class CompilerInputDocumentTest {
 
         assertEquals("catalog/src/main/dto/book/Book.dto", document.source.path)
         assertEquals(
-            "8649417ec959322d191b59b848c534401474f78f80db0b18af3d98da2c734740",
+            "89b1d1a42d381d1518bb8b8ba3c590e1f226dfd82cff2eae4ff4249c1ac1753c",
             document.fingerprint,
         )
         assertEquals(document.fingerprint, document("book/Book.dto", "export Book").fingerprint)
         assertNotEquals(document.fingerprint, document("book/Book.dto", "export Store").fingerprint)
         assertNotEquals(document.fingerprint, document("book/Store.dto", "export Book").fingerprint)
-        assertNotEquals(document.fingerprint, document.copy(projectName = "catalog-api").fingerprint)
-        assertNotEquals(document.fingerprint, document.copy(sourceRoot = "src/main/api-dto").fingerprint)
-        assertNotEquals(document.fingerprint, document.copy(sourceSet = CompilerSourceSet.TEST).fingerprint)
+        assertNotEquals(
+            document.fingerprint,
+            document.copy(origin = CompilerInputDocumentOrigin.Project("catalog-api", "src/main/dto")).fingerprint,
+        )
+        assertNotEquals(
+            document.fingerprint,
+            document.copy(origin = CompilerInputDocumentOrigin.Project("catalog", "src/main/api-dto")).fingerprint,
+        )
+        assertNotEquals(
+            document.fingerprint,
+            document.copy(
+                sourceSet = CompilerSourceSet.TEST,
+                origin = CompilerInputDocumentOrigin.Project("catalog", "src/test/dto"),
+            ).fingerprint,
+        )
     }
 
     @Test
@@ -42,11 +55,43 @@ class CompilerInputDocumentTest {
             CompilerInputDocument(
                 kind = CompilerInputDocumentKind.DTO,
                 sourceSet = CompilerSourceSet.MAIN,
-                projectName = "bad/project",
-                sourceRoot = "src/main/dto",
+                origin = CompilerInputDocumentOrigin.Project("bad/project", "src/main/dto"),
                 relativePath = "Book.dto",
                 content = "export Book",
             )
+        }
+    }
+
+    @Test
+    fun `derives binary source identity from bundle provenance`() {
+        val document = CompilerInputDocument(
+            kind = CompilerInputDocumentKind.DTO,
+            sourceSet = CompilerSourceSet.MAIN,
+            origin = CompilerInputDocumentOrigin.Bundle(
+                bundleId = "org.example:catalog-model",
+                sourceRoot = "src/main/dto",
+                resourcePath = "META-INF/jimmer/dto/org/example/Book.dto",
+                contentSha256 = "4d23397fce696aa3d1e73dcc1515ede94e404df0d72db65157397e1334e016cf",
+            ),
+            relativePath = "org/example/Book.dto",
+            content = "BookView {}",
+        )
+
+        assertEquals(
+            "dto-bundle/org.example:catalog-model/src/main/dto/org/example/Book.dto",
+            document.source.path,
+        )
+        assertEquals(LsiSourceKind.BINARY, document.source.kind)
+        assertEquals(
+            document.fingerprint,
+            document.copy(
+                origin = (document.origin as CompilerInputDocumentOrigin.Bundle).copy(
+                    resourcePath = "META-INF/jimmer/relocated/Book.dto",
+                ),
+            ).fingerprint,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            document.copy(content = "ChangedBookView {}")
         }
     }
 
@@ -225,8 +270,7 @@ class CompilerInputDocumentTest {
         return CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
-            projectName = "catalog",
-            sourceRoot = "src/main/dto",
+            origin = CompilerInputDocumentOrigin.Project("catalog", "src/main/dto"),
             relativePath = relativePath,
             content = content,
         )

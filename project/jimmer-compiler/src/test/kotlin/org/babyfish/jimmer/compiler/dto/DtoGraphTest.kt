@@ -16,6 +16,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
@@ -146,6 +147,7 @@ class DtoGraphTest {
                 .flatMap(DtoGraph::rootTypeIds)
                 .sorted()
                 .associateWith { false },
+            inputDocumentDiscoveryComplete = true,
             immutableDependencyFingerprint = "immutable-fingerprint",
         )
         val forbiddenTypes = state.reachableTypeNames().filter(::isForbiddenCompilerStateType)
@@ -692,8 +694,7 @@ class DtoGraphTest {
         val document = CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
-            projectName = "demo-project",
-            sourceRoot = "src/main/dto",
+            origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = "demo/Client.dto",
             content = """
                 /**
@@ -877,8 +878,7 @@ class DtoGraphTest {
         val document = CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
-            projectName = "demo-project",
-            sourceRoot = "src/main/dto",
+            origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = "demo/Book.dto",
             content = "frozen DTO graph fixture",
         )

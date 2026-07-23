@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerSession
@@ -281,8 +282,7 @@ class JimmerDtoSelectorStagingTest {
         return CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
-            projectName = "selector-test",
-            sourceRoot = "src/main/dto",
+            origin = CompilerInputDocumentOrigin.Project("selector-test", "src/main/dto"),
             relativePath = relativePath,
             content = content,
         )

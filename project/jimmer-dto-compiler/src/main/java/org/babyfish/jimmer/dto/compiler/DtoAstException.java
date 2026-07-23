@@ -6,9 +6,7 @@ import java.nio.file.Files;
 
 public class DtoAstException extends RuntimeException {
 
-    private final String absolutePath;
-
-    private final String path;
+    private final String sourcePath;
 
     private final int lineNumber;
 
@@ -16,24 +14,19 @@ public class DtoAstException extends RuntimeException {
 
     public DtoAstException(DtoFile file, int lineNumber, int colNumber, String message) {
         super(
-                file.getAbsolutePath() +
+                file.getSourcePath() +
                         ':' +
                         lineNumber +
                         " : " +
                         message + positionString(file, lineNumber, colNumber)
         );
-        this.absolutePath = file.getAbsolutePath();
-        this.path = file.getPath();
+        this.sourcePath = file.getSourcePath();
         this.lineNumber = lineNumber;
         this.colNumber = colNumber;
     }
 
-    public String getAbsolutePath() {
-        return absolutePath;
-    }
-
-    public String getPath() {
-        return path;
+    public String getSourcePath() {
+        return sourcePath;
     }
 
     public int getLineNumber() {

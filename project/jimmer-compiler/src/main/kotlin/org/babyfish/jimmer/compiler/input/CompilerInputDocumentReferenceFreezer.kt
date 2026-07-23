@@ -8,7 +8,6 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
 import org.babyfish.jimmer.dto.compiler.DtoDocumentReferenceKind
 import org.babyfish.jimmer.dto.compiler.DtoDocumentReferences
-import org.babyfish.jimmer.dto.compiler.DtoFile
 import org.babyfish.jimmer.dto.compiler.DtoTypeNameSelector
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
@@ -63,17 +62,5 @@ private fun DtoTypeNameSelector.toCompilerSelector(): CompilerInputDocumentTypeS
         fallbackTypeId = LsiSymbolId.type(fallbackQualifiedName),
         wildcardTypeIds = wildcardQualifiedNames.map(LsiSymbolId::type),
         checksFallbackExistence = checksFallbackExistence,
-    )
-}
-
-private fun CompilerInputDocument.toDtoFile(): DtoFile {
-    val pathParts = relativePath.split('/')
-    return DtoFile(
-        source.path,
-        content,
-        projectName,
-        sourceRoot,
-        pathParts.dropLast(1),
-        pathParts.last(),
     )
 }

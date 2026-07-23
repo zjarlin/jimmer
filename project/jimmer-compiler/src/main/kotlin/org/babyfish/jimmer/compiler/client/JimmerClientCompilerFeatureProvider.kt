@@ -553,6 +553,7 @@ private val EMPTY_SCHEMA = ClientSchema(emptyList(), emptyList())
 
 private val DTO_DEFERRED_STATUSES = setOf(
     JimmerDtoCompilerFeatureStatus.PENDING,
+    JimmerDtoCompilerFeatureStatus.INPUT_PENDING,
     JimmerDtoCompilerFeatureStatus.DEFERRED,
     JimmerDtoCompilerFeatureStatus.DEPENDENCY_DEFERRED,
 )

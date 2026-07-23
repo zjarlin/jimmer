@@ -293,6 +293,7 @@ class DtoCompilerExtensionsTest {
         val registry = schema.toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
         val dtoFile = DtoFile(
             rawSourcePath,
+            "demo/Book.dto",
             """
                 /**
                  * DTO book documentation
@@ -304,10 +305,6 @@ class DtoCompilerExtensionsTest {
                     title
                 }
             """.trimIndent(),
-            "/project",
-            "src/main/dto",
-            listOf("demo"),
-            "Book.dto",
         )
         val compiler = dtoFile.toLsiDtoCompiler(
             registry = registry,

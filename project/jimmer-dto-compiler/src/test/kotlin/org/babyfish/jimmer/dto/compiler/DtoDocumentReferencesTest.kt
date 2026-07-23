@@ -9,11 +9,8 @@ class DtoDocumentReferencesTest {
     fun `does not report an unreliable subject for malformed export`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/Book.dto",
-            "export",
-            "workspace",
-            "src/main/dto",
-            emptyList(),
             "Book.dto",
+            "export",
         )
 
         assertEquals(emptyList<DtoDocumentReference>(), DtoDocumentReferences.parse(dtoFile))
@@ -23,11 +20,8 @@ class DtoDocumentReferencesTest {
     fun `does not report an empty subject from dto suffix only file name`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/.dto",
-            "View implements java.lang.Runnable {}",
-            "workspace",
-            "src/main/dto",
-            emptyList(),
             ".dto",
+            "View implements java.lang.Runnable {}",
         )
 
         assertEquals(
@@ -42,6 +36,7 @@ class DtoDocumentReferencesTest {
     fun `leaves unqualified macro model names to immutable hierarchy resolution`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/model/Book.dto",
+            "model/Book.dto",
             """
                 export demo.model.Book
                 import demo.shared.ImportedBase
@@ -50,10 +45,6 @@ class DtoDocumentReferencesTest {
                     #allScalars(BaseEntity, ImportedBase, this)
                 }
             """.trimIndent(),
-            "workspace",
-            "src/main/dto",
-            listOf("model"),
-            "Book.dto",
         )
 
         assertEquals(
@@ -71,6 +62,7 @@ class DtoDocumentReferencesTest {
     fun `freezes explicit dto and fragment targets without a synthetic subject`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/source/Shared.dto",
+            "source/Shared.dto",
             """
                 package demo.dto
                 import demo.model.{Book, Author}
@@ -78,10 +70,6 @@ class DtoDocumentReferencesTest {
                 BookView for Book { id }
                 fragment AuthorProps for Author { id }
             """.trimIndent(),
-            "workspace",
-            "src/main/dto",
-            listOf("source"),
-            "Shared.dto",
         )
 
         assertEquals(
@@ -99,6 +87,7 @@ class DtoDocumentReferencesTest {
     fun `keeps subject when a fragment uses its implicit target`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/model/Book.dto",
+            "model/Book.dto",
             """
                 export demo.model.Book
                 import demo.model.Author
@@ -106,10 +95,6 @@ class DtoDocumentReferencesTest {
                 AuthorView for Author { id }
                 fragment BookProps { id }
             """.trimIndent(),
-            "workspace",
-            "src/main/dto",
-            listOf("model"),
-            "Book.dto",
         )
 
         assertEquals(
@@ -127,6 +112,7 @@ class DtoDocumentReferencesTest {
     fun `freezes declaration owners for partially invalid targets`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/shared/Shared.dto",
+            "shared/Shared.dto",
             """
                 package demo.dto
 
@@ -135,10 +121,6 @@ class DtoDocumentReferencesTest {
                 }
                 AuthorView for demo.Author { id }
             """.trimIndent(),
-            "workspace",
-            "src/main/dto",
-            listOf("shared"),
-            "Shared.dto",
         )
 
         assertEquals(
@@ -157,6 +139,7 @@ class DtoDocumentReferencesTest {
     fun `preserves ordered wildcard candidates for model and reusable dto types`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/source/Shared.dto",
+            "source/Shared.dto",
             """
                 package demo.dto
                 import demo.model.*
@@ -166,10 +149,6 @@ class DtoDocumentReferencesTest {
                     store -> StoreView
                 }
             """.trimIndent(),
-            "workspace",
-            "src/main/dto",
-            listOf("source"),
-            "Shared.dto",
         )
 
         val references = DtoDocumentReferences.parse(dtoFile)
@@ -208,16 +187,13 @@ class DtoDocumentReferencesTest {
     fun `preserves source spelling when an imported alias prefixes a nested type`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/source/Shared.dto",
+            "source/Shared.dto",
             """
                 package demo.dto
                 import demo.Root as Book
 
                 NestedView for Book.Nested { id }
             """.trimIndent(),
-            "workspace",
-            "src/main/dto",
-            listOf("source"),
-            "Shared.dto",
         )
 
         val selector = DtoDocumentReferences.parse(dtoFile).single().typeSelector
@@ -231,6 +207,7 @@ class DtoDocumentReferencesTest {
     fun `freezes every dto-only type reference without compiler spi`() {
         val dtoFile = DtoFile(
             "/workspace/src/main/dto/catalog/Book.dto",
+            "catalog/Book.dto",
             """
                 export demo.model.Book
                 import demo.api.{Marker as ViewMarker}
@@ -250,10 +227,6 @@ class DtoDocumentReferencesTest {
                     }
                 }
             """.trimIndent(),
-            "catalog",
-            "src/main/dto",
-            listOf("catalog"),
-            "Book.dto",
         )
 
         val references = DtoDocumentReferences.parse(dtoFile)

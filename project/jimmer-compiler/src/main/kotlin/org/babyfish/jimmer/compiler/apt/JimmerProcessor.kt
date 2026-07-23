@@ -1,19 +1,19 @@
 package org.babyfish.jimmer.compiler.apt
 
 import org.babyfish.jimmer.apt.Context
-import org.babyfish.jimmer.apt.GeneratorException
 import org.babyfish.jimmer.apt.MetaException
 import org.babyfish.jimmer.apt.dto.DtoProcessor
+import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
+import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
+import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
+import org.babyfish.jimmer.compiler.input.toDtoFile
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
-import org.babyfish.jimmer.dto.compiler.DtoBundleLoader
 import org.babyfish.jimmer.dto.compiler.DtoModifier
-import org.babyfish.jimmer.dto.compiler.DtoUtils
 import org.babyfish.jimmer.dto.compiler.SourceTypeFilter
 import org.babyfish.jimmer.sql.EnableDtoGeneration
-import java.io.IOException
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
@@ -23,7 +23,6 @@ import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
 import javax.lang.model.util.Elements
 import javax.tools.Diagnostic
-import javax.tools.StandardLocation
 
 @SupportedAnnotationTypes(
     "org.babyfish.jimmer.Immutable",
@@ -50,12 +49,6 @@ class JimmerProcessor : AbstractProcessor() {
 
     private lateinit var messager: javax.annotation.processing.Messager
 
-    private lateinit var dtoDirs: Collection<String>
-
-    private lateinit var dtoTestDirs: Collection<String>
-
-    private var dtoBundleEnabled = true
-
     private var defaultNullableInputModifier = DtoModifier.STATIC
 
     private var dtoGenerated = false
@@ -77,19 +70,6 @@ class JimmerProcessor : AbstractProcessor() {
         messager = processingEnv.messager
         val includes = processingEnv.options["jimmer.source.includes"]
         val excludes = processingEnv.options["jimmer.source.excludes"]
-        dtoDirs = dtoDirs(
-            processingEnv,
-            "jimmer.dto.dirs",
-            "src/main/",
-            listOf("src/main/dto"),
-        )
-        dtoTestDirs = dtoDirs(
-            processingEnv,
-            "jimmer.dto.testDirs",
-            "src/test/",
-            listOf("src/test/dto"),
-        )
-        dtoBundleEnabled = DtoBundleLoader.isEnabled(processingEnv.options)
         defaultNullableInputModifier = processingEnv.options["jimmer.dto.defaultNullableInputModifier"]
             ?.takeIf { it.isNotEmpty() }
             ?.let {
@@ -148,8 +128,12 @@ class JimmerProcessor : AbstractProcessor() {
                 generated = DtoProcessor(
                     context,
                     elements,
-                    if (isTest()) dtoTestDirs else dtoDirs,
-                    dtoBundleEnabled,
+                    lsiRoundResult.round.inputDocumentSnapshots
+                        .asSequence()
+                        .map { snapshot -> snapshot.document }
+                        .filter { document -> document.kind == CompilerInputDocumentKind.DTO }
+                        .map { document -> document.toDtoFile() }
+                        .toList(),
                     defaultNullableInputModifier,
                 ).process()
             }
@@ -177,26 +161,14 @@ class JimmerProcessor : AbstractProcessor() {
         return true
     }
 
-    private fun isTest(): Boolean {
-        try {
-            val path = context.filer.getResource(
-                StandardLocation.CLASS_OUTPUT,
-                "",
-                "dummy.txt",
-            ).toUri().path
-            return path.endsWith("/test/dummy.txt")
-        } catch (ex: IOException) {
-            throw GeneratorException("Cannot get the class output dir", ex)
-        }
-    }
-
     companion object {
 
         private val COMPILER_OPTIONS = setOf(
             "jimmer.buddy.ignoreResourceGeneration",
             "jimmer.client.checkedException",
             "jimmer.dto.defaultNullableInputModifier",
-            DtoBundleLoader.ENABLED_OPTION,
+            CompilerInputDocumentBundleReader.ENABLED_OPTION,
+            CompilerInputDocumentBundleRenderer.BUNDLE_ID_OPTION,
             "jimmer.dto.dirs",
             "jimmer.dto.fieldVisibility",
             "jimmer.dto.hibernateValidatorEnhancement",
@@ -223,42 +195,5 @@ class JimmerProcessor : AbstractProcessor() {
             }
         }
 
-        private fun dtoDirs(
-            environment: ProcessingEnvironment,
-            configurationName: String,
-            prefix: String,
-            defaultDirs: Collection<String>,
-        ): Collection<String> {
-            val configuredDirs = environment.options[configurationName]
-            if (configuredDirs.isNullOrEmpty()) {
-                return defaultDirs
-            }
-            val dirs = linkedSetOf<String>()
-            for (configuredPath in configuredDirs.trim().split(Regex("\\s*[,:;]\\s*"))) {
-                var path = configuredPath
-                if (path.isEmpty() || path == "/") {
-                    continue
-                }
-                if (path.startsWith('/')) {
-                    path = path.substring(1)
-                }
-                if (path.endsWith('/')) {
-                    path = path.substring(0, path.length - 1)
-                }
-                if (path.isNotEmpty()) {
-                    dirs += path
-                }
-            }
-            for (dir in dirs) {
-                if (!dir.startsWith(prefix)) {
-                    throw GeneratorException(
-                        "Illegal annotation processor configuration \"$configurationName\", it contains an " +
-                            "illegal path \"$dir\" which does not start with \"$prefix\"",
-                        null,
-                    )
-                }
-            }
-            return DtoUtils.standardDtoDirs(dirs)
-        }
     }
 }

@@ -8,6 +8,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
@@ -502,8 +503,7 @@ class JimmerDtoReusableIntegrationTest {
         return CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
-            projectName = "dto-reusable-integration",
-            sourceRoot = "src/main/dto",
+            origin = CompilerInputDocumentOrigin.Project("dto-reusable-integration", "src/main/dto"),
             relativePath = relativePath,
             content = content,
         )

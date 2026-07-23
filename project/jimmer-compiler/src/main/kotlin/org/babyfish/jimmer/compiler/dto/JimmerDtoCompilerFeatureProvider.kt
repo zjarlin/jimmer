@@ -6,10 +6,13 @@ import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
+import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
+import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import org.babyfish.jimmer.dto.compiler.DtoModifier
@@ -66,6 +69,8 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             dependencyStatus = dependencyStatus,
             unresolvedStatus = unresolvedStatus,
             invalid = resolution.failures.isNotEmpty(),
+            inputDocumentDiscoveryComplete = context.round.inputDocumentDiscoveryComplete,
+            isFinal = context.round.isFinal,
         )
         val state = JimmerDtoCompilerFeatureState(
             status = status,
@@ -80,6 +85,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             defaultNullableInputModifier = defaultNullableInputModifier,
             rendererOptions = rendererOptions,
             effectiveKspMutableByRootTypeId = effectiveKspMutableByRootTypeId,
+            inputDocumentDiscoveryComplete = context.round.inputDocumentDiscoveryComplete,
             immutableDependencyFingerprint = immutableState.fingerprint,
         )
         val unavailableTypeIds = buildSet {
@@ -97,8 +103,8 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             state = state,
             diagnostics = resolution.diagnostics(
                 reportUnresolved = unresolvedStatus == JimmerDtoCompilerFeatureStatus.INVALID,
-            ),
-            processedSymbols = processedTypeIds,
+            ) + inputDiscoveryDiagnostics(context.round),
+            processedSymbols = if (context.round.inputDocumentDiscoveryComplete) processedTypeIds else emptySet(),
             unresolvedSymbols = if (unresolvedStatus == JimmerDtoCompilerFeatureStatus.DEFERRED) {
                 resolution.unresolvedDocuments.flatMapTo(sortedSetOf()) { document ->
                     document.unresolvedTypeIds
@@ -108,11 +114,29 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             },
         )
     }
+
+    override fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult {
+        if (!context.round.isFinal || !context.round.inputDocumentDiscoveryComplete) {
+            return JimmerCompilerFeatureRenderResult()
+        }
+        val bundleId = context.round.options[CompilerInputDocumentBundleRenderer.BUNDLE_ID_OPTION]
+            ?: return JimmerCompilerFeatureRenderResult()
+        require(bundleId.isNotBlank() && bundleId == bundleId.trim()) {
+            "Compiler option '${CompilerInputDocumentBundleRenderer.BUNDLE_ID_OPTION}' must be a canonical bundle id"
+        }
+        return JimmerCompilerFeatureRenderResult(
+            artifacts = CompilerInputDocumentBundleRenderer().render(
+                bundleId = bundleId,
+                snapshots = context.round.inputDocumentSnapshots,
+            ),
+        )
+    }
 }
 
 internal enum class JimmerDtoCompilerFeatureStatus {
     RESOLVED,
     PENDING,
+    INPUT_PENDING,
     DEFERRED,
     INVALID,
     DEPENDENCY_DEFERRED,
@@ -138,6 +162,7 @@ internal data class JimmerDtoCompilerFeatureState(
     val defaultNullableInputModifier: DtoModifier,
     val rendererOptions: JimmerDtoRendererOptions,
     val effectiveKspMutableByRootTypeId: Map<DtoTypeId, Boolean>,
+    val inputDocumentDiscoveryComplete: Boolean,
     val immutableDependencyFingerprint: String,
     override val fingerprint: String = buildString {
         append(status.name)
@@ -149,6 +174,8 @@ internal data class JimmerDtoCompilerFeatureState(
         append(rendererOptions.fingerprint)
         append(':')
         appendEffectiveKspMutableByRootTypeId(effectiveKspMutableByRootTypeId)
+        append(':')
+        append(inputDocumentDiscoveryComplete)
         append(':')
         append(resolvedInputFingerprint)
         append(':')
@@ -241,6 +268,9 @@ internal data class JimmerDtoCompilerFeatureState(
         require(status != JimmerDtoCompilerFeatureStatus.RESOLVED || failures.isEmpty()) {
             "Resolved DTO state cannot contain failures"
         }
+        require(status != JimmerDtoCompilerFeatureStatus.RESOLVED || inputDocumentDiscoveryComplete) {
+            "Resolved DTO state requires complete input document discovery"
+        }
         require(status != JimmerDtoCompilerFeatureStatus.PENDING || unresolvedDocuments.isNotEmpty()) {
             "Pending DTO state requires unresolved documents"
         }
@@ -262,11 +292,18 @@ private fun dtoStatus(
     dependencyStatus: JimmerDtoCompilerDependencyStatus,
     unresolvedStatus: JimmerDtoCompilerFeatureStatus?,
     invalid: Boolean,
+    inputDocumentDiscoveryComplete: Boolean,
+    isFinal: Boolean,
 ): JimmerDtoCompilerFeatureStatus {
     return when {
         invalid -> JimmerDtoCompilerFeatureStatus.INVALID
         dependencyStatus == JimmerDtoCompilerDependencyStatus.INVALID -> {
             JimmerDtoCompilerFeatureStatus.DEPENDENCY_INVALID
+        }
+        !inputDocumentDiscoveryComplete -> if (isFinal) {
+            JimmerDtoCompilerFeatureStatus.INVALID
+        } else {
+            JimmerDtoCompilerFeatureStatus.INPUT_PENDING
         }
         unresolvedStatus != null -> unresolvedStatus
         dependencyStatus == JimmerDtoCompilerDependencyStatus.DEFERRED -> {
@@ -274,6 +311,22 @@ private fun dtoStatus(
         }
         else -> JimmerDtoCompilerFeatureStatus.RESOLVED
     }
+}
+
+private fun inputDiscoveryDiagnostics(
+    round: org.babyfish.jimmer.compiler.CompilerRound,
+): List<LsiDiagnostic> {
+    if (round.inputDocumentDiscoveryComplete || !round.isFinal) {
+        return emptyList()
+    }
+    return listOf(
+        LsiDiagnostic(
+            code = "jimmer.dto.input-discovery",
+            severity = LsiDiagnosticSeverity.ERROR,
+            message = "KSP could not discover project DTO directories because no source file was available; " +
+                "set jimmer.dto.dirs=/ when only dependency DTO bundles are used",
+        )
+    )
 }
 
 private fun dtoUnresolvedStatus(
@@ -459,6 +512,7 @@ internal fun CompilerRoundResult.dtoGenerationTerminal(): Boolean {
         status !in setOf(
             JimmerDtoCompilerFeatureStatus.DEFERRED,
             JimmerDtoCompilerFeatureStatus.PENDING,
+            JimmerDtoCompilerFeatureStatus.INPUT_PENDING,
             JimmerDtoCompilerFeatureStatus.DEPENDENCY_DEFERRED,
         )
     } ?: true

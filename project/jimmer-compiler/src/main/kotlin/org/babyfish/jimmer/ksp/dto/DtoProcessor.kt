@@ -18,8 +18,7 @@ import org.babyfish.jimmer.ksp.util.fastResolve
 class DtoProcessor(
     private val ctx: Context,
     private val mutable: Boolean,
-    private val dtoDirs: Collection<String>,
-    private val dtoBundleEnabled: Boolean,
+    private val dtoFiles: Collection<DtoFile>,
     private val defaultNullableInputModifier: DtoModifier
 ) {
     fun process(): Boolean {
@@ -29,15 +28,14 @@ class DtoProcessor(
     }
 
     private fun findDtoTypes(): List<DtoType<ImmutableType, ImmutableProp>> {
-        val dtoCtx = DtoContext(ctx.resolver.getAllFiles().firstOrNull(), dtoDirs, dtoBundleEnabled)
         val compilers = mutableListOf<KspDtoCompiler>()
-        for (dtoFile in dtoCtx.dtoFiles) {
+        for (dtoFile in dtoFiles) {
             val compiler = try {
                 KspDtoCompiler(dtoFile, ctx, defaultNullableInputModifier)
             } catch (ex: DtoAstException) {
                 throw DtoException(
                     "Failed to parse \"" +
-                            dtoFile.absolutePath +
+                            dtoFile.sourcePath +
                             "\": " +
                             ex.message,
                     ex
@@ -45,7 +43,7 @@ class DtoProcessor(
             } catch (ex: Throwable) {
                 throw DtoException(
                     "Failed to read \"" +
-                            dtoFile.absolutePath +
+                            dtoFile.sourcePath +
                             "\": " +
                             ex.message,
                     ex

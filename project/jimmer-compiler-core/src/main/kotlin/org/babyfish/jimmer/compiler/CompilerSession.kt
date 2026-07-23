@@ -23,6 +23,7 @@ data class CompilerRound(
     val options: Map<String, String> = emptyMap(),
     val availableTypeIds: Set<LsiSymbolId> = emptySet(),
     val frontendDeferred: Boolean = false,
+    val inputDocumentDiscoveryComplete: Boolean = true,
     val inputResources: Map<String, String> = emptyMap(),
     val inputDocumentSnapshots: List<CompilerInputDocumentSnapshot>,
 ) {

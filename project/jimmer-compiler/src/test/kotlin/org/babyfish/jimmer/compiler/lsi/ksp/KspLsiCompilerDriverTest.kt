@@ -42,6 +42,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -134,7 +135,7 @@ class KspLsiCompilerDriverTest {
 
         val document = provider.rounds.single().round.inputDocumentSnapshots.single().document
         assertEquals("export Model", document.content)
-        assertEquals("src/main/dto", document.sourceRoot)
+        assertEquals("src/main/dto", (document.origin as CompilerInputDocumentOrigin.Project).sourceRoot)
         assertEquals("Model.dto", document.relativePath)
     }
 
@@ -168,6 +169,42 @@ class KspLsiCompilerDriverTest {
             "export Model",
             provider.rounds.single().round.inputDocumentSnapshots.single().document.content,
         )
+    }
+
+    @Test
+    fun `marks dto discovery pending until a later ksp round provides a project anchor`() {
+        val projectDirectory = createTempDirectory(prefix = "compiler-ksp-delayed-input-documents").toFile()
+        val sourcePath = projectDirectory.resolve("src/main/kotlin/demo/Anchor.kt").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("fun anchor() = Unit")
+        }
+        projectDirectory.resolve("src/main/dto/Model.dto").also { file ->
+            file.parentFile.mkdirs()
+            file.writeText("export Model")
+        }
+        val provider = InputDocumentFeatureProvider()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            providers = listOf(provider),
+            sessionId = "ksp-delayed-input-document-test",
+        )
+
+        driver.process(resolver(emptyList(), emptyList()))
+
+        assertTrue(!provider.rounds.single().round.inputDocumentDiscoveryComplete)
+        assertTrue(provider.rounds.single().round.inputDocumentSnapshots.isEmpty())
+
+        val sourceFile = file(emptyList(), sourcePath.absolutePath)
+        driver.process(resolver(listOf(sourceFile), listOf(sourceFile)))
+
+        val secondRound = provider.rounds.last().round
+        assertTrue(secondRound.inputDocumentDiscoveryComplete)
+        assertEquals("export Model", secondRound.inputDocumentSnapshots.single().document.content)
     }
 
     @Test

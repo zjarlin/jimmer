@@ -17,9 +17,9 @@ import site.addzero.lsi.jimmer.dto.resolveDtoConfigContracts
 import site.addzero.lsi.jimmer.dto.resolveDtoInterfaceContracts
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
+import org.babyfish.jimmer.compiler.input.toDtoFile
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoCompiler
-import org.babyfish.jimmer.dto.compiler.DtoFile
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoTypeLinker
 import site.addzero.lsi.core.LsiLocation
@@ -556,9 +556,9 @@ private fun DtoAstException.toFailure(
     entries: List<JimmerDtoCompilerEntry>,
 ): JimmerDtoCompilerFailure {
     val entry = requireNotNull(entries.singleOrNull { candidate ->
-        candidate.inputSnapshot.document.source.path == absolutePath
+        candidate.inputSnapshot.document.source.path == sourcePath
     }) {
-        "DTO compiler exception path does not match one input document: $absolutePath"
+        "DTO compiler exception path does not match one input document: $sourcePath"
     }
     return JimmerDtoCompilerFailure(
         inputSnapshot = entry.inputSnapshot,
@@ -579,17 +579,6 @@ private fun DtoAstException.toLocation(snapshot: CompilerInputDocumentSnapshot):
     )
 }
 
-private fun CompilerInputDocument.toDtoFile(): DtoFile {
-    val pathParts = relativePath.split('/')
-    return DtoFile(
-        source.path,
-        content,
-        projectName,
-        sourceRoot,
-        pathParts.dropLast(1),
-        pathParts.last(),
-    )
-}
 
 private fun CompilerPlatform.dtoTargetLanguage(): LsiLanguage {
     return when (this) {

@@ -9,6 +9,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
@@ -17,6 +18,7 @@ import org.babyfish.jimmer.compiler.CompilerSession
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
+import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
@@ -1245,6 +1247,47 @@ class JimmerDtoCompilerFeatureProviderTest {
     }
 
     @Test
+    fun `ksp waits for filesystem discovery before dto generation`() {
+        val workspace = immutableWorkspace(LsiLanguage.KOTLIN)
+        val document = bookDocument("BookView { id }")
+        val active = session("dto-ksp-input-discovery").execute(
+            round(
+                number = 0,
+                workspace = workspace,
+                currentWorkspace = workspace,
+                platform = CompilerPlatform.KSP,
+                inputDocuments = listOf(document),
+                inputDocumentDiscoveryComplete = false,
+            )
+        )
+
+        assertEquals(JimmerDtoCompilerFeatureStatus.INPUT_PENDING, active.dtoState().status)
+        assertTrue(active.dtoResult().processedSymbols.isEmpty())
+        assertTrue(active.diagnostics.isEmpty())
+        assertTrue(!active.dtoGenerationReady())
+        assertTrue(!active.dtoGenerationTerminal())
+
+        val final = session("dto-ksp-input-discovery-final").execute(
+            round(
+                number = 0,
+                workspace = workspace,
+                currentWorkspace = LsiWorkspace.EMPTY,
+                currentRootTypeIds = emptySet(),
+                platform = CompilerPlatform.KSP,
+                inputDocuments = listOf(document),
+                inputDocumentDiscoveryComplete = false,
+                isFinal = true,
+                options = mapOf(
+                    CompilerInputDocumentBundleRenderer.BUNDLE_ID_OPTION to "org.example:incomplete",
+                ),
+            )
+        )
+        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, final.dtoState().status)
+        assertEquals(listOf("jimmer.dto.input-discovery"), final.diagnostics.map { it.code })
+        assertTrue(final.newArtifacts.isEmpty())
+    }
+
+    @Test
     fun `ksp and apt final round report missing dto base type as invalid`() {
         val document = bookDocument("BookView { id }")
         val kspFinal = session("dto-ksp-final-missing").execute(
@@ -1631,6 +1674,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
+        inputDocumentDiscoveryComplete: Boolean = true,
     ): CompilerRound {
         return CompilerRound(
             number = number,
@@ -1640,6 +1684,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             platform = platform,
             isFinal = isFinal,
             options = options,
+            inputDocumentDiscoveryComplete = inputDocumentDiscoveryComplete,
             inputDocumentSnapshots = inputDocuments.map(REFERENCE_FREEZER::freeze),
         )
     }
@@ -1802,6 +1847,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 .flatMap(DtoGraph::rootTypeIds)
                 .sorted()
                 .associateWith { false },
+            inputDocumentDiscoveryComplete = true,
             immutableDependencyFingerprint = "immutable-fingerprint",
         )
     }
@@ -2105,8 +2151,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         return CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
-            projectName = "demo-project",
-            sourceRoot = "src/main/dto",
+            origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = relativePath,
             content = content,
         )

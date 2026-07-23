@@ -25,23 +25,19 @@ public class DtoProcessor {
 
     private final Elements elements;
 
-    private final Collection<String> dtoDirs;
-
-    private final boolean dtoBundleEnabled;
+    private final Collection<DtoFile> dtoFiles;
 
     private final DtoModifier defaultNullableInputModifier;
 
     public DtoProcessor(
             Context context,
             Elements elements,
-            Collection<String> dtoDirs,
-            boolean dtoBundleEnabled,
+            Collection<DtoFile> dtoFiles,
             DtoModifier defaultNullableInputModifier
     ) {
         this.context = context;
         this.elements = elements;
-        this.dtoDirs = dtoDirs;
-        this.dtoBundleEnabled = dtoBundleEnabled;
+        this.dtoFiles = dtoFiles;
         this.defaultNullableInputModifier = defaultNullableInputModifier;
     }
 
@@ -51,16 +47,15 @@ public class DtoProcessor {
 
     private List<DtoType<ImmutableType, ImmutableProp>> parseDtoTypes() {
         List<AptDtoCompiler> compilers = new ArrayList<>();
-        DtoContext dtoContext = new DtoContext(context.getFiler(), dtoDirs, dtoBundleEnabled);
         AptDtoCompiler compiler;
 
-        for (DtoFile dtoFile : dtoContext.getDtoFiles()) {
+        for (DtoFile dtoFile : dtoFiles) {
             try {
                 compiler = new AptDtoCompiler(dtoFile, context, elements, defaultNullableInputModifier);
             } catch (DtoAstException ex) {
                 throw new DtoException(
                         "Failed to parse \"" +
-                                dtoFile.getAbsolutePath() +
+                                dtoFile.getSourcePath() +
                                 "\": " +
                                 ex.getMessage(),
                         ex
@@ -68,7 +63,7 @@ public class DtoProcessor {
             } catch (Throwable ex) {
                 throw new DtoException(
                         "Failed to read \"" +
-                                dtoFile.getAbsolutePath() +
+                                dtoFile.getSourcePath() +
                                 "\": " +
                                 ex.getMessage(),
                         ex

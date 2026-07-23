@@ -5,12 +5,12 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 
-class FileSystemCompilerInputDocumentScannerTest {
+class CompilerInputDocumentScannerTest {
 
     @Test
     fun `scans requested source set in stable path order`() {
@@ -19,12 +19,11 @@ class FileSystemCompilerInputDocumentScannerTest {
         project.write("src/main/dto/Book.dto", "export Book")
         project.write("src/test/dto/TestBook.dto", "export TestBook")
         val start = project.resolve("build/classes/kotlin/main").apply(File::mkdirs)
+        val scanner = scanner()
 
         val documents = scanner.scan(
             startPaths = listOf(start),
-            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.MAIN,
-            options = emptyMap(),
         ).map { snapshot -> snapshot.document }
 
         assertEquals(listOf("Book.dto", "store/Store.dto"), documents.map { document -> document.relativePath })
@@ -43,36 +42,38 @@ class FileSystemCompilerInputDocumentScannerTest {
         val options = mapOf(
             "jimmer.dto.testDirs" to "src/test/api-dto, src/test/api-dto/nested",
         )
+        val scanner = scanner(options = options)
 
         val first = scanner.scan(
             startPaths = listOf(start),
-            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.TEST,
-            options = options,
         ).single().document
         source.writeText("second")
         val second = scanner.scan(
             startPaths = listOf(start),
-            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.TEST,
-            options = options,
         ).single().document
         val renamed = source.parentFile.resolve("Renamed.dto")
         assertTrue(source.renameTo(renamed))
         val third = scanner.scan(
             startPaths = listOf(start),
-            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.TEST,
-            options = options,
+        ).single().document
+        val refreshed = scanner(options = options).scan(
+            startPaths = listOf(start),
+            sourceSet = CompilerSourceSet.TEST,
         ).single().document
 
         assertEquals("first", first.content)
-        assertEquals("second", second.content)
-        assertNotEquals(first.fingerprint, second.fingerprint)
-        assertEquals("src/test/api-dto", second.sourceRoot)
+        assertEquals(first, second)
+        assertEquals(first, third)
+        assertEquals(
+            "src/test/api-dto",
+            (second.origin as CompilerInputDocumentOrigin.Project).sourceRoot,
+        )
         assertEquals("nested/Book.dto", second.relativePath)
-        assertEquals("nested/Renamed.dto", third.relativePath)
-        assertNotEquals(second.fingerprint, third.fingerprint)
+        assertEquals("second", refreshed.content)
+        assertEquals("nested/Renamed.dto", refreshed.relativePath)
     }
 
     @Test
@@ -84,21 +85,33 @@ class FileSystemCompilerInputDocumentScannerTest {
         }
 
         assertTrue(
-            scanner.scan(
+            scanner().scan(
                 startPaths = listOf(start),
-                requestedKinds = setOf(CompilerInputDocumentKind.DTO),
                 sourceSet = CompilerSourceSet.MAIN,
-                options = emptyMap(),
             ).isEmpty()
         )
         assertTrue(
-            scanner.scan(
+            scanner(requestedKinds = emptySet()).scan(
                 startPaths = listOf(start),
-                requestedKinds = emptySet(),
                 sourceSet = CompilerSourceSet.MAIN,
-                options = emptyMap(),
             ).isEmpty()
         )
+    }
+
+    @Test
+    fun `keeps filesystem discovery pending until a source anchor appears`() {
+        val project = project()
+        project.write("src/main/dto/Book.dto", "export Book")
+        val source = project.write("src/main/kotlin/demo/Model.kt", "interface Model")
+        val scanner = scanner()
+
+        assertTrue(scanner.scan(emptyList(), CompilerSourceSet.MAIN).isEmpty())
+        assertTrue(!scanner.isFileSystemDiscoveryComplete(CompilerSourceSet.MAIN))
+
+        val snapshots = scanner.scan(listOf(source), CompilerSourceSet.MAIN)
+
+        assertEquals(listOf("Book.dto"), snapshots.map { snapshot -> snapshot.document.relativePath })
+        assertTrue(scanner.isFileSystemDiscoveryComplete(CompilerSourceSet.MAIN))
     }
 
     @Test
@@ -111,18 +124,13 @@ class FileSystemCompilerInputDocumentScannerTest {
         }
 
         assertTrue(
-            scanner.scan(
+            scanner(options = mapOf("jimmer.dto.dirs" to "/")).scan(
                 startPaths = listOf(start),
-                requestedKinds = setOf(CompilerInputDocumentKind.DTO),
                 sourceSet = CompilerSourceSet.MAIN,
-                options = mapOf("jimmer.dto.dirs" to "/"),
             ).isEmpty()
         )
         assertFailsWith<IllegalArgumentException> {
-            scanner.scan(
-                startPaths = emptyList(),
-                requestedKinds = setOf(CompilerInputDocumentKind.DTO),
-                sourceSet = CompilerSourceSet.MAIN,
+            scanner(
                 options = mapOf("jimmer.dto.dirs" to "src/test/dto"),
             )
         }
@@ -146,12 +154,11 @@ class FileSystemCompilerInputDocumentScannerTest {
             file.parentFile.mkdirs()
             file.writeText("interface Model")
         }
+        val scanner = scanner()
 
         val snapshot = scanner.scan(
             startPaths = listOf(start),
-            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.MAIN,
-            options = emptyMap(),
         ).single()
 
         assertEquals(
@@ -175,12 +182,11 @@ class FileSystemCompilerInputDocumentScannerTest {
             file.parentFile.mkdirs()
             file.writeText("interface Model")
         }
+        val scanner = scanner()
 
         val snapshot = scanner.scan(
             startPaths = listOf(start),
-            requestedKinds = setOf(CompilerInputDocumentKind.DTO),
             sourceSet = CompilerSourceSet.MAIN,
-            options = emptyMap(),
         ).single()
 
         assertEquals("@broken(", snapshot.document.content)
@@ -196,7 +202,17 @@ class FileSystemCompilerInputDocumentScannerTest {
         }
     }
 
+    private fun scanner(
+        requestedKinds: Set<CompilerInputDocumentKind> = setOf(CompilerInputDocumentKind.DTO),
+        options: Map<String, String> = emptyMap(),
+        classLoader: ClassLoader = EMPTY_CLASS_LOADER,
+    ): CompilerInputDocumentScanner = CompilerInputDocumentScanner(
+        requestedKinds = requestedKinds,
+        options = options,
+        bundleClassLoader = classLoader,
+    )
+
     private companion object {
-        val scanner = FileSystemCompilerInputDocumentScanner()
+        val EMPTY_CLASS_LOADER = object : ClassLoader(null) {}
     }
 }

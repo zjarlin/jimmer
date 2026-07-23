@@ -33,7 +33,7 @@ public class GeneratedAnnotation {
                 .addMember(
                         "file",
                         "$S",
-                        dtoFile.getPath()
+                        dtoFile.getSourcePath()
                 )
                 .build();
     }

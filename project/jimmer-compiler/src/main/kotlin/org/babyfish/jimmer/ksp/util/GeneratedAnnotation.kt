@@ -23,7 +23,7 @@ fun generatedAnnotation(dtoFile: DtoFile, mutable: Boolean): AnnotationSpec =
         .builder(GENERATED_BY_CLASS_NAME)
         .addMember(
             "file = %S, prompt = %S",
-            dtoFile.path,
+            dtoFile.sourcePath,
             if (mutable) {
                 "The current DTO type is mutable. If you need to make it immutable, " +
                         "please remove the ksp argument `jimmer.dto.mutable`"

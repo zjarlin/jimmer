@@ -6,41 +6,89 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 
-internal class FileSystemCompilerInputDocumentScanner {
+internal class CompilerInputDocumentScanner(
+    requestedKinds: Set<CompilerInputDocumentKind>,
+    options: Map<String, String>,
+    bundleClassLoader: ClassLoader = CompilerInputDocumentScanner::class.java.classLoader,
+) {
 
     private val referenceFreezer = CompilerInputDocumentReferenceFreezer()
 
+    private val scansDto = CompilerInputDocumentKind.DTO in requestedKinds
+
+    private val sourceRootsBySourceSet = if (scansDto) {
+        CompilerSourceSet.entries.associateWith { sourceSet -> dtoSourceRoots(sourceSet, options) }
+    } else {
+        emptyMap()
+    }
+
+    private val bundleEnabled = scansDto && CompilerInputDocumentBundleReader.isEnabled(options)
+
+    private val bundleSnapshots: List<CompilerInputDocumentSnapshot> by lazy {
+        if (bundleEnabled) {
+            try {
+                CompilerInputDocumentBundleReader(bundleClassLoader)
+                    .read()
+                    .map(referenceFreezer::freeze)
+            } catch (exception: Exception) {
+                throw IllegalStateException("Cannot load compiler input DTO bundles: ${exception.message}", exception)
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    private var fileSystemSnapshots: List<CompilerInputDocumentSnapshot>? = null
+
+    private var fileSystemSourceSet: CompilerSourceSet? = null
+
     fun scan(
         startPaths: Collection<File>,
-        requestedKinds: Set<CompilerInputDocumentKind>,
         sourceSet: CompilerSourceSet,
-        options: Map<String, String>,
     ): List<CompilerInputDocumentSnapshot> {
-        if (CompilerInputDocumentKind.DTO !in requestedKinds) {
+        if (!scansDto) {
             return emptyList()
         }
-        val sourceRoots = dtoSourceRoots(sourceSet, options)
-        if (startPaths.isEmpty() || sourceRoots.isEmpty()) {
+        if (fileSystemSnapshots == null && startPaths.isNotEmpty()) {
+            val sourceRoots = sourceRootsBySourceSet.getValue(sourceSet)
+            fileSystemSourceSet = sourceSet
+            fileSystemSnapshots = scanFileSystem(startPaths, sourceRoots, sourceSet)
+        } else if (fileSystemSnapshots != null) {
+            require(fileSystemSourceSet == sourceSet) {
+                "Compiler input document source set changed within one session: " +
+                    "$fileSystemSourceSet -> $sourceSet"
+            }
+        }
+        return mergeSnapshots(
+            bundleSnapshots.filter { snapshot -> snapshot.document.sourceSet == sourceSet } +
+                fileSystemSnapshots.orEmpty()
+        )
+    }
+
+    fun isFileSystemDiscoveryComplete(sourceSet: CompilerSourceSet): Boolean {
+        return !scansDto || sourceRootsBySourceSet.getValue(sourceSet).isEmpty() || fileSystemSnapshots != null
+    }
+
+    private fun scanFileSystem(
+        startPaths: Collection<File>,
+        sourceRoots: List<String>,
+        sourceSet: CompilerSourceSet,
+    ): List<CompilerInputDocumentSnapshot> {
+        if (sourceRoots.isEmpty()) {
             return emptyList()
         }
         val projects = startPaths
             .mapNotNull { startPath -> findProject(startPath, sourceRoots) }
             .distinctBy { project -> project.root.canonicalPath }
             .sortedBy { project -> project.root.canonicalPath }
-        val documents = projects.flatMap { project -> project.documents(sourceSet) }.sorted()
-        require(documents.distinctBy { document -> document.kind to document.source.path }.size == documents.size) {
-            "Compiler input document paths collide across projects: " +
-                documents.groupingBy { document -> document.source.path }
-                    .eachCount()
-                    .filterValues { count -> count > 1 }
-                    .keys
-                    .sorted()
-                    .joinToString()
-        }
-        return documents.map(referenceFreezer::freeze)
+        return projects
+            .flatMap { project -> project.documents(sourceSet) }
+            .sorted()
+            .map(referenceFreezer::freeze)
     }
 
     private fun findProject(
@@ -69,8 +117,10 @@ internal class FileSystemCompilerInputDocumentScanner {
                     CompilerInputDocument(
                         kind = CompilerInputDocumentKind.DTO,
                         sourceSet = sourceSet,
-                        projectName = root.name,
-                        sourceRoot = sourceRoot,
+                        origin = CompilerInputDocumentOrigin.Project(
+                            projectName = root.name,
+                            sourceRoot = sourceRoot,
+                        ),
                         relativePath = relativePath,
                         content = readUtf8(file),
                     )
@@ -93,6 +143,22 @@ internal class FileSystemCompilerInputDocumentScanner {
     )
 }
 
+private fun mergeSnapshots(
+    snapshots: List<CompilerInputDocumentSnapshot>,
+): List<CompilerInputDocumentSnapshot> {
+    return snapshots
+        .groupBy { snapshot -> snapshot.document.kind to snapshot.document.source.path }
+        .toSortedMap(compareBy<Pair<CompilerInputDocumentKind, String>> { it.second }.thenBy { it.first })
+        .map { (key, candidates) ->
+            val distinctFingerprints = candidates.map { candidate -> candidate.document.fingerprint }.distinct()
+            require(distinctFingerprints.size == 1) {
+                "Compiler input documents conflict at '${key.second}'"
+            }
+            candidates.first()
+        }
+        .sorted()
+}
+
 private fun dtoSourceRoots(
     sourceSet: CompilerSourceSet,
     options: Map<String, String>,
@@ -101,10 +167,7 @@ private fun dtoSourceRoots(
         CompilerSourceSet.MAIN -> "jimmer.dto.dirs"
         CompilerSourceSet.TEST -> "jimmer.dto.testDirs"
     }
-    val requiredPrefix = when (sourceSet) {
-        CompilerSourceSet.MAIN -> "src/main/"
-        CompilerSourceSet.TEST -> "src/test/"
-    }
+    val requiredPrefix = sourceSet.dtoSourceRootPrefix
     val defaultRoot = when (sourceSet) {
         CompilerSourceSet.MAIN -> "src/main/dto"
         CompilerSourceSet.TEST -> "src/test/dto"
@@ -133,6 +196,12 @@ private fun dtoSourceRoots(
         }
     }
 }
+
+internal val CompilerSourceSet.dtoSourceRootPrefix: String
+    get() = when (this) {
+        CompilerSourceSet.MAIN -> "src/main/"
+        CompilerSourceSet.TEST -> "src/test/"
+    }
 
 private fun String.normalizeDocumentRoot(): String? {
     val normalized = trim().replace('\\', '/').trim('/')

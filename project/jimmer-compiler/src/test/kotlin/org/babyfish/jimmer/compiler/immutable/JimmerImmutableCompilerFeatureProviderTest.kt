@@ -8,6 +8,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
@@ -173,8 +174,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
             CompilerInputDocument(
                 kind = CompilerInputDocumentKind.DTO,
                 sourceSet = CompilerSourceSet.MAIN,
-                projectName = "demo-project",
-                sourceRoot = "src/main/dto",
+                origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
                 relativePath = "demo/BinaryBook.dto",
                 content = """
                     export demo.BinaryBook

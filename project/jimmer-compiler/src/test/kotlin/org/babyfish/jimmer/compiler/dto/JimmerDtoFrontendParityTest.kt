@@ -25,6 +25,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
@@ -224,8 +225,7 @@ class JimmerDtoFrontendParityTest {
         val document = CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
-            projectName = "demo-project",
-            sourceRoot = "src/main/dto",
+            origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = "demo/Book.dto",
             content = DTO_SOURCE,
         )

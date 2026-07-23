@@ -455,7 +455,7 @@ private class DtoGraphFreezer(
     }
 
     private fun source(declaringFile: DtoFile): LsiSource {
-        val declaringSource = LsiSource.of(declaringFile.absolutePath)
+        val declaringSource = LsiSource.of(declaringFile.sourcePath)
         return if (declaringSource.path == graphSource.path) {
             graphSource
         } else {

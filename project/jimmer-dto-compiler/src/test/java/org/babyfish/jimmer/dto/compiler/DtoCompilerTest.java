@@ -426,11 +426,8 @@ public class DtoCompilerTest {
         MyDtoCompiler compiler = new MyDtoCompiler(
                 new DtoFile(
                         "/User/test/Book.dto",
-                        "",
-                        "project",
-                        "src/main/dto",
-                        Collections.emptyList(),
-                        "Book.dto"
+                        "Book.dto",
+                        ""
                 )
         );
         Assertions.assertEquals("Book", compiler.getSourceTypeName());
@@ -442,11 +439,8 @@ public class DtoCompilerTest {
         MyDtoCompiler compiler = new MyDtoCompiler(
                 new DtoFile(
                         "/User/test/Book.dto",
-                        "export Book",
-                        "project",
-                        "src/main/dto",
-                        Collections.emptyList(),
-                        "Book.dto"
+                        "Book.dto",
+                        "export Book"
                 )
         );
         Assertions.assertEquals("Book", compiler.getSourceTypeName());
@@ -460,11 +454,8 @@ public class DtoCompilerTest {
                 () -> new MyDtoCompiler(
                         new DtoFile(
                                 "/User/test/.dto",
-                                "",
-                                "project",
-                                "src/main/dto",
-                                Collections.emptyList(),
-                                ".dto"
+                                ".dto",
+                                ""
                         )
                 )
         );
@@ -2954,11 +2945,8 @@ public class DtoCompilerTest {
                 return new MyDtoCompiler(
                         new DtoFile(
                                 "file:/User/test/" + fileName,
-                                code,
-                                "project",
-                                "src/main/dto",
-                                packageParts,
-                                fileName
+                                String.join("/", packageParts) + '/' + fileName,
+                                code
                         )
                 );
             } catch (IOException ex) {
@@ -2971,11 +2959,8 @@ public class DtoCompilerTest {
                 return new MyDtoCompiler(
                         new DtoFile(
                                 "file:/User/test/" + fileName,
-                                code,
-                                "project",
-                                "src/main/dto",
-                                Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
-                                fileName
+                                "org/babyfish/jimmer/sql/model/" + fileName,
+                                code
                         ),
                         false
                 );
@@ -2989,11 +2974,8 @@ public class DtoCompilerTest {
                 return new MyDtoCompiler(
                         new DtoFile(
                                 "file:/User/test/Book.dto",
-                                code,
-                                "project",
-                                "src/main/dto",
-                                Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
-                                "Book.dto"
+                                "org/babyfish/jimmer/sql/model/Book.dto",
+                                code
                         )
                 ).compile(BOOK_TYPE);
             } catch (IOException ex) {
@@ -3007,11 +2989,8 @@ public class DtoCompilerTest {
                 return new MyDtoCompiler(
                         new DtoFile(
                                 "file:/User/test/TreeNode.dto",
-                                code,
-                                "project",
-                                "src/main/dto",
-                                Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
-                                "TreeNode.dto"
+                                "org/babyfish/jimmer/sql/model/TreeNode.dto",
+                                code
                         )
                 ).compile(TREE_NODE_TYPE);
             } catch (IOException ex) {
@@ -3025,11 +3004,8 @@ public class DtoCompilerTest {
                 return new MyDtoCompiler(
                         new DtoFile(
                                 "file:/User/test/BookStore.dto",
-                                code,
-                                "project",
-                                "src/main/dto",
-                                Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
-                                "BookStore.dto"
+                                "org/babyfish/jimmer/sql/model/BookStore.dto",
+                                code
                         )
                 ).compile(BOOK_STORE_TYPE);
             } catch (IOException ex) {
@@ -3043,11 +3019,8 @@ public class DtoCompilerTest {
                 return new MyDtoCompiler(
                         new DtoFile(
                                 "file:/User/test/Client.dto",
-                                code,
-                                "project",
-                                "src/main/dto",
-                                Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
-                                "Client.dto"
+                                "org/babyfish/jimmer/sql/model/Client.dto",
+                                code
                         )
                 ).compile(CLIENT_TYPE);
             } catch (IOException ex) {
@@ -3061,11 +3034,8 @@ public class DtoCompilerTest {
                 return new MyDtoCompiler(
                         new DtoFile(
                                 "file:/User/test/Payment.dto",
-                                code,
-                                "project",
-                                "src/main/dto",
-                                Arrays.asList("org", "babyfish", "jimmer", "sql", "model"),
-                                "Payment.dto"
+                                "org/babyfish/jimmer/sql/model/Payment.dto",
+                                code
                         )
                 ).compile(PAYMENT_TYPE);
             } catch (IOException ex) {
