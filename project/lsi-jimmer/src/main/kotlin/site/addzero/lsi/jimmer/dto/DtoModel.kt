@@ -222,6 +222,9 @@ data class DtoBaseProp(
         require(inputModifier.isInputStrategy) {
             "DTO base property input modifier must be an input strategy: ${inputModifier.name}"
         }
+        require(inputModifier != DtoModifier.DYNAMIC || nullable) {
+            "Dynamic DTO input property must be nullable: ${id.value}"
+        }
     }
 }
 
