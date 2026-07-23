@@ -13,10 +13,6 @@ import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
-import org.babyfish.jimmer.compiler.error.ErrorPrecompileOptions
-import org.babyfish.jimmer.compiler.error.ErrorPrecompileException
-import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
-import org.babyfish.jimmer.compiler.error.ErrorPrecompiler
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
@@ -25,6 +21,10 @@ import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
+import site.addzero.lsi.jimmer.error.ErrorSchema
+import site.addzero.lsi.jimmer.error.ErrorSchemaOptions
+import site.addzero.lsi.jimmer.error.ErrorValidationException
+import site.addzero.lsi.jimmer.error.toErrorSchema
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -275,7 +275,7 @@ private data class ClientDependencies(
     val immutableFingerprint: String,
     val errorFingerprint: String,
     val immutableSchema: ImmutableSchema,
-    val errorSchema: ErrorPrecompiledSchema,
+    val errorSchema: ErrorSchema,
     val definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
     val dtoFingerprint: String,
 )
@@ -357,13 +357,13 @@ private fun CompilerRound.previewClientDependencies(): ClientPrecompileDependenc
         ImmutableSchema(emptyList())
     }
     val errorSchema = try {
-        ErrorPrecompiler(
-            ErrorPrecompileOptions(
+        workspace.toErrorSchema(
+            options = ErrorSchemaOptions(
                 checkedException = options["jimmer.client.checkedException"] == "true",
-            )
-        ).compile(workspace)
-    } catch (_: ErrorPrecompileException) {
-        ErrorPrecompiledSchema(emptyList())
+            ),
+        )
+    } catch (_: ErrorValidationException) {
+        ErrorSchema(emptyList())
     }
     return ClientPrecompileDependencies(
         immutableSchema = immutableSchema,

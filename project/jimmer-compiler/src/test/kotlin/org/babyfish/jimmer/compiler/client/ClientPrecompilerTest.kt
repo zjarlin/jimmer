@@ -7,10 +7,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.error.ErrorCodeModel
-import org.babyfish.jimmer.compiler.error.ErrorFamilyModel
-import org.babyfish.jimmer.compiler.error.ErrorFieldModel
-import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import site.addzero.lsi.jimmer.error.ErrorCode
+import site.addzero.lsi.jimmer.error.ErrorFamily
+import site.addzero.lsi.jimmer.error.ErrorField
+import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.core.LsiLanguage
@@ -511,7 +511,7 @@ class ClientPrecompilerTest {
             annotations = listOf(api()),
             thrownTypes = listOf(LsiDeclaredType(codeExceptionId)),
         )
-        val field = ErrorFieldModel(
+        val field = ErrorField(
             name = "detail",
             type = LsiDeclaredType(externalPojoId),
             list = false,
@@ -521,9 +521,9 @@ class ClientPrecompilerTest {
         )
         val dependencies = ClientPrecompileDependencies(
             immutableSchema = ImmutableSchema(emptyList()),
-            errorSchema = ErrorPrecompiledSchema(
+            errorSchema = ErrorSchema(
                 families = listOf(
-                    ErrorFamilyModel(
+                    ErrorFamily(
                         id = familyId,
                         qualifiedName = "demo.GeneratedErrorCode",
                         packageName = "demo",
@@ -534,7 +534,7 @@ class ClientPrecompilerTest {
                         documentation = "Generated error family.",
                         declaredFields = listOf(field),
                         codes = listOf(
-                            ErrorCodeModel(
+                            ErrorCode(
                                 id = LsiSymbolId("${familyId.value}#INVALID"),
                                 enumEntryName = "INVALID",
                                 code = "INVALID",
@@ -543,7 +543,6 @@ class ClientPrecompilerTest {
                                 exceptionSimpleName = "Invalid",
                                 documentation = "Invalid error.",
                                 declaredFields = emptyList(),
-                                fields = listOf(field),
                             )
                         ),
                     )
@@ -1369,7 +1368,7 @@ class ClientPrecompilerTest {
     )
 
     companion object {
-        private val EMPTY_ERROR_SCHEMA = ErrorPrecompiledSchema(emptyList())
+        private val EMPTY_ERROR_SCHEMA = ErrorSchema(emptyList())
         private val SERVICE_ID = LsiSymbolId.type("demo.Service")
         private val API = LsiSymbolId.type("org.babyfish.jimmer.client.meta.Api")
         private val API_IGNORE = LsiSymbolId.type("org.babyfish.jimmer.client.ApiIgnore")
@@ -1392,7 +1391,7 @@ class ClientPrecompilerTest {
     }
 }
 
-private fun ErrorPrecompiledSchema.clientDependencies(): ClientPrecompileDependencies {
+private fun ErrorSchema.clientDependencies(): ClientPrecompileDependencies {
     return ClientPrecompileDependencies(
         immutableSchema = ImmutableSchema(emptyList()),
         errorSchema = this,
@@ -1400,11 +1399,11 @@ private fun ErrorPrecompiledSchema.clientDependencies(): ClientPrecompileDepende
     )
 }
 
-private fun errorSchema(): ErrorPrecompiledSchema {
+private fun errorSchema(): ErrorSchema {
     val familyId = LsiSymbolId.type("demo.BookErrorCode")
-    return ErrorPrecompiledSchema(
+    return ErrorSchema(
         families = listOf(
-            ErrorFamilyModel(
+            ErrorFamily(
                 id = familyId,
                 qualifiedName = "demo.BookErrorCode",
                 packageName = "demo",
@@ -1427,8 +1426,8 @@ private fun errorCode(
     familyId: LsiSymbolId,
     code: String,
     exceptionSimpleName: String,
-): ErrorCodeModel {
-    return ErrorCodeModel(
+): ErrorCode {
+    return ErrorCode(
         id = LsiSymbolId("${familyId.value}#$code"),
         enumEntryName = code,
         code = code,
@@ -1437,7 +1436,6 @@ private fun errorCode(
         exceptionSimpleName = exceptionSimpleName,
         documentation = "$code error.",
         declaredFields = emptyList(),
-        fields = emptyList(),
     )
 }
 

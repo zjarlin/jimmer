@@ -1,7 +1,7 @@
 package org.babyfish.jimmer.compiler.client
 
-import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
-import org.babyfish.jimmer.compiler.error.ErrorFieldModel
+import site.addzero.lsi.jimmer.error.ErrorSchema
+import site.addzero.lsi.jimmer.error.ErrorField
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiLanguage
@@ -39,7 +39,7 @@ data class ClientPrecompileOptions(
 
 data class ClientPrecompileDependencies(
     val immutableSchema: ImmutableSchema,
-    val errorSchema: ErrorPrecompiledSchema,
+    val errorSchema: ErrorSchema,
     val definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
 )
 
@@ -131,7 +131,7 @@ class ClientPrecompiler(
         val scannedDefinitionTypeIds = mutableSetOf<LsiSymbolId>()
         val types = workspace.declarationsOfType<LsiTypeDeclaration>()
         dependencies.errorSchema.families.forEach { family ->
-            (family.declaredFields + family.codes.flatMap { code -> code.fields }).forEach { field ->
+            (family.declaredFields + family.codes.flatMap { code -> code.declaredFields }).forEach { field ->
                 field.type.collectClientTypeIds(
                     definitionTypeIds = definitionTypeIds,
                     seedIds = seedIds,
@@ -472,7 +472,7 @@ class ClientPrecompiler(
         workspace: LsiWorkspace,
         service: ClientService,
         immutableSchema: ImmutableSchema,
-        errorSchema: ErrorPrecompiledSchema,
+        errorSchema: ErrorSchema,
         definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
     ): List<ClientTypeDefinition> {
         val exceptionMetadataByTypeId = service.operations
@@ -1135,16 +1135,16 @@ private data class GeneratedClientErrorType(
     val code: String?,
     val superTypeId: LsiSymbolId?,
     val documentation: String?,
-    val fields: List<ErrorFieldModel>,
+    val fields: List<ErrorField>,
 )
 
 private val EMPTY_CLIENT_DEPENDENCIES = ClientPrecompileDependencies(
     immutableSchema = ImmutableSchema(emptyList()),
-    errorSchema = ErrorPrecompiledSchema(emptyList()),
+    errorSchema = ErrorSchema(emptyList()),
     definitionDocumentationByTypeId = emptyMap(),
 )
 
-private fun ErrorPrecompiledSchema.generatedErrorType(typeId: LsiSymbolId): GeneratedClientErrorType? {
+private fun ErrorSchema.generatedErrorType(typeId: LsiSymbolId): GeneratedClientErrorType? {
     families.forEach { family ->
         if (family.exceptionTypeId == typeId) {
             return GeneratedClientErrorType(
@@ -1163,7 +1163,7 @@ private fun ErrorPrecompiledSchema.generatedErrorType(typeId: LsiSymbolId): Gene
                 code = code.code,
                 superTypeId = family.exceptionTypeId,
                 documentation = code.documentation,
-                fields = code.fields,
+                fields = family.declaredFields + code.declaredFields,
             )
         }
     }

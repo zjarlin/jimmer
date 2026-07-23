@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.error
+package site.addzero.lsi.jimmer.error
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -10,9 +10,10 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 
-fun ErrorPrecompiledSchema.normalizedSnapshot(): String {
+/** 生成与前端无关且顺序稳定的 Error 语义快照。 */
+fun ErrorSchema.normalizedSnapshot(): String {
     return buildString {
-        families.sortedBy(ErrorFamilyModel::id).forEach { family ->
+        families.sortedBy(ErrorFamily::id).forEach { family ->
             appendRecord(
                 "family",
                 family.id.value,
@@ -47,7 +48,8 @@ fun ErrorPrecompiledSchema.normalizedSnapshot(): String {
     }
 }
 
-fun ErrorPrecompiledSchema.fingerprint(): String {
+/** 计算 Error 语义快照的 SHA-256 指纹。 */
+fun ErrorSchema.fingerprint(): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes = digest.digest(normalizedSnapshot().toByteArray(StandardCharsets.UTF_8))
     return bytes.joinToString("") { byte -> "%02x".format(byte) }
@@ -56,7 +58,7 @@ fun ErrorPrecompiledSchema.fingerprint(): String {
 private fun StringBuilder.appendField(
     kind: String,
     owner: String,
-    field: ErrorFieldModel,
+    field: ErrorField,
 ) {
     appendRecord(
         kind,

@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.error
+package site.addzero.lsi.jimmer.error
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,12 +22,12 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 
-class ErrorPrecompilerTest {
+class ErrorWorkspaceExtensionsTest {
 
     @Test
     fun `precompiles error family fields codes and names`() {
-        val schema = ErrorPrecompiler(ErrorPrecompileOptions(checkedException = true))
-            .compile(errorWorkspace(LsiLanguage.JAVA, repeatableContainer = true))
+        val schema = errorWorkspace(LsiLanguage.JAVA, repeatableContainer = true)
+            .toErrorSchema(ErrorSchemaOptions(checkedException = true))
 
         val family = schema.families.single()
         assertEquals("demo", family.packageName)
@@ -36,20 +36,23 @@ class ErrorPrecompilerTest {
         assertEquals("BookException", family.exceptionSimpleName)
         assertTrue(family.checkedException)
         assertEquals("demo/BookErrorCode.java", family.originatingSources.single().path)
-        assertEquals(listOf("timestamp", "tags"), family.declaredFields.map(ErrorFieldModel::name))
+        assertEquals(listOf("timestamp", "tags"), family.declaredFields.map(ErrorField::name))
         val code = family.codes.single()
         assertEquals("OUT_OF_RANGE", code.code)
         assertEquals(LsiSymbolId.type("demo.BookException.OutOfRange"), code.exceptionTypeId)
         assertEquals("outOfRange", code.creatorName)
         assertEquals("OutOfRange", code.exceptionSimpleName)
-        assertEquals(listOf("timestamp", "tags", "min", "max"), code.fields.map(ErrorFieldModel::name))
+        assertEquals(
+            listOf("timestamp", "tags", "min", "max"),
+            (family.declaredFields + code.declaredFields).map(ErrorField::name),
+        )
         assertEquals(64, schema.fingerprint().length)
     }
 
     @Test
     fun `apt and ksp repeatable annotations have identical error snapshots`() {
-        val apt = ErrorPrecompiler().compile(errorWorkspace(LsiLanguage.JAVA, repeatableContainer = true))
-        val ksp = ErrorPrecompiler().compile(errorWorkspace(LsiLanguage.KOTLIN, repeatableContainer = false))
+        val apt = errorWorkspace(LsiLanguage.JAVA, repeatableContainer = true).toErrorSchema()
+        val ksp = errorWorkspace(LsiLanguage.KOTLIN, repeatableContainer = false).toErrorSchema()
 
         assertEquals(apt.normalizedSnapshot(), ksp.normalizedSnapshot())
         assertEquals(apt.fingerprint(), ksp.fingerprint())
@@ -57,7 +60,7 @@ class ErrorPrecompilerTest {
 
     @Test
     fun `snapshot distinguishes primitive and boxed error fields`() {
-        val schema = ErrorPrecompiler().compile(errorWorkspace(LsiLanguage.JAVA, repeatableContainer = true))
+        val schema = errorWorkspace(LsiLanguage.JAVA, repeatableContainer = true).toErrorSchema()
         val family = schema.families.single()
         val boxedFamily = family.copy(
             codes = family.codes.map { code ->
@@ -69,17 +72,10 @@ class ErrorPrecompilerTest {
                             field
                         }
                     },
-                    fields = code.fields.map { field ->
-                        if (field.name == "min") {
-                            field.copy(type = LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true))
-                        } else {
-                            field
-                        }
-                    },
                 )
             },
         )
-        val boxedSchema = ErrorPrecompiledSchema(listOf(boxedFamily))
+        val boxedSchema = ErrorSchema(listOf(boxedFamily))
 
         assertNotEquals(schema.normalizedSnapshot(), boxedSchema.normalizedSnapshot())
         assertNotEquals(schema.fingerprint(), boxedSchema.fingerprint())
@@ -108,9 +104,9 @@ class ErrorPrecompilerTest {
             declarations = sourceWorkspace.declarations + binaryFamily,
         )
 
-        val schema = ErrorPrecompiler().compile(workspace, setOf(sourceFamily.id))
+        val schema = workspace.toErrorSchema(targetTypeIds = setOf(sourceFamily.id))
 
-        assertEquals(listOf(sourceFamily.id), schema.families.map(ErrorFamilyModel::id))
+        assertEquals(listOf(sourceFamily.id), schema.families.map(ErrorFamily::id))
     }
 
     @Test
@@ -130,7 +126,7 @@ class ErrorPrecompilerTest {
             enumEntries = listOf(entry),
         )
 
-        val family = ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(outer, nested)))
+        val family = LsiWorkspace(declarations = listOf(outer, nested)).toErrorSchema()
             .families.single()
 
         assertEquals("demo", family.packageName)
@@ -154,7 +150,7 @@ class ErrorPrecompilerTest {
             enumEntries = listOf(entry),
         )
 
-        val schema = ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(family)))
+        val schema = LsiWorkspace(declarations = listOf(family)).toErrorSchema()
 
         assertEquals("KBUSINESS", schema.families.single().family)
     }
@@ -166,8 +162,8 @@ class ErrorPrecompilerTest {
             kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = listOf(errorFamily("INVALID")),
         )
-        val kindException = assertFailsWith<ErrorPrecompileException> {
-            ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(nonEnum)))
+        val kindException = assertFailsWith<ErrorValidationException> {
+            LsiWorkspace(declarations = listOf(nonEnum)).toErrorSchema()
         }
         assertTrue(kindException.message.orEmpty().contains("Only enum"))
 
@@ -176,8 +172,8 @@ class ErrorPrecompilerTest {
             kind = LsiTypeDeclarationKind.ENUM,
             annotations = listOf(errorFamily("EMPTY")),
         )
-        val emptyFamilyException = assertFailsWith<ErrorPrecompileException> {
-            ErrorPrecompiler().compile(LsiWorkspace(declarations = listOf(emptyFamily)))
+        val emptyFamilyException = assertFailsWith<ErrorValidationException> {
+            LsiWorkspace(declarations = listOf(emptyFamily)).toErrorSchema()
         }
         assertTrue(emptyFamilyException.message.orEmpty().contains("at least one error code"))
 
@@ -186,8 +182,8 @@ class ErrorPrecompilerTest {
             repeatableContainer = false,
             codeFields = listOf(errorField("timestamp", STRING_TYPE)),
         )
-        val duplicateException = assertFailsWith<ErrorPrecompileException> {
-            ErrorPrecompiler().compile(duplicate)
+        val duplicateException = assertFailsWith<ErrorValidationException> {
+            duplicate.toErrorSchema()
         }
         assertTrue(duplicateException.message.orEmpty().contains("already been declared"))
 
@@ -196,8 +192,8 @@ class ErrorPrecompilerTest {
             repeatableContainer = false,
             codeFields = listOf(errorField("values", LsiPrimitiveType(LsiPrimitiveKind.INT), list = true)),
         )
-        val primitiveException = assertFailsWith<ErrorPrecompileException> {
-            ErrorPrecompiler().compile(primitiveList)
+        val primitiveException = assertFailsWith<ErrorValidationException> {
+            primitiveList.toErrorSchema()
         }
         assertTrue(primitiveException.message.orEmpty().contains("list of primitive"))
     }

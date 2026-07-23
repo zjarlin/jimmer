@@ -14,6 +14,11 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.error.ErrorSchema
+import site.addzero.lsi.jimmer.error.ErrorSchemaOptions
+import site.addzero.lsi.jimmer.error.ErrorValidationException
+import site.addzero.lsi.jimmer.error.fingerprint
+import site.addzero.lsi.jimmer.error.toErrorSchema
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -37,11 +42,12 @@ class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     type.annotations.any { annotation -> annotation.type == ERROR_FAMILY_ANNOTATION }
                 }
                 .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
-            val schema = ErrorPrecompiler(
-                ErrorPrecompileOptions(
+            val schema = context.round.workspace.toErrorSchema(
+                options = ErrorSchemaOptions(
                     checkedException = context.round.options["jimmer.client.checkedException"] == "true"
-                )
-            ).compile(context.round.workspace, targetTypeIds)
+                ),
+                targetTypeIds = targetTypeIds,
+            )
             val state = ErrorCompilerFeatureState(
                 status = ErrorCompilerFeatureStatus.RESOLVED,
                 schema = schema,
@@ -50,7 +56,7 @@ class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 state = state,
                 processedSymbols = schema.families.mapTo(sortedSetOf()) { family -> family.id },
             )
-        } catch (exception: ErrorPrecompileException) {
+        } catch (exception: ErrorValidationException) {
             JimmerCompilerFeaturePrecompileResult(
                 state = ErrorCompilerFeatureState.invalid(exception),
                 diagnostics = listOf(
@@ -111,14 +117,14 @@ internal enum class ErrorCompilerFeatureStatus {
 
 internal data class ErrorCompilerFeatureState(
     val status: ErrorCompilerFeatureStatus,
-    val schema: ErrorPrecompiledSchema,
+    val schema: ErrorSchema,
     override val fingerprint: String = "${status.name}:${schema.fingerprint()}",
 ) : JimmerCompilerFeatureState {
     companion object {
-        fun invalid(exception: ErrorPrecompileException): ErrorCompilerFeatureState {
+        fun invalid(exception: ErrorValidationException): ErrorCompilerFeatureState {
             return ErrorCompilerFeatureState(
                 status = ErrorCompilerFeatureStatus.INVALID,
-                schema = ErrorPrecompiledSchema(emptyList()),
+                schema = ErrorSchema(emptyList()),
                 fingerprint = "INVALID:${exception.declarationId.value}:${exception.message.orEmpty()}",
             )
         }

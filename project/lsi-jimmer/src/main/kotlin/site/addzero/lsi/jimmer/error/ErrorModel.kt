@@ -1,14 +1,16 @@
-package org.babyfish.jimmer.compiler.error
+package site.addzero.lsi.jimmer.error
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.model.LsiTypeRef
 
-data class ErrorPrecompiledSchema(
-    val families: List<ErrorFamilyModel>,
+/** 描述工作区内可生成的错误族语义。 */
+data class ErrorSchema(
+    val families: List<ErrorFamily>,
 )
 
-data class ErrorFamilyModel(
+/** 描述错误枚举及其生成异常基类。 */
+data class ErrorFamily(
     val id: LsiSymbolId,
     val qualifiedName: String,
     val packageName: String,
@@ -18,8 +20,8 @@ data class ErrorFamilyModel(
     val checkedException: Boolean,
     val documentation: String?,
     val originatingSources: Set<LsiSource> = emptySet(),
-    val declaredFields: List<ErrorFieldModel>,
-    val codes: List<ErrorCodeModel>,
+    val declaredFields: List<ErrorField>,
+    val codes: List<ErrorCode>,
 ) {
     init {
         id.requireTypeQualifiedName()
@@ -27,7 +29,8 @@ data class ErrorFamilyModel(
     }
 }
 
-data class ErrorCodeModel(
+/** 描述错误枚举项及其生成异常子类。 */
+data class ErrorCode(
     val id: LsiSymbolId,
     val enumEntryName: String,
     val code: String,
@@ -35,15 +38,15 @@ data class ErrorCodeModel(
     val exceptionTypeId: LsiSymbolId,
     val exceptionSimpleName: String,
     val documentation: String?,
-    val declaredFields: List<ErrorFieldModel>,
-    val fields: List<ErrorFieldModel>,
+    val declaredFields: List<ErrorField>,
 ) {
     init {
         exceptionTypeId.requireTypeQualifiedName()
     }
 }
 
-data class ErrorFieldModel(
+/** 描述错误异常携带的领域字段。 */
+data class ErrorField(
     val name: String,
     val type: LsiTypeRef,
     val list: Boolean,

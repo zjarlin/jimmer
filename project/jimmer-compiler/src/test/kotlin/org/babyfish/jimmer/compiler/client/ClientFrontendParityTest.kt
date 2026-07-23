@@ -24,7 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.jimmer.ImmutableSchema
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
@@ -38,7 +38,7 @@ import site.addzero.lsi.model.toSemanticSnapshot
 private fun emptyClientDependencies(): ClientPrecompileDependencies {
     return ClientPrecompileDependencies(
         immutableSchema = ImmutableSchema(emptyList()),
-        errorSchema = ErrorPrecompiledSchema(emptyList()),
+        errorSchema = ErrorSchema(emptyList()),
         definitionDocumentationByTypeId = emptyMap(),
     )
 }

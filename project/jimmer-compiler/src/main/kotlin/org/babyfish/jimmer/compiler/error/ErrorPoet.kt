@@ -3,6 +3,10 @@ package org.babyfish.jimmer.compiler.error
 import site.addzero.lsi.codegen.classifyArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.error.ErrorCode
+import site.addzero.lsi.jimmer.error.ErrorFamily
+import site.addzero.lsi.jimmer.error.ErrorField
+import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
@@ -39,13 +43,13 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
 
-internal fun ErrorPrecompiledSchema.toLsiPoetArtifacts(
+internal fun ErrorSchema.toLsiPoetArtifacts(
     workspace: LsiWorkspace,
 ): List<LsiPoetArtifact> {
     return families.map { family -> family.toLsiPoetArtifact(workspace) }
 }
 
-private fun ErrorFamilyModel.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtifact {
+private fun ErrorFamily.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtifact {
     val language = sourceLanguage(workspace)
     val originatingSymbols = setOf(id)
     val originatingSources = workspace.originatingSources(originatingSymbols)
@@ -78,7 +82,7 @@ private fun ErrorFamilyModel.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoet
     )
 }
 
-private fun ErrorFamilyModel.toJavaPoetType(): LsiPoetType {
+private fun ErrorFamily.toJavaPoetType(): LsiPoetType {
     val enumType = LsiDeclaredType(id)
     return LsiPoetType(
         name = exceptionSimpleName,
@@ -96,13 +100,15 @@ private fun ErrorFamilyModel.toJavaPoetType(): LsiPoetType {
         members = buildList {
             addAll(javaCommonMembers(declaredFields, declaredFields, sharedFields = null))
             add(javaEnumFunction(enumType))
-            codes.forEach { code -> addAll(code.javaCreatorFunctions()) }
+            codes.forEach { code ->
+                addAll(code.javaCreatorFunctions(declaredFields + code.declaredFields))
+            }
             codes.forEach { code -> add(code.toJavaPoetType(this@toJavaPoetType, enumType)) }
         },
     )
 }
 
-private fun ErrorFamilyModel.toKotlinPoetType(): LsiPoetType {
+private fun ErrorFamily.toKotlinPoetType(): LsiPoetType {
     val enumType = LsiDeclaredType(id)
     return LsiPoetType(
         name = exceptionSimpleName,
@@ -129,10 +135,10 @@ private fun ErrorFamilyModel.toKotlinPoetType(): LsiPoetType {
     )
 }
 
-private fun ErrorFamilyModel.javaCommonMembers(
-    declaredFields: List<ErrorFieldModel>,
-    allFields: List<ErrorFieldModel>,
-    sharedFields: List<ErrorFieldModel>?,
+private fun ErrorFamily.javaCommonMembers(
+    declaredFields: List<ErrorField>,
+    allFields: List<ErrorField>,
+    sharedFields: List<ErrorField>?,
 ): List<LsiPoetMember> {
     return buildList {
         declaredFields.forEach { field -> add(field.toJavaField()) }
@@ -141,10 +147,10 @@ private fun ErrorFamilyModel.javaCommonMembers(
     }
 }
 
-private fun ErrorFamilyModel.javaConstructor(
-    declaredFields: List<ErrorFieldModel>,
-    allFields: List<ErrorFieldModel>,
-    sharedFields: List<ErrorFieldModel>?,
+private fun ErrorFamily.javaConstructor(
+    declaredFields: List<ErrorField>,
+    allFields: List<ErrorField>,
+    sharedFields: List<ErrorField>?,
 ): LsiPoetConstructor {
     val superArguments = buildList {
         add(codeName("message"))
@@ -175,7 +181,7 @@ private fun ErrorFamilyModel.javaConstructor(
     )
 }
 
-private fun ErrorFamilyModel.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunction {
+private fun ErrorFamily.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunction {
     return LsiPoetFunction(
         name = "get${qualifiedName.substringAfterLast('.')}",
         annotations = listOf(JSON_IGNORE_ANNOTATION),
@@ -187,15 +193,16 @@ private fun ErrorFamilyModel.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunc
     )
 }
 
-private fun ErrorCodeModel.javaCreatorFunctions(): List<LsiPoetFunction> {
+private fun ErrorCode.javaCreatorFunctions(fields: List<ErrorField>): List<LsiPoetFunction> {
     return listOf(
-        javaCreatorFunction(withMessage = false, withCause = false),
-        javaCreatorFunction(withMessage = true, withCause = false),
-        javaCreatorFunction(withMessage = true, withCause = true),
+        javaCreatorFunction(fields, withMessage = false, withCause = false),
+        javaCreatorFunction(fields, withMessage = true, withCause = false),
+        javaCreatorFunction(fields, withMessage = true, withCause = true),
     )
 }
 
-private fun ErrorCodeModel.javaCreatorFunction(
+private fun ErrorCode.javaCreatorFunction(
+    fields: List<ErrorField>,
     withMessage: Boolean,
     withCause: Boolean,
 ): LsiPoetFunction {
@@ -258,10 +265,11 @@ private fun ErrorCodeModel.javaCreatorFunction(
     )
 }
 
-private fun ErrorCodeModel.toJavaPoetType(
-    family: ErrorFamilyModel,
+private fun ErrorCode.toJavaPoetType(
+    family: ErrorFamily,
     enumType: LsiTypeRef,
 ): LsiPoetType {
+    val allFields = family.declaredFields + declaredFields
     return LsiPoetType(
         name = exceptionSimpleName,
         kind = LsiPoetTypeKind.CLASS,
@@ -273,14 +281,14 @@ private fun ErrorCodeModel.toJavaPoetType(
         documentation = documentation.withTrailingLineBreak(),
         superClass = LsiDeclaredType(family.exceptionTypeId),
         members = buildList {
-            addAll(family.javaCommonMembers(declaredFields, fields, family.declaredFields))
+            addAll(family.javaCommonMembers(declaredFields, allFields, family.declaredFields))
             add(javaEnumFunction(enumType))
-            add(javaFieldsFunction())
+            add(javaFieldsFunction(allFields))
         },
     )
 }
 
-private fun ErrorCodeModel.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunction {
+private fun ErrorCode.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunction {
     return LsiPoetFunction(
         name = "get${enumType.declarationSimpleName()}",
         annotations = listOf(
@@ -302,7 +310,7 @@ private fun ErrorCodeModel.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFuncti
     )
 }
 
-private fun ErrorCodeModel.javaFieldsFunction(): LsiPoetFunction {
+private fun ErrorCode.javaFieldsFunction(fields: List<ErrorField>): LsiPoetFunction {
     return LsiPoetFunction(
         name = "getFields",
         annotations = listOf(JAVA_OVERRIDE_ANNOTATION),
@@ -349,7 +357,7 @@ private fun ErrorCodeModel.javaFieldsFunction(): LsiPoetFunction {
     )
 }
 
-private fun ErrorFieldModel.toJavaField(): LsiPoetField {
+private fun ErrorField.toJavaField(): LsiPoetField {
     return LsiPoetField(
         name = name,
         type = javaType(),
@@ -358,7 +366,7 @@ private fun ErrorFieldModel.toJavaField(): LsiPoetField {
     )
 }
 
-private fun ErrorFieldModel.toJavaParameter(): LsiPoetParameter {
+private fun ErrorField.toJavaParameter(): LsiPoetParameter {
     return LsiPoetParameter(
         name = name,
         type = javaType(),
@@ -366,8 +374,9 @@ private fun ErrorFieldModel.toJavaParameter(): LsiPoetParameter {
     )
 }
 
-private fun ErrorFieldModel.toJavaGetter(): LsiPoetFunction {
-    val prefix = if (type is LsiPrimitiveType && type.kind == LsiPrimitiveKind.BOOLEAN && !list) {
+private fun ErrorField.toJavaGetter(): LsiPoetFunction {
+    val fieldType = type
+    val prefix = if (fieldType is LsiPrimitiveType && fieldType.kind == LsiPrimitiveKind.BOOLEAN && !list) {
         "is"
     } else {
         "get"
@@ -382,7 +391,7 @@ private fun ErrorFieldModel.toJavaGetter(): LsiPoetFunction {
     )
 }
 
-private fun ErrorFieldModel.javaType(): LsiTypeRef {
+private fun ErrorField.javaType(): LsiTypeRef {
     return if (list) {
         LsiDeclaredType(
             declarationId = LIST_ID,
@@ -393,11 +402,11 @@ private fun ErrorFieldModel.javaType(): LsiTypeRef {
     }
 }
 
-private fun ErrorFieldModel.nullabilityAnnotation(): LsiPoetAnnotation {
+private fun ErrorField.nullabilityAnnotation(): LsiPoetAnnotation {
     return if (nullable) NULLABLE_ANNOTATION else NON_NULL_ANNOTATION
 }
 
-private fun ErrorFamilyModel.kotlinPrimaryConstructor(fields: List<ErrorFieldModel>): LsiPoetConstructor {
+private fun ErrorFamily.kotlinPrimaryConstructor(fields: List<ErrorField>): LsiPoetConstructor {
     return LsiPoetConstructor(
         parameters = buildList {
             add(
@@ -419,7 +428,7 @@ private fun ErrorFamilyModel.kotlinPrimaryConstructor(fields: List<ErrorFieldMod
     )
 }
 
-private fun ErrorFieldModel.toKotlinParameter(): LsiPoetParameter {
+private fun ErrorField.toKotlinParameter(): LsiPoetParameter {
     return LsiPoetParameter(
         name = name,
         type = kotlinType(),
@@ -427,7 +436,7 @@ private fun ErrorFieldModel.toKotlinParameter(): LsiPoetParameter {
     )
 }
 
-private fun ErrorFieldModel.toKotlinProperty(): LsiPoetProperty {
+private fun ErrorField.toKotlinProperty(): LsiPoetProperty {
     return LsiPoetProperty(
         name = name,
         type = kotlinType(),
@@ -438,7 +447,7 @@ private fun ErrorFieldModel.toKotlinProperty(): LsiPoetProperty {
     )
 }
 
-private fun ErrorFieldModel.kotlinType(): LsiTypeRef {
+private fun ErrorField.kotlinType(): LsiTypeRef {
     val baseType = if (list) {
         LsiDeclaredType(
             declarationId = LIST_ID,
@@ -450,9 +459,9 @@ private fun ErrorFieldModel.kotlinType(): LsiTypeRef {
     return baseType.withRootNullability(nullable)
 }
 
-private fun ErrorFamilyModel.kotlinEnumProperty(
+private fun ErrorFamily.kotlinEnumProperty(
     enumType: LsiTypeRef,
-    code: ErrorCodeModel?,
+    code: ErrorCode?,
 ): LsiPoetProperty {
     return LsiPoetProperty(
         name = enumType.declarationSimpleName().replaceFirstChar(Char::lowercaseChar),
@@ -477,7 +486,7 @@ private fun ErrorFamilyModel.kotlinEnumProperty(
     )
 }
 
-private fun ErrorFamilyModel.kotlinFieldsProperty(fields: List<ErrorFieldModel>): LsiPoetProperty {
+private fun ErrorFamily.kotlinFieldsProperty(fields: List<ErrorField>): LsiPoetProperty {
     return LsiPoetProperty(
         name = "fields",
         type = KOTLIN_FIELDS_MAP_TYPE,
@@ -511,16 +520,18 @@ private fun ErrorFamilyModel.kotlinFieldsProperty(fields: List<ErrorFieldModel>)
     )
 }
 
-private fun ErrorFamilyModel.kotlinCompanionType(): LsiPoetType {
+private fun ErrorFamily.kotlinCompanionType(): LsiPoetType {
     return LsiPoetType(
         name = "Companion",
         kind = LsiPoetTypeKind.OBJECT,
         modifiers = setOf(LsiPoetModifier.COMPANION),
-        members = codes.map(ErrorCodeModel::kotlinFactoryFunction),
+        members = codes.map { code ->
+            code.kotlinFactoryFunction(declaredFields + code.declaredFields)
+        },
     )
 }
 
-private fun ErrorCodeModel.kotlinFactoryFunction(): LsiPoetFunction {
+private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiPoetFunction {
     val nestedType = LsiDeclaredType(exceptionTypeId)
     return LsiPoetFunction(
         name = creatorName,
@@ -550,7 +561,7 @@ private fun ErrorCodeModel.kotlinFactoryFunction(): LsiPoetFunction {
                 text("(")
                 line()
                 indent {
-                    val arguments = listOf("message", "cause") + fields.map(ErrorFieldModel::name)
+                    val arguments = listOf("message", "cause") + fields.map(ErrorField::name)
                     arguments.forEachIndexed { index, argument ->
                         if (index != 0) {
                             text(",")
@@ -566,10 +577,11 @@ private fun ErrorCodeModel.kotlinFactoryFunction(): LsiPoetFunction {
     )
 }
 
-private fun ErrorCodeModel.toKotlinPoetType(
-    family: ErrorFamilyModel,
+private fun ErrorCode.toKotlinPoetType(
+    family: ErrorFamily,
     enumType: LsiTypeRef,
 ): LsiPoetType {
+    val allFields = family.declaredFields + declaredFields
     return LsiPoetType(
         name = exceptionSimpleName,
         kind = LsiPoetTypeKind.CLASS,
@@ -582,16 +594,16 @@ private fun ErrorCodeModel.toKotlinPoetType(
             add(codeName("cause"))
             family.declaredFields.forEach { field -> add(codeName(field.name)) }
         },
-        primaryConstructor = family.kotlinPrimaryConstructor(fields),
+        primaryConstructor = family.kotlinPrimaryConstructor(allFields),
         members = buildList {
             declaredFields.forEach { field -> add(field.toKotlinProperty()) }
             add(family.kotlinEnumProperty(enumType, this@toKotlinPoetType))
-            add(family.kotlinFieldsProperty(fields))
+            add(family.kotlinFieldsProperty(allFields))
         },
     )
 }
 
-private fun ErrorFamilyModel.generatedByAnnotation(enumType: LsiTypeRef): LsiPoetAnnotation {
+private fun ErrorFamily.generatedByAnnotation(enumType: LsiTypeRef): LsiPoetAnnotation {
     return LsiPoetAnnotation(
         type = GENERATED_BY_ID,
         arguments = listOf(
@@ -603,7 +615,7 @@ private fun ErrorFamilyModel.generatedByAnnotation(enumType: LsiTypeRef): LsiPoe
     )
 }
 
-private fun ErrorFamilyModel.clientExceptionAnnotation(): LsiPoetAnnotation {
+private fun ErrorFamily.clientExceptionAnnotation(): LsiPoetAnnotation {
     return LsiPoetAnnotation(
         type = CLIENT_EXCEPTION_ID,
         arguments = buildList {
@@ -631,7 +643,7 @@ private fun ErrorFamilyModel.clientExceptionAnnotation(): LsiPoetAnnotation {
     )
 }
 
-private fun ErrorCodeModel.clientExceptionAnnotation(family: String): LsiPoetAnnotation {
+private fun ErrorCode.clientExceptionAnnotation(family: String): LsiPoetAnnotation {
     return LsiPoetAnnotation(
         type = CLIENT_EXCEPTION_ID,
         arguments = listOf(
@@ -647,13 +659,13 @@ private fun ErrorCodeModel.clientExceptionAnnotation(family: String): LsiPoetAnn
     )
 }
 
-private fun ErrorFamilyModel.codeBasedExceptionType(): LsiDeclaredType {
+private fun ErrorFamily.codeBasedExceptionType(): LsiDeclaredType {
     return LsiDeclaredType(
         if (checkedException) CODE_BASED_EXCEPTION_ID else CODE_BASED_RUNTIME_EXCEPTION_ID
     )
 }
 
-private fun ErrorFamilyModel.sourceLanguage(workspace: LsiWorkspace): LsiLanguage {
+private fun ErrorFamily.sourceLanguage(workspace: LsiWorkspace): LsiLanguage {
     val declarationLanguage = (workspace[id] as? LsiTypeDeclaration)?.origin?.language
     if (declarationLanguage == LsiLanguage.JAVA || declarationLanguage == LsiLanguage.KOTLIN) {
         return declarationLanguage
@@ -664,10 +676,9 @@ private fun ErrorFamilyModel.sourceLanguage(workspace: LsiWorkspace): LsiLanguag
     return sourceLanguage ?: LsiLanguage.UNKNOWN
 }
 
-private fun ErrorFamilyModel.dependencySymbols(language: LsiLanguage): Set<LsiSymbolId> {
+private fun ErrorFamily.dependencySymbols(language: LsiLanguage): Set<LsiSymbolId> {
     return buildSet {
         add(id)
-        add(exceptionTypeId)
         add(codeBasedExceptionType().declarationId)
         add(CLIENT_EXCEPTION_ID)
         add(GENERATED_BY_ID)
@@ -676,9 +687,7 @@ private fun ErrorFamilyModel.dependencySymbols(language: LsiLanguage): Set<LsiSy
         copiedFieldDependencies(declaredFields)
         codes.forEach { code ->
             add(code.id)
-            add(code.exceptionTypeId)
             copiedFieldDependencies(code.declaredFields)
-            copiedFieldDependencies(code.fields)
         }
         when (language) {
             LsiLanguage.JAVA -> {
@@ -690,7 +699,7 @@ private fun ErrorFamilyModel.dependencySymbols(language: LsiLanguage): Set<LsiSy
                 add(NULLABLE_ID)
                 add(COLLECTIONS_ID)
                 add(LINKED_HASH_MAP_ID)
-                if ((declaredFields + codes.flatMap(ErrorCodeModel::fields)).any(ErrorFieldModel::list)) {
+                if ((declaredFields + codes.flatMap(ErrorCode::declaredFields)).any(ErrorField::list)) {
                     add(LIST_ID)
                 }
             }
@@ -705,7 +714,7 @@ private fun ErrorFamilyModel.dependencySymbols(language: LsiLanguage): Set<LsiSy
     }
 }
 
-private fun MutableSet<LsiSymbolId>.copiedFieldDependencies(fields: List<ErrorFieldModel>) {
+private fun MutableSet<LsiSymbolId>.copiedFieldDependencies(fields: List<ErrorField>) {
     fields.forEach { field ->
         add(field.declaredBy)
         addType(field.type)

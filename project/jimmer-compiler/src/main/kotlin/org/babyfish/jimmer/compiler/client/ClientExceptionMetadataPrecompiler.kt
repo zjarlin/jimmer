@@ -1,7 +1,7 @@
 package org.babyfish.jimmer.compiler.client
 
-import org.babyfish.jimmer.compiler.error.ErrorFamilyModel
-import org.babyfish.jimmer.compiler.error.ErrorPrecompiledSchema
+import site.addzero.lsi.jimmer.error.ErrorFamily
+import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
@@ -250,9 +250,9 @@ internal class ClientExceptionMetadataPrecompiler private constructor(
     companion object {
         fun from(
             workspace: LsiWorkspace,
-            schema: ErrorPrecompiledSchema,
+            schema: ErrorSchema,
         ): ClientExceptionMetadataPrecompiler {
-            val generatedMetadata = schema.families.flatMap(ErrorFamilyModel::toClientExceptionMetadata)
+            val generatedMetadata = schema.families.flatMap(ErrorFamily::toClientExceptionMetadata)
             val generatedMetadataByTypeId = generatedMetadata.associateBy(ClientExceptionMetadata::typeId)
             val manualTypeIds = workspace.declarationsOfType<LsiTypeDeclaration>()
                 .filter { type ->
@@ -340,7 +340,7 @@ private class ManualClientExceptionMetadataCompiler(
     }
 }
 
-private fun ErrorFamilyModel.toClientExceptionMetadata(): List<ClientExceptionMetadata> {
+private fun ErrorFamily.toClientExceptionMetadata(): List<ClientExceptionMetadata> {
     val codeMetadata = codes.map { code ->
         ClientExceptionMetadata(
             typeId = code.exceptionTypeId,

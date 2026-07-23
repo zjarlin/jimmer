@@ -10,6 +10,7 @@ import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
@@ -20,6 +21,10 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.error.ErrorCode
+import site.addzero.lsi.jimmer.error.ErrorFamily
+import site.addzero.lsi.jimmer.error.ErrorField
+import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -83,14 +88,11 @@ class ErrorRendererTest {
         )
         val family = schema.families.single()
         val sharedField = family.declaredFields.single().copy(type = LsiDeclaredType(dependencyId))
-        val code = family.codes.single().copy(
-            fields = listOf(sharedField) + family.codes.single().declaredFields,
-        )
-        val dependentSchema = ErrorPrecompiledSchema(
+        val dependentSchema = ErrorSchema(
             listOf(
                 family.copy(
                     declaredFields = listOf(sharedField),
-                    codes = listOf(code),
+                    codes = family.codes,
                 )
             )
         )
@@ -102,7 +104,7 @@ class ErrorRendererTest {
         assertEquals(dependencyWorkspace.sources.toSet(), artifact.dependencySources)
     }
 
-    private fun fixture(language: LsiLanguage): Pair<ErrorPrecompiledSchema, LsiWorkspace> {
+    private fun fixture(language: LsiLanguage): Pair<ErrorSchema, LsiWorkspace> {
         val source = LsiSource.of(
             "demo/BookErrorCode.${if (language == LsiLanguage.JAVA) "java" else "kt"}",
             language,
@@ -119,7 +121,7 @@ class ErrorRendererTest {
                 )
             ),
         )
-        val shared = ErrorFieldModel(
+        val shared = ErrorField(
             name = "timestamp",
             type = LsiDeclaredType(LsiSymbolId.type("java.time.LocalDateTime")),
             list = false,
@@ -127,7 +129,7 @@ class ErrorRendererTest {
             documentation = "Created time",
             declaredBy = FAMILY_ID,
         )
-        val min = ErrorFieldModel(
+        val min = ErrorField(
             name = "min",
             type = LsiPrimitiveType(LsiPrimitiveKind.INT),
             list = false,
@@ -135,7 +137,7 @@ class ErrorRendererTest {
             documentation = null,
             declaredBy = CODE_ID,
         )
-        val label = ErrorFieldModel(
+        val label = ErrorField(
             name = "label",
             type = LsiDeclaredType(LsiSymbolId.type("java.lang.String")),
             list = false,
@@ -143,7 +145,7 @@ class ErrorRendererTest {
             documentation = null,
             declaredBy = CODE_ID,
         )
-        val primitiveValues = ErrorFieldModel(
+        val primitiveValues = ErrorField(
             name = "primitiveValues",
             type = LsiArrayType(LsiPrimitiveType(LsiPrimitiveKind.INT)),
             list = false,
@@ -151,7 +153,7 @@ class ErrorRendererTest {
             documentation = null,
             declaredBy = CODE_ID,
         )
-        val boxedValues = ErrorFieldModel(
+        val boxedValues = ErrorField(
             name = "boxedValues",
             type = LsiArrayType(LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true)),
             list = false,
@@ -159,7 +161,7 @@ class ErrorRendererTest {
             documentation = null,
             declaredBy = CODE_ID,
         )
-        val code = ErrorCodeModel(
+        val code = ErrorCode(
             id = CODE_ID,
             enumEntryName = "OUT_OF_RANGE",
             code = "OUT_OF_RANGE",
@@ -168,11 +170,10 @@ class ErrorRendererTest {
             exceptionSimpleName = "OutOfRange",
             documentation = "Out of range.",
             declaredFields = listOf(min, label, primitiveValues, boxedValues),
-            fields = listOf(shared, min, label, primitiveValues, boxedValues),
         )
-        return ErrorPrecompiledSchema(
+        return ErrorSchema(
             families = listOf(
-                ErrorFamilyModel(
+                ErrorFamily(
                     id = FAMILY_ID,
                     qualifiedName = "demo.BookErrorCode",
                     packageName = "demo",
@@ -243,23 +244,23 @@ class ErrorRendererTest {
     }
 
     private fun assertDependencyContract(
-        schema: ErrorPrecompiledSchema,
+        schema: ErrorSchema,
         dependencySymbols: Set<LsiSymbolId>,
     ) {
         val family = schema.families.single()
         val code = family.codes.single()
         val expected = buildSet {
             add(family.id)
-            add(family.exceptionTypeId)
             add(code.id)
-            add(code.exceptionTypeId)
             add(LsiSymbolId.type("org.babyfish.jimmer.ClientException"))
             add(LsiSymbolId.type("org.babyfish.jimmer.internal.GeneratedBy"))
             add(LsiSymbolId.type("com.fasterxml.jackson.annotation.JsonIgnore"))
-            family.declaredFields.mapTo(this, ErrorFieldModel::declaredBy)
-            code.fields.mapTo(this, ErrorFieldModel::declaredBy)
+            family.declaredFields.mapTo(this, ErrorField::declaredBy)
+            code.declaredFields.mapTo(this, ErrorField::declaredBy)
         }
         assertTrue(dependencySymbols.containsAll(expected), dependencySymbols.toString())
+        assertFalse(family.exceptionTypeId in dependencySymbols, dependencySymbols.toString())
+        assertFalse(code.exceptionTypeId in dependencySymbols, dependencySymbols.toString())
     }
 
     private companion object {
