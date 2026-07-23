@@ -8,10 +8,7 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
-import site.addzero.lsi.jimmer.dto.DtoProp
-import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
-import site.addzero.lsi.jimmer.dto.DtoType
-import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
+import site.addzero.lsi.jimmer.dto.requireResolvedContracts
 
 internal data class JimmerDtoPrecompiledSchema(
     val documents: List<JimmerDtoPrecompiledDocument>,
@@ -49,18 +46,11 @@ internal data class JimmerDtoPrecompiledDocument(
         }) {
             "DTO types must reference a document target type: ${inputSnapshot.document.source.path}"
         }
-        require(annotationContract.typePlans.map(DtoTypeAnnotationPlan::typeId) == graph.types.map(DtoType::id)) {
-            "DTO annotation contract must cover every frozen DTO type: ${inputSnapshot.document.source.path}"
-        }
-        require(annotationContract.propPlans.map(DtoPropAnnotationPlan::propId) == graph.props.map(DtoProp::id)) {
-            "DTO annotation contract must cover every frozen DTO property: ${inputSnapshot.document.source.path}"
-        }
-        require(interfaceContractResolution.contracts.all { contract -> contract.typeId in graph.typesById }) {
-            "DTO interface contracts must reference frozen DTO types: ${inputSnapshot.document.source.path}"
-        }
-        require(configContractResolution.contracts.all { contract -> contract.propId in graph.propsById }) {
-            "DTO config contracts must reference frozen DTO properties: ${inputSnapshot.document.source.path}"
-        }
+        graph.requireResolvedContracts(
+            annotationContract = annotationContract,
+            interfaceContractResolution = interfaceContractResolution,
+            configContractResolution = configContractResolution,
+        )
     }
 }
 

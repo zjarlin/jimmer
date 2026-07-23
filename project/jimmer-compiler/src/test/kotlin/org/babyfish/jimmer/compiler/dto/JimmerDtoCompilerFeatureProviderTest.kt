@@ -1074,7 +1074,8 @@ class JimmerDtoCompilerFeatureProviderTest {
             listOf("taxCode"),
             branchType.propIds.map { propId -> document.graph.propsById.getValue(propId).name },
         )
-        assertTrue("branch|" in outcome.schema.normalizedSnapshot())
+        assertTrue("graph-record|" in outcome.schema.normalizedSnapshot())
+        assertTrue("branch" in outcome.schema.normalizedSnapshot())
     }
 
     @Test

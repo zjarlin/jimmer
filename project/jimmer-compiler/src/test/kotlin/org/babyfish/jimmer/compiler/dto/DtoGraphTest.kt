@@ -173,10 +173,11 @@ class DtoGraphTest {
         assertEquals(first.normalizedSnapshot(), reordered.normalizedSnapshot())
         assertEquals(first.fingerprint(), reordered.fingerprint())
         assertEquals(64, first.fingerprint().length)
-        assertTrue("base-prop|" in first.normalizedSnapshot())
-        assertTrue("user-prop|" in first.normalizedSnapshot())
-        assertTrue("fold-prop|" in first.normalizedSnapshot())
-        assertTrue("branch|" in first.normalizedSnapshot())
+        assertTrue("graph-record|" in first.normalizedSnapshot())
+        assertTrue("base-prop" in first.normalizedSnapshot())
+        assertTrue("user-prop" in first.normalizedSnapshot())
+        assertTrue("fold-prop" in first.normalizedSnapshot())
+        assertTrue("branch" in first.normalizedSnapshot())
         assertTrue("BookRecursion" in first.normalizedSnapshot())
     }
 

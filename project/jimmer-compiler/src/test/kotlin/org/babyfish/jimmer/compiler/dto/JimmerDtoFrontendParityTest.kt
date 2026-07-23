@@ -154,7 +154,8 @@ class JimmerDtoFrontendParityTest {
         assertTrue(kspLabelProp.origin.originatingSymbols.isEmpty())
         assertEquals(kspLabelProp.origin, kspLabelProp.getter?.origin)
         val aptSnapshot = apt.dtoSchema.normalizedSnapshot()
-        assertTrue("interface-prop|" in aptSnapshot)
+        assertTrue("interface-contract-record|" in aptSnapshot)
+        assertTrue("4:prop" in aptSnapshot)
         assertTrue("type:demo.ViewContract/property:label" in aptSnapshot)
         assertTrue(aptDocument.configContractResolution.dtoFingerprint() in aptSnapshot)
 
