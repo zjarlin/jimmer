@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.client
+package site.addzero.lsi.jimmer.client
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,10 +42,37 @@ import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
 
-class ClientPrecompilerTest {
+class ClientWorkspaceExtensionsTest {
 
     @Test
-    fun `precompiles service operation parameters exceptions and fetch by`() {
+    fun `discovers targets and isolates unresolved service roots`() {
+        val serviceId = LsiSymbolId.type("demo.PartialService")
+        val missingOperationId = LsiSymbolId.function(serviceId, "find")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = serviceId.requireTypeQualifiedName(),
+                    annotations = listOf(api()),
+                    memberIds = listOf(missingOperationId),
+                )
+            )
+        )
+
+        val targets = workspace.clientTargets()
+        val unresolvedTypeIds = workspace.unresolvedClientTargetTypeIds(targets)
+
+        assertEquals(setOf(serviceId), targets.serviceTypeIds)
+        assertEquals(setOf(serviceId), unresolvedTypeIds)
+        assertTrue(
+            workspace.toClientSchema(
+                targets = targets.without(unresolvedTypeIds),
+                dependencies = EMPTY_ERROR_SCHEMA.clientDependencies(),
+            ).services.isEmpty()
+        )
+    }
+
+    @Test
+    fun `resolves service operation parameters exceptions and fetch by`() {
         val bookId = LsiSymbolId.type("demo.Book")
         val exceptionId = LsiSymbolId.type("demo.BookException")
         val serviceId = LsiSymbolId.type("demo.BookService")
@@ -102,7 +129,7 @@ class ClientPrecompilerTest {
             ),
         )
 
-        val schema = ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies())
+        val schema = workspace.toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
 
         val service = schema.services.single()
         assertEquals(serviceId, service.id)
@@ -131,7 +158,7 @@ class ClientPrecompilerTest {
     }
 
     @Test
-    fun `precompiles reachable immutable enum and polymorphic definitions`() {
+    fun `resolves reachable immutable enum and polymorphic definitions`() {
         val bookId = LsiSymbolId.type("demo.Book")
         val titleProp = property(bookId, "title")
         val resultId = LsiSymbolId.type("demo.SearchResult")
@@ -213,9 +240,8 @@ class ClientPrecompilerTest {
             ),
         )
         val immutableSchema = workspace.toImmutableSchema(setOf(bookId))
-        val schema = ClientPrecompiler().compile(
-            workspace,
-            ClientPrecompileDependencies(
+        val schema = workspace.toClientSchema(
+            ClientSchemaDependencies(
                 immutableSchema = immutableSchema,
                 errorSchema = EMPTY_ERROR_SCHEMA,
                 definitionDocumentationByTypeId = emptyMap(),
@@ -267,9 +293,8 @@ class ClientPrecompilerTest {
                 operation,
             ),
         )
-        val schema = ClientPrecompiler().compile(
-            workspace,
-            ClientPrecompileDependencies(
+        val schema = workspace.toClientSchema(
+            ClientSchemaDependencies(
                 immutableSchema = ImmutableSchema(emptyList()),
                 errorSchema = EMPTY_ERROR_SCHEMA,
                 definitionDocumentationByTypeId = mapOf(
@@ -294,7 +319,7 @@ class ClientPrecompilerTest {
 
     @Test
     fun `rejects missing and duplicate polymorphic branch orders`() {
-        fun compile(vararg branchOrders: Int?): ClientPrecompileException {
+        fun compile(vararg branchOrders: Int?): ClientValidationException {
             val resultId = LsiSymbolId.type("demo.OrderedResult")
             val serviceId = LsiSymbolId.type("demo.OrderedResultService")
             val operation = function(
@@ -332,7 +357,7 @@ class ClientPrecompilerTest {
                 ) + branches,
             )
             return assertFailsWith {
-                ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies())
+                workspace.toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
             }
         }
 
@@ -368,7 +393,7 @@ class ClientPrecompilerTest {
         )
         assertEquals(
             listOf(externalId),
-            ClientPrecompiler().requestedTypeSeeds(initialWorkspace).map { seed -> seed.typeId },
+            initialWorkspace.requestedClientTypeSeeds().map { seed -> seed.typeId },
         )
 
         val expandedWorkspace = LsiWorkspace(
@@ -386,10 +411,10 @@ class ClientPrecompilerTest {
         )
         assertEquals(
             listOf(externalId, payloadId),
-            ClientPrecompiler().requestedTypeSeeds(expandedWorkspace).map { seed -> seed.typeId },
+            expandedWorkspace.requestedClientTypeSeeds().map { seed -> seed.typeId },
         )
         assertTrue(
-            ClientPrecompiler().requestedTypeSeeds(expandedWorkspace).all { seed ->
+            expandedWorkspace.requestedClientTypeSeeds().all { seed ->
                 seed.mode == LsiTypeSeedMode.FULL_DECLARATION
             }
         )
@@ -467,13 +492,13 @@ class ClientPrecompilerTest {
                 type(qualifiedName = "external.Nested", kind = LsiTypeDeclarationKind.CLASS),
             ),
         )
-        val dependencies = ClientPrecompileDependencies(
+        val dependencies = ClientSchemaDependencies(
             immutableSchema = workspace.toImmutableSchema(setOf(bookId)),
             errorSchema = EMPTY_ERROR_SCHEMA,
             definitionDocumentationByTypeId = emptyMap(),
         )
 
-        val seeds = ClientPrecompiler().requestedTypeSeeds(workspace, dependencies = dependencies)
+        val seeds = workspace.requestedClientTypeSeeds(dependencies)
 
         assertEquals(
             LsiTypeSeedMode.FULL_DECLARATION,
@@ -483,7 +508,7 @@ class ClientPrecompilerTest {
             LsiTypeSeedMode.FULL_DECLARATION,
             seeds.single { seed -> seed.typeId == nestedId }.mode,
         )
-        val definitions = ClientPrecompiler().compile(workspace, dependencies)
+        val definitions = workspace.toClientSchema(dependencies)
             .definitions
             .associateBy(ClientTypeDefinition::id)
         val convertedType = assertIs<ClientDeclaredTypeRef>(
@@ -519,7 +544,7 @@ class ClientPrecompilerTest {
             documentation = "External error detail.",
             declaredBy = familyId,
         )
-        val dependencies = ClientPrecompileDependencies(
+        val dependencies = ClientSchemaDependencies(
             immutableSchema = ImmutableSchema(emptyList()),
             errorSchema = ErrorSchema(
                 families = listOf(
@@ -567,13 +592,13 @@ class ClientPrecompilerTest {
             ),
         )
 
-        val seeds = ClientPrecompiler().requestedTypeSeeds(workspace, dependencies = dependencies)
+        val seeds = workspace.requestedClientTypeSeeds(dependencies)
 
         assertEquals(
             LsiTypeSeedMode.FULL_DECLARATION,
             seeds.single { seed -> seed.typeId == externalPojoId }.mode,
         )
-        val definitions = ClientPrecompiler().compile(workspace, dependencies)
+        val definitions = workspace.toClientSchema(dependencies)
             .definitions
             .associateBy(ClientTypeDefinition::id)
         val generatedError = definitions.getValue(codeExceptionId)
@@ -629,7 +654,7 @@ class ClientPrecompilerTest {
             ),
         )
 
-        val seeds = ClientPrecompiler().requestedTypeSeeds(workspace)
+        val seeds = workspace.requestedClientTypeSeeds()
 
         assertEquals(
             LsiTypeSeedMode.FULL_DECLARATION,
@@ -639,7 +664,7 @@ class ClientPrecompilerTest {
             LsiTypeSeedMode.FULL_DECLARATION,
             seeds.single { seed -> seed.typeId == externalPojoId }.mode,
         )
-        val schema = ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies())
+        val schema = workspace.toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
         assertEquals(
             externalPojoId,
             assertIs<ClientDeclaredTypeRef>(schema.services.single().operations.single().returnType).typeId,
@@ -687,9 +712,8 @@ class ClientPrecompilerTest {
             annotations = listOf(api()),
             origin = javaOrigin,
         )
-        val schema = ClientPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(
+        val schema = LsiWorkspace(
+            declarations = listOf(
                     type(
                         qualifiedName = "demo.JavaDto",
                         kind = LsiTypeDeclarationKind.CLASS,
@@ -706,8 +730,8 @@ class ClientPrecompilerTest {
                         origin = javaOrigin,
                     ),
                     operation,
-                ),
             ),
+        ).toClientSchema(
             EMPTY_ERROR_SCHEMA.clientDependencies(),
         )
 
@@ -742,9 +766,8 @@ class ClientPrecompilerTest {
             annotations = listOf(api()),
             origin = javaOrigin,
         )
-        val schema = ClientPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(
+        val schema = LsiWorkspace(
+            declarations = listOf(
                     type(
                         qualifiedName = "demo.Tuple2",
                         kind = LsiTypeDeclarationKind.CLASS,
@@ -760,8 +783,8 @@ class ClientPrecompilerTest {
                         origin = javaOrigin,
                     ),
                     operation,
-                ),
             ),
+        ).toClientSchema(
             EMPTY_ERROR_SCHEMA.clientDependencies(),
         )
 
@@ -776,14 +799,14 @@ class ClientPrecompilerTest {
         val nullable = annotation(LsiSymbolId.type("demo.Nullable"))
         val nonNull = annotation(LsiSymbolId.type("demo.NonNull"))
 
-        val nullablePrimitive = assertFailsWith<ClientPrecompileException> {
+        val nullablePrimitive = assertFailsWith<ClientValidationException> {
             compileSingleOperation(
                 LsiPrimitiveType(LsiPrimitiveKind.INT, annotations = listOf(nullable)),
             )
         }
         assertTrue(nullablePrimitive.message.orEmpty().contains("cannot decorate primitive type"))
 
-        val nonNullBoxed = assertFailsWith<ClientPrecompileException> {
+        val nonNullBoxed = assertFailsWith<ClientValidationException> {
             compileSingleOperation(
                 LsiPrimitiveType(
                     LsiPrimitiveKind.INT,
@@ -795,7 +818,7 @@ class ClientPrecompilerTest {
         }
         assertTrue(nonNullBoxed.message.orEmpty().contains("cannot decorate boxed primitive type"))
 
-        val conflict = assertFailsWith<ClientPrecompileException> {
+        val conflict = assertFailsWith<ClientValidationException> {
             compileSingleOperation(
                 LsiDeclaredType(
                     declarationId = LsiSymbolId.type("java.lang.String"),
@@ -835,9 +858,8 @@ class ClientPrecompilerTest {
             returnType = LsiDeclaredType(levelId),
             annotations = listOf(api()),
         )
-        val schema = ClientPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(
+        val schema = LsiWorkspace(
+            declarations = listOf(
                     type(
                         qualifiedName = "demo.Level",
                         kind = LsiTypeDeclarationKind.ENUM,
@@ -850,8 +872,8 @@ class ClientPrecompilerTest {
                         annotations = listOf(api()),
                     ),
                     operation,
-                ),
             ),
+        ).toClientSchema(
             EMPTY_ERROR_SCHEMA.clientDependencies(),
         )
 
@@ -887,16 +909,18 @@ class ClientPrecompilerTest {
         )
 
         assertTrue(
-            ClientPrecompiler().compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies()).services.isEmpty()
+            workspace.toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies()).services.isEmpty()
         )
-        val schema = ClientPrecompiler(ClientPrecompileOptions(explicitApi = true))
-            .compile(workspace, EMPTY_ERROR_SCHEMA.clientDependencies())
+        val schema = workspace.toClientSchema(
+            dependencies = EMPTY_ERROR_SCHEMA.clientDependencies(),
+            options = ClientSchemaOptions(explicitApi = true),
+        )
 
         assertEquals(listOf("findAll"), schema.services.single().operations.map(ClientOperation::name))
     }
 
     @Test
-    fun `precompiles recursive error metadata with stable sorting and deduplication`() {
+    fun `resolves recursive error metadata with stable sorting and deduplication`() {
         val serviceId = LsiSymbolId.type("demo.ErrorService")
         val baseExceptionId = LsiSymbolId.type("demo.BookException")
         val notFoundExceptionId = LsiSymbolId.type("demo.BookException.NotFound")
@@ -921,7 +945,7 @@ class ClientPrecompilerTest {
                 operation,
             ),
         )
-        val schema = ClientPrecompiler().compile(workspace, errorSchema().clientDependencies())
+        val schema = workspace.toClientSchema(errorSchema().clientDependencies())
         val compiledOperation = schema.services.single().operations.single()
 
         assertEquals(
@@ -967,7 +991,7 @@ class ClientPrecompilerTest {
             subTypeIds = listOf(leafId),
         )
         val leaf = exceptionMetadata(leafId, familyId, code = "LEAF", superTypeId = branchId)
-        val resolution = ClientExceptionMetadataPrecompiler(listOf(leaf, root, branch, leaf))
+        val resolution = ClientExceptionMetadataResolver(listOf(leaf, root, branch, leaf))
             .resolve(listOf(leafId, rootId, rootId), operationId)
 
         assertEquals(listOf(leafId), resolution.typeIds)
@@ -978,8 +1002,8 @@ class ClientPrecompilerTest {
 
         val cyclicRoot = root.copy(superTypeId = branchId)
         val cyclicBranch = branch.copy(subTypeIds = listOf(rootId))
-        val exception = assertFailsWith<ClientPrecompileException> {
-            ClientExceptionMetadataPrecompiler(listOf(cyclicRoot, cyclicBranch))
+        val exception = assertFailsWith<ClientValidationException> {
+            ClientExceptionMetadataResolver(listOf(cyclicRoot, cyclicBranch))
                 .resolve(listOf(rootId), operationId)
         }
         assertEquals(operationId, exception.declarationId)
@@ -990,17 +1014,16 @@ class ClientPrecompilerTest {
     fun `operation without exceptions has empty exception semantics`() {
         val serviceId = LsiSymbolId.type("demo.PlainService")
         val operation = function(ownerId = serviceId, name = "execute", annotations = listOf(api()))
-        val schema = ClientPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(
+        val schema = LsiWorkspace(
+            declarations = listOf(
                     type(
                         qualifiedName = "demo.PlainService",
                         annotations = listOf(api()),
                         memberIds = listOf(operation.id),
                     ),
                     operation,
-                ),
             ),
+        ).toClientSchema(
             errorSchema().clientDependencies(),
         )
 
@@ -1017,11 +1040,9 @@ class ClientPrecompilerTest {
             qualifiedName = "demo.Outer.Service",
             annotations = listOf(api()),
         )
-        val nestedException = assertFailsWith<ClientPrecompileException> {
-            ClientPrecompiler().compile(
-                LsiWorkspace(declarations = listOf(outer, nested)),
-                EMPTY_ERROR_SCHEMA.clientDependencies(),
-            )
+        val nestedException = assertFailsWith<ClientValidationException> {
+            LsiWorkspace(declarations = listOf(outer, nested))
+                .toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
         }
         assertTrue(nestedException.message.orEmpty().contains("top-level"))
 
@@ -1033,11 +1054,9 @@ class ClientPrecompilerTest {
                 LsiTypeParameter(LsiSymbolId.typeParameter(genericId, "T"), "T")
             ),
         )
-        val genericException = assertFailsWith<ClientPrecompileException> {
-            ClientPrecompiler().compile(
-                LsiWorkspace(declarations = listOf(generic)),
-                EMPTY_ERROR_SCHEMA.clientDependencies(),
-            )
+        val genericException = assertFailsWith<ClientValidationException> {
+            LsiWorkspace(declarations = listOf(generic))
+                .toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
         }
         assertTrue(genericException.message.orEmpty().contains("type parameters"))
     }
@@ -1084,14 +1103,10 @@ class ClientPrecompilerTest {
 
     @Test
     fun `java getter and kotlin function produce equivalent snapshots`() {
-        val javaSchema = ClientPrecompiler().compile(
-            languageWorkspace(LsiLanguage.JAVA, javaGetter = true),
-            EMPTY_ERROR_SCHEMA.clientDependencies(),
-        )
-        val kotlinSchema = ClientPrecompiler().compile(
-            languageWorkspace(LsiLanguage.KOTLIN, javaGetter = false),
-            EMPTY_ERROR_SCHEMA.clientDependencies(),
-        )
+        val javaSchema = languageWorkspace(LsiLanguage.JAVA, javaGetter = true)
+            .toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
+        val kotlinSchema = languageWorkspace(LsiLanguage.KOTLIN, javaGetter = false)
+            .toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
 
         assertEquals(javaSchema.normalizedSnapshot(), kotlinSchema.normalizedSnapshot())
         assertEquals(javaSchema.fingerprint(), kotlinSchema.fingerprint())
@@ -1108,11 +1123,9 @@ class ClientPrecompilerTest {
             annotations = listOf(api(*serviceGroups.toTypedArray())),
             memberIds = listOf(operation.id),
         )
-        val exception = assertFailsWith<ClientPrecompileException> {
-            ClientPrecompiler().compile(
-                LsiWorkspace(declarations = listOf(service, operation)),
-                EMPTY_ERROR_SCHEMA.clientDependencies(),
-            )
+        val exception = assertFailsWith<ClientValidationException> {
+            LsiWorkspace(declarations = listOf(service, operation))
+                .toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
         }
         assertTrue(exception.message.orEmpty().contains(messagePart))
     }
@@ -1200,7 +1213,7 @@ class ClientPrecompilerTest {
         )
     }
 
-    private fun compileSingleOperation(returnType: LsiTypeRef): ClientPrecompiledSchema {
+    private fun compileSingleOperation(returnType: LsiTypeRef): ClientSchema {
         val serviceId = LsiSymbolId.type("demo.NullabilityService")
         val operation = function(
             ownerId = serviceId,
@@ -1208,17 +1221,16 @@ class ClientPrecompilerTest {
             returnType = returnType,
             annotations = listOf(api()),
         )
-        return ClientPrecompiler().compile(
-            LsiWorkspace(
-                declarations = listOf(
+        return LsiWorkspace(
+            declarations = listOf(
                     type(
                         qualifiedName = "demo.NullabilityService",
                         annotations = listOf(api()),
                         memberIds = listOf(operation.id),
                     ),
                     operation,
-                ),
             ),
+        ).toClientSchema(
             EMPTY_ERROR_SCHEMA.clientDependencies(),
         )
     }
@@ -1391,8 +1403,8 @@ class ClientPrecompilerTest {
     }
 }
 
-private fun ErrorSchema.clientDependencies(): ClientPrecompileDependencies {
-    return ClientPrecompileDependencies(
+private fun ErrorSchema.clientDependencies(): ClientSchemaDependencies {
+    return ClientSchemaDependencies(
         immutableSchema = ImmutableSchema(emptyList()),
         errorSchema = this,
         definitionDocumentationByTypeId = emptyMap(),

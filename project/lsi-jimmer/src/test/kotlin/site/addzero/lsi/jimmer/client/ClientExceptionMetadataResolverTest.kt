@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.client
+package site.addzero.lsi.jimmer.client
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,7 +23,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
-class ClientExceptionMetadataPrecompilerTest {
+class ClientExceptionMetadataResolverTest {
 
     @Test
     fun `parses manual client exception hierarchy and preserves declaration order`() {
@@ -90,7 +90,7 @@ class ClientExceptionMetadataPrecompilerTest {
             annotation = clientException(code = "FIRST"),
         )
 
-        val exception = assertFailsWith<ClientPrecompileException> {
+        val exception = assertFailsWith<ClientValidationException> {
             compileOperation(
                 thrownTypeIds = listOf(ROOT_EXCEPTION),
                 exceptionTypes = listOf(root, detachedLeaf),
@@ -112,7 +112,7 @@ class ClientExceptionMetadataPrecompilerTest {
             superTypeId = CODE_BASED_RUNTIME_EXCEPTION,
             annotation = clientException(family = "DUPLICATE", code = "SAME"),
         )
-        val duplicateException = assertFailsWith<ClientPrecompileException> {
+        val duplicateException = assertFailsWith<ClientValidationException> {
             compileOperation(
                 thrownTypeIds = listOf(SECOND_EXCEPTION, FIRST_EXCEPTION),
                 exceptionTypes = listOf(first, second),
@@ -135,7 +135,7 @@ class ClientExceptionMetadataPrecompilerTest {
             superTypeId = ROOT_EXCEPTION,
             annotation = clientException(code = "FIRST"),
         )
-        val shapeException = assertFailsWith<ClientPrecompileException> {
+        val shapeException = assertFailsWith<ClientValidationException> {
             compileOperation(
                 thrownTypeIds = listOf(ROOT_EXCEPTION),
                 exceptionTypes = listOf(illegalRoot, leaf),
@@ -161,8 +161,8 @@ class ClientExceptionMetadataPrecompilerTest {
             checked = true,
             superTypeId = ROOT_EXCEPTION,
         )
-        val familyException = assertFailsWith<ClientPrecompileException> {
-            ClientExceptionMetadataPrecompiler(listOf(familyRoot, differentFamilyLeaf))
+        val familyException = assertFailsWith<ClientValidationException> {
+            ClientExceptionMetadataResolver(listOf(familyRoot, differentFamilyLeaf))
                 .resolve(listOf(ROOT_EXCEPTION), operationId)
         }
         assertTrue(familyException.message.orEmpty().contains("belongs to family"))
@@ -171,8 +171,8 @@ class ClientExceptionMetadataPrecompilerTest {
             family = "ROOT",
             checked = false,
         )
-        val checkedException = assertFailsWith<ClientPrecompileException> {
-            ClientExceptionMetadataPrecompiler(listOf(familyRoot, differentCheckedLeaf))
+        val checkedException = assertFailsWith<ClientValidationException> {
+            ClientExceptionMetadataResolver(listOf(familyRoot, differentCheckedLeaf))
                 .resolve(listOf(ROOT_EXCEPTION), operationId)
         }
         assertTrue(checkedException.message.orEmpty().contains("checked state"))
@@ -201,9 +201,8 @@ class ClientExceptionMetadataPrecompilerTest {
             annotations = listOf(annotation(API_ANNOTATION)),
             origin = SYNTHETIC_ORIGIN,
         )
-        val schema = ClientPrecompiler().compile(
-            workspace = LsiWorkspace(declarations = exceptionTypes + service + operation),
-            dependencies = ClientPrecompileDependencies(
+        val schema = LsiWorkspace(declarations = exceptionTypes + service + operation).toClientSchema(
+            dependencies = ClientSchemaDependencies(
                 immutableSchema = ImmutableSchema(emptyList()),
                 errorSchema = ErrorSchema(emptyList()),
                 definitionDocumentationByTypeId = emptyMap(),

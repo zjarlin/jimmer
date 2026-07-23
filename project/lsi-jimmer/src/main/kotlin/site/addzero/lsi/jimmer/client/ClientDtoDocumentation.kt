@@ -1,24 +1,23 @@
-package org.babyfish.jimmer.compiler.client
+package site.addzero.lsi.jimmer.client
 
-import org.babyfish.jimmer.compiler.dto.JimmerDtoPrecompiledSchema
-import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoGraph
 
-internal fun JimmerDtoPrecompiledSchema.toClientDefinitionDocumentation(
+/** 将 DTO 根类型文档冻结为 Client 类型定义文档。 */
+fun Iterable<DtoGraph>.toClientDefinitionDocumentation(
     immutableSchema: ImmutableSchema,
 ): Map<LsiSymbolId, ClientDefinitionDocumentation> {
     val documentationByTypeId = linkedMapOf<LsiSymbolId, ClientDefinitionDocumentation>()
-    documents.forEach { document ->
-        val graph = document.graph
-        graph.rootTypeIds.forEach { rootTypeId ->
+    for (graph in this) {
+        for (rootTypeId in graph.rootTypeIds) {
             val type = graph.typesById.getValue(rootTypeId)
-            val typeName = type.name ?: return@forEach
-            val qualifiedName = if (type.packageName.isEmpty()) {
-                typeName
-            } else {
-                "${type.packageName}.$typeName"
-            }
+            val typeName = type.name ?: continue
+            val qualifiedName = type.packageName
+                .takeIf(String::isNotEmpty)
+                ?.let { packageName -> "$packageName.$typeName" }
+                ?: typeName
             val propertyDocumentation = type.propIds.mapNotNull { propId ->
                 val prop = graph.propsById.getValue(propId)
                 val documentation = if (prop is DtoBaseProp) {

@@ -20,7 +20,7 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
-import org.babyfish.jimmer.compiler.client.toClientDefinitionDocumentation
+import site.addzero.lsi.jimmer.client.toClientDefinitionDocumentation
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
 import site.addzero.lsi.jimmer.FormulaKind
@@ -290,7 +290,9 @@ class DtoGraphTest {
         val rootTypeId = LsiSymbolId.type(
             if (rootType.packageName.isEmpty()) rootTypeName else "${rootType.packageName}.$rootTypeName"
         )
-        val clientDocumentation = outcome.schema.toClientDefinitionDocumentation(fixture.schema)
+        val clientDocumentation = outcome.schema.documents
+            .map { document -> document.graph }
+            .toClientDefinitionDocumentation(fixture.schema)
             .getValue(rootTypeId)
         assertEquals("DTO name documentation", clientDocumentation.properties.getValue("name"))
         assertEquals("Store name documentation", clientDocumentation.properties.getValue("storeName"))

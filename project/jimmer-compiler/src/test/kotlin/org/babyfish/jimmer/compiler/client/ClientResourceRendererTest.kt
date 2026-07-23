@@ -10,6 +10,20 @@ import org.babyfish.jimmer.client.meta.TypeDefinition
 import org.babyfish.jimmer.client.meta.TypeName
 import org.babyfish.jimmer.client.meta.impl.Schemas
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.client.ClientDeclaredTypeRef
+import site.addzero.lsi.jimmer.client.ClientDefinitionError
+import site.addzero.lsi.jimmer.client.ClientDefinitionKind
+import site.addzero.lsi.jimmer.client.ClientDefinitionProperty
+import site.addzero.lsi.jimmer.client.ClientEnumConstant
+import site.addzero.lsi.jimmer.client.ClientFetchBy
+import site.addzero.lsi.jimmer.client.ClientOperation
+import site.addzero.lsi.jimmer.client.ClientParameter
+import site.addzero.lsi.jimmer.client.ClientPrimitiveTypeRef
+import site.addzero.lsi.jimmer.client.ClientSchema
+import site.addzero.lsi.jimmer.client.ClientService
+import site.addzero.lsi.jimmer.client.ClientTypeArgument
+import site.addzero.lsi.jimmer.client.ClientTypeDefinition
+import site.addzero.lsi.jimmer.client.ClientTypeName
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiVariance
 
@@ -48,7 +62,7 @@ class ClientResourceRendererTest {
     fun `renders a top level service in the default package`() {
         val serviceId = LsiSymbolId.type("Service")
         val content = ClientResourceRenderer().render(
-            ClientPrecompiledSchema(
+            ClientSchema(
                 services = listOf(
                     ClientService(
                         id = serviceId,
@@ -118,7 +132,7 @@ class ClientResourceRendererTest {
         assertEquals(TypeName.parse("demo.BookFetchers"), rendered.fetcherOwner)
     }
 
-    private fun schema(): ClientPrecompiledSchema {
+    private fun schema(): ClientSchema {
         val bookType = ClientTypeName("demo", listOf("Book"))
         val categoryType = ClientTypeName("demo", listOf("Category"))
         val exceptionType = ClientTypeName("demo", listOf("BookException"))
@@ -127,7 +141,7 @@ class ClientResourceRendererTest {
         val bookId = LsiSymbolId.type("demo.Book")
         val categoryId = LsiSymbolId.type("demo.Category")
         val exceptionId = LsiSymbolId.type("demo.BookException")
-        return ClientPrecompiledSchema(
+        return ClientSchema(
             services = listOf(
                 ClientService(
                     id = serviceId,

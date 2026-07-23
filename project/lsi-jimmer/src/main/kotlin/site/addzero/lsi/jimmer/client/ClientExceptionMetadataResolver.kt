@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.client
+package site.addzero.lsi.jimmer.client
 
 import site.addzero.lsi.jimmer.error.ErrorFamily
 import site.addzero.lsi.jimmer.error.ErrorSchema
@@ -12,7 +12,7 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 
-internal class ClientExceptionMetadataPrecompiler private constructor(
+internal class ClientExceptionMetadataResolver private constructor(
     private val knownTypeIds: Set<LsiSymbolId>,
     private val metadataProvider: (LsiSymbolId) -> Collection<ClientExceptionMetadata>,
 ) {
@@ -251,7 +251,7 @@ internal class ClientExceptionMetadataPrecompiler private constructor(
         fun from(
             workspace: LsiWorkspace,
             schema: ErrorSchema,
-        ): ClientExceptionMetadataPrecompiler {
+        ): ClientExceptionMetadataResolver {
             val generatedMetadata = schema.families.flatMap(ErrorFamily::toClientExceptionMetadata)
             val generatedMetadataByTypeId = generatedMetadata.associateBy(ClientExceptionMetadata::typeId)
             val manualTypeIds = workspace.declarationsOfType<LsiTypeDeclaration>()
@@ -260,7 +260,7 @@ internal class ClientExceptionMetadataPrecompiler private constructor(
                         type.annotations.hasAnnotation(CLIENT_EXCEPTION_ANNOTATION)
                 }
                 .mapTo(linkedSetOf(), LsiTypeDeclaration::id)
-            return ClientExceptionMetadataPrecompiler(
+            return ClientExceptionMetadataResolver(
                 knownTypeIds = generatedMetadataByTypeId.keys + manualTypeIds,
                 metadataProvider = { operationId ->
                     generatedMetadata + ManualClientExceptionMetadataCompiler(
@@ -453,8 +453,8 @@ private fun String?.normalizedDocumentation(): String? {
 private fun invalidExceptionTree(
     operationId: LsiSymbolId,
     message: String,
-): ClientPrecompileException {
-    return ClientPrecompileException(
+): ClientValidationException {
+    return ClientValidationException(
         declarationId = operationId,
         message = message,
     )

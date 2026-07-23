@@ -12,12 +12,26 @@ import org.babyfish.jimmer.client.meta.impl.Schemas
 import org.babyfish.jimmer.client.meta.impl.TypeDefinitionImpl
 import org.babyfish.jimmer.client.meta.impl.TypeRefImpl
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.client.ClientArrayTypeRef
+import site.addzero.lsi.jimmer.client.ClientDeclaredTypeRef
+import site.addzero.lsi.jimmer.client.ClientDefinitionKind
+import site.addzero.lsi.jimmer.client.ClientIgnoredParameter
+import site.addzero.lsi.jimmer.client.ClientOperation
+import site.addzero.lsi.jimmer.client.ClientParameter
+import site.addzero.lsi.jimmer.client.ClientPrimitiveTypeRef
+import site.addzero.lsi.jimmer.client.ClientSchema
+import site.addzero.lsi.jimmer.client.ClientService
+import site.addzero.lsi.jimmer.client.ClientTypeDefinition
+import site.addzero.lsi.jimmer.client.ClientTypeName
+import site.addzero.lsi.jimmer.client.ClientTypeParameterRef
+import site.addzero.lsi.jimmer.client.ClientTypeRef
+import site.addzero.lsi.jimmer.client.ClientUnresolvedTypeRef
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiVariance
 
 class ClientResourceRenderer {
 
-    fun render(schema: ClientPrecompiledSchema): String {
+    fun render(schema: ClientSchema): String {
         val definitionsById = schema.definitions.associateBy(ClientTypeDefinition::id)
         val definitionIdsByTypeName = schema.definitions.associate { definition ->
             definition.typeName.qualifiedName to definition.id

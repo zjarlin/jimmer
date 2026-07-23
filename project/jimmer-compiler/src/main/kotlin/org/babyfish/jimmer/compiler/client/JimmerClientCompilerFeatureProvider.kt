@@ -17,14 +17,6 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
-import site.addzero.lsi.jimmer.ImmutablePrecompileException
-import site.addzero.lsi.jimmer.ImmutableSchema
-import site.addzero.lsi.jimmer.toImmutableSchema
-import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
-import site.addzero.lsi.jimmer.error.ErrorSchema
-import site.addzero.lsi.jimmer.error.ErrorSchemaOptions
-import site.addzero.lsi.jimmer.error.ErrorValidationException
-import site.addzero.lsi.jimmer.error.toErrorSchema
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -33,6 +25,28 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.ImmutablePrecompileException
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.client.ClientDefinitionDocumentation
+import site.addzero.lsi.jimmer.client.ClientSchema
+import site.addzero.lsi.jimmer.client.ClientSchemaDependencies
+import site.addzero.lsi.jimmer.client.ClientSchemaOptions
+import site.addzero.lsi.jimmer.client.ClientService
+import site.addzero.lsi.jimmer.client.ClientTargets
+import site.addzero.lsi.jimmer.client.ClientTypeDefinition
+import site.addzero.lsi.jimmer.client.ClientValidationException
+import site.addzero.lsi.jimmer.client.clientTargets
+import site.addzero.lsi.jimmer.client.fingerprint
+import site.addzero.lsi.jimmer.client.requestedClientTypeSeeds
+import site.addzero.lsi.jimmer.client.toClientDefinitionDocumentation
+import site.addzero.lsi.jimmer.client.toClientSchema
+import site.addzero.lsi.jimmer.client.unresolvedClientTargetTypeIds
+import site.addzero.lsi.jimmer.error.ErrorSchema
+import site.addzero.lsi.jimmer.error.ErrorSchemaOptions
+import site.addzero.lsi.jimmer.error.ErrorValidationException
+import site.addzero.lsi.jimmer.error.toErrorSchema
+import site.addzero.lsi.jimmer.toImmutableSchema
+import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiWorkspace
@@ -53,8 +67,8 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             platform = context.round.platform,
             sourceFilter = sourceFilter,
         )
-        val precompiler = ClientPrecompiler(ClientPrecompileOptions(explicitApi))
-        val targets = precompiler.targets(context.round.workspace).compilationTargets(
+        val schemaOptions = ClientSchemaOptions(explicitApi)
+        val targets = context.round.workspace.clientTargets(schemaOptions).compilationTargets(
             workspace = context.round.workspace,
             platform = context.round.platform,
             sourceFilter = sourceFilter,
@@ -62,10 +76,10 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         if (targets.rootTypeIds.isEmpty()) {
             return emptyList()
         }
-        return precompiler.requestedTypeSeeds(
-            workspace = context.round.workspace,
+        return context.round.workspace.requestedClientTypeSeeds(
             targets = targets,
             dependencies = context.round.previewClientDependencies(),
+            options = schemaOptions,
         )
     }
 
@@ -84,27 +98,27 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             platform = context.round.platform,
             sourceFilter = sourceFilter,
         )
-        val precompiler = ClientPrecompiler(ClientPrecompileOptions(explicitApi))
-        val targets = precompiler.targets(context.round.workspace).compilationTargets(
+        val schemaOptions = ClientSchemaOptions(explicitApi)
+        val targets = context.round.workspace.clientTargets(schemaOptions).compilationTargets(
             workspace = context.round.workspace,
             platform = context.round.platform,
             sourceFilter = sourceFilter,
         )
         val currentTargets = targets.only(context.round.currentRootTypeIds)
-        val initialUnresolvedTypeIds = precompiler.unresolvedTargetTypeIds(
-            workspace = context.round.workspace,
+        val initialUnresolvedTypeIds = context.round.workspace.unresolvedClientTargetTypeIds(
             targets = targets,
+            options = schemaOptions,
         )
-        val outcome = precompileAvailableTargets(
-            precompiler = precompiler,
+        val outcome = buildAvailableClientSchema(
             workspace = context.round.workspace,
             targets = targets.without(initialUnresolvedTypeIds),
             initialUnresolvedTypeIds = initialUnresolvedTypeIds,
-            dependencies = ClientPrecompileDependencies(
+            dependencies = ClientSchemaDependencies(
                 immutableSchema = dependencies.immutableSchema,
                 errorSchema = dependencies.errorSchema,
                 definitionDocumentationByTypeId = dependencies.definitionDocumentationByTypeId,
             ),
+            options = schemaOptions,
         )
         val deferred = outcome.unresolvedRootTypeIds.isNotEmpty() &&
             context.round.platform == CompilerPlatform.APT &&
@@ -196,7 +210,7 @@ internal data class ClientCompilerFailure(
 internal data class JimmerClientCompilerFeatureState(
     val status: JimmerClientCompilerFeatureStatus,
     val dependencyStatus: JimmerClientCompilerDependencyStatus,
-    val schema: ClientPrecompiledSchema,
+    val schema: ClientSchema,
     val explicitApi: Boolean,
     val targetServiceTypeIds: Set<LsiSymbolId>,
     val currentServiceTypeIds: Set<LsiSymbolId>,
@@ -280,8 +294,8 @@ private data class ClientDependencies(
     val dtoFingerprint: String,
 )
 
-private data class ClientPrecompileOutcome(
-    val schema: ClientPrecompiledSchema,
+private data class ClientSchemaOutcome(
+    val schema: ClientSchema,
     val unresolvedRootTypeIds: Set<LsiSymbolId>,
     val failures: List<ClientCompilerFailure>,
 )
@@ -339,12 +353,14 @@ private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependen
         errorFingerprint = errorState.fingerprint,
         immutableSchema = immutableState.schema,
         errorSchema = errorState.schema,
-        definitionDocumentationByTypeId = dtoState.schema.toClientDefinitionDocumentation(immutableState.schema),
+        definitionDocumentationByTypeId = dtoState.schema.documents
+            .map { document -> document.graph }
+            .toClientDefinitionDocumentation(immutableState.schema),
         dtoFingerprint = dtoState.fingerprint,
     )
 }
 
-private fun CompilerRound.previewClientDependencies(): ClientPrecompileDependencies {
+private fun CompilerRound.previewClientDependencies(): ClientSchemaDependencies {
     val immutableTypeIds = workspace.declarationsOfType<LsiTypeDeclaration>()
         .filter { type ->
             type.annotations.any { annotation -> annotation.type in IMMUTABLE_TYPE_ANNOTATIONS }
@@ -365,7 +381,7 @@ private fun CompilerRound.previewClientDependencies(): ClientPrecompileDependenc
     } catch (_: ErrorValidationException) {
         ErrorSchema(emptyList())
     }
-    return ClientPrecompileDependencies(
+    return ClientSchemaDependencies(
         immutableSchema = immutableSchema,
         errorSchema = errorSchema,
         definitionDocumentationByTypeId = emptyMap(),
@@ -392,27 +408,27 @@ private fun clientStatus(
     }
 }
 
-private fun precompileAvailableTargets(
-    precompiler: ClientPrecompiler,
+private fun buildAvailableClientSchema(
     workspace: LsiWorkspace,
-    targets: ClientPrecompileTargets,
+    targets: ClientTargets,
     initialUnresolvedTypeIds: Set<LsiSymbolId>,
-    dependencies: ClientPrecompileDependencies,
-): ClientPrecompileOutcome {
+    dependencies: ClientSchemaDependencies,
+    options: ClientSchemaOptions,
+): ClientSchemaOutcome {
     var availableTargets = targets
     val unresolvedTypeIds = initialUnresolvedTypeIds.toCollection(sortedSetOf())
     val failures = mutableListOf<ClientCompilerFailure>()
     while (availableTargets.rootTypeIds.isNotEmpty()) {
         try {
-            return ClientPrecompileOutcome(
-                schema = precompiler.compile(workspace, availableTargets, dependencies),
+            return ClientSchemaOutcome(
+                schema = workspace.toClientSchema(availableTargets, dependencies, options),
                 unresolvedRootTypeIds = unresolvedTypeIds,
                 failures = failures,
             )
-        } catch (exception: ClientPrecompileException) {
+        } catch (exception: ClientValidationException) {
             val affectedRootTypeId = (exception.rootTypeId ?: exception.declarationId.rootTypeId())
                 .takeIf { typeId -> typeId in availableTargets.rootTypeIds }
-                ?: return ClientPrecompileOutcome(
+                ?: return ClientSchemaOutcome(
                     schema = EMPTY_SCHEMA,
                     unresolvedRootTypeIds = unresolvedTypeIds,
                     failures = failures + exception.toFailure(exception.declarationId.rootTypeId()),
@@ -425,14 +441,14 @@ private fun precompileAvailableTargets(
             availableTargets = availableTargets.without(setOf(affectedRootTypeId))
         }
     }
-    return ClientPrecompileOutcome(
+    return ClientSchemaOutcome(
         schema = EMPTY_SCHEMA,
         unresolvedRootTypeIds = unresolvedTypeIds,
         failures = failures,
     )
 }
 
-private fun ClientPrecompileOutcome.diagnostics(
+private fun ClientSchemaOutcome.diagnostics(
     deferred: Boolean,
 ): List<LsiDiagnostic> {
     return buildList {
@@ -462,7 +478,7 @@ private fun ClientPrecompileOutcome.diagnostics(
     }
 }
 
-private fun ClientPrecompileException.toFailure(
+private fun ClientValidationException.toFailure(
     rootTypeId: LsiSymbolId,
 ): ClientCompilerFailure {
     return ClientCompilerFailure(
@@ -472,24 +488,24 @@ private fun ClientPrecompileException.toFailure(
     )
 }
 
-private fun ClientPrecompileTargets.compilationTargets(
+private fun ClientTargets.compilationTargets(
     workspace: LsiWorkspace,
     platform: CompilerPlatform,
     sourceFilter: JimmerCompilerSourceFilter,
-): ClientPrecompileTargets {
+): ClientTargets {
     fun Set<LsiSymbolId>.accepted(): Set<LsiSymbolId> {
         return filterTo(sortedSetOf()) { typeId ->
             val type = workspace[typeId] as? LsiTypeDeclaration ?: return@filterTo false
             type.isCompilationTarget(platform, sourceFilter)
         }
     }
-    return ClientPrecompileTargets(
+    return ClientTargets(
         serviceTypeIds = serviceTypeIds.accepted(),
     )
 }
 
-private fun ClientPrecompileTargets.only(typeIds: Set<LsiSymbolId>): ClientPrecompileTargets {
-    return ClientPrecompileTargets(
+private fun ClientTargets.only(typeIds: Set<LsiSymbolId>): ClientTargets {
+    return ClientTargets(
         serviceTypeIds = serviceTypeIds intersect typeIds,
     )
 }
@@ -534,7 +550,7 @@ private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val IGNORE_RESOURCE_GENERATION_OPTION = "jimmer.buddy.ignoreResourceGeneration"
 private const val CLIENT_RESOURCE_PATH = "META-INF/jimmer/client"
 
-private val EMPTY_SCHEMA = ClientPrecompiledSchema(emptyList(), emptyList())
+private val EMPTY_SCHEMA = ClientSchema(emptyList(), emptyList())
 
 private val DTO_DEFERRED_STATUSES = setOf(
     JimmerDtoCompilerFeatureStatus.PENDING,

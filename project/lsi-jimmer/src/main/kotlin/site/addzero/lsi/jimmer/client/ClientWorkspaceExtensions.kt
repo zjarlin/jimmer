@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.client
+package site.addzero.lsi.jimmer.client
 
 import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.jimmer.error.ErrorField
@@ -33,16 +33,19 @@ import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
 
-data class ClientPrecompileOptions(
+/** Client 语义模型的解析选项。 */
+data class ClientSchemaOptions(
     val explicitApi: Boolean = false,
 )
 
-data class ClientPrecompileDependencies(
+/** Client 语义解析所依赖的共享领域模型。 */
+data class ClientSchemaDependencies(
     val immutableSchema: ImmutableSchema,
     val errorSchema: ErrorSchema,
     val definitionDocumentationByTypeId: Map<LsiSymbolId, ClientDefinitionDocumentation>,
 )
 
+/** Client 类型定义及其属性的冻结文档。 */
 data class ClientDefinitionDocumentation(
     val type: String?,
     val properties: Map<String, String>,
@@ -57,32 +60,83 @@ data class ClientDefinitionDocumentation(
     }
 }
 
-class ClientPrecompileException(
+/** Client 语义校验失败。 */
+class ClientValidationException(
     val declarationId: LsiSymbolId,
     val rootTypeId: LsiSymbolId? = null,
     val recoverable: Boolean = false,
     message: String,
 ) : IllegalArgumentException(message)
 
-class ClientPrecompiler(
-    private val options: ClientPrecompileOptions = ClientPrecompileOptions(),
+/** 将当前工作区解析为完整的 Client 语义模型。 */
+fun LsiWorkspace.toClientSchema(
+    dependencies: ClientSchemaDependencies,
+    options: ClientSchemaOptions = ClientSchemaOptions(),
+): ClientSchema {
+    return ClientSchemaBuilder(options).build(this, dependencies)
+}
+
+/** 将当前工作区中指定的 Client 目标解析为语义模型。 */
+fun LsiWorkspace.toClientSchema(
+    targets: ClientTargets,
+    dependencies: ClientSchemaDependencies,
+    options: ClientSchemaOptions = ClientSchemaOptions(),
+): ClientSchema {
+    return ClientSchemaBuilder(options).build(this, targets, dependencies)
+}
+
+/** 收集当前工作区中需要生成 Client 资源的服务目标。 */
+fun LsiWorkspace.clientTargets(
+    options: ClientSchemaOptions = ClientSchemaOptions(),
+): ClientTargets {
+    return ClientSchemaBuilder(options).targets(this)
+}
+
+/** 收集解析全部 Client 目标所需的完整类型种子。 */
+fun LsiWorkspace.requestedClientTypeSeeds(
+    dependencies: ClientSchemaDependencies = EMPTY_CLIENT_SCHEMA_DEPENDENCIES,
+    options: ClientSchemaOptions = ClientSchemaOptions(),
+): List<LsiTypeSeed> {
+    val builder = ClientSchemaBuilder(options)
+    return builder.requestedTypeSeeds(this, builder.targets(this), dependencies)
+}
+
+/** 收集解析指定 Client 目标所需的完整类型种子。 */
+fun LsiWorkspace.requestedClientTypeSeeds(
+    targets: ClientTargets,
+    dependencies: ClientSchemaDependencies = EMPTY_CLIENT_SCHEMA_DEPENDENCIES,
+    options: ClientSchemaOptions = ClientSchemaOptions(),
+): List<LsiTypeSeed> {
+    return ClientSchemaBuilder(options).requestedTypeSeeds(this, targets, dependencies)
+}
+
+/** 返回指定 Client 目标中尚未完整解析的类型标识。 */
+fun LsiWorkspace.unresolvedClientTargetTypeIds(
+    targets: ClientTargets,
+    options: ClientSchemaOptions = ClientSchemaOptions(),
+): Set<LsiSymbolId> {
+    return ClientSchemaBuilder(options).unresolvedTargetTypeIds(this, targets)
+}
+
+private class ClientSchemaBuilder(
+    private val options: ClientSchemaOptions = ClientSchemaOptions(),
 ) {
-    fun compile(
+    fun build(
         workspace: LsiWorkspace,
-        dependencies: ClientPrecompileDependencies,
-    ): ClientPrecompiledSchema {
-        return compile(workspace, targets(workspace), dependencies)
+        dependencies: ClientSchemaDependencies,
+    ): ClientSchema {
+        return build(workspace, targets(workspace), dependencies)
     }
 
-    fun compile(
+    fun build(
         workspace: LsiWorkspace,
-        targets: ClientPrecompileTargets,
-        dependencies: ClientPrecompileDependencies,
-    ): ClientPrecompiledSchema {
+        targets: ClientTargets,
+        dependencies: ClientSchemaDependencies,
+    ): ClientSchema {
         val unresolvedTypeIds = unresolvedTargetTypeIds(workspace, targets)
         if (unresolvedTypeIds.isNotEmpty()) {
             val unresolvedTypeId = unresolvedTypeIds.first()
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = unresolvedTypeId,
                 recoverable = true,
                 message = "Client declaration '${unresolvedTypeId.value}' cannot be fully resolved",
@@ -90,10 +144,10 @@ class ClientPrecompiler(
         }
         val types = workspace.declarationsOfType<LsiTypeDeclaration>()
             .sortedBy(LsiTypeDeclaration::qualifiedName)
-        val exceptionPrecompiler = ClientExceptionMetadataPrecompiler.from(workspace, dependencies.errorSchema)
+        val exceptionResolver = ClientExceptionMetadataResolver.from(workspace, dependencies.errorSchema)
         val services = types
             .filter { type -> type.id in targets.serviceTypeIds }
-            .map { service -> compileService(service, types, workspace, exceptionPrecompiler) }
+            .map { service -> compileService(service, types, workspace, exceptionResolver) }
             .sortedBy { service -> service.id }
         val definitionsById = linkedMapOf<LsiSymbolId, ClientTypeDefinition>()
         services.forEach { service ->
@@ -105,16 +159,16 @@ class ClientPrecompiler(
                 definitionDocumentationByTypeId = dependencies.definitionDocumentationByTypeId,
             ).forEach { definition -> definitionsById.putIfAbsent(definition.id, definition) }
         }
-        return ClientPrecompiledSchema(
+        return ClientSchema(
             services = services,
             definitions = definitionsById.values.sortedBy(ClientTypeDefinition::id),
         )
     }
 
-    fun targets(workspace: LsiWorkspace): ClientPrecompileTargets {
+    fun targets(workspace: LsiWorkspace): ClientTargets {
         val types = workspace.declarationsOfType<LsiTypeDeclaration>()
             .sortedBy(LsiTypeDeclaration::qualifiedName)
-        return ClientPrecompileTargets(
+        return ClientTargets(
             serviceTypeIds = types
                 .filter(::isApiService)
                 .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
@@ -123,8 +177,8 @@ class ClientPrecompiler(
 
     fun requestedTypeSeeds(
         workspace: LsiWorkspace,
-        targets: ClientPrecompileTargets = targets(workspace),
-        dependencies: ClientPrecompileDependencies = EMPTY_CLIENT_DEPENDENCIES,
+        targets: ClientTargets,
+        dependencies: ClientSchemaDependencies,
     ): List<LsiTypeSeed> {
         val seedIds = sortedSetOf<LsiSymbolId>()
         val definitionTypeIds = ArrayDeque<LsiSymbolId>()
@@ -336,7 +390,7 @@ class ClientPrecompiler(
 
     fun unresolvedTargetTypeIds(
         workspace: LsiWorkspace,
-        targets: ClientPrecompileTargets,
+        targets: ClientTargets,
     ): Set<LsiSymbolId> {
         return targets.rootTypeIds
             .filterTo(sortedSetOf()) { typeId ->
@@ -365,13 +419,13 @@ class ClientPrecompiler(
         service: LsiTypeDeclaration,
         allTypes: List<LsiTypeDeclaration>,
         workspace: LsiWorkspace,
-        exceptionPrecompiler: ClientExceptionMetadataPrecompiler,
+        exceptionResolver: ClientExceptionMetadataResolver,
     ): ClientService {
         validateService(service, allTypes)
         val groups = service.annotations.apiGroups()
         val operations = service.memberIds
             .map { memberId ->
-                workspace[memberId] ?: throw ClientPrecompileException(
+                workspace[memberId] ?: throw ClientValidationException(
                     declarationId = service.id,
                     recoverable = true,
                     message = "Client API service '${service.qualifiedName}' references missing member " +
@@ -382,7 +436,7 @@ class ClientPrecompiler(
             .filterNot { declaration -> declaration.annotations.hasAnnotation(API_IGNORE_ANNOTATION) }
             .filter(::isApiOperation)
             .map { declaration ->
-                compileOperation(service, groups, declaration, workspace, exceptionPrecompiler)
+                compileOperation(service, groups, declaration, workspace, exceptionResolver)
             }
         return ClientService(
             id = service.id,
@@ -398,7 +452,7 @@ class ClientPrecompiler(
         serviceGroups: List<String>,
         declaration: LsiDeclaration,
         workspace: LsiWorkspace,
-        exceptionPrecompiler: ClientExceptionMetadataPrecompiler,
+        exceptionResolver: ClientExceptionMetadataResolver,
     ): ClientOperation {
         validateOperation(declaration)
         val function = declaration as? LsiFunction
@@ -453,7 +507,7 @@ class ClientPrecompiler(
             .orEmpty()
             .mapNotNull(LsiTypeRef::declaredTypeId)
             .distinct()
-        val exceptionResolution = exceptionPrecompiler.resolve(declaredExceptionTypeIds, operationId)
+        val exceptionResolution = exceptionResolver.resolve(declaredExceptionTypeIds, operationId)
         return ClientOperation(
             id = operationId,
             name = name,
@@ -499,7 +553,7 @@ class ClientPrecompiler(
             val type = workspace[typeId] as? LsiTypeDeclaration
             val generatedError = errorSchema.generatedErrorType(typeId)
             if (type == null && generatedError == null) {
-                throw ClientPrecompileException(
+                throw ClientValidationException(
                     declarationId = typeId,
                     rootTypeId = service.id,
                     recoverable = true,
@@ -523,11 +577,11 @@ class ClientPrecompiler(
                         generatedError = requireNotNull(generatedError),
                     )
                 }
-            } catch (exception: ClientPrecompileException) {
+            } catch (exception: ClientValidationException) {
                 if (exception.rootTypeId != null) {
                     throw exception
                 }
-                throw ClientPrecompileException(
+                throw ClientValidationException(
                     declarationId = exception.declarationId,
                     rootTypeId = service.id,
                     recoverable = exception.recoverable,
@@ -674,7 +728,7 @@ class ClientPrecompiler(
                 .firstOrNull { (_, count) -> count > 1 }
                 ?.key
             if (duplicateOrder != null) {
-                throw ClientPrecompileException(
+                throw ClientValidationException(
                     declarationId = type.id,
                     rootTypeId = rootServiceId,
                     message = "Client polymorphic definition '${type.id.value}' has duplicate branch order $duplicateOrder",
@@ -782,13 +836,13 @@ class ClientPrecompiler(
     ) {
         val enclosingType = service.enclosingType(allTypes)
         if (enclosingType != null) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = service.id,
                 message = "Client API service '${service.qualifiedName}' must be top-level",
             )
         }
         if (service.typeParameters.isNotEmpty()) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = service.id,
                 message = "Client API service '${service.qualifiedName}' cannot declare type parameters",
             )
@@ -797,7 +851,7 @@ class ClientPrecompiler(
 
     private fun validateOperation(declaration: LsiDeclaration) {
         if (declaration.visibility != LsiVisibility.PUBLIC) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = declaration.id,
                 message = "Client API operation '${declaration.id.value}' must be public",
             )
@@ -808,14 +862,14 @@ class ClientPrecompiler(
             else -> false
         }
         if (static) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = declaration.id,
                 message = "Client API operation '${declaration.id.value}' cannot be static",
             )
         }
         val typeParameters = (declaration as? LsiFunction)?.typeParameters.orEmpty()
         if (typeParameters.isNotEmpty()) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = declaration.id,
                 message = "Client API operation '${declaration.id.value}' cannot declare type parameters",
             )
@@ -835,7 +889,7 @@ class ClientPrecompiler(
         if (illegalGroups.isEmpty()) {
             return
         }
-        throw ClientPrecompileException(
+        throw ClientValidationException(
             declarationId = operation.id,
             message = "Client API operation '${operation.id.value}' declares groups " +
                 "${illegalGroups.joinToString()} outside service '${service.qualifiedName}'",
@@ -872,7 +926,7 @@ class ClientPrecompiler(
         val nullableAnnotations = effectiveAnnotations.filter(LsiAnnotation::isClientNullableAnnotation)
         val nonNullAnnotations = effectiveAnnotations.filter(LsiAnnotation::isClientNonNullAnnotation)
         if (nullableAnnotations.isNotEmpty() && nonNullAnnotations.isNotEmpty()) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = sourceId,
                 message = "Client type '${sourceId.value}' has conflicting nullability annotations " +
                     "'@${nullableAnnotations.first().type.value}' and '@${nonNullAnnotations.first().type.value}'",
@@ -880,14 +934,14 @@ class ClientPrecompiler(
         }
         val primitiveType = this as? LsiPrimitiveType
         if (nullableAnnotations.isNotEmpty() && primitiveType?.boxed == false) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = sourceId,
                 message = "Nullable annotation '@${nullableAnnotations.first().type.value}' cannot decorate " +
                     "primitive type '${primitiveType.kind.name.lowercase()}'",
             )
         }
         if (nonNullAnnotations.isNotEmpty() && primitiveType?.boxed == true) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = sourceId,
                 message = "Non-null annotation '@${nonNullAnnotations.first().type.value}' cannot decorate " +
                     "boxed primitive type '${primitiveType.kind.name.lowercase()}'; use the unboxed primitive type",
@@ -906,7 +960,7 @@ class ClientPrecompiler(
         if (this is LsiDeclaredType) {
             workspace.jsonValueType(declarationId)?.let { jsonValueType ->
                 if (declarationId in jsonValueTypeIds) {
-                    throw ClientPrecompileException(
+                    throw ClientValidationException(
                         declarationId = sourceId,
                         message = "Cannot resolve client @JsonValue type because of recursion: " +
                             (jsonValueTypeIds + declarationId).joinToString { typeId -> typeId.value },
@@ -941,13 +995,13 @@ class ClientPrecompiler(
             }
             val declaration = workspace[declarationId] as? LsiTypeDeclaration
             if (declaration?.requiresEnclosingInstance == true) {
-                throw ClientPrecompileException(
+                throw ClientValidationException(
                     declarationId = sourceId,
                     message = "Client API only accepts top-level or static nested types: '${typeName.qualifiedName}'",
                 )
             }
             if (declaration?.typeParameters?.isNotEmpty() == true && arguments.isEmpty()) {
-                throw ClientPrecompileException(
+                throw ClientValidationException(
                     declarationId = sourceId,
                     message = "Client API type system does not accept raw generic type '${typeName.qualifiedName}'",
                 )
@@ -987,13 +1041,13 @@ class ClientPrecompiler(
                 nullable = nullable,
                 fetchBy = fetchBy,
             )
-            is LsiFunctionType -> throw ClientPrecompileException(
+            is LsiFunctionType -> throw ClientValidationException(
                 declarationId = sourceId,
                 message = "Client API type system does not support function type '${stableSignature()}'",
             )
             is LsiTypeParameterRef -> {
                 val owner = workspace.typeParameterOwner(parameterId)
-                    ?: throw ClientPrecompileException(
+                    ?: throw ClientValidationException(
                         declarationId = sourceId,
                         recoverable = true,
                         message = "Client type parameter '${parameterId.value}' has no declaring type",
@@ -1020,7 +1074,7 @@ class ClientPrecompiler(
         nestedType: Boolean = true,
     ): ClientTypeArgument {
         if (variance == LsiVariance.STAR || variance == LsiVariance.IN) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = sourceId,
                 message = "Client API type system does not accept ${variance.name.lowercase()} type arguments",
             )
@@ -1047,7 +1101,7 @@ class ClientPrecompiler(
         workspace: LsiWorkspace,
     ): ClientFetchBy {
         val value = stringValue("value")?.takeIf(String::isNotBlank)
-            ?: throw ClientPrecompileException(
+            ?: throw ClientValidationException(
                 declarationId = sourceId,
                 message = "FetchBy on '${sourceId.value}' requires a non-blank value",
             )
@@ -1055,7 +1109,7 @@ class ClientPrecompiler(
         val targetEntityTypeId = decoratedType.fetchTargetEntityTypeId(workspace, sourceId)
         val ownerTypeId = explicitOwnerId ?: defaultFetcherOwnerId ?: serviceId
         val fetcherMember = workspace.fetcherMember(ownerTypeId, value)
-            ?: throw ClientPrecompileException(
+            ?: throw ClientValidationException(
                 declarationId = sourceId,
                 recoverable = workspace[ownerTypeId] == null,
                 message = "FetchBy on '${sourceId.value}' cannot find fetcher '$value' in " +
@@ -1082,7 +1136,7 @@ class ClientPrecompiler(
             ?.type
             ?.declaredTypeId()
         if (fetchedTypeId != targetEntityTypeId) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = sourceId,
                 message = "FetchBy '$value' in '${ownerTypeId.requireTypeQualifiedName()}' must have type " +
                     "'${FETCHER_TYPE_ID.requireTypeQualifiedName()}<${targetEntityTypeId.requireTypeQualifiedName()}>'",
@@ -1105,7 +1159,7 @@ class ClientPrecompiler(
         val typeId = (this as? LsiDeclaredType)?.declarationId
         val type = typeId?.let { id -> workspace[id] as? LsiTypeDeclaration }
         if (type == null || !type.annotations.hasAnnotation(ENTITY_ANNOTATION)) {
-            throw ClientPrecompileException(
+            throw ClientValidationException(
                 declarationId = sourceId,
                 recoverable = typeId != null && workspace[typeId] == null,
                 message = "FetchBy on '${sourceId.value}' can only decorate an entity type",
@@ -1138,7 +1192,7 @@ private data class GeneratedClientErrorType(
     val fields: List<ErrorField>,
 )
 
-private val EMPTY_CLIENT_DEPENDENCIES = ClientPrecompileDependencies(
+private val EMPTY_CLIENT_SCHEMA_DEPENDENCIES = ClientSchemaDependencies(
     immutableSchema = ImmutableSchema(emptyList()),
     errorSchema = ErrorSchema(emptyList()),
     definitionDocumentationByTypeId = emptyMap(),
@@ -1201,7 +1255,7 @@ private fun ClientTypeRef.requireResolvedDefinitionType(
         -> false
     }
     if (unresolved) {
-        throw ClientPrecompileException(
+        throw ClientValidationException(
             declarationId = declarationId,
             rootTypeId = rootServiceId,
             recoverable = true,
@@ -1342,7 +1396,7 @@ private fun ClientTypeRef.withAdditionalNullability(nullable: Boolean): ClientTy
 private fun LsiTypeDeclaration.polymorphicBranchOrder(ownerTypeId: LsiSymbolId): Int? {
     val annotation = annotations.annotation(GENERATED_POLYMORPHIC_BRANCH_ANNOTATION) ?: return null
     val value = annotation.arguments["value"]?.value as? LsiAnnotationValue.ClassValue
-        ?: throw ClientPrecompileException(
+        ?: throw ClientValidationException(
             declarationId = id,
             message = "Client polymorphic branch '${id.value}' has no owner type",
         )
@@ -1350,12 +1404,12 @@ private fun LsiTypeDeclaration.polymorphicBranchOrder(ownerTypeId: LsiSymbolId):
         return null
     }
     val order = (annotation.arguments["order"]?.value as? LsiAnnotationValue.IntValue)?.value
-        ?: throw ClientPrecompileException(
+        ?: throw ClientValidationException(
             declarationId = id,
             message = "Client polymorphic branch '${id.value}' has no order",
         )
     if (order < 0) {
-        throw ClientPrecompileException(
+        throw ClientValidationException(
             declarationId = id,
             message = "Client polymorphic branch '${id.value}' has negative order $order",
         )

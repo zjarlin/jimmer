@@ -1,30 +1,31 @@
-package org.babyfish.jimmer.compiler.client
+package site.addzero.lsi.jimmer.client
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import site.addzero.lsi.model.LsiVariance
 
-fun ClientPrecompiledSchema.normalizedSnapshot(): String {
+/** 生成可用于跨前端比较的稳定 Client 快照。 */
+fun ClientSchema.normalizedSnapshot(): String {
     return buildString {
         services.sortedBy(ClientService::id).forEach { service ->
             appendRecord(
                 "service",
                 service.id.value,
                 service.qualifiedName,
-                service.groups.joinToString(","),
+                service.groups.canonicalListText(),
                 service.doc.orEmpty(),
             )
-            service.operations.sortedBy(ClientOperation::id).forEach { operation ->
+            service.operations.forEach { operation ->
                 appendRecord(
                     "operation",
                     service.id.value,
                     operation.id.value,
                     operation.name,
-                    operation.groups.joinToString(","),
+                    operation.groups.canonicalListText(),
                     operation.doc.orEmpty(),
                     operation.returnType?.canonicalText().orEmpty(),
-                    operation.declaredExceptionTypeIds.joinToString(",") { id -> id.value },
-                    operation.exceptionTypeIds.joinToString(",") { id -> id.value },
+                    operation.declaredExceptionTypeIds.map { id -> id.value }.canonicalListText(),
+                    operation.exceptionTypeIds.map { id -> id.value }.canonicalListText(),
                 )
                 operation.parameters.sortedBy(ClientParameter::originalIndex).forEach { parameter ->
                     appendRecord(
@@ -56,7 +57,7 @@ fun ClientPrecompiledSchema.normalizedSnapshot(): String {
                         metadata.checked.toString(),
                         metadata.abstract.toString(),
                         metadata.superTypeId?.value.orEmpty(),
-                        metadata.subTypeIds.joinToString(",") { typeId -> typeId.value },
+                        metadata.subTypeIds.map { typeId -> typeId.value }.canonicalListText(),
                         metadata.documentation.orEmpty(),
                     )
                 }
@@ -73,35 +74,29 @@ fun ClientPrecompiledSchema.normalizedSnapshot(): String {
                 definition.error?.family.orEmpty(),
                 definition.error?.code.orEmpty(),
             )
-            definition.properties
-                .sortedWith(compareBy(ClientDefinitionProperty::name, ClientDefinitionProperty::id))
-                .forEach { property ->
-                    appendRecord(
-                        "definition-property",
-                        definition.id.value,
-                        property.id.value,
-                        property.name,
-                        property.type.canonicalText(),
-                        property.doc.orEmpty(),
-                    )
-                }
+            definition.properties.forEach { property ->
+                appendRecord(
+                    "definition-property",
+                    definition.id.value,
+                    property.id.value,
+                    property.name,
+                    property.type.canonicalText(),
+                    property.doc.orEmpty(),
+                )
+            }
             definition.superTypes
                 .map(ClientTypeRef::canonicalText)
-                .sorted()
                 .forEach { superType ->
                     appendRecord("definition-super", definition.id.value, superType)
                 }
-            definition.polymorphicBranches
-                .sortedBy(ClientDeclaredTypeRef::typeId)
-                .forEach { branch ->
-                    appendRecord(
-                        "definition-branch",
-                        definition.id.value,
-                        branch.typeId.value,
-                        branch.typeName.canonicalText(),
-                    )
-                }
-            definition.enumConstants.sortedBy(ClientEnumConstant::name).forEach { constant ->
+            definition.polymorphicBranches.forEach { branch ->
+                appendRecord(
+                    "definition-branch",
+                    definition.id.value,
+                    branch.canonicalText(),
+                )
+            }
+            definition.enumConstants.forEach { constant ->
                 appendRecord(
                     "definition-enum",
                     definition.id.value,
@@ -114,7 +109,8 @@ fun ClientPrecompiledSchema.normalizedSnapshot(): String {
     }
 }
 
-fun ClientPrecompiledSchema.fingerprint(): String {
+/** 计算完整 Client 语义快照的 SHA-256 指纹。 */
+fun ClientSchema.fingerprint(): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes = digest.digest(normalizedSnapshot().toByteArray(StandardCharsets.UTF_8))
     return bytes.joinToString("") { byte -> "%02x".format(byte) }
@@ -156,7 +152,7 @@ private fun ClientTypeRef.canonicalText(): String {
             append(']')
             if (arguments.isNotEmpty()) {
                 append('<')
-                append(arguments.joinToString(",") { argument -> argument.canonicalText() })
+                append(arguments.map(ClientTypeArgument::canonicalText).canonicalListText())
                 append('>')
             }
         }
@@ -178,28 +174,26 @@ private fun ClientTypeRef.canonicalText(): String {
         append(if (nullable) "?" else "!")
         fetchBy?.let { fetchBy ->
             append("@fetchBy(")
-            append(fetchBy.value.escapeSnapshotField())
-            append(',')
-            append(fetchBy.ownerTypeId.value)
-            append(',')
-            append(fetchBy.ownerTypeName.canonicalText())
-            append(',')
-            append(fetchBy.targetEntityTypeId.value)
-            append(',')
-            append(fetchBy.nullable)
-            append(',')
-            append(fetchBy.documentation.orEmpty().escapeSnapshotField())
+            append(
+                listOf(
+                    fetchBy.value,
+                    fetchBy.ownerTypeId.value,
+                    fetchBy.ownerTypeName.canonicalText(),
+                    fetchBy.targetEntityTypeId.value,
+                    fetchBy.nullable.toString(),
+                    fetchBy.documentation.orEmpty(),
+                ).canonicalListText()
+            )
             append(')')
         }
     }
 }
 
 private fun ClientTypeName.canonicalText(): String {
-    return buildString {
-        append(packageName.orEmpty())
-        append('/')
-        append(simpleNames.joinToString("\$"))
-    }
+    return listOf(
+        packageName.orEmpty(),
+        simpleNames.canonicalListText(),
+    ).canonicalListText()
 }
 
 private fun ClientTypeArgument.canonicalText(): String {
@@ -208,5 +202,15 @@ private fun ClientTypeArgument.canonicalText(): String {
         LsiVariance.INVARIANT -> requireNotNull(type).canonicalText()
         LsiVariance.IN -> "in:${requireNotNull(type).canonicalText()}"
         LsiVariance.OUT -> "out:${requireNotNull(type).canonicalText()}"
+    }
+}
+
+private fun Iterable<String>.canonicalListText(): String {
+    return buildString {
+        this@canonicalListText.forEach { value ->
+            append(value.length)
+            append(':')
+            append(value)
+        }
     }
 }

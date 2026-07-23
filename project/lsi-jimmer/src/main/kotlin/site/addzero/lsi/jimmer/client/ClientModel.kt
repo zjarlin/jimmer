@@ -1,10 +1,11 @@
-package org.babyfish.jimmer.compiler.client
+package site.addzero.lsi.jimmer.client
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiVariance
 
-data class ClientPrecompiledSchema(
+/** 与语言前端无关的完整 Client 语义模型。 */
+data class ClientSchema(
     val services: List<ClientService>,
     val definitions: List<ClientTypeDefinition>,
 ) {
@@ -24,26 +25,30 @@ data class ClientPrecompiledSchema(
     }
 }
 
-data class ClientPrecompileTargets(
+/** 一次 Client 解析所包含的服务目标。 */
+data class ClientTargets(
     val serviceTypeIds: Set<LsiSymbolId>,
 ) {
     init {
         serviceTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
     }
 
+    /** 需要由前端完整解析的根类型。 */
     val rootTypeIds: Set<LsiSymbolId>
         get() = serviceTypeIds
 
-    fun without(typeIds: Set<LsiSymbolId>): ClientPrecompileTargets {
+    /** 排除本轮无法解析的目标。 */
+    fun without(typeIds: Set<LsiSymbolId>): ClientTargets {
         if (typeIds.isEmpty()) {
             return this
         }
-        return ClientPrecompileTargets(
+        return ClientTargets(
             serviceTypeIds = serviceTypeIds - typeIds,
         )
     }
 }
 
+/** 可生成 Client 资源的服务定义。 */
 data class ClientService(
     val id: LsiSymbolId,
     val qualifiedName: String,
@@ -52,6 +57,7 @@ data class ClientService(
     val operations: List<ClientOperation>,
 )
 
+/** 保留嵌套层级的 Client 类型名称。 */
 data class ClientTypeName(
     val packageName: String?,
     val simpleNames: List<String>,
@@ -66,6 +72,7 @@ data class ClientTypeName(
         }
     }
 
+    /** 点分隔的完整类型名。 */
     val qualifiedName: String = buildString {
         packageName?.let { value ->
             append(value)
@@ -75,6 +82,7 @@ data class ClientTypeName(
     }
 
     companion object {
+        /** 从完整类型名创建 Client 类型名称。 */
         fun parse(qualifiedName: String): ClientTypeName {
             require(qualifiedName.isNotBlank()) { "Client qualified type name cannot be blank" }
             val packageSeparator = qualifiedName.lastIndexOf('.')
@@ -90,12 +98,14 @@ data class ClientTypeName(
     }
 }
 
+/** Client 类型定义的结构类别。 */
 enum class ClientDefinitionKind {
     IMMUTABLE,
     OBJECT,
     ENUM,
 }
 
+/** Client 资源中的类型定义。 */
 data class ClientTypeDefinition(
     val id: LsiSymbolId,
     val typeName: ClientTypeName,
@@ -128,6 +138,7 @@ data class ClientTypeDefinition(
     }
 }
 
+/** 错误类型定义关联的 family 与 code。 */
 data class ClientDefinitionError(
     val family: String,
     val code: String,
@@ -138,6 +149,7 @@ data class ClientDefinitionError(
     }
 }
 
+/** Client 类型定义中的属性。 */
 data class ClientDefinitionProperty(
     val id: LsiSymbolId,
     val name: String,
@@ -149,6 +161,7 @@ data class ClientDefinitionProperty(
     }
 }
 
+/** Client 枚举定义中的常量。 */
 data class ClientEnumConstant(
     val id: LsiSymbolId,
     val name: String,
@@ -159,6 +172,7 @@ data class ClientEnumConstant(
     }
 }
 
+/** Client 服务公开的操作。 */
 data class ClientOperation(
     val id: LsiSymbolId,
     val name: String,
@@ -172,6 +186,7 @@ data class ClientOperation(
     val exceptionMetadata: List<ClientExceptionMetadata>,
 )
 
+/** Client 操作可见的异常层级元数据。 */
 data class ClientExceptionMetadata(
     val typeId: LsiSymbolId,
     val errorFamilyId: LsiSymbolId?,
@@ -202,6 +217,7 @@ data class ClientExceptionMetadata(
     }
 }
 
+/** Client 操作中参与生成的参数。 */
 data class ClientParameter(
     val id: LsiSymbolId,
     val name: String,
@@ -213,6 +229,7 @@ data class ClientParameter(
     }
 }
 
+/** Client 操作中被显式忽略的参数。 */
 data class ClientIgnoredParameter(
     val id: LsiSymbolId,
     val name: String,
@@ -223,11 +240,13 @@ data class ClientIgnoredParameter(
     }
 }
 
+/** Client 资源可表达的类型引用。 */
 sealed interface ClientTypeRef {
     val nullable: Boolean
     val fetchBy: ClientFetchBy?
 }
 
+/** 声明类型的 Client 引用。 */
 data class ClientDeclaredTypeRef(
     val typeId: LsiSymbolId,
     val typeName: ClientTypeName,
@@ -236,18 +255,21 @@ data class ClientDeclaredTypeRef(
     override val fetchBy: ClientFetchBy? = null,
 ) : ClientTypeRef
 
+/** 基础类型的 Client 引用。 */
 data class ClientPrimitiveTypeRef(
     val kind: LsiPrimitiveKind,
     override val nullable: Boolean = false,
     override val fetchBy: ClientFetchBy? = null,
 ) : ClientTypeRef
 
+/** 数组类型的 Client 引用。 */
 data class ClientArrayTypeRef(
     val elementType: ClientTypeRef,
     override val nullable: Boolean = false,
     override val fetchBy: ClientFetchBy? = null,
 ) : ClientTypeRef
 
+/** 类型参数的 Client 引用。 */
 data class ClientTypeParameterRef(
     val parameterId: LsiSymbolId,
     val ownerTypeName: ClientTypeName,
@@ -256,6 +278,7 @@ data class ClientTypeParameterRef(
     override val fetchBy: ClientFetchBy? = null,
 ) : ClientTypeRef
 
+/** 尚未解析的 Client 类型引用。 */
 data class ClientUnresolvedTypeRef(
     val displayName: String,
     override val nullable: Boolean = false,
@@ -266,6 +289,7 @@ data class ClientUnresolvedTypeRef(
     }
 }
 
+/** 带变型信息的 Client 类型实参。 */
 data class ClientTypeArgument(
     val variance: LsiVariance,
     val type: ClientTypeRef?,
@@ -279,6 +303,7 @@ data class ClientTypeArgument(
     }
 }
 
+/** Client 类型引用上的 FetchBy 元数据。 */
 data class ClientFetchBy(
     val value: String,
     val ownerTypeId: LsiSymbolId,

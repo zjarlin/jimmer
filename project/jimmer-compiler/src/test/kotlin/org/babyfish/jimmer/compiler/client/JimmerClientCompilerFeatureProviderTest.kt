@@ -18,6 +18,9 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.client.ClientExceptionMetadata
+import site.addzero.lsi.jimmer.client.ClientService
+import site.addzero.lsi.jimmer.client.fingerprint
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiEnumEntry

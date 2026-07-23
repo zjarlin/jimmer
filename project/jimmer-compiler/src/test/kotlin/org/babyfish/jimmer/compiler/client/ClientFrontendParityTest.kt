@@ -24,19 +24,23 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import site.addzero.lsi.jimmer.error.ErrorSchema
-import site.addzero.lsi.jimmer.ImmutableSchema
 import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
 import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.client.ClientOperation
+import site.addzero.lsi.jimmer.client.ClientSchemaDependencies
+import site.addzero.lsi.jimmer.client.normalizedSnapshot
+import site.addzero.lsi.jimmer.client.toClientSchema
+import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.toSemanticSnapshot
 
-private fun emptyClientDependencies(): ClientPrecompileDependencies {
-    return ClientPrecompileDependencies(
+private fun emptyClientDependencies(): ClientSchemaDependencies {
+    return ClientSchemaDependencies(
         immutableSchema = ImmutableSchema(emptyList()),
         errorSchema = ErrorSchema(emptyList()),
         definitionDocumentationByTypeId = emptyMap(),
@@ -49,14 +53,8 @@ class ClientFrontendParityTest {
     fun `java throws and kotlin Throws produce identical client exception schema`() {
         val aptWorkspace = compileJava(JAVA_SOURCES)
         val kspWorkspace = compileKotlin(KOTLIN_SOURCES)
-        val aptSchema = ClientPrecompiler().compile(
-            aptWorkspace,
-            emptyClientDependencies(),
-        )
-        val kspSchema = ClientPrecompiler().compile(
-            kspWorkspace,
-            emptyClientDependencies(),
-        )
+        val aptSchema = aptWorkspace.toClientSchema(emptyClientDependencies())
+        val kspSchema = kspWorkspace.toClientSchema(emptyClientDependencies())
 
         val serviceId = LsiSymbolId.type("demo.ErrorService")
         val aptCallableIds = aptWorkspace.declarationsOfType<LsiFunction>()
