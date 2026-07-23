@@ -1,20 +1,21 @@
 package org.babyfish.jimmer.compiler.dto
 
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoKotlinMutability
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.effectiveKotlinMutabilityByRootTypeId
 
 internal fun JimmerDtoRendererOptions.effectiveKspMutableByRootTypeId(
     platform: CompilerPlatform,
-    schema: JimmerDtoPrecompiledSchema,
+    graphs: List<DtoGraph>,
 ): Map<DtoTypeId, Boolean> {
     val result = sortedMapOf<DtoTypeId, Boolean>()
-    schema.documents.forEach { document ->
+    graphs.forEach { graph ->
         val mutabilityByRootTypeId = if (platform == CompilerPlatform.KSP) {
-            document.graph.effectiveKotlinMutabilityByRootTypeId(defaultKotlinMutability())
+            graph.effectiveKotlinMutabilityByRootTypeId(defaultKotlinMutability())
         } else {
-            document.graph.rootTypeIds.associateWith { DtoKotlinMutability.IMMUTABLE }
+            graph.rootTypeIds.associateWith { DtoKotlinMutability.IMMUTABLE }
         }
         mutabilityByRootTypeId.forEach { (rootTypeId, mutability) ->
             val previous = result.put(

@@ -7,7 +7,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerSourceSet
 import org.babyfish.jimmer.dto.compiler.DtoModifier
@@ -29,10 +28,10 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 class JimmerDtoKspMutabilityPlanTest {
     @Test
     fun `non ksp platforms freeze immutable roots without consuming overrides`() {
-        val schema = schema()
+        val graphs = listOf(graph())
         val options = rendererOptions(defaultMutable = true)
-        val aptPlan = options.effectiveKspMutableByRootTypeId(CompilerPlatform.APT, schema)
-        val unknownPlan = options.effectiveKspMutableByRootTypeId(CompilerPlatform.UNKNOWN, schema)
+        val aptPlan = options.effectiveKspMutableByRootTypeId(CompilerPlatform.APT, graphs)
+        val unknownPlan = options.effectiveKspMutableByRootTypeId(CompilerPlatform.UNKNOWN, graphs)
 
         assertEquals(ROOT_TYPE_IDS.sorted(), aptPlan.keys.toList())
         assertTrue(aptPlan.values.none { mutable -> mutable })
@@ -41,21 +40,21 @@ class JimmerDtoKspMutabilityPlanTest {
 
     @Test
     fun `dto state freezes stable root plan into fingerprint`() {
-        val schema = schema()
+        val graphs = listOf(graph())
         val falsePlan = ROOT_TYPE_IDS.sorted().associateWith { rootTypeId ->
             rootTypeId == MUTABLE_ROOT_TYPE_ID
         }
         val truePlan = ROOT_TYPE_IDS.sorted().associateWith { rootTypeId ->
             rootTypeId != IMMUTABLE_ROOT_TYPE_ID
         }
-        val falseState = state(schema, falsePlan)
-        val trueState = state(schema, truePlan)
+        val falseState = state(graphs, falsePlan)
+        val trueState = state(graphs, truePlan)
 
         assertEquals(falsePlan, falseState.effectiveKspMutableByRootTypeId)
         assertNotEquals(falseState.fingerprint, trueState.fingerprint)
         assertFailsWith<IllegalArgumentException> {
             state(
-                schema,
+                graphs,
                 linkedMapOf(
                     MUTABLE_ROOT_TYPE_ID to true,
                     AUTO_ROOT_TYPE_ID to false,
@@ -63,39 +62,8 @@ class JimmerDtoKspMutabilityPlanTest {
             )
         }
         assertFailsWith<IllegalArgumentException> {
-            state(schema, sortedMapOf(NESTED_TYPE_ID to true))
+            state(graphs, sortedMapOf(NESTED_TYPE_ID to true))
         }
-    }
-
-    private fun schema(): JimmerDtoPrecompiledSchema {
-        val graph = graph()
-        return JimmerDtoPrecompiledSchema(
-            listOf(
-                JimmerDtoPrecompiledDocument(
-                    inputSnapshot = CompilerInputDocumentSnapshot(DOCUMENT, emptyList()),
-                    targetTypeIds = listOf(BASE_TYPE_ID),
-                    graph = graph,
-                    annotationContract = DtoAnnotationContract(
-                        declarations = emptyList(),
-                        typePlans = graph.types.map { type ->
-                            DtoTypeAnnotationPlan(type.id, emptyList())
-                        },
-                        propPlans = emptyList(),
-                        diagnostics = emptyList(),
-                    ),
-                    interfaceContractResolution = DtoInterfaceContractResolution(
-                        contracts = graph.types.map { type ->
-                            DtoInterfaceContract(type.id, emptyList(), emptyList())
-                        },
-                        diagnostics = emptyList(),
-                    ),
-                    configContractResolution = DtoConfigContractResolution(
-                        contracts = emptyList(),
-                        diagnostics = emptyList(),
-                    ),
-                )
-            ),
-        )
     }
 
     private fun graph(): DtoGraph {
@@ -166,13 +134,39 @@ class JimmerDtoKspMutabilityPlanTest {
     }
 
     private fun state(
-        schema: JimmerDtoPrecompiledSchema,
+        graphs: List<DtoGraph>,
         effectiveKspMutableByRootTypeId: Map<DtoTypeId, Boolean>,
     ): JimmerDtoCompilerFeatureState {
+        val graph = graphs.single()
         return JimmerDtoCompilerFeatureState(
             status = JimmerDtoCompilerFeatureStatus.RESOLVED,
             dependencyStatus = JimmerDtoCompilerDependencyStatus.RESOLVED,
-            schema = schema,
+            graphs = graphs,
+            annotationContractsBySource = sortedMapOf(
+                graph.source to DtoAnnotationContract(
+                    declarations = emptyList(),
+                    typePlans = graph.types.map { type ->
+                        DtoTypeAnnotationPlan(type.id, emptyList())
+                    },
+                    propPlans = emptyList(),
+                    diagnostics = emptyList(),
+                )
+            ),
+            interfaceContractsBySource = sortedMapOf(
+                graph.source to DtoInterfaceContractResolution(
+                    contracts = graph.types.map { type ->
+                        DtoInterfaceContract(type.id, emptyList(), emptyList())
+                    },
+                    diagnostics = emptyList(),
+                )
+            ),
+            configContractsBySource = sortedMapOf(
+                graph.source to DtoConfigContractResolution(
+                    contracts = emptyList(),
+                    diagnostics = emptyList(),
+                )
+            ),
+            resolvedInputFingerprint = "resolved-input-fingerprint",
             unresolvedDocuments = emptyList(),
             failures = emptyList(),
             defaultNullableInputModifier = DtoModifier.STATIC,

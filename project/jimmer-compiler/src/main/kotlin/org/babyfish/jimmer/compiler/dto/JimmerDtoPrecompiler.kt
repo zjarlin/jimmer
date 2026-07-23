@@ -25,9 +25,14 @@ import org.babyfish.jimmer.dto.compiler.DtoTypeLinker
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiPosition
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -40,7 +45,7 @@ internal class JimmerDtoPrecompiler {
         sourceFilter: JimmerCompilerSourceFilter,
         defaultNullableInputModifier: DtoModifier,
         platform: CompilerPlatform,
-    ): JimmerDtoPrecompileOutcome {
+    ): JimmerDtoRoundResolution {
         require(defaultNullableInputModifier.isInputStrategy) {
             "Default nullable input modifier must be an input strategy"
         }
@@ -166,8 +171,12 @@ internal class JimmerDtoPrecompiler {
             }
         }
         if (failures.isNotEmpty() || unresolvedDocuments.isNotEmpty()) {
-            return JimmerDtoPrecompileOutcome(
-                schema = JimmerDtoPrecompiledSchema(emptyList()),
+            return JimmerDtoRoundResolution(
+                resolvedInputs = emptyList(),
+                graphs = emptyList(),
+                annotationContractsBySource = emptyMap(),
+                interfaceContractsBySource = emptyMap(),
+                configContractsBySource = emptyMap(),
                 unresolvedDocuments = unresolvedDocuments.sortedBy(JimmerDtoUnresolvedDocument::inputSnapshot),
                 failures = failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR),
             )
@@ -185,8 +194,12 @@ internal class JimmerDtoPrecompiler {
             }
         } catch (exception: DtoAstException) {
             failures += exception.toFailure(entries)
-            return JimmerDtoPrecompileOutcome(
-                schema = JimmerDtoPrecompiledSchema(emptyList()),
+            return JimmerDtoRoundResolution(
+                resolvedInputs = emptyList(),
+                graphs = emptyList(),
+                annotationContractsBySource = emptyMap(),
+                interfaceContractsBySource = emptyMap(),
+                configContractsBySource = emptyMap(),
                 unresolvedDocuments = emptyList(),
                 failures = failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR),
             )
@@ -200,6 +213,7 @@ internal class JimmerDtoPrecompiler {
                 return@entryLoop
             }
             val unresolvedReusableDtoTypeIds = sortedSetOf<LsiSymbolId>()
+            var hasAmbiguousReusableDtoType = false
             entry.inputSnapshot.references
                 .asSequence()
                 .filter { reference ->
@@ -213,6 +227,7 @@ internal class JimmerDtoPrecompiler {
                 .forEach referenceLoop@{ reference ->
                     val selection = reference.selectType(workspace, sourceDtoTypeIds)
                     if (selection.isAmbiguous) {
+                        hasAmbiguousReusableDtoType = true
                         failures += JimmerDtoSelectorAmbiguity(
                             selector = reference.typeSelector,
                             selection = selection,
@@ -225,7 +240,7 @@ internal class JimmerDtoPrecompiler {
                         unresolvedReusableDtoTypeIds += typeId
                     }
                 }
-            if (unresolvedReusableDtoTypeIds.isNotEmpty()) {
+            if (!hasAmbiguousReusableDtoType && unresolvedReusableDtoTypeIds.isNotEmpty()) {
                 unresolvedDocuments += JimmerDtoUnresolvedDocument(
                     inputSnapshot = entry.inputSnapshot,
                     targetTypeIds = entry.targetTypeIds,
@@ -237,8 +252,12 @@ internal class JimmerDtoPrecompiler {
             }
         }
         if (failures.isNotEmpty() || unresolvedDocuments.isNotEmpty()) {
-            return JimmerDtoPrecompileOutcome(
-                schema = JimmerDtoPrecompiledSchema(emptyList()),
+            return JimmerDtoRoundResolution(
+                resolvedInputs = emptyList(),
+                graphs = emptyList(),
+                annotationContractsBySource = emptyMap(),
+                interfaceContractsBySource = emptyMap(),
+                configContractsBySource = emptyMap(),
                 unresolvedDocuments = unresolvedDocuments.sortedBy(JimmerDtoUnresolvedDocument::inputSnapshot),
                 failures = failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR),
             )
@@ -248,8 +267,12 @@ internal class JimmerDtoPrecompiler {
             DtoTypeLinker.link(compiledTypes, reusableDtoTypeResolver::resolve)
         } catch (exception: DtoAstException) {
             failures += exception.toFailure(entries)
-            return JimmerDtoPrecompileOutcome(
-                schema = JimmerDtoPrecompiledSchema(emptyList()),
+            return JimmerDtoRoundResolution(
+                resolvedInputs = emptyList(),
+                graphs = emptyList(),
+                annotationContractsBySource = emptyMap(),
+                interfaceContractsBySource = emptyMap(),
+                configContractsBySource = emptyMap(),
                 unresolvedDocuments = emptyList(),
                 failures = failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR),
             )
@@ -278,15 +301,24 @@ internal class JimmerDtoPrecompiler {
                 }
         }
         if (failures.isNotEmpty()) {
-            return JimmerDtoPrecompileOutcome(
-                schema = JimmerDtoPrecompiledSchema(emptyList()),
+            return JimmerDtoRoundResolution(
+                resolvedInputs = emptyList(),
+                graphs = emptyList(),
+                annotationContractsBySource = emptyMap(),
+                interfaceContractsBySource = emptyMap(),
+                configContractsBySource = emptyMap(),
                 unresolvedDocuments = emptyList(),
                 failures = failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR),
             )
         }
-        val documents = entries
+        val resolvedInputs = mutableListOf<JimmerDtoResolvedInput>()
+        val graphs = mutableListOf<DtoGraph>()
+        val annotationContractsBySource = sortedMapOf<LsiSource, DtoAnnotationContract>()
+        val interfaceContractsBySource = sortedMapOf<LsiSource, DtoInterfaceContractResolution>()
+        val configContractsBySource = sortedMapOf<LsiSource, DtoConfigContractResolution>()
+        entries
             .filter(JimmerDtoCompilerEntry::isActive)
-            .map { entry ->
+            .forEach { entry ->
                 val snapshot = entry.inputSnapshot
                 val inputDocument = snapshot.document
                 val graph = DtoGraphFreezer(snapshot).freeze(
@@ -319,17 +351,27 @@ internal class JimmerDtoPrecompiler {
                 failures += semanticDiagnostics.map { diagnostic ->
                     diagnostic.toCompilerFailure(snapshot, entry.targetTypeIds)
                 }
-                JimmerDtoPrecompiledDocument(
+                resolvedInputs += JimmerDtoResolvedInput(
                     inputSnapshot = snapshot,
                     targetTypeIds = entry.targetTypeIds,
-                    graph = graph,
-                    annotationContract = annotationContract,
-                    interfaceContractResolution = interfaceContractResolution,
-                    configContractResolution = configContractResolution,
                 )
+                graphs += graph
+                check(annotationContractsBySource.put(graph.source, annotationContract) == null) {
+                    "DTO round cannot contain duplicate annotation contract sources: ${graph.source.path}"
+                }
+                check(interfaceContractsBySource.put(graph.source, interfaceContractResolution) == null) {
+                    "DTO round cannot contain duplicate interface contract sources: ${graph.source.path}"
+                }
+                check(configContractsBySource.put(graph.source, configContractResolution) == null) {
+                    "DTO round cannot contain duplicate config contract sources: ${graph.source.path}"
+                }
             }
-        return JimmerDtoPrecompileOutcome(
-            schema = JimmerDtoPrecompiledSchema(documents),
+        return JimmerDtoRoundResolution(
+            resolvedInputs = resolvedInputs.toList(),
+            graphs = graphs.toList(),
+            annotationContractsBySource = annotationContractsBySource.toMap(),
+            interfaceContractsBySource = interfaceContractsBySource.toMap(),
+            configContractsBySource = configContractsBySource.toMap(),
             unresolvedDocuments = unresolvedDocuments.sortedBy(JimmerDtoUnresolvedDocument::inputSnapshot),
             failures = failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR),
         )

@@ -353,8 +353,7 @@ private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependen
         errorFingerprint = errorState.fingerprint,
         immutableSchema = immutableState.schema,
         errorSchema = errorState.schema,
-        definitionDocumentationByTypeId = dtoState.schema.documents
-            .map { document -> document.graph }
+        definitionDocumentationByTypeId = dtoState.graphs
             .toClientDefinitionDocumentation(immutableState.schema),
         dtoFingerprint = dtoState.fingerprint,
     )

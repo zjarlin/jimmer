@@ -54,6 +54,7 @@ import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.fingerprint as dtoFingerprint
+import site.addzero.lsi.jimmer.dto.normalizedSnapshot as dtoNormalizedSnapshot
 
 class JimmerDtoFrontendParityTest {
 
@@ -68,69 +69,87 @@ class JimmerDtoFrontendParityTest {
         )
         assertEquals(apt.immutableSchema.fingerprint(), ksp.immutableSchema.fingerprint())
 
-        val aptDocument = apt.dtoSchema.documents.single()
-        val kspDocument = ksp.dtoSchema.documents.single()
-        assertEquals(aptDocument.graph, kspDocument.graph)
+        val aptGraph = apt.dtoResolution.graphs.single()
+        val kspGraph = ksp.dtoResolution.graphs.single()
+        val aptAnnotationContract = apt.dtoResolution.annotationContractsBySource.getValue(aptGraph.source)
+        val kspAnnotationContract = ksp.dtoResolution.annotationContractsBySource.getValue(kspGraph.source)
+        val aptInterfaceResolution = apt.dtoResolution.interfaceContractsBySource.getValue(aptGraph.source)
+        val kspInterfaceResolution = ksp.dtoResolution.interfaceContractsBySource.getValue(kspGraph.source)
+        val aptConfigResolution = apt.dtoResolution.configContractsBySource.getValue(aptGraph.source)
+        val kspConfigResolution = ksp.dtoResolution.configContractsBySource.getValue(kspGraph.source)
+        assertEquals(aptGraph, kspGraph)
         assertEquals(
-            aptDocument.annotationContract.typePlans,
-            kspDocument.annotationContract.typePlans,
+            aptAnnotationContract.typePlans,
+            kspAnnotationContract.typePlans,
         )
         assertEquals(
-            aptDocument.annotationContract.propPlans,
-            kspDocument.annotationContract.propPlans,
+            aptAnnotationContract.propPlans,
+            kspAnnotationContract.propPlans,
         )
         assertEquals(
-            aptDocument.interfaceContractResolution.canonicalizeFrontendMetadata(),
-            kspDocument.interfaceContractResolution.canonicalizeFrontendMetadata(),
+            aptInterfaceResolution.canonicalizeFrontendMetadata(),
+            kspInterfaceResolution.canonicalizeFrontendMetadata(),
         )
-        val aptConfigContract = aptDocument.configContractResolution.contracts.single()
-        val kspConfigContract = kspDocument.configContractResolution.contracts.single()
+        val aptConfigContract = aptConfigResolution.contracts.single()
+        val kspConfigContract = kspConfigResolution.contracts.single()
         assertEquals(DtoConfigContractKind.FILTER, aptConfigContract.kind)
         assertEquals(aptConfigContract.targetEntityTypeId, kspConfigContract.targetEntityTypeId)
         assertEquals(aptConfigContract.dependencyTypeIds, kspConfigContract.dependencyTypeIds)
         assertEquals(listOf(AUTHOR_ID, FILTER_ID), aptConfigContract.dependencyTypeIds)
-        val aptMarkerDeclaration = aptDocument.annotationContract.declarationsByTypeId.getValue(MARKER_ID)
-        val kspMarkerDeclaration = kspDocument.annotationContract.declarationsByTypeId.getValue(MARKER_ID)
+        val aptMarkerDeclaration = aptAnnotationContract.declarationsByTypeId.getValue(MARKER_ID)
+        val kspMarkerDeclaration = kspAnnotationContract.declarationsByTypeId.getValue(MARKER_ID)
         assertEquals(DtoAnnotationDeclarationKind.JAVA, aptMarkerDeclaration.kind)
         assertEquals(DtoAnnotationDeclarationKind.KOTLIN, kspMarkerDeclaration.kind)
         assertEquals(
             aptMarkerDeclaration.copy(kind = DtoAnnotationDeclarationKind.KOTLIN),
             kspMarkerDeclaration,
         )
-        val canonicalAptSchema = JimmerDtoPrecompiledSchema(
-            documents = listOf(
-                aptDocument.copy(
-                    annotationContract = aptDocument.annotationContract.copy(
-                        declarations = aptDocument.annotationContract.declarations.map { declaration ->
-                            if (declaration.typeId == MARKER_ID) {
-                                declaration.copy(kind = DtoAnnotationDeclarationKind.KOTLIN)
-                            } else {
-                                declaration
-                            }
-                        },
-                    ),
-                    interfaceContractResolution = aptDocument.interfaceContractResolution
-                        .canonicalizeFrontendMetadata(),
-                ),
+        val canonicalAptResolution = apt.dtoResolution.copy(
+            annotationContractsBySource = sortedMapOf(
+                aptGraph.source to aptAnnotationContract.copy(
+                    declarations = aptAnnotationContract.declarations.map { declaration ->
+                        if (declaration.typeId == MARKER_ID) {
+                            declaration.copy(kind = DtoAnnotationDeclarationKind.KOTLIN)
+                        } else {
+                            declaration
+                        }
+                    },
+                )
+            ),
+            interfaceContractsBySource = sortedMapOf(
+                aptGraph.source to aptInterfaceResolution.canonicalizeFrontendMetadata()
             ),
         )
-        val canonicalKspSchema = JimmerDtoPrecompiledSchema(
-            documents = listOf(
-                kspDocument.copy(
-                    interfaceContractResolution = kspDocument.interfaceContractResolution
-                        .canonicalizeFrontendMetadata(),
-                ),
+        val canonicalKspResolution = ksp.dtoResolution.copy(
+            interfaceContractsBySource = sortedMapOf(
+                kspGraph.source to kspInterfaceResolution.canonicalizeFrontendMetadata()
             ),
         )
-        assertEquals(canonicalAptSchema.normalizedSnapshot(), canonicalKspSchema.normalizedSnapshot())
-        assertEquals(canonicalAptSchema.fingerprint(), canonicalKspSchema.fingerprint())
+        assertEquals(
+            canonicalAptResolution.resolvedInputs.resolvedInputFingerprint(),
+            canonicalKspResolution.resolvedInputs.resolvedInputFingerprint(),
+        )
+        assertEquals(
+            dtoSemanticFingerprint(
+                canonicalAptResolution.graphs,
+                canonicalAptResolution.annotationContractsBySource,
+                canonicalAptResolution.interfaceContractsBySource,
+                canonicalAptResolution.configContractsBySource,
+            ),
+            dtoSemanticFingerprint(
+                canonicalKspResolution.graphs,
+                canonicalKspResolution.annotationContractsBySource,
+                canonicalKspResolution.interfaceContractsBySource,
+                canonicalKspResolution.configContractsBySource,
+            ),
+        )
 
-        val interfaceContract = aptDocument.interfaceContractResolution.contracts.single { contract ->
+        val interfaceContract = aptInterfaceResolution.contracts.single { contract ->
             VIEW_CONTRACT_ID in contract.superInterfaceTypeIds
         }
         assertEquals(VIEW_CONTRACT_ID, interfaceContract.superInterfaceTypeIds.single())
         val aptLabelProp = interfaceContract.props.single()
-        val kspInterfaceContract = kspDocument.interfaceContractResolution.contracts.single { contract ->
+        val kspInterfaceContract = kspInterfaceResolution.contracts.single { contract ->
             VIEW_CONTRACT_ID in contract.superInterfaceTypeIds
         }
         val kspLabelProp = kspInterfaceContract.props.single()
@@ -153,11 +172,10 @@ class JimmerDtoFrontendParityTest {
         assertTrue(kspLabelProp.origin.source?.path?.endsWith("demo/Models.kt") == true)
         assertTrue(kspLabelProp.origin.originatingSymbols.isEmpty())
         assertEquals(kspLabelProp.origin, kspLabelProp.getter?.origin)
-        val aptSnapshot = apt.dtoSchema.normalizedSnapshot()
-        assertTrue("interface-contract-record|" in aptSnapshot)
-        assertTrue("4:prop" in aptSnapshot)
-        assertTrue("type:demo.ViewContract/property:label" in aptSnapshot)
-        assertTrue(aptDocument.configContractResolution.dtoFingerprint() in aptSnapshot)
+        val aptInterfaceSnapshot = aptInterfaceResolution.dtoNormalizedSnapshot()
+        assertTrue("4:prop" in aptInterfaceSnapshot)
+        assertTrue("type:demo.ViewContract/property:label" in aptInterfaceSnapshot)
+        assertEquals(64, aptConfigResolution.dtoFingerprint().length)
 
         val bookType = apt.immutableSchema.typesById.getValue(BOOK_ID)
         val nameProp = bookType.props.single { prop -> prop.name == "name" }
@@ -181,11 +199,11 @@ class JimmerDtoFrontendParityTest {
             storeIdProp.view,
         )
 
-        val dtoType = aptDocument.graph.typesById.getValue(
-            aptDocument.graph.rootTypeIds.single(),
+        val dtoType = aptGraph.typesById.getValue(
+            aptGraph.rootTypeIds.single(),
         )
         val dtoProps = dtoType.propIds.map { propId ->
-            aptDocument.graph.propsById.getValue(propId)
+            aptGraph.propsById.getValue(propId)
         }
         assertEquals(listOf("id", "name", "rating", "storeId", "authors"), dtoProps.map { prop -> prop.name })
         assertTrue(dtoProps.single { prop -> prop.name == "rating" }.nullable)
@@ -223,7 +241,7 @@ class JimmerDtoFrontendParityTest {
         )
         assertTrue(outcome.unresolvedDocuments.isEmpty(), outcome.unresolvedDocuments.joinToString("\n"))
         assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString("\n"))
-        return CompiledFixture(immutableSchema, outcome.schema)
+        return CompiledFixture(immutableSchema, outcome)
     }
 
     private fun compileApt(source: String): LsiWorkspace {
@@ -373,7 +391,7 @@ class JimmerDtoFrontendParityTest {
 
     private data class CompiledFixture(
         val immutableSchema: ImmutableSchema,
-        val dtoSchema: JimmerDtoPrecompiledSchema,
+        val dtoResolution: JimmerDtoRoundResolution,
     )
 
     /**

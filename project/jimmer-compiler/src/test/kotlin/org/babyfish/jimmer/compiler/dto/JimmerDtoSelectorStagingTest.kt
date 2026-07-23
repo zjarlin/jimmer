@@ -54,7 +54,7 @@ class JimmerDtoSelectorStagingTest {
 
         assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString("\n"))
         assertTrue(outcome.unresolvedDocuments.isEmpty())
-        assertEquals(listOf(defaultTarget), outcome.schema.documents.single().targetTypeIds)
+        assertEquals(listOf(defaultTarget), outcome.resolvedInputs.single().targetTypeIds)
     }
 
     @Test
@@ -78,7 +78,7 @@ class JimmerDtoSelectorStagingTest {
 
         assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString("\n"))
         assertTrue(outcome.unresolvedDocuments.isEmpty())
-        assertEquals(listOf(wildcardTarget), outcome.schema.documents.single().targetTypeIds)
+        assertEquals(listOf(wildcardTarget), outcome.resolvedInputs.single().targetTypeIds)
     }
 
     @Test
@@ -113,7 +113,7 @@ class JimmerDtoSelectorStagingTest {
             failure.message,
         )
         assertEquals(targetReference.location, failure.location)
-        assertTrue(outcome.schema.documents.isEmpty())
+        assertTrue(outcome.resolvedInputs.isEmpty())
     }
 
     @Test
@@ -136,7 +136,7 @@ class JimmerDtoSelectorStagingTest {
         val unresolved = outcome.unresolvedDocuments.single()
         assertEquals(listOf(fallbackTarget), unresolved.targetTypeIds)
         assertEquals(listOf(fallbackTarget), unresolved.unresolvedTypeIds)
-        assertTrue(outcome.schema.documents.isEmpty())
+        assertTrue(outcome.resolvedInputs.isEmpty())
         assertTrue(outcome.failures.isEmpty())
     }
 
@@ -170,7 +170,7 @@ class JimmerDtoSelectorStagingTest {
 
         assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString("\n"))
         assertTrue(outcome.unresolvedDocuments.isEmpty(), outcome.unresolvedDocuments.joinToString("\n"))
-        assertTrue(outcome.schema.documents.isEmpty())
+        assertTrue(outcome.resolvedInputs.isEmpty())
     }
 
     @Test
@@ -217,7 +217,7 @@ class JimmerDtoSelectorStagingTest {
             (immutableState as org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState)
                 .targetTypeIds,
         )
-        assertTrue(dtoState.schema.documents.isEmpty())
+        assertTrue(dtoState.graphs.isEmpty())
         assertTrue(dtoState.unresolvedDocuments.isEmpty())
         assertTrue(dtoState.failures.isEmpty())
         assertTrue(javaTarget !in result.featureResults.getValue("dto").processedSymbols)
@@ -229,7 +229,7 @@ class JimmerDtoSelectorStagingTest {
         workspace: LsiWorkspace,
         semanticRootTypeIds: Set<LsiSymbolId>,
         sourceFilter: JimmerCompilerSourceFilter = JimmerCompilerSourceFilter(),
-    ): JimmerDtoPrecompileOutcome {
+    ): JimmerDtoRoundResolution {
         return JimmerDtoPrecompiler().compile(
             inputDocumentSnapshots = listOf(FREEZER.freeze(document)),
             immutableSchema = immutableSchema(semanticRootTypeIds),

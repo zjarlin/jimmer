@@ -86,9 +86,7 @@ class JimmerDtoReusableIntegrationTest {
         assertTrue(state.unresolvedDocuments.isEmpty())
         assertTrue(state.failures.isEmpty())
         assertTrue(result.diagnostics.isEmpty())
-        val bookGraph = state.schema.documents.single { compiledDocument ->
-            compiledDocument.inputSnapshot.document.relativePath == bookDocument.relativePath
-        }.graph
+        val bookGraph = state.graphs.single { graph -> graph.source == bookDocument.source }
         val bookView = bookGraph.typesById.getValue(bookGraph.rootTypeIds.single())
         val storeProp = bookView.propIds
             .map(bookGraph.propsById::getValue)
@@ -185,12 +183,60 @@ class JimmerDtoReusableIntegrationTest {
         assertTrue(state.failures.isEmpty())
         assertTrue(result.diagnostics.isEmpty())
         assertEquals(setOf(BOOK_TYPE_ID), result.processedSymbols)
-        val graph = state.schema.documents.single().graph
+        val graph = state.graphs.single()
         val rootType = graph.typesById.getValue(graph.rootTypeIds.single())
         val storeProp = rootType.propIds
             .map(graph.propsById::getValue)
             .single { prop -> prop.name == "store" } as DtoBaseProp
         assertNull(storeProp.targetTypeId)
+    }
+
+    @Test
+    fun `classifies ambiguous and unresolved reusable references as invalid without retaining unresolved source`() {
+        val input = document(
+            relativePath = "book/MixedInvalidReusable.dto",
+            content = """
+                package demo.dto
+                import first.*
+                import second.*
+
+                AmbiguousBookView for demo.Book {
+                    store -> StoreView
+                }
+
+                MissingBookView for demo.Book {
+                    store -> MissingStoreView
+                }
+            """.trimIndent(),
+        )
+        val snapshot = freeze(input)
+        val reusableReferences = snapshot.references.filter { reference ->
+            reference.kind == CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE
+        }
+        val workspace = workspace(
+            externalDeclarations = listOf(
+                externalDto("first.StoreView", STORE_TYPE_ID),
+                externalDto("second.StoreView", STORE_TYPE_ID),
+            )
+        )
+
+        val result = precompileSnapshots(
+            snapshots = listOf(snapshot),
+            workspace = workspace,
+            platform = CompilerPlatform.APT,
+        )
+        val state = result.dtoState()
+        val failure = state.failures.single()
+
+        assertEquals(2, reusableReferences.size)
+        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, state.status)
+        assertTrue(state.graphs.isEmpty())
+        assertTrue(state.unresolvedDocuments.isEmpty())
+        assertEquals("jimmer.dto.invalid", failure.code)
+        assertTrue(failure.message.contains("Ambiguous type name \"StoreView\""), failure.message)
+        assertEquals(listOf(failure.code), result.diagnostics.map { diagnostic -> diagnostic.code })
+        assertFalse(BOOK_TYPE_ID in result.processedSymbols)
+        assertTrue(result.unresolvedSymbols.isEmpty())
     }
 
     @Test

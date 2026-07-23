@@ -61,6 +61,7 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclaration
 import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoAnnotationOrigin
 import site.addzero.lsi.jimmer.dto.DtoAnnotationPlacement
+import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
@@ -69,6 +70,8 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
 import site.addzero.lsi.jimmer.dto.DtoInterfacePropContract
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
+import site.addzero.lsi.jimmer.dto.fingerprint
+import site.addzero.lsi.jimmer.dto.normalizedSnapshot
 
 class JimmerDtoCompilerFeatureProviderTest {
     @Test
@@ -218,7 +221,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         ).dtoState()
 
         fun mutabilityByName(state: JimmerDtoCompilerFeatureState): Map<String, Boolean> {
-            val graph = state.schema.documents.single().graph
+            val graph = state.graphs.single()
             return graph.rootTypeIds.associate { rootTypeId ->
                 requireNotNull(graph.typesById.getValue(rootTypeId).name) to
                     state.effectiveKspMutableByRootTypeId.getValue(rootTypeId)
@@ -271,30 +274,33 @@ class JimmerDtoCompilerFeatureProviderTest {
 
         assertTrue(outcome.unresolvedDocuments.isEmpty())
         assertTrue(outcome.failures.isEmpty())
-        val document = outcome.schema.documents.single()
-        assertEquals(inputSnapshot, document.inputSnapshot)
-        val dtoType = document.graph.typesById.getValue(document.graph.rootTypeIds.single())
-        assertEquals(listOf(BOOK_ID), document.targetTypeIds)
+        val resolvedInput = outcome.resolvedInputs.single()
+        val graph = outcome.graphs.single()
+        val annotationContract = outcome.annotationContractsBySource.getValue(graph.source)
+        val interfaceContract = outcome.interfaceContractsBySource.getValue(graph.source)
+        assertEquals(inputSnapshot, resolvedInput.inputSnapshot)
+        val dtoType = graph.typesById.getValue(graph.rootTypeIds.single())
+        assertEquals(listOf(BOOK_ID), resolvedInput.targetTypeIds)
         assertEquals("demo.dto", dtoType.packageName)
         assertEquals("BookView", dtoType.name)
         assertEquals(
             listOf("id", "name"),
-            dtoType.propIds.map { propId -> document.graph.propsById.getValue(propId).name },
+            dtoType.propIds.map { propId -> graph.propsById.getValue(propId).name },
         )
         assertEquals(BOOK_ID, dtoType.baseTypeId)
-        assertTrue(document.annotationContract.diagnostics.isEmpty())
+        assertTrue(annotationContract.diagnostics.isEmpty())
         assertEquals(
-            document.graph.types.map(DtoType::id),
-            document.annotationContract.typePlans.map(DtoTypeAnnotationPlan::typeId),
+            graph.types.map(DtoType::id),
+            annotationContract.typePlans.map(DtoTypeAnnotationPlan::typeId),
         )
         assertEquals(
-            document.graph.props.map(DtoProp::id),
-            document.annotationContract.propPlans.map(DtoPropAnnotationPlan::propId),
+            graph.props.map(DtoProp::id),
+            annotationContract.propPlans.map(DtoPropAnnotationPlan::propId),
         )
-        assertTrue(document.interfaceContractResolution.successful)
+        assertTrue(interfaceContract.successful)
         assertEquals(
-            document.graph.types.map(DtoType::id),
-            document.interfaceContractResolution.contracts.map(DtoInterfaceContract::typeId),
+            graph.types.map(DtoType::id),
+            interfaceContract.contracts.map(DtoInterfaceContract::typeId),
         )
     }
 
@@ -324,15 +330,16 @@ class JimmerDtoCompilerFeatureProviderTest {
 
         assertTrue(outcome.unresolvedDocuments.isEmpty(), outcome.unresolvedDocuments.joinToString("\n"))
         assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString("\n"))
-        val document = outcome.schema.documents.single()
-        assertEquals(listOf(AUTHOR_ID, BOOK_ID), document.targetTypeIds)
+        val resolvedInput = outcome.resolvedInputs.single()
+        val graph = outcome.graphs.single()
+        assertEquals(listOf(AUTHOR_ID, BOOK_ID), resolvedInput.targetTypeIds)
         assertEquals(
             listOf(
                 "BookView" to BOOK_ID,
                 "AuthorView" to AUTHOR_ID,
             ),
-            document.graph.rootTypeIds.map { rootTypeId ->
-                val rootType = document.graph.typesById.getValue(rootTypeId)
+            graph.rootTypeIds.map { rootTypeId ->
+                val rootType = graph.typesById.getValue(rootTypeId)
                 rootType.name to rootType.baseTypeId
             },
         )
@@ -418,27 +425,49 @@ class JimmerDtoCompilerFeatureProviderTest {
             assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString("\n"))
             assertEquals(
                 listOf("shared/BookFragments.dto", "views/BookViews.dto"),
-                outcome.schema.documents.map { document -> document.inputSnapshot.document.relativePath },
+                outcome.resolvedInputs.map { input -> input.inputSnapshot.document.relativePath },
             )
-            val fragment = outcome.schema.documents.single { document ->
-                document.inputSnapshot.document.relativePath == fragmentDocument.relativePath
+            val fragmentInput = outcome.resolvedInputs.single { input ->
+                input.inputSnapshot.document.relativePath == fragmentDocument.relativePath
             }
-            assertEquals(listOf(BOOK_ID), fragment.targetTypeIds)
-            assertTrue(fragment.graph.rootTypeIds.isEmpty())
+            val fragmentGraph = outcome.graphs.single { graph ->
+                graph.source == fragmentInput.inputSnapshot.document.source
+            }
+            assertEquals(listOf(BOOK_ID), fragmentInput.targetTypeIds)
+            assertTrue(fragmentGraph.rootTypeIds.isEmpty())
         }
-        val document = first.schema.documents.single { candidate ->
-            candidate.graph.rootTypeIds.isNotEmpty()
+        val graph = first.graphs.single { candidate ->
+            candidate.rootTypeIds.isNotEmpty()
         }
-        assertEquals(listOf(BOOK_ID), document.targetTypeIds)
-        val bookView = document.graph.typesById.getValue(document.graph.rootTypeIds.single())
+        val resolvedInput = first.resolvedInputs.single { input ->
+            input.inputSnapshot.document.source == graph.source
+        }
+        assertEquals(listOf(BOOK_ID), resolvedInput.targetTypeIds)
+        val bookView = graph.typesById.getValue(graph.rootTypeIds.single())
         assertEquals("BookView", bookView.name)
         assertEquals(BOOK_ID, bookView.baseTypeId)
         assertEquals(
             listOf("id", "name"),
-            bookView.propIds.map { propId -> document.graph.propsById.getValue(propId).name },
+            bookView.propIds.map { propId -> graph.propsById.getValue(propId).name },
         )
-        assertEquals(first.schema.normalizedSnapshot(), reversed.schema.normalizedSnapshot())
-        assertEquals(first.schema.fingerprint(), reversed.schema.fingerprint())
+        assertEquals(
+            first.resolvedInputs.resolvedInputFingerprint(),
+            reversed.resolvedInputs.resolvedInputFingerprint(),
+        )
+        assertEquals(
+            dtoSemanticFingerprint(
+                first.graphs,
+                first.annotationContractsBySource,
+                first.interfaceContractsBySource,
+                first.configContractsBySource,
+            ),
+            dtoSemanticFingerprint(
+                reversed.graphs,
+                reversed.annotationContractsBySource,
+                reversed.interfaceContractsBySource,
+                reversed.configContractsBySource,
+            ),
+        )
     }
 
     @Test
@@ -501,9 +530,10 @@ class JimmerDtoCompilerFeatureProviderTest {
                 ),
             )
         ).dtoState()
-        val contract = state.schema.documents.single().annotationContract
-        val rootTypeId = state.schema.documents.single().graph.rootTypeIds.single()
-        val namePropId = state.schema.documents.single().graph.props.single().id
+        val graph = state.graphs.single()
+        val contract = state.annotationContractsBySource.getValue(graph.source)
+        val rootTypeId = graph.rootTypeIds.single()
+        val namePropId = graph.props.single().id
         val noTargetDeclaration = contract.declarationsByTypeId.getValue(noTargetTypeId)
         val typeApplications = contract.typePlansByTypeId.getValue(rootTypeId).applications
         val propApplications = contract.propPlansByPropId.getValue(namePropId).propertyApplications
@@ -520,7 +550,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             propApplications.single { application -> application.annotation.type == notNullTypeId }.origin,
         )
         assertTrue(contract.diagnostics.isEmpty(), contract.diagnostics.joinToString { diagnostic -> diagnostic.message })
-        assertTrue("annotation-contract-record|" in state.schema.normalizedSnapshot())
+        assertTrue(contract.normalizedSnapshot().isNotEmpty())
     }
 
     @Test
@@ -548,10 +578,10 @@ class JimmerDtoCompilerFeatureProviderTest {
 
         val state = result.dtoState()
         assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, state.status)
-        val precompiledDocument = state.schema.documents.single()
+        val graph = state.graphs.single()
         val contractDiagnostics =
-            precompiledDocument.annotationContract.diagnostics +
-                precompiledDocument.interfaceContractResolution.diagnostics
+            state.annotationContractsBySource.getValue(graph.source).diagnostics +
+                state.interfaceContractsBySource.getValue(graph.source).diagnostics
         assertEquals(3, contractDiagnostics.size)
         assertEquals(
             listOf(badAnnotationId, alphaId, zetaId),
@@ -612,7 +642,7 @@ class JimmerDtoCompilerFeatureProviderTest {
     }
 
     @Test
-    fun `annotation and interface contracts participate in schema and state fingerprints`() {
+    fun `annotation and interface contracts participate in semantic and state fingerprints`() {
         val schema = ImmutableSchema(
             listOf(
                 immutableType(
@@ -629,11 +659,14 @@ class JimmerDtoCompilerFeatureProviderTest {
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
-        ).schema
-        val document = baseline.documents.single()
+        )
+        val graph = baseline.graphs.single()
+        val source = graph.source
+        val baselineAnnotationContract = baseline.annotationContractsBySource.getValue(source)
+        val baselineInterfaceResolution = baseline.interfaceContractsBySource.getValue(source)
         val markerTypeId = LsiSymbolId.type("demo.RenderMarker")
-        val rootTypeId = document.graph.rootTypeIds.single()
-        val annotationContract = document.annotationContract.copy(
+        val rootTypeId = graph.rootTypeIds.single()
+        val annotationContract = baselineAnnotationContract.copy(
             declarations = listOf(
                 DtoAnnotationDeclaration(
                     typeId = markerTypeId,
@@ -644,7 +677,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                     kotlinValueVararg = false,
                 )
             ),
-            typePlans = document.annotationContract.typePlans.map { plan ->
+            typePlans = baselineAnnotationContract.typePlans.map { plan ->
                 if (plan.typeId != rootTypeId) {
                     plan
                 } else {
@@ -661,8 +694,8 @@ class JimmerDtoCompilerFeatureProviderTest {
                 }
             },
         )
-        val interfaceResolution = document.interfaceContractResolution.copy(
-            contracts = document.interfaceContractResolution.contracts.map { contract ->
+        val interfaceResolution = baselineInterfaceResolution.copy(
+            contracts = baselineInterfaceResolution.contracts.map { contract ->
                 if (contract.typeId != rootTypeId) {
                     contract
                 } else {
@@ -690,13 +723,12 @@ class JimmerDtoCompilerFeatureProviderTest {
                 }
             },
         )
-        val annotationChanged = JimmerDtoPrecompiledSchema(
-            listOf(document.copy(annotationContract = annotationContract)),
+        val annotationChanged = baseline.copy(
+            annotationContractsBySource = sortedMapOf(source to annotationContract),
         )
-        val interfaceChanged = JimmerDtoPrecompiledSchema(
-            listOf(document.copy(interfaceContractResolution = interfaceResolution)),
+        val interfaceChanged = baseline.copy(
+            interfaceContractsBySource = sortedMapOf(source to interfaceResolution),
         )
-        val interfaceBaseline = interfaceChanged
         val interfaceProp = interfaceResolution.contracts.single { contract ->
             contract.typeId == rootTypeId
         }.props.single()
@@ -819,94 +851,34 @@ class JimmerDtoCompilerFeatureProviderTest {
             },
         )
 
-        assertTrue("annotation-contract|" in baseline.normalizedSnapshot())
-        assertTrue("interface-contract|" in baseline.normalizedSnapshot())
-        assertNotEquals(baseline.normalizedSnapshot(), annotationChanged.normalizedSnapshot())
-        assertNotEquals(baseline.normalizedSnapshot(), interfaceChanged.normalizedSnapshot())
-        assertNotEquals(
-            interfaceBaseline.normalizedSnapshot(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfaceSuperTypesChanged)),
-            ).normalizedSnapshot(),
+        val interfaceMutations = listOf(
+            interfaceSuperTypesChanged,
+            interfacePropDeclaringTypeChanged,
+            interfacePropTypeChanged,
+            interfacePropMutabilityChanged,
+            interfacePropAccessorChanged,
+            interfacePropAccessorDeclarationChanged,
+            interfacePropOriginChanged,
         )
-        assertNotEquals(
-            interfaceBaseline.normalizedSnapshot(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropDeclaringTypeChanged)),
-            ).normalizedSnapshot(),
-        )
-        assertNotEquals(
-            interfaceBaseline.normalizedSnapshot(),
-            JimmerDtoPrecompiledSchema(listOf(document.copy(interfaceContractResolution = interfacePropTypeChanged)))
-                .normalizedSnapshot(),
-        )
-        assertNotEquals(
-            interfaceBaseline.normalizedSnapshot(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropMutabilityChanged)),
-            ).normalizedSnapshot(),
-        )
-        assertNotEquals(
-            interfaceBaseline.normalizedSnapshot(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropAccessorChanged)),
-            ).normalizedSnapshot(),
-        )
-        assertNotEquals(
-            interfaceBaseline.normalizedSnapshot(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropAccessorDeclarationChanged)),
-            ).normalizedSnapshot(),
-        )
-        assertNotEquals(
-            interfaceBaseline.normalizedSnapshot(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropOriginChanged)),
-            ).normalizedSnapshot(),
-        )
-        assertNotEquals(baseline.fingerprint(), annotationChanged.fingerprint())
-        assertNotEquals(baseline.fingerprint(), interfaceChanged.fingerprint())
-        assertNotEquals(
-            interfaceBaseline.fingerprint(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfaceSuperTypesChanged)),
-            ).fingerprint(),
-        )
-        assertNotEquals(
-            interfaceBaseline.fingerprint(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropDeclaringTypeChanged)),
-            ).fingerprint(),
-        )
-        assertNotEquals(
-            interfaceBaseline.fingerprint(),
-            JimmerDtoPrecompiledSchema(listOf(document.copy(interfaceContractResolution = interfacePropTypeChanged)))
-                .fingerprint(),
-        )
-        assertNotEquals(
-            interfaceBaseline.fingerprint(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropMutabilityChanged)),
-            ).fingerprint(),
-        )
-        assertNotEquals(
-            interfaceBaseline.fingerprint(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropAccessorChanged)),
-            ).fingerprint(),
-        )
-        assertNotEquals(
-            interfaceBaseline.fingerprint(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropAccessorDeclarationChanged)),
-            ).fingerprint(),
-        )
-        assertNotEquals(
-            interfaceBaseline.fingerprint(),
-            JimmerDtoPrecompiledSchema(
-                listOf(document.copy(interfaceContractResolution = interfacePropOriginChanged)),
-            ).fingerprint(),
-        )
+        val semanticFingerprint: (JimmerDtoRoundResolution) -> String = { resolution ->
+            dtoSemanticFingerprint(
+                resolution.graphs,
+                resolution.annotationContractsBySource,
+                resolution.interfaceContractsBySource,
+                resolution.configContractsBySource,
+            )
+        }
+
+        assertTrue(baselineAnnotationContract.normalizedSnapshot().isNotEmpty())
+        assertTrue(baselineInterfaceResolution.normalizedSnapshot().isNotEmpty())
+        assertNotEquals(baselineAnnotationContract.fingerprint(), annotationContract.fingerprint())
+        assertNotEquals(baselineInterfaceResolution.fingerprint(), interfaceResolution.fingerprint())
+        interfaceMutations.forEach { mutation ->
+            assertNotEquals(interfaceResolution.normalizedSnapshot(), mutation.normalizedSnapshot())
+            assertNotEquals(interfaceResolution.fingerprint(), mutation.fingerprint())
+        }
+        assertNotEquals(semanticFingerprint(baseline), semanticFingerprint(annotationChanged))
+        assertNotEquals(semanticFingerprint(baseline), semanticFingerprint(interfaceChanged))
         assertNotEquals(dtoState(baseline).fingerprint, dtoState(annotationChanged).fingerprint)
         assertNotEquals(dtoState(baseline).fingerprint, dtoState(interfaceChanged).fingerprint)
     }
@@ -1056,8 +1028,8 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
 
         assertTrue(outcome.failures.isEmpty())
-        val document = outcome.schema.documents.single()
-        val dtoType = document.graph.typesById.getValue(document.graph.rootTypeIds.single())
+        val graph = outcome.graphs.single()
+        val dtoType = graph.typesById.getValue(graph.rootTypeIds.single())
         val polymorphism = assertNotNull(dtoType.polymorphism)
         assertFalse(polymorphism.exhaustive)
         assertTrue(polymorphism.branches.single { branch ->
@@ -1069,13 +1041,12 @@ class JimmerDtoCompilerFeatureProviderTest {
         assertEquals(ORGANIZATION_ID, branch.targetBaseTypeId)
         assertEquals(CLIENT_ID, schema.typesById.getValue(ORGANIZATION_ID).primarySuperTypeId)
         assertEquals(CLIENT_ID, schema.typesById.getValue(ORGANIZATION_ID).inheritanceRootTypeId)
-        val branchType = document.graph.typesById.getValue(branch.bodyTypeId)
+        val branchType = graph.typesById.getValue(branch.bodyTypeId)
         assertEquals(
             listOf("taxCode"),
-            branchType.propIds.map { propId -> document.graph.propsById.getValue(propId).name },
+            branchType.propIds.map { propId -> graph.propsById.getValue(propId).name },
         )
-        assertTrue("graph-record|" in outcome.schema.normalizedSnapshot())
-        assertTrue("branch" in outcome.schema.normalizedSnapshot())
+        assertTrue("branch|" in graph.normalizedSnapshot())
     }
 
     @Test
@@ -1107,7 +1078,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
-        ).schema
+        )
         val reversed = precompiler.compile(
             inputDocumentSnapshots = listOf(author, book).map(REFERENCE_FREEZER::freeze),
             immutableSchema = schema,
@@ -1116,7 +1087,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
-        ).schema
+        )
         val whitespaceChanged = precompiler.compile(
             inputDocumentSnapshots = listOf(
                 author,
@@ -1128,14 +1099,33 @@ class JimmerDtoCompilerFeatureProviderTest {
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
-        ).schema
+        )
 
-        assertEquals(listOf("Author.dto", "Book.dto"), first.documents.map {
-            precompiled -> precompiled.inputSnapshot.document.relativePath.substringAfterLast('/')
+        assertEquals(listOf("Author.dto", "Book.dto"), first.resolvedInputs.map { input ->
+            input.inputSnapshot.document.relativePath.substringAfterLast('/')
         })
-        assertEquals(first.normalizedSnapshot(), reversed.normalizedSnapshot())
-        assertEquals(first.fingerprint(), reversed.fingerprint())
-        assertNotEquals(first.fingerprint(), whitespaceChanged.fingerprint())
+        assertEquals(
+            first.resolvedInputs.resolvedInputFingerprint(),
+            reversed.resolvedInputs.resolvedInputFingerprint(),
+        )
+        assertEquals(
+            dtoSemanticFingerprint(
+                first.graphs,
+                first.annotationContractsBySource,
+                first.interfaceContractsBySource,
+                first.configContractsBySource,
+            ),
+            dtoSemanticFingerprint(
+                reversed.graphs,
+                reversed.annotationContractsBySource,
+                reversed.interfaceContractsBySource,
+                reversed.configContractsBySource,
+            ),
+        )
+        assertNotEquals(
+            first.resolvedInputs.resolvedInputFingerprint(),
+            whitespaceChanged.resolvedInputs.resolvedInputFingerprint(),
+        )
     }
 
     @Test
@@ -1157,7 +1147,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
-        ).schema
+        )
         val same = precompiler.compile(
             inputDocumentSnapshots = listOf(REFERENCE_FREEZER.freeze(bookDocument(""))),
             immutableSchema = schema,
@@ -1166,7 +1156,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
-        ).schema
+        )
         val whitespaceChanged = precompiler.compile(
             inputDocumentSnapshots = listOf(REFERENCE_FREEZER.freeze(bookDocument("\n"))),
             immutableSchema = schema,
@@ -1175,13 +1165,18 @@ class JimmerDtoCompilerFeatureProviderTest {
             sourceFilter = JimmerCompilerSourceFilter(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
-        ).schema
+        )
 
-        assertTrue(empty.documents.single().graph.rootTypeIds.isEmpty())
-        assertTrue("document|" in empty.normalizedSnapshot())
-        assertEquals(empty.normalizedSnapshot(), same.normalizedSnapshot())
-        assertEquals(empty.fingerprint(), same.fingerprint())
-        assertNotEquals(empty.fingerprint(), whitespaceChanged.fingerprint())
+        assertTrue(empty.graphs.single().rootTypeIds.isEmpty())
+        assertEquals(1, empty.resolvedInputs.size)
+        assertEquals(
+            empty.resolvedInputs.resolvedInputFingerprint(),
+            same.resolvedInputs.resolvedInputFingerprint(),
+        )
+        assertNotEquals(
+            empty.resolvedInputs.resolvedInputFingerprint(),
+            whitespaceChanged.resolvedInputs.resolvedInputFingerprint(),
+        )
     }
 
     @Test
@@ -1215,11 +1210,11 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
         val secondState = second.dtoState()
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, secondState.status)
-        val secondDocument = secondState.schema.documents.single()
+        val secondGraph = secondState.graphs.single()
         assertEquals(
             listOf("BookView"),
-            secondDocument.graph.rootTypeIds.map { typeId ->
-                secondDocument.graph.typesById.getValue(typeId).name
+            secondGraph.rootTypeIds.map { typeId ->
+                secondGraph.typesById.getValue(typeId).name
             },
         )
         assertEquals(setOf(BOOK_ID), second.dtoResult().processedSymbols)
@@ -1263,7 +1258,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             ),
         )
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, second.dtoState().status)
-        val contract = second.dtoState().schema.documents.single().configContractResolution.contracts.single()
+        val contract = second.dtoState().configContractsBySource.values.single().contracts.single()
         assertEquals(FILTER_ID, contract.implementationTypeId)
         assertEquals(AUTHOR_ID, contract.targetEntityTypeId)
         assertEquals(listOf(AUTHOR_ID, FILTER_ID), contract.dependencyTypeIds)
@@ -1319,11 +1314,11 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         )
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, second.dtoState().status)
-        val secondDocument = second.dtoState().schema.documents.single()
+        val secondGraph = second.dtoState().graphs.single()
         assertEquals(
             listOf("BookView"),
-            secondDocument.graph.rootTypeIds.map { typeId ->
-                secondDocument.graph.typesById.getValue(typeId).name
+            secondGraph.rootTypeIds.map { typeId ->
+                secondGraph.typesById.getValue(typeId).name
             },
         )
         assertEquals(setOf(BOOK_ID), second.dtoResult().processedSymbols)
@@ -1457,7 +1452,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
 
             assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
-            assertTrue(result.dtoState().schema.documents.isEmpty())
+            assertTrue(result.dtoState().graphs.isEmpty())
             assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
             assertTrue(result.dtoState().failures.isEmpty())
             assertTrue(result.diagnostics.isEmpty())
@@ -1485,7 +1480,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
 
             assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
-            assertTrue(result.dtoState().schema.documents.isEmpty())
+            assertTrue(result.dtoState().graphs.isEmpty())
             assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
             assertTrue(result.dtoState().failures.isEmpty())
             assertTrue(result.diagnostics.isEmpty())
@@ -1534,7 +1529,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
 
             assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
-            assertTrue(result.dtoState().schema.documents.isEmpty())
+            assertTrue(result.dtoState().graphs.isEmpty())
             assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
             assertTrue(result.dtoState().failures.isEmpty())
             assertTrue(result.dtoResult().processedSymbols.isEmpty())
@@ -1579,7 +1574,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
 
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
-        assertTrue(result.dtoState().schema.documents.isEmpty())
+        assertTrue(result.dtoState().graphs.isEmpty())
         assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
         assertTrue(result.dtoState().failures.isEmpty())
         assertTrue(result.diagnostics.isEmpty())
@@ -1619,12 +1614,12 @@ class JimmerDtoCompilerFeatureProviderTest {
             assertTrue(state.unresolvedDocuments.isEmpty())
             assertTrue(state.failures.isEmpty())
             assertTrue(result.diagnostics.isEmpty())
-            val document = state.schema.documents.single()
-            assertEquals(listOf(AUTHOR_ID), document.targetTypeIds)
+            val graph = state.graphs.single()
+            assertEquals(setOf(AUTHOR_ID), result.dtoResult().processedSymbols)
             assertEquals(
                 listOf("AuthorView" to AUTHOR_ID),
-                document.graph.rootTypeIds.map { rootTypeId ->
-                    val rootType = document.graph.typesById.getValue(rootTypeId)
+                graph.rootTypeIds.map { rootTypeId ->
+                    val rootType = graph.typesById.getValue(rootTypeId)
                     rootType.name to rootType.baseTypeId
                 },
             )
@@ -1656,8 +1651,25 @@ class JimmerDtoCompilerFeatureProviderTest {
 
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, apt.status)
         assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, ksp.status)
-        assertEquals(apt.schema.normalizedSnapshot(), ksp.schema.normalizedSnapshot())
-        assertEquals(apt.schema.fingerprint(), ksp.schema.fingerprint())
+        assertEquals(apt.resolvedInputFingerprint, ksp.resolvedInputFingerprint)
+        assertEquals(
+            apt.graphs.map { graph -> graph.normalizedSnapshot() },
+            ksp.graphs.map { graph -> graph.normalizedSnapshot() },
+        )
+        assertEquals(
+            dtoSemanticFingerprint(
+                apt.graphs,
+                apt.annotationContractsBySource,
+                apt.interfaceContractsBySource,
+                apt.configContractsBySource,
+            ),
+            dtoSemanticFingerprint(
+                ksp.graphs,
+                ksp.annotationContractsBySource,
+                ksp.interfaceContractsBySource,
+                ksp.configContractsBySource,
+            ),
+        )
         assertEquals(apt.fingerprint, ksp.fingerprint)
     }
 
@@ -1853,17 +1865,21 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
     }
 
-    private fun dtoState(schema: JimmerDtoPrecompiledSchema): JimmerDtoCompilerFeatureState {
+    private fun dtoState(resolution: JimmerDtoRoundResolution): JimmerDtoCompilerFeatureState {
         return JimmerDtoCompilerFeatureState(
             status = JimmerDtoCompilerFeatureStatus.RESOLVED,
             dependencyStatus = JimmerDtoCompilerDependencyStatus.RESOLVED,
-            schema = schema,
+            graphs = resolution.graphs,
+            annotationContractsBySource = resolution.annotationContractsBySource,
+            interfaceContractsBySource = resolution.interfaceContractsBySource,
+            configContractsBySource = resolution.configContractsBySource,
+            resolvedInputFingerprint = resolution.resolvedInputs.resolvedInputFingerprint(),
             unresolvedDocuments = emptyList(),
             failures = emptyList(),
             defaultNullableInputModifier = DtoModifier.STATIC,
             rendererOptions = rendererOptions(CompilerPlatform.UNKNOWN),
-            effectiveKspMutableByRootTypeId = schema.documents
-                .flatMap { document -> document.graph.rootTypeIds }
+            effectiveKspMutableByRootTypeId = resolution.graphs
+                .flatMap(DtoGraph::rootTypeIds)
                 .sorted()
                 .associateWith { false },
             immutableDependencyFingerprint = "immutable-fingerprint",

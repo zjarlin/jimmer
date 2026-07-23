@@ -85,6 +85,8 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.DtoVariance
+import site.addzero.lsi.jimmer.dto.fingerprint
+import site.addzero.lsi.jimmer.dto.normalizedSnapshot
 
 class DtoGraphTest {
     @Test
@@ -121,12 +123,16 @@ class DtoGraphTest {
     }
 
     @Test
-    fun `precompiled document and state retain only frozen dto graph`() {
-        val schema = schema(complexGraph())
+    fun `round resolution and state retain only frozen dto graph`() {
+        val resolution = resolution(complexGraph())
         val state = JimmerDtoCompilerFeatureState(
             status = JimmerDtoCompilerFeatureStatus.RESOLVED,
             dependencyStatus = JimmerDtoCompilerDependencyStatus.RESOLVED,
-            schema = schema,
+            graphs = resolution.graphs,
+            annotationContractsBySource = resolution.annotationContractsBySource,
+            interfaceContractsBySource = resolution.interfaceContractsBySource,
+            configContractsBySource = resolution.configContractsBySource,
+            resolvedInputFingerprint = resolution.resolvedInputs.resolvedInputFingerprint(),
             unresolvedDocuments = emptyList(),
             failures = emptyList(),
             defaultNullableInputModifier = AstDtoModifier.STATIC,
@@ -136,23 +142,30 @@ class DtoGraphTest {
                 aptFieldVisibility = JimmerDtoFieldVisibility.PRIVATE,
                 kspMutable = false,
             ),
-            effectiveKspMutableByRootTypeId = schema.documents
-                .flatMap { document -> document.graph.rootTypeIds }
+            effectiveKspMutableByRootTypeId = resolution.graphs
+                .flatMap(DtoGraph::rootTypeIds)
                 .sorted()
                 .associateWith { false },
             immutableDependencyFingerprint = "immutable-fingerprint",
         )
         val forbiddenTypes = state.reachableTypeNames().filter(::isForbiddenCompilerStateType)
+        val semanticFingerprint = dtoSemanticFingerprint(
+            graphs = resolution.graphs,
+            annotationContractsBySource = resolution.annotationContractsBySource,
+            interfaceContractsBySource = resolution.interfaceContractsBySource,
+            configContractsBySource = resolution.configContractsBySource,
+        )
 
         assertTrue(forbiddenTypes.isEmpty(), "DTO feature state retains forbidden state: $forbiddenTypes")
-        assertTrue(schema.fingerprint() in state.fingerprint)
+        assertTrue(semanticFingerprint in state.fingerprint)
         assertTrue(state.rendererOptions.fingerprint in state.fingerprint)
     }
 
     @Test
-    fun `precompiled document and state contracts exclude compiler and workspace types`() {
+    fun `round resolution and state contracts exclude compiler and workspace types`() {
         val fieldTypeSignatures = reachableFieldTypeSignatures(
-            JimmerDtoPrecompiledDocument::class.java,
+            JimmerDtoResolvedInput::class.java,
+            JimmerDtoRoundResolution::class.java,
             JimmerDtoCompilerFeatureState::class.java,
         )
         val forbiddenSignatures = fieldTypeSignatures.filter { signature ->
@@ -161,30 +174,29 @@ class DtoGraphTest {
 
         assertTrue(
             forbiddenSignatures.isEmpty(),
-            "DTO precompiled contracts expose forbidden field types: $forbiddenSignatures",
+            "DTO round contracts expose forbidden field types: $forbiddenSignatures",
         )
     }
 
     @Test
     fun `complex graph snapshot is stable across equivalent construction order`() {
-        val first = schema(complexGraph())
-        val reordered = schema(reorderedSetGraph())
+        val first = complexGraph()
+        val reordered = reorderedSetGraph()
 
         assertEquals(first.normalizedSnapshot(), reordered.normalizedSnapshot())
         assertEquals(first.fingerprint(), reordered.fingerprint())
         assertEquals(64, first.fingerprint().length)
-        assertTrue("graph-record|" in first.normalizedSnapshot())
-        assertTrue("base-prop" in first.normalizedSnapshot())
-        assertTrue("user-prop" in first.normalizedSnapshot())
-        assertTrue("fold-prop" in first.normalizedSnapshot())
-        assertTrue("branch" in first.normalizedSnapshot())
+        assertTrue("base-prop|" in first.normalizedSnapshot())
+        assertTrue("user-prop|" in first.normalizedSnapshot())
+        assertTrue("fold-prop|" in first.normalizedSnapshot())
+        assertTrue("branch|" in first.normalizedSnapshot())
         assertTrue("BookRecursion" in first.normalizedSnapshot())
     }
 
     @Test
     fun `complex graph fingerprint changes for every DTO semantic mutation`() {
         val graph = complexGraph()
-        val baseline = schema(graph).fingerprint()
+        val baseline = graph.fingerprint()
         val semanticMutations = listOf(
             graph.withRootType { type -> type.copy(documentation = "Changed DTO contract") },
             graph.withProp(STATUS_PROP_ID) { prop ->
@@ -236,9 +248,9 @@ class DtoGraphTest {
         )
 
         semanticMutations.forEach { mutation ->
-            assertNotEquals(baseline, schema(mutation).fingerprint())
+            assertNotEquals(baseline, mutation.fingerprint())
         }
-        assertEquals(semanticMutations.size, semanticMutations.map { mutation -> schema(mutation).fingerprint() }.toSet().size)
+        assertEquals(semanticMutations.size, semanticMutations.map(DtoGraph::fingerprint).toSet().size)
     }
 
     @Test
@@ -256,8 +268,7 @@ class DtoGraphTest {
 
         assertTrue(outcome.failures.isEmpty(), outcome.failures.joinToString { failure -> failure.message })
         assertTrue(outcome.unresolvedDocuments.isEmpty())
-        val document = outcome.schema.documents.single()
-        val graph = document.graph
+        val graph = outcome.graphs.single()
         val rootType = graph.typesById.getValue(graph.rootTypeIds.single())
         val rootProps = rootType.propIds.map(graph.propsById::getValue)
         val nestedProp = rootProps.single { prop -> prop.name == "publisher" } as DtoBaseProp
@@ -291,8 +302,7 @@ class DtoGraphTest {
         val rootTypeId = LsiSymbolId.type(
             if (rootType.packageName.isEmpty()) rootTypeName else "${rootType.packageName}.$rootTypeName"
         )
-        val clientDocumentation = outcome.schema.documents
-            .map { document -> document.graph }
+        val clientDocumentation = outcome.graphs
             .toClientDefinitionDocumentation(fixture.schema)
             .getValue(rootTypeId)
         assertEquals("DTO name documentation", clientDocumentation.properties.getValue("name"))
@@ -306,7 +316,7 @@ class DtoGraphTest {
             assertTrue(branch.mergedTypeId in graph.typesById)
         }
         assertTrue(graph.reachableTypeNames().none(::isForbiddenCompilerStateType))
-        assertTrue("taxCode" in outcome.schema.normalizedSnapshot())
+        assertTrue("taxCode" in graph.normalizedSnapshot())
     }
 
     private fun complexGraph(): DtoGraph {
@@ -863,7 +873,7 @@ class DtoGraphTest {
         return graph.copy(types = types, props = props)
     }
 
-    private fun schema(graph: DtoGraph): JimmerDtoPrecompiledSchema {
+    private fun resolution(graph: DtoGraph): JimmerDtoRoundResolution {
         val document = CompilerInputDocument(
             kind = CompilerInputDocumentKind.DTO,
             sourceSet = CompilerSourceSet.MAIN,
@@ -872,34 +882,42 @@ class DtoGraphTest {
             relativePath = "demo/Book.dto",
             content = "frozen DTO graph fixture",
         )
-        return JimmerDtoPrecompiledSchema(
-            listOf(
-                JimmerDtoPrecompiledDocument(
+        return JimmerDtoRoundResolution(
+            resolvedInputs = listOf(
+                JimmerDtoResolvedInput(
                     inputSnapshot = CompilerInputDocumentSnapshot(document, emptyList()),
                     targetTypeIds = listOf(BOOK_TYPE_ID),
-                    graph = graph,
-                    annotationContract = DtoAnnotationContract(
-                        declarations = emptyList(),
-                        typePlans = graph.types.map { type ->
-                            DtoTypeAnnotationPlan(type.id, emptyList())
-                        },
-                        propPlans = graph.props.map { prop ->
-                            DtoPropAnnotationPlan(prop.id, emptyList(), emptyList())
-                        },
-                        diagnostics = emptyList(),
-                    ),
-                    interfaceContractResolution = DtoInterfaceContractResolution(
-                        contracts = graph.types.map { type ->
-                            DtoInterfaceContract(type.id, emptyList(), emptyList())
-                        },
-                        diagnostics = emptyList(),
-                    ),
-                    configContractResolution = DtoConfigContractResolution(
-                        contracts = emptyList(),
-                        diagnostics = emptyList(),
-                    ),
                 )
-            )
+            ),
+            graphs = listOf(graph),
+            annotationContractsBySource = sortedMapOf(
+                graph.source to DtoAnnotationContract(
+                    declarations = emptyList(),
+                    typePlans = graph.types.map { type ->
+                        DtoTypeAnnotationPlan(type.id, emptyList())
+                    },
+                    propPlans = graph.props.map { prop ->
+                        DtoPropAnnotationPlan(prop.id, emptyList(), emptyList())
+                    },
+                    diagnostics = emptyList(),
+                )
+            ),
+            interfaceContractsBySource = sortedMapOf(
+                graph.source to DtoInterfaceContractResolution(
+                    contracts = graph.types.map { type ->
+                        DtoInterfaceContract(type.id, emptyList(), emptyList())
+                    },
+                    diagnostics = emptyList(),
+                )
+            ),
+            configContractsBySource = sortedMapOf(
+                graph.source to DtoConfigContractResolution(
+                    contracts = emptyList(),
+                    diagnostics = emptyList(),
+                )
+            ),
+            unresolvedDocuments = emptyList(),
+            failures = emptyList(),
         )
     }
 

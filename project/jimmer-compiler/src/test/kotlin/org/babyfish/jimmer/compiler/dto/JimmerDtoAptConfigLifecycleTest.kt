@@ -181,8 +181,7 @@ class JimmerDtoAptConfigLifecycleTest {
                 unresolvedTypeIds = state.unresolvedDocuments.flatMap { document -> document.unresolvedTypeIds },
                 diagnosticCodes = result.diagnostics.map { diagnostic -> diagnostic.code },
                 currentRootTypeIds = context.round.currentRootTypeIds,
-                contract = state.schema.documents.singleOrNull()
-                    ?.configContractResolution
+                contract = state.configContractsBySource.values.singleOrNull()
                     ?.contracts
                     ?.singleOrNull(),
             )

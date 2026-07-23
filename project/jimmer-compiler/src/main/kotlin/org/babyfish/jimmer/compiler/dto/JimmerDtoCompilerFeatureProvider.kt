@@ -14,9 +14,14 @@ import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStat
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLocation
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 
 class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
@@ -39,7 +44,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val defaultNullableInputModifier = context.round.options.defaultNullableInputModifier()
         val rendererOptions = context.round.toJimmerDtoRendererOptions()
         val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
-        val outcome = JimmerDtoPrecompiler().compile(
+        val resolution = JimmerDtoPrecompiler().compile(
             inputDocumentSnapshots = context.round.inputDocumentSnapshots,
             immutableSchema = immutableState.schema,
             immutableSemanticRootTypeIds = immutableState.semanticRootTypeIds,
@@ -50,48 +55,52 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         )
         val effectiveKspMutableByRootTypeId = rendererOptions.effectiveKspMutableByRootTypeId(
             platform = context.round.platform,
-            schema = outcome.schema,
+            graphs = resolution.graphs,
         )
         val unresolvedStatus = dtoUnresolvedStatus(
             platform = context.round.platform,
             isFinal = context.round.isFinal,
-            unresolved = outcome.unresolvedDocuments.isNotEmpty(),
+            unresolved = resolution.unresolvedDocuments.isNotEmpty(),
         )
         val status = dtoStatus(
             dependencyStatus = dependencyStatus,
             unresolvedStatus = unresolvedStatus,
-            invalid = outcome.failures.isNotEmpty(),
+            invalid = resolution.failures.isNotEmpty(),
         )
         val state = JimmerDtoCompilerFeatureState(
             status = status,
             dependencyStatus = dependencyStatus,
-            schema = outcome.schema,
-            unresolvedDocuments = outcome.unresolvedDocuments,
-            failures = outcome.failures,
+            graphs = resolution.graphs,
+            annotationContractsBySource = resolution.annotationContractsBySource,
+            interfaceContractsBySource = resolution.interfaceContractsBySource,
+            configContractsBySource = resolution.configContractsBySource,
+            resolvedInputFingerprint = resolution.resolvedInputs.resolvedInputFingerprint(),
+            unresolvedDocuments = resolution.unresolvedDocuments,
+            failures = resolution.failures,
             defaultNullableInputModifier = defaultNullableInputModifier,
             rendererOptions = rendererOptions,
             effectiveKspMutableByRootTypeId = effectiveKspMutableByRootTypeId,
             immutableDependencyFingerprint = immutableState.fingerprint,
         )
         val unavailableTypeIds = buildSet {
-            outcome.unresolvedDocuments.flatMapTo(this) { document -> document.targetTypeIds }
-            outcome.failures.flatMapTo(this) { failure -> failure.targetTypeIds }
+            resolution.unresolvedDocuments.flatMapTo(this) { document -> document.targetTypeIds }
+            resolution.failures.flatMapTo(this) { failure -> failure.targetTypeIds }
         }
         val processedTypeIds = if (context.round.isFinal) {
             emptySet()
         } else {
-            outcome.schema.documents
-                .flatMapTo(sortedSetOf()) { document -> document.targetTypeIds }
+            resolution.resolvedInputs
+                .flatMapTo(sortedSetOf()) { input -> input.targetTypeIds }
                 .minus(unavailableTypeIds)
         }
         return JimmerCompilerFeaturePrecompileResult(
             state = state,
-            diagnostics = outcome.diagnostics(
+            diagnostics = resolution.diagnostics(
                 reportUnresolved = unresolvedStatus == JimmerDtoCompilerFeatureStatus.INVALID,
             ),
             processedSymbols = processedTypeIds,
             unresolvedSymbols = if (unresolvedStatus == JimmerDtoCompilerFeatureStatus.DEFERRED) {
-                outcome.unresolvedDocuments.flatMapTo(sortedSetOf()) { document ->
+                resolution.unresolvedDocuments.flatMapTo(sortedSetOf()) { document ->
                     document.unresolvedTypeIds
                 }
             } else {
@@ -119,7 +128,11 @@ internal enum class JimmerDtoCompilerDependencyStatus {
 internal data class JimmerDtoCompilerFeatureState(
     val status: JimmerDtoCompilerFeatureStatus,
     val dependencyStatus: JimmerDtoCompilerDependencyStatus,
-    val schema: JimmerDtoPrecompiledSchema,
+    val graphs: List<DtoGraph>,
+    val annotationContractsBySource: Map<LsiSource, DtoAnnotationContract>,
+    val interfaceContractsBySource: Map<LsiSource, DtoInterfaceContractResolution>,
+    val configContractsBySource: Map<LsiSource, DtoConfigContractResolution>,
+    val resolvedInputFingerprint: String,
     val unresolvedDocuments: List<JimmerDtoUnresolvedDocument>,
     val failures: List<JimmerDtoCompilerFailure>,
     val defaultNullableInputModifier: DtoModifier,
@@ -137,7 +150,16 @@ internal data class JimmerDtoCompilerFeatureState(
         append(':')
         appendEffectiveKspMutableByRootTypeId(effectiveKspMutableByRootTypeId)
         append(':')
-        append(schema.fingerprint())
+        append(resolvedInputFingerprint)
+        append(':')
+        append(
+            dtoSemanticFingerprint(
+                graphs = graphs,
+                annotationContractsBySource = annotationContractsBySource,
+                interfaceContractsBySource = interfaceContractsBySource,
+                configContractsBySource = configContractsBySource,
+            )
+        )
         unresolvedDocuments.forEach { document ->
             appendDtoDocumentState(
                 kind = "unresolved",
@@ -182,14 +204,23 @@ internal data class JimmerDtoCompilerFeatureState(
         require(failures == failures.sortedWith(JIMMER_DTO_COMPILER_FAILURE_COMPARATOR)) {
             "DTO compiler failures must use stable diagnostic order"
         }
+        require(resolvedInputFingerprint.isNotBlank()) {
+            "DTO resolved input fingerprint cannot be blank"
+        }
+        requireDtoResolvedContracts(
+            graphs = graphs,
+            annotationContractsBySource = annotationContractsBySource,
+            interfaceContractsBySource = interfaceContractsBySource,
+            configContractsBySource = configContractsBySource,
+        )
         require(
             effectiveKspMutableByRootTypeId.keys.toList() ==
                 effectiveKspMutableByRootTypeId.keys.sorted()
         ) {
             "DTO KSP renderer plan must use stable root type id order"
         }
-        val rootTypeIds = schema.documents
-            .flatMap { document -> document.graph.rootTypeIds }
+        val rootTypeIds = graphs
+            .flatMap(DtoGraph::rootTypeIds)
             .sorted()
         require(effectiveKspMutableByRootTypeId.keys.toList() == rootTypeIds) {
             "DTO KSP renderer plan must cover every frozen root type"
@@ -276,7 +307,7 @@ private fun Map<String, String>.defaultNullableInputModifier(): DtoModifier {
     }
 }
 
-private fun JimmerDtoPrecompileOutcome.diagnostics(
+private fun JimmerDtoRoundResolution.diagnostics(
     reportUnresolved: Boolean,
 ): List<LsiDiagnostic> {
     return buildList {
