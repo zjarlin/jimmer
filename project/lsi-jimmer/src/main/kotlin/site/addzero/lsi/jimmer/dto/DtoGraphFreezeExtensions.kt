@@ -1,10 +1,8 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.util.IdentityHashMap
-import org.babyfish.jimmer.client.meta.Doc
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.dto.compiler.AbstractProp
 import org.babyfish.jimmer.dto.compiler.Anno
 import org.babyfish.jimmer.dto.compiler.DtoFile
@@ -22,38 +20,17 @@ import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.jimmer.dto.DtoAnnotation
-import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
-import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
-import site.addzero.lsi.jimmer.dto.DtoBaseProp
-import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
-import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
-import site.addzero.lsi.jimmer.dto.DtoConfigValue
-import site.addzero.lsi.jimmer.dto.DtoEnumMapping
-import site.addzero.lsi.jimmer.dto.DtoEnumType
-import site.addzero.lsi.jimmer.dto.DtoFetchType
-import site.addzero.lsi.jimmer.dto.DtoFoldProp
-import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoLikeOption
-import site.addzero.lsi.jimmer.dto.DtoModifier
-import site.addzero.lsi.jimmer.dto.DtoOrderItem
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
-import site.addzero.lsi.jimmer.dto.DtoPolymorphism
-import site.addzero.lsi.jimmer.dto.DtoPredicate
-import site.addzero.lsi.jimmer.dto.DtoProp
-import site.addzero.lsi.jimmer.dto.DtoPropConfig
-import site.addzero.lsi.jimmer.dto.DtoPropId
-import site.addzero.lsi.jimmer.dto.DtoPropPathNode
-import site.addzero.lsi.jimmer.dto.DtoType
-import site.addzero.lsi.jimmer.dto.DtoTypeArgument
-import site.addzero.lsi.jimmer.dto.DtoTypeId
-import site.addzero.lsi.jimmer.dto.DtoTypeRef
-import site.addzero.lsi.jimmer.dto.DtoUserProp
-import site.addzero.lsi.jimmer.dto.DtoVariance
+import site.addzero.lsi.model.parseLsiDocumentation
 
-internal class DtoGraphFreezer(
-    private val inputSnapshot: CompilerInputDocumentSnapshot,
+/**
+ * 将 DTO 编译器语义树冻结为稳定的 Jimmer LSI 图。
+ */
+fun List<AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>>.toLsiDtoGraph(
+    source: LsiSource,
+): DtoGraph = DtoGraphFreezer(source).freeze(this)
+
+private class DtoGraphFreezer(
+    private val graphSource: LsiSource,
 ) {
     private val typeIds = IdentityHashMap<AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>, DtoTypeId>()
 
@@ -77,7 +54,7 @@ internal class DtoGraphFreezer(
             )
         }
         return DtoGraph(
-            source = inputSnapshot.document.source,
+            source = graphSource,
             rootTypeIds = rootTypeIds,
             types = types.values.sortedBy(DtoType::id),
             props = props.values.sortedBy(DtoProp::id),
@@ -90,7 +67,7 @@ internal class DtoGraphFreezer(
         location: LsiLocation,
     ): DtoTypeId {
         typeIds[dtoType]?.let { typeId -> return typeId }
-        val typeId = DtoTypeId("${inputSnapshot.document.source.path}#$path")
+        val typeId = DtoTypeId("${graphSource.path}#$path")
         require(typeId !in types && typeId !in typeIds.values) {
             "Duplicate DTO type id: ${typeId.value}"
         }
@@ -148,7 +125,7 @@ internal class DtoGraphFreezer(
     ): DtoPropId {
         val ownerPropIds = propIdsByOwner.getOrPut(ownerTypeId, ::IdentityHashMap)
         ownerPropIds[prop]?.let { propId -> return propId }
-        val propId = DtoPropId("${inputSnapshot.document.source.path}#$path")
+        val propId = DtoPropId("${graphSource.path}#$path")
         require(propId !in props && propId !in ownerPropIds.values) {
             "Duplicate DTO property id: ${propId.value}"
         }
@@ -478,18 +455,18 @@ internal class DtoGraphFreezer(
     }
 
     private fun source(declaringFile: DtoFile): LsiSource {
-        val graphSource = inputSnapshot.document.source
-        return if (declaringFile.absolutePath == graphSource.path) {
+        val declaringSource = LsiSource.of(declaringFile.absolutePath)
+        return if (declaringSource.path == graphSource.path) {
             graphSource
         } else {
-            LsiSource.of(declaringFile.absolutePath)
+            declaringSource
         }
     }
 }
 
 private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(): String? {
-    return Doc.parse(doc)?.toString()
-        ?: Doc.parse(baseType?.immutableType?.documentation)?.toString()
+    return doc.parseLsiDocumentation()?.canonicalText()
+        ?: baseType?.immutableType?.documentation.parseLsiDocumentation()?.canonicalText()
 }
 
 private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
@@ -507,12 +484,12 @@ private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
         ?.castBaseProp()
         ?.toTailProp()
         ?.baseProp
-    baseProp?.immutableProp?.documentation?.let(Doc::parse)?.toString()?.let { documentation ->
+    baseProp?.immutableProp?.documentation.parseLsiDocumentation()?.canonicalText()?.let { documentation ->
         return documentation
     }
     return baseProp?.let { immutableProp ->
-        Doc.parse(baseType?.immutableType?.documentation)
-            ?.parameterValueMap
+        baseType?.immutableType?.documentation.parseLsiDocumentation()
+            ?.parameterValues
             ?.get(immutableProp.name)
     }
 }
@@ -520,13 +497,13 @@ private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.effectiveDocumentation(
 private fun AstDtoType<LsiDtoBaseType, LsiDtoBaseProp>.dtoDocumentation(
     prop: AbstractProp,
 ): String? {
-    Doc.parse(prop.doc)?.toString()?.let { documentation -> return documentation }
+    prop.doc.parseLsiDocumentation()?.canonicalText()?.let { documentation -> return documentation }
     val baseProp = (prop as? AstDtoProp<*, *>)
         ?.castBaseProp()
         ?.toTailProp()
         ?.baseProp
     val parameterName = prop.alias ?: baseProp?.name ?: return null
-    return Doc.parse(doc)?.parameterValueMap?.get(parameterName)
+    return doc.parseLsiDocumentation()?.parameterValues?.get(parameterName)
 }
 
 @Suppress("UNCHECKED_CAST")

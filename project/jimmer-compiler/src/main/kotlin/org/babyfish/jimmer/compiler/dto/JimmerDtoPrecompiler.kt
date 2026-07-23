@@ -33,6 +33,12 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
+import site.addzero.lsi.jimmer.dto.LsiDtoBaseProp
+import site.addzero.lsi.jimmer.dto.LsiDtoBaseType
+import site.addzero.lsi.jimmer.dto.resolveDtoTypeInfo
+import site.addzero.lsi.jimmer.dto.toLsiDtoCompiler
+import site.addzero.lsi.jimmer.dto.toLsiDtoGraph
+import site.addzero.lsi.jimmer.dto.toLsiDtoTypeRegistry
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -52,7 +58,8 @@ internal class JimmerDtoPrecompiler {
         require(platform != CompilerPlatform.UNKNOWN) {
             "DTO precompilation requires APT or KSP platform"
         }
-        val registry = LsiDtoTypeRegistry(immutableSchema, workspace)
+        val targetLanguage = platform.dtoTargetLanguage()
+        val registry = immutableSchema.toLsiDtoTypeRegistry(workspace)
         val failures = mutableListOf<JimmerDtoCompilerFailure>()
         val entries = inputDocumentSnapshots
             .filter { snapshot -> snapshot.document.kind == CompilerInputDocumentKind.DTO }
@@ -60,8 +67,7 @@ internal class JimmerDtoPrecompiler {
             .mapNotNull { snapshot ->
                 val inputDocument = snapshot.document
                 val compiler = try {
-                    LsiDtoCompiler(
-                        dtoFile = inputDocument.toDtoFile(),
+                    inputDocument.toDtoFile().toLsiDtoCompiler(
                         registry = registry,
                         defaultNullableInputModifier = defaultNullableInputModifier,
                     )
@@ -263,8 +269,9 @@ internal class JimmerDtoPrecompiler {
             )
         }
         try {
-            val reusableDtoTypeResolver = LsiDtoTypeInfoResolver(registry, platform)
-            DtoTypeLinker.link(compiledTypes, reusableDtoTypeResolver::resolve)
+            DtoTypeLinker.link(compiledTypes) { qualifiedName ->
+                registry.resolveDtoTypeInfo(qualifiedName, targetLanguage)
+            }
         } catch (exception: DtoAstException) {
             failures += exception.toFailure(entries)
             return JimmerDtoRoundResolution(
@@ -321,19 +328,15 @@ internal class JimmerDtoPrecompiler {
             .forEach { entry ->
                 val snapshot = entry.inputSnapshot
                 val inputDocument = snapshot.document
-                val graph = DtoGraphFreezer(snapshot).freeze(
-                    compiledByCompiler.getValue(entry.compiler),
-                )
+                val graph = compiledByCompiler
+                    .getValue(entry.compiler)
+                    .toLsiDtoGraph(snapshot.document.source)
                 val annotationContract = workspace.resolveDtoAnnotationContract(graph, immutableSchema)
                 val interfaceContractResolution = workspace.resolveDtoInterfaceContracts(graph)
                 val configContractResolution = workspace.resolveDtoConfigContracts(
                     graph = graph,
                     immutableSchema = immutableSchema,
-                    targetLanguage = when (platform) {
-                        CompilerPlatform.APT -> LsiLanguage.JAVA
-                        CompilerPlatform.KSP -> LsiLanguage.KOTLIN
-                        CompilerPlatform.UNKNOWN -> error("Unsupported DTO compiler platform")
-                    },
+                    targetLanguage = targetLanguage,
                 )
                 val semanticDiagnostics =
                     annotationContract.diagnostics +
@@ -396,7 +399,7 @@ private fun LsiDiagnostic.toCompilerFailure(
 
 private data class JimmerDtoCompilerEntry(
     val inputSnapshot: CompilerInputDocumentSnapshot,
-    val compiler: LsiDtoCompiler,
+    val compiler: DtoCompiler<LsiDtoBaseType, LsiDtoBaseProp>,
     val targetTypeIds: List<LsiSymbolId>,
     val referenceResolution: JimmerDtoStaticReferenceResolution,
 ) {
@@ -586,6 +589,14 @@ private fun CompilerInputDocument.toDtoFile(): DtoFile {
         pathParts.dropLast(1),
         pathParts.last(),
     )
+}
+
+private fun CompilerPlatform.dtoTargetLanguage(): LsiLanguage {
+    return when (this) {
+        CompilerPlatform.APT -> LsiLanguage.JAVA
+        CompilerPlatform.KSP -> LsiLanguage.KOTLIN
+        CompilerPlatform.UNKNOWN -> error("Unsupported DTO compiler platform")
+    }
 }
 
 private const val DTO_INVALID_DIAGNOSTIC_CODE = "jimmer.dto.invalid"

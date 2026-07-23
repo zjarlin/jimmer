@@ -47,6 +47,7 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoModifier
 
 class JimmerDtoReusableIntegrationTest {
 
@@ -189,6 +190,46 @@ class JimmerDtoReusableIntegrationTest {
             .map(graph.propsById::getValue)
             .single { prop -> prop.name == "store" } as DtoBaseProp
         assertNull(storeProp.targetTypeId)
+    }
+
+    @Test
+    fun `routes external reusable specification by compiler target language`() {
+        val input = document(
+            relativePath = "book/ExternalStoreSpecification.dto",
+            content = """
+                package demo.dto
+
+                specification BookSpecification for demo.Book {
+                    store -> contract.StoreSpecification
+                }
+            """.trimIndent(),
+        )
+
+        listOf(CompilerPlatform.APT, CompilerPlatform.KSP).forEach { platform ->
+            val externalSpecification = externalSpecification(
+                qualifiedName = "contract.StoreSpecification",
+                entityTypeId = STORE_TYPE_ID,
+                platform = platform,
+            )
+            val result = precompileDocuments(
+                documents = listOf(input),
+                workspace = workspace(externalDeclarations = listOf(externalSpecification)),
+                platform = platform,
+            )
+            val state = result.dtoState()
+            val graph = state.graphs.single()
+            val rootType = graph.typesById.getValue(graph.rootTypeIds.single())
+            val storeProp = rootType.propIds
+                .map(graph.propsById::getValue)
+                .single { prop -> prop.name == "store" } as DtoBaseProp
+
+            assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, state.status)
+            assertTrue(state.unresolvedDocuments.isEmpty())
+            assertTrue(state.failures.isEmpty())
+            assertTrue(result.diagnostics.isEmpty())
+            assertTrue(DtoModifier.SPECIFICATION in rootType.modifiers)
+            assertNull(storeProp.targetTypeId)
+        }
     }
 
     @Test
@@ -403,6 +444,35 @@ class JimmerDtoReusableIntegrationTest {
         )
     }
 
+    private fun externalSpecification(
+        qualifiedName: String,
+        entityTypeId: LsiSymbolId,
+        platform: CompilerPlatform,
+    ): LsiTypeDeclaration {
+        val markerTypeId = when (platform) {
+            CompilerPlatform.APT -> J_SPECIFICATION_TYPE_ID
+            CompilerPlatform.KSP -> K_SPECIFICATION_TYPE_ID
+            CompilerPlatform.UNKNOWN -> error("Unsupported DTO compiler platform")
+        }
+        val arguments = buildList {
+            add(LsiTypeArgument.invariant(LsiDeclaredType(entityTypeId)))
+            if (platform == CompilerPlatform.APT) {
+                add(LsiTypeArgument.invariant(LsiDeclaredType(STORE_TABLE_TYPE_ID)))
+            }
+        }
+        return typeDeclaration(
+            id = LsiSymbolId.type(qualifiedName),
+            kind = LsiTypeDeclarationKind.INTERFACE,
+            origin = BINARY_ORIGIN,
+            superTypes = listOf(
+                LsiDeclaredType(
+                    declarationId = markerTypeId,
+                    arguments = arguments,
+                )
+            ),
+        )
+    }
+
     private fun typeDeclaration(
         id: LsiSymbolId,
         kind: LsiTypeDeclarationKind,
@@ -453,6 +523,11 @@ class JimmerDtoReusableIntegrationTest {
         val NOT_IMMUTABLE_TYPE_ID = LsiSymbolId.type("demo.NotImmutable")
         val ENTITY_ANNOTATION_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
         val VIEW_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.View")
+        val J_SPECIFICATION_TYPE_ID =
+            LsiSymbolId.type("org.babyfish.jimmer.sql.ast.query.specification.JSpecification")
+        val K_SPECIFICATION_TYPE_ID =
+            LsiSymbolId.type("org.babyfish.jimmer.sql.kt.ast.query.specification.KSpecification")
+        val STORE_TABLE_TYPE_ID = LsiSymbolId.type("demo.StoreTable")
         val LONG_TYPE: LsiTypeRef = LsiPrimitiveType(LsiPrimitiveKind.LONG)
         val STRING_TYPE: LsiTypeRef = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
         val BINARY_ORIGIN = LsiOrigin(LsiOriginKind.BINARY)

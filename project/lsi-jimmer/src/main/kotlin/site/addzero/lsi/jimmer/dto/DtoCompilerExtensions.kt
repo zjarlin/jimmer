@@ -1,22 +1,22 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
-import site.addzero.lsi.jimmer.FormulaKind
-import site.addzero.lsi.jimmer.PrimaryMapping
-import site.addzero.lsi.jimmer.ImmutableProp
-import site.addzero.lsi.jimmer.ImmutableSchema
-import site.addzero.lsi.jimmer.ImmutableType
-import site.addzero.lsi.jimmer.ImmutableTypeKind
-import site.addzero.lsi.jimmer.ImmutableView
-import site.addzero.lsi.jimmer.isJimmerImmutableType
-import site.addzero.lsi.jimmer.jimmerTypeSignature
 import org.babyfish.jimmer.dto.compiler.DtoCompiler
 import org.babyfish.jimmer.dto.compiler.DtoFile
-import org.babyfish.jimmer.dto.compiler.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier as AstDtoModifier
 import org.babyfish.jimmer.dto.compiler.PropConfig
 import org.babyfish.jimmer.dto.compiler.SimplePropType
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp
 import org.babyfish.jimmer.dto.compiler.spi.BaseType
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.isJimmerImmutableType
+import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -27,13 +27,34 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
-internal class LsiDtoTypeRegistry(
+/** 为 DTO compiler 创建共享的 LSI 类型注册表。 */
+fun ImmutableSchema.toLsiDtoTypeRegistry(
+    workspace: LsiWorkspace,
+): LsiDtoTypeRegistry = LsiDtoTypeRegistry(this, workspace)
+
+/** 基于共享 LSI 类型注册表创建 DTO compiler。 */
+fun DtoFile.toLsiDtoCompiler(
+    registry: LsiDtoTypeRegistry,
+    defaultNullableInputModifier: AstDtoModifier,
+): DtoCompiler<LsiDtoBaseType, LsiDtoBaseProp> {
+    return LsiDtoCompiler(
+        dtoFile = this,
+        registry = registry,
+        defaultNullableInputModifier = defaultNullableInputModifier,
+    )
+}
+
+/** 在多个 DTO 文档之间共享不可变类型与属性身份。 */
+class LsiDtoTypeRegistry internal constructor(
     immutableSchema: ImmutableSchema,
-    val workspace: LsiWorkspace,
+    internal val workspace: LsiWorkspace,
 ) {
+    private val typeSystem = LsiTypeSystem(workspace)
+
     private val typesById: Map<LsiSymbolId, LsiDtoBaseType>
 
     private val typesByQualifiedName: Map<String, LsiDtoBaseType>
@@ -49,29 +70,29 @@ internal class LsiDtoTypeRegistry(
 
     operator fun get(typeId: LsiSymbolId): LsiDtoBaseType? = typesById[typeId]
 
-    fun type(qualifiedName: String): LsiDtoBaseType? = typesByQualifiedName[qualifiedName]
+    internal fun type(qualifiedName: String): LsiDtoBaseType? = typesByQualifiedName[qualifiedName]
 
-    fun superTypes(type: LsiDtoBaseType): List<LsiDtoBaseType> {
+    internal fun superTypes(type: LsiDtoBaseType): List<LsiDtoBaseType> {
         return type.immutableType.superTypeIds.mapNotNull(typesById::get)
     }
 
-    fun directSubTypes(type: LsiDtoBaseType): List<LsiDtoBaseType> {
+    internal fun directSubTypes(type: LsiDtoBaseType): List<LsiDtoBaseType> {
         return typesById.values
             .filter { candidate -> candidate.immutableType.primarySuperTypeId == type.id }
             .sortedBy(LsiDtoBaseType::id)
     }
 
-    fun props(type: LsiDtoBaseType): Map<String, LsiDtoBaseProp> {
+    internal fun props(type: LsiDtoBaseType): Map<String, LsiDtoBaseProp> {
         return type.immutableType.props.associate { immutableProp ->
             immutableProp.name to LsiDtoBaseProp(type, immutableProp, this)
         }
     }
 
-    fun targetType(prop: LsiDtoBaseProp): LsiDtoBaseType? {
+    internal fun targetType(prop: LsiDtoBaseProp): LsiDtoBaseType? {
         return prop.immutableProp.targetTypeId?.let(typesById::get)
     }
 
-    fun genericTypeCount(qualifiedName: String): Int? {
+    internal fun genericTypeCount(qualifiedName: String): Int? {
         val typeId = LsiSymbolId.type(qualifiedName)
         val declaration = workspace[typeId] as? LsiTypeDeclaration
         if (declaration != null) {
@@ -83,10 +104,16 @@ internal class LsiDtoTypeRegistry(
         }
         return STANDARD_GENERIC_TYPE_COUNTS[qualifiedName]
     }
+
+    internal fun resolveSuperType(
+        typeId: LsiSymbolId,
+        superTypeId: LsiSymbolId,
+    ): LsiDeclaredType? = typeSystem.resolveSuperType(typeId, superTypeId)
 }
 
-internal class LsiDtoBaseType(
-    internal val immutableType: ImmutableType,
+/** DTO compiler SPI 使用的不可变类型投影。 */
+class LsiDtoBaseType internal constructor(
+    val immutableType: ImmutableType,
     private val registry: LsiDtoTypeRegistry,
 ) : BaseType {
     val id: LsiSymbolId
@@ -116,9 +143,10 @@ internal class LsiDtoBaseType(
     override fun toString(): String = qualifiedName
 }
 
-internal class LsiDtoBaseProp(
+/** DTO compiler SPI 使用的不可变属性投影。 */
+class LsiDtoBaseProp internal constructor(
     private val ownerType: LsiDtoBaseType,
-    internal val immutableProp: ImmutableProp,
+    val immutableProp: ImmutableProp,
     private val registry: LsiDtoTypeRegistry,
 ) : BaseProp {
     val id: LsiSymbolId
@@ -186,12 +214,12 @@ internal class LsiDtoBaseProp(
     override fun toString(): String = "${ownerType.qualifiedName}.$name"
 }
 
-internal class LsiDtoCompiler(
+private class LsiDtoCompiler(
     dtoFile: DtoFile,
     private val registry: LsiDtoTypeRegistry,
-    private val defaultNullableInputModifier: DtoModifier,
+    private val defaultNullableInputModifier: AstDtoModifier,
 ) : DtoCompiler<LsiDtoBaseType, LsiDtoBaseProp>(dtoFile) {
-    override fun getDefaultNullableInputModifier(): DtoModifier = defaultNullableInputModifier
+    override fun getDefaultNullableInputModifier(): AstDtoModifier = defaultNullableInputModifier
 
     override fun getSuperTypes(baseType: LsiDtoBaseType): Collection<LsiDtoBaseType> {
         return registry.superTypes(baseType)

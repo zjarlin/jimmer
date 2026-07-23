@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     api(projects.lsiCore)
+    api(projects.jimmerDtoCompiler)
     testImplementation(libs.kotlin.test)
 }
 
