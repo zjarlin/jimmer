@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.tuple
+package site.addzero.lsi.jimmer.tuple
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -29,16 +29,15 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
 
-class TypedTuplePrecompilerTest {
+class TypedTupleWorkspaceExtensionsTest {
     @Test
-    fun `java tuple consumes fields in declaration order with setter plan`() {
+    fun `java tuple consumes fields in declaration order with setter construction`() {
         val origin = sourceOrigin(LsiLanguage.JAVA, "demo/BookStats.java")
         val tupleId = LsiSymbolId.type("demo.BookStats")
         val markerId = LsiSymbolId.type("demo.Marker")
@@ -53,22 +52,17 @@ class TypedTuplePrecompilerTest {
             superTypes = listOf(LsiDeclaredType(markerId), LsiDeclaredType(OBJECT_TYPE)),
             origin = origin,
         )
+        val workspace = LsiWorkspace(declarations = listOf(marker, count, ignored, title, tuple))
 
-        val schema = TypedTuplePrecompiler().compile(
-            LsiWorkspace(declarations = listOf(marker, count, ignored, title, tuple))
-        )
+        val model = workspace.toTypedTupleSchema().tuples.single()
 
-        val model = schema.tuples.single()
-        assertEquals(TypedTuplePlatform.JAVA, model.platform)
-        assertEquals("demo.BookStatsMapper", model.mapperQualifiedName)
+        assertEquals(setOf(tupleId), workspace.typedTupleTypeIds())
+        assertEquals(LsiLanguage.JAVA, model.sourceLanguage)
+        assertEquals("demo", model.packageName)
+        assertEquals("BookStats", model.simpleName)
         assertEquals(listOf("bookCount", "title"), model.properties.map(TypedTupleProperty::name))
         assertEquals(listOf(count.id, title.id), model.properties.map(TypedTupleProperty::sourceMemberId))
-        assertEquals(listOf(null, "TitleBuilder"), model.properties.map(TypedTupleProperty::builderSimpleName))
-        assertEquals(
-            listOf("TitleBuilder", "BookStatsMapper"),
-            model.properties.map(TypedTupleProperty::nextStepTypeName),
-        )
-        val construction = assertIs<TypedTupleJavaSetterPlan>(model.construction)
+        val construction = assertIs<TypedTupleJavaSetterConstruction>(model.construction)
         assertEquals(null, construction.constructorId)
         assertEquals(listOf("setBookCount", "setTitle"), construction.assignments.map { it.setterName })
         assertEquals(listOf(0, 1), construction.propertyIndexes)
@@ -92,11 +86,12 @@ class TypedTuplePrecompilerTest {
             origin = origin,
         )
 
-        val model = TypedTuplePrecompiler().compile(
-            LsiWorkspace(declarations = listOf(tuple, constructor, title, count))
-        ).tuples.single()
+        val model = LsiWorkspace(declarations = listOf(tuple, constructor, title, count))
+            .toTypedTupleSchema()
+            .tuples
+            .single()
 
-        val construction = assertIs<TypedTupleJavaPositionalPlan>(model.construction)
+        val construction = assertIs<TypedTupleJavaConstructorConstruction>(model.construction)
         assertEquals(constructor.id, construction.constructorId)
         assertEquals(listOf(1, 0), construction.arguments.map { it.propertyIndex })
         assertEquals(constructor.parameters.map(LsiParameter::id), construction.arguments.map { it.parameterId })
@@ -107,12 +102,12 @@ class TypedTuplePrecompilerTest {
     @Test
     fun `lombok data chooses construction from field finality`() {
         val finalModel = javaLombokDataTuple(mutableStates = listOf(false, false))
-        assertIs<TypedTupleJavaPositionalPlan>(finalModel.construction)
+        assertIs<TypedTupleJavaConstructorConstruction>(finalModel.construction)
 
         val mutableModel = javaLombokDataTuple(mutableStates = listOf(true, true))
-        assertIs<TypedTupleJavaSetterPlan>(mutableModel.construction)
+        assertIs<TypedTupleJavaSetterConstruction>(mutableModel.construction)
 
-        val exception = assertFailsWith<TypedTuplePrecompileException> {
+        val exception = assertFailsWith<TypedTupleValidationException> {
             javaLombokDataTuple(mutableStates = listOf(false, true))
         }
         assertTrue(exception.message.orEmpty().contains("mix final and non-final"))
@@ -140,21 +135,22 @@ class TypedTuplePrecompilerTest {
             origin = origin,
         )
 
-        val model = TypedTuplePrecompiler().compile(
-            LsiWorkspace(declarations = listOf(tuple, count, bodyValue, title, primary))
-        ).tuples.single()
+        val model = LsiWorkspace(declarations = listOf(tuple, count, bodyValue, title, primary))
+            .toTypedTupleSchema()
+            .tuples
+            .single()
 
-        assertEquals(TypedTuplePlatform.KOTLIN, model.platform)
+        assertEquals(LsiLanguage.KOTLIN, model.sourceLanguage)
         assertEquals(listOf("title", "count"), model.properties.map(TypedTupleProperty::name))
         assertFalse(bodyValue.id in model.dependencies.memberIds)
-        val construction = assertIs<TypedTupleKotlinNamedPlan>(model.construction)
+        val construction = assertIs<TypedTupleKotlinConstructorConstruction>(model.construction)
         assertEquals(primary.id, construction.constructorId)
         assertEquals(listOf("title", "count"), construction.arguments.map { it.parameterName })
         assertEquals(listOf(title.id, count.id), construction.arguments.map { it.sourceMemberId })
     }
 
     @Test
-    fun `collects recursive type and source member dependencies`() {
+    fun `collects recursive type source and annotation dependencies`() {
         val tupleSource = LsiSource.of("src/main/kotlin/demo/BookTuple.kt", LsiLanguage.KOTLIN)
         val bookSource = LsiSource.of("src/main/kotlin/demo/Book.kt", LsiLanguage.KOTLIN)
         val tupleOrigin = LsiOrigin(LsiOriginKind.SOURCE, tupleSource)
@@ -162,9 +158,28 @@ class TypedTuplePrecompilerTest {
         val tupleId = LsiSymbolId.type("demo.BookTuple")
         val bookId = LsiSymbolId.type("demo.Book")
         val listId = LsiSymbolId.type("java.util.List")
+        val annotationId = LsiSymbolId.type("demo.TypeMarker")
+        val payloadId = LsiSymbolId.type("demo.AnnotationPayload")
         val booksType = LsiDeclaredType(
             declarationId = listId,
-            arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(bookId))),
+            arguments = listOf(
+                LsiTypeArgument.invariant(
+                    LsiDeclaredType(
+                        declarationId = bookId,
+                        annotations = listOf(
+                            LsiAnnotation(
+                                type = annotationId,
+                                arguments = mapOf(
+                                    "payload" to LsiAnnotationArgument(
+                                        value = LsiAnnotationValue.ClassValue(LsiDeclaredType(payloadId)),
+                                        origin = LsiAnnotationArgumentOrigin.EXPLICIT,
+                                    )
+                                ),
+                            )
+                        ),
+                    )
+                )
+            ),
         )
         val books = property(tupleId, "books", booksType, origin = tupleOrigin)
         val count = property(tupleId, "count", LONG_TYPE, origin = tupleOrigin)
@@ -187,10 +202,16 @@ class TypedTuplePrecompilerTest {
             declarations = listOf(book, books, count, primary, tuple),
         )
 
-        val model = TypedTuplePrecompiler().compile(workspace).tuples.single()
+        val model = workspace.toTypedTupleSchema().tuples.single()
 
-        assertEquals(listOf(bookId, listId), model.properties.first().typeDependencyIds)
-        assertEquals(listOf(bookId, tupleId, listId).sorted(), model.dependencies.typeIds)
+        assertEquals(
+            listOf(annotationId, payloadId, bookId, listId).sorted(),
+            model.properties.first().typeDependencyIds,
+        )
+        assertEquals(
+            listOf(annotationId, payloadId, bookId, tupleId, listId).sorted(),
+            model.dependencies.typeIds,
+        )
         assertEquals(listOf(books.id, count.id, primary.id).sorted(), model.dependencies.memberIds)
         assertEquals(
             setOf(tupleSource, bookSource),
@@ -199,9 +220,9 @@ class TypedTuplePrecompilerTest {
     }
 
     @Test
-    fun `apt and ksp semantic snapshots match while render fingerprints differ`() {
-        val apt = TypedTuplePrecompiler().compile(languageWorkspace(LsiLanguage.JAVA))
-        val ksp = TypedTuplePrecompiler().compile(languageWorkspace(LsiLanguage.KOTLIN))
+    fun `apt and ksp semantic snapshots match while full fingerprints differ`() {
+        val apt = languageWorkspace(LsiLanguage.JAVA).toTypedTupleSchema()
+        val ksp = languageWorkspace(LsiLanguage.KOTLIN).toTypedTupleSchema()
 
         assertEquals(apt.normalizedSnapshot(), ksp.normalizedSnapshot())
         assertNotEquals(apt.fingerprint(), ksp.fingerprint())
@@ -216,8 +237,8 @@ class TypedTuplePrecompilerTest {
             annotations = listOf(annotation(TYPED_TUPLE)),
             memberIds = listOf(LsiSymbolId.field(LsiSymbolId.type("demo.MissingTuple"), "value")),
         )
-        val missingException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(LsiWorkspace(declarations = listOf(missingTuple)))
+        val missingException = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(missingTuple)).toTypedTupleSchema()
         }
         assertEquals(missingTuple.id, missingException.declarationId)
         assertTrue(missingException.recoverable)
@@ -229,10 +250,8 @@ class TypedTuplePrecompilerTest {
             annotations = listOf(annotation(TYPED_TUPLE)),
             memberIds = listOf(unresolvedField.id),
         )
-        val unresolvedException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(
-                LsiWorkspace(declarations = listOf(unresolvedField, unresolvedTuple))
-            )
+        val unresolvedException = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(unresolvedField, unresolvedTuple)).toTypedTupleSchema()
         }
         assertEquals(unresolvedTuple.id, unresolvedException.declarationId)
         assertTrue(unresolvedException.recoverable)
@@ -252,8 +271,8 @@ class TypedTuplePrecompilerTest {
             memberIds = listOf(callback.id),
         )
 
-        val exception = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(LsiWorkspace(declarations = listOf(callback, tuple)))
+        val exception = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(callback, tuple)).toTypedTupleSchema()
         }
 
         assertEquals(callback.id, exception.declarationId)
@@ -262,41 +281,7 @@ class TypedTuplePrecompilerTest {
     }
 
     @Test
-    fun `tracks type use annotation dependencies`() {
-        val tupleId = LsiSymbolId.type("demo.AnnotatedTuple")
-        val annotationId = LsiSymbolId.type("demo.TypeMarker")
-        val payloadId = LsiSymbolId.type("demo.AnnotationPayload")
-        val annotatedType = STRING_TYPE.copy(
-            annotations = listOf(
-                LsiAnnotation(
-                    type = annotationId,
-                    arguments = mapOf(
-                        "payload" to LsiAnnotationArgument(
-                            value = LsiAnnotationValue.ClassValue(LsiDeclaredType(payloadId)),
-                            origin = LsiAnnotationArgumentOrigin.EXPLICIT,
-                        )
-                    ),
-                )
-            ),
-        )
-        val value = field(tupleId, "value", annotatedType)
-        val tuple = type(
-            qualifiedName = "demo.AnnotatedTuple",
-            annotations = listOf(annotation(TYPED_TUPLE)),
-            memberIds = listOf(value.id),
-        )
-
-        val model = TypedTuplePrecompiler()
-            .compile(LsiWorkspace(declarations = listOf(value, tuple)))
-            .tuples
-            .single()
-
-        assertTrue(annotationId in model.dependencies.typeIds)
-        assertTrue(payloadId in model.dependencies.typeIds)
-    }
-
-    @Test
-    fun `rejects invalid type shapes as semantic errors`() {
+    fun `rejects invalid declaration shapes and construction`() {
         val nonClass = assertRejected(
             type(
                 qualifiedName = "demo.InvalidTuple",
@@ -313,8 +298,8 @@ class TypedTuplePrecompilerTest {
             enclosingTypeId = outer.id,
             annotations = listOf(annotation(TYPED_TUPLE)),
         )
-        val nestedException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(LsiWorkspace(declarations = listOf(outer, nested)))
+        val nestedException = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(outer, nested)).toTypedTupleSchema()
         }
         assertTrue(nestedException.message.orEmpty().contains("top-level"))
 
@@ -326,36 +311,34 @@ class TypedTuplePrecompilerTest {
             typeParameters = listOf(LsiTypeParameter(parameterId, "T")),
         )
         assertRejected(generic, "cannot be generic")
-    }
 
-    @Test
-    fun `rejects class inheritance and missing java construction`() {
         val base = type("demo.BaseTuple")
-        val tupleId = LsiSymbolId.type("demo.InvalidTuple")
+        val tupleId = LsiSymbolId.type("demo.ConstructionTuple")
         val value = field(tupleId, "value", STRING_TYPE)
-        val tuple = type(
-            qualifiedName = "demo.InvalidTuple",
+        val inherited = type(
+            qualifiedName = "demo.ConstructionTuple",
             annotations = listOf(annotation(TYPED_TUPLE)),
             memberIds = listOf(value.id),
             superTypes = listOf(LsiDeclaredType(base.id)),
         )
-        val inheritanceException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(LsiWorkspace(declarations = listOf(base, value, tuple)))
+        val inheritanceException = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(base, value, inherited)).toTypedTupleSchema()
         }
         assertTrue(inheritanceException.message.orEmpty().contains("cannot inherit class"))
 
         val constructor = constructor(tupleId, listOf("other" to STRING_TYPE))
-        val constructionTuple = tuple.copy(memberIds = listOf(value.id, constructor.id), superTypes = emptyList())
-        val constructionException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(
-                LsiWorkspace(declarations = listOf(value, constructor, constructionTuple))
-            )
+        val invalidConstruction = inherited.copy(
+            memberIds = listOf(value.id, constructor.id),
+            superTypes = emptyList(),
+        )
+        val constructionException = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(value, constructor, invalidConstruction)).toTypedTupleSchema()
         }
         assertTrue(constructionException.message.orEmpty().contains("parameters match all fields"))
     }
 
     @Test
-    fun `rejects lombok builder duplicate builder names and non data kotlin class`() {
+    fun `rejects lombok builder and non data kotlin class`() {
         val lombokTupleId = LsiSymbolId.type("demo.LombokTuple")
         val lombokValue = field(lombokTupleId, "value", STRING_TYPE)
         val lombokTuple = type(
@@ -363,26 +346,10 @@ class TypedTuplePrecompilerTest {
             annotations = listOf(annotation(TYPED_TUPLE), annotation(LOMBOK_BUILDER)),
             memberIds = listOf(lombokValue.id),
         )
-        val lombokException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(LsiWorkspace(declarations = listOf(lombokValue, lombokTuple)))
+        val lombokException = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(lombokValue, lombokTuple)).toTypedTupleSchema()
         }
         assertTrue(lombokException.message.orEmpty().contains("lombok.Builder"))
-
-        val duplicateTupleId = LsiSymbolId.type("demo.DuplicateTuple")
-        val head = field(duplicateTupleId, "head", STRING_TYPE)
-        val lower = field(duplicateTupleId, "foo", STRING_TYPE)
-        val upper = field(duplicateTupleId, "Foo", STRING_TYPE)
-        val duplicateTuple = type(
-            qualifiedName = "demo.DuplicateTuple",
-            annotations = listOf(annotation(TYPED_TUPLE)),
-            memberIds = listOf(head.id, lower.id, upper.id),
-        )
-        val duplicateException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(
-                LsiWorkspace(declarations = listOf(head, lower, upper, duplicateTuple))
-            )
-        }
-        assertTrue(duplicateException.message.orEmpty().contains("duplicate builder"))
 
         val kotlinOrigin = sourceOrigin(LsiLanguage.KOTLIN, "demo/NotData.kt")
         val kotlinTupleId = LsiSymbolId.type("demo.NotData")
@@ -399,10 +366,9 @@ class TypedTuplePrecompilerTest {
             memberIds = listOf(kotlinProperty.id, kotlinConstructor.id),
             origin = kotlinOrigin,
         )
-        val kotlinException = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(
-                LsiWorkspace(declarations = listOf(kotlinProperty, kotlinConstructor, kotlinTuple))
-            )
+        val kotlinException = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(kotlinProperty, kotlinConstructor, kotlinTuple))
+                .toTypedTupleSchema()
         }
         assertTrue(kotlinException.message.orEmpty().contains("data class"))
     }
@@ -417,17 +383,18 @@ class TypedTuplePrecompilerTest {
             annotations = listOf(annotation(TYPED_TUPLE), annotation(LOMBOK_DATA)),
             memberIds = fields.map(LsiField::id),
         )
-        return TypedTuplePrecompiler().compile(
-            LsiWorkspace(declarations = fields + tuple)
-        ).tuples.single()
+        return LsiWorkspace(declarations = fields + tuple)
+            .toTypedTupleSchema()
+            .tuples
+            .single()
     }
 
     private fun assertRejected(
         type: LsiTypeDeclaration,
         messagePart: String,
-    ): TypedTuplePrecompileException {
-        val exception = assertFailsWith<TypedTuplePrecompileException> {
-            TypedTuplePrecompiler().compile(LsiWorkspace(declarations = listOf(type)))
+    ): TypedTupleValidationException {
+        val exception = assertFailsWith<TypedTupleValidationException> {
+            LsiWorkspace(declarations = listOf(type)).toTypedTupleSchema()
         }
         assertTrue(exception.message.orEmpty().contains(messagePart))
         return exception

@@ -20,6 +20,14 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.tuple.TypedTupleConstructorArgument
+import site.addzero.lsi.jimmer.tuple.TypedTupleDependencies
+import site.addzero.lsi.jimmer.tuple.TypedTupleJavaSetterConstruction
+import site.addzero.lsi.jimmer.tuple.TypedTupleKotlinConstructorConstruction
+import site.addzero.lsi.jimmer.tuple.TypedTupleProperty
+import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
+import site.addzero.lsi.jimmer.tuple.TypedTupleSetterAssignment
+import site.addzero.lsi.jimmer.tuple.TypedTupleType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -33,7 +41,7 @@ class TypedTupleRendererTest {
 
     @Test
     fun `java renderer matches legacy golden and compiles`() {
-        val fixture = fixture(TypedTuplePlatform.JAVA)
+        val fixture = fixture(LsiLanguage.JAVA)
         val artifact = fixture.schema
             .toLsiPoetArtifacts(fixture.workspace)
             .map(LsiJavaPoetRenderer()::render)
@@ -52,7 +60,7 @@ class TypedTupleRendererTest {
 
     @Test
     fun `kotlin renderer matches legacy golden and compiles`() {
-        val fixture = fixture(TypedTuplePlatform.KOTLIN)
+        val fixture = fixture(LsiLanguage.KOTLIN)
         val artifact = fixture.schema
             .toLsiPoetArtifacts(fixture.workspace)
             .map(LsiKotlinPoetRenderer()::render)
@@ -69,12 +77,7 @@ class TypedTupleRendererTest {
         compileKotlin(artifact.content)
     }
 
-    private fun fixture(platform: TypedTuplePlatform): Fixture {
-        val language = if (platform == TypedTuplePlatform.JAVA) {
-            LsiLanguage.JAVA
-        } else {
-            LsiLanguage.KOTLIN
-        }
+    private fun fixture(language: LsiLanguage): Fixture {
         val extension = if (language == LsiLanguage.JAVA) "java" else "kt"
         val tupleSource = LsiSource.of("demo/BookSummary.$extension", language)
         val unrelatedSource = LsiSource.of("demo/Unrelated.$extension", language)
@@ -86,7 +89,7 @@ class TypedTupleRendererTest {
             kind = LsiTypeDeclarationKind.CLASS,
             origin = origin,
         )
-        val sourceMemberIds = if (platform == TypedTuplePlatform.JAVA) {
+        val sourceMemberIds = if (language == LsiLanguage.JAVA) {
             listOf(
                 LsiSymbolId.field(TUPLE_ID, "book"),
                 LsiSymbolId.field(TUPLE_ID, "authorCount"),
@@ -104,10 +107,6 @@ class TypedTupleRendererTest {
                 name = "book",
                 index = 0,
                 type = BOOK_VIEW_TYPE,
-                nullable = false,
-                builderSimpleName = null,
-                nextStepTypeName = "AuthorCountBuilder",
-                typeDependencyIds = listOf(BOOK_VIEW_ID),
             ),
             TypedTupleProperty(
                 id = LsiSymbolId.property(TUPLE_ID, "authorCount"),
@@ -115,26 +114,22 @@ class TypedTupleRendererTest {
                 name = "authorCount",
                 index = 1,
                 type = LONG_TYPE,
-                nullable = false,
-                builderSimpleName = "AuthorCountBuilder",
-                nextStepTypeName = "BookSummaryMapper",
-                typeDependencyIds = emptyList(),
             ),
         )
-        val construction = when (platform) {
-            TypedTuplePlatform.JAVA -> TypedTupleJavaSetterPlan(
+        val construction = when (language) {
+            LsiLanguage.JAVA -> TypedTupleJavaSetterConstruction(
                 constructorId = null,
                 assignments = listOf(
                     TypedTupleSetterAssignment(sourceMemberIds[0], 0, "setBook"),
                     TypedTupleSetterAssignment(sourceMemberIds[1], 1, "setAuthorCount"),
                 ),
             )
-            TypedTuplePlatform.KOTLIN -> {
+            LsiLanguage.KOTLIN -> {
                 val constructorId = LsiSymbolId.constructor(
                     TUPLE_ID,
                     listOf("type:demo.BookView", "primitive:long"),
                 )
-                TypedTupleKotlinNamedPlan(
+                TypedTupleKotlinConstructorConstruction(
                     constructorId = constructorId,
                     arguments = listOf(
                         TypedTupleConstructorArgument(
@@ -154,18 +149,17 @@ class TypedTupleRendererTest {
                     ),
                 )
             }
+            LsiLanguage.UNKNOWN -> error("测试夹具仅支持 Java 或 Kotlin")
         }
         val dependencyMembers = (sourceMemberIds + construction.constructorId).filterNotNull().sorted()
-        val schema = TypedTuplePrecompiledSchema(
+        val schema = TypedTupleSchema(
             tuples = listOf(
                 TypedTupleType(
                     id = TUPLE_ID,
                     qualifiedName = "demo.BookSummary",
                     packageName = "demo",
                     simpleName = "BookSummary",
-                    mapperSimpleName = "BookSummaryMapper",
-                    mapperQualifiedName = "demo.BookSummaryMapper",
-                    platform = platform,
+                    sourceLanguage = language,
                     properties = properties,
                     construction = construction,
                     dependencies = TypedTupleDependencies(
@@ -254,7 +248,7 @@ class TypedTupleRendererTest {
     }
 
     private data class Fixture(
-        val schema: TypedTuplePrecompiledSchema,
+        val schema: TypedTupleSchema,
         val workspace: LsiWorkspace,
         val tupleSource: LsiSource,
         val dependencySymbols: Set<LsiSymbolId>,

@@ -10,26 +10,33 @@ import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
-import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
+import site.addzero.lsi.jimmer.tuple.TypedTupleValidationException
+import site.addzero.lsi.jimmer.tuple.fingerprint
+import site.addzero.lsi.jimmer.tuple.toTypedTupleSchema
+import site.addzero.lsi.jimmer.tuple.typedTupleTypeIds
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class TypedTupleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor("tuple")
+    override val descriptor = JimmerCompilerFeatureDescriptor(
+        id = TYPED_TUPLE_FEATURE_ID,
+        dependsOn = setOf(IMMUTABLE_FEATURE_ID, DTO_FEATURE_ID),
+    )
 
     override fun precompile(
         context: JimmerCompilerPrecompileContext,
     ): JimmerCompilerFeaturePrecompileResult {
         return try {
-            val schema = TypedTuplePrecompiler().compile(context.round.workspace)
+            val schema = context.round.workspace.toTypedTupleSchema()
+            schema.validateCodegenNames()
             JimmerCompilerFeaturePrecompileResult(
                 state = TypedTupleCompilerFeatureState(schema),
                 processedSymbols = schema.tuples.mapTo(sortedSetOf()) { tuple -> tuple.id },
             )
-        } catch (exception: TypedTuplePrecompileException) {
+        } catch (exception: TypedTupleValidationException) {
             val deferred = exception.recoverable &&
                 context.round.platform == CompilerPlatform.APT &&
                 !context.round.isFinal
@@ -87,38 +94,34 @@ class TypedTupleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 }
 
-private fun site.addzero.lsi.model.LsiWorkspace.typedTupleTypeIds(): Set<LsiSymbolId> {
-    return declarationsOfType<LsiTypeDeclaration>()
-        .filter { type -> type.annotations.any { annotation -> annotation.type == TYPED_TUPLE_ANNOTATION } }
-        .mapTo(sortedSetOf()) { type -> type.id }
-}
-
-private val TYPED_TUPLE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.TypedTuple")
-
 private data class TypedTupleCompilerFeatureState(
-    val schema: TypedTuplePrecompiledSchema,
+    val schema: TypedTupleSchema,
     val renderable: Boolean = true,
     override val fingerprint: String = schema.fingerprint(),
 ) : JimmerCompilerFeatureState {
 
     companion object {
-        fun deferred(exception: TypedTuplePrecompileException): TypedTupleCompilerFeatureState {
+        fun deferred(exception: TypedTupleValidationException): TypedTupleCompilerFeatureState {
             return failed("deferred", exception)
         }
 
-        fun invalid(exception: TypedTuplePrecompileException): TypedTupleCompilerFeatureState {
+        fun invalid(exception: TypedTupleValidationException): TypedTupleCompilerFeatureState {
             return failed("invalid", exception)
         }
 
         private fun failed(
             status: String,
-            exception: TypedTuplePrecompileException,
+            exception: TypedTupleValidationException,
         ): TypedTupleCompilerFeatureState {
             return TypedTupleCompilerFeatureState(
-                schema = TypedTuplePrecompiledSchema(emptyList()),
+                schema = TypedTupleSchema(emptyList()),
                 renderable = false,
                 fingerprint = "$status:${exception.declarationId.value}:${exception.message.orEmpty()}",
             )
         }
     }
 }
+
+private const val TYPED_TUPLE_FEATURE_ID = "tuple"
+private const val IMMUTABLE_FEATURE_ID = "immutable"
+private const val DTO_FEATURE_ID = "dto"

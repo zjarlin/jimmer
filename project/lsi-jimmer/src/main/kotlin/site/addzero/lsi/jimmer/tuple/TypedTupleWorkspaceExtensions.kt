@@ -1,16 +1,13 @@
-package org.babyfish.jimmer.compiler.tuple
+package site.addzero.lsi.jimmer.tuple
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
@@ -22,76 +19,64 @@ import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 
-class TypedTuplePrecompileException(
+/** TypedTuple 语义校验失败。 */
+class TypedTupleValidationException(
     val declarationId: LsiSymbolId,
     val recoverable: Boolean = false,
     message: String,
 ) : IllegalArgumentException(message)
 
-class TypedTuplePrecompiler {
-    fun compile(workspace: LsiWorkspace): TypedTuplePrecompiledSchema {
-        val types = workspace.declarationsOfType<LsiTypeDeclaration>()
+/** 将冻结的 LSI 工作区解析为 TypedTuple 共享语义。 */
+fun LsiWorkspace.toTypedTupleSchema(): TypedTupleSchema {
+    return TypedTupleSchemaBuilder(this).build()
+}
+
+/** 返回当前工作区直接声明的全部 TypedTuple 类型符号。 */
+fun LsiWorkspace.typedTupleTypeIds(): Set<LsiSymbolId> {
+    return declarationsOfType<LsiTypeDeclaration>()
+        .filter { type -> type.hasAnnotation(TYPED_TUPLE_ANNOTATION) }
+        .mapTo(sortedSetOf()) { type -> type.id }
+}
+
+private class TypedTupleSchemaBuilder(
+    private val workspace: LsiWorkspace,
+) {
+    fun build(): TypedTupleSchema {
+        val tuples = workspace.declarationsOfType<LsiTypeDeclaration>()
+            .asSequence()
+            .filter { type -> type.hasAnnotation(TYPED_TUPLE_ANNOTATION) }
             .sortedBy(LsiTypeDeclaration::qualifiedName)
-        val tuples = types
-            .filter { type -> type.annotations.any { annotation -> annotation.type == TYPED_TUPLE_ANNOTATION } }
-            .map { type -> compileType(type, workspace) }
-        return TypedTuplePrecompiledSchema(tuples)
+            .map(::compileType)
+            .toList()
+        return TypedTupleSchema(tuples)
     }
 
-    private fun compileType(
-        type: LsiTypeDeclaration,
-        workspace: LsiWorkspace,
-    ): TypedTupleType {
+    private fun compileType(type: LsiTypeDeclaration): TypedTupleType {
         val members = type.memberIds.map { memberId ->
-            workspace[memberId] ?: throw TypedTuplePrecompileException(
+            workspace[memberId] ?: throw TypedTupleValidationException(
                 declarationId = type.id,
                 recoverable = true,
                 message = "Typed tuple '${type.qualifiedName}' references missing member '${memberId.value}'",
             )
         }
-        val platform = determinePlatform(type, members)
-        validateType(type, platform, workspace)
-        val preparedType = when (platform) {
-            TypedTuplePlatform.JAVA -> prepareJavaType(type, members)
-            TypedTuplePlatform.KOTLIN -> prepareKotlinType(type, members)
+        val sourceLanguage = determineSourceLanguage(type, members)
+        validateType(type, sourceLanguage)
+        val preparedType = when (sourceLanguage) {
+            LsiLanguage.JAVA -> prepareJavaType(type, members)
+            LsiLanguage.KOTLIN -> prepareKotlinType(type, members)
+            LsiLanguage.UNKNOWN -> error("Typed tuple source language must be resolved")
         }
-
         val packageName = type.qualifiedName
             .removeSuffix(".${type.name}")
             .takeUnless { value -> value == type.qualifiedName }
             .orEmpty()
-        val mapperSimpleName = type.name + "Mapper"
-        val mapperQualifiedName = if (packageName.isEmpty()) {
-            mapperSimpleName
-        } else {
-            "$packageName.$mapperSimpleName"
-        }
         val properties = preparedType.properties.mapIndexed { index, property ->
-            val typeDependencyIds = property.type.dependencyTypeIds()
-            val nextProperty = preparedType.properties.getOrNull(index + 1)
             TypedTupleProperty(
                 id = LsiSymbolId.property(type.id, property.name),
                 sourceMemberId = property.sourceMemberId,
                 name = property.name,
                 index = index,
                 type = property.type,
-                nullable = property.type.nullability == LsiNullability.NULLABLE,
-                builderSimpleName = property.name.toTupleBuilderSimpleName().takeIf { index > 0 },
-                nextStepTypeName = nextProperty?.name?.toTupleBuilderSimpleName() ?: mapperSimpleName,
-                typeDependencyIds = typeDependencyIds,
-            )
-        }
-        val duplicateBuilderName = properties
-            .mapNotNull(TypedTupleProperty::builderSimpleName)
-            .groupingBy { builderName -> builderName }
-            .eachCount()
-            .entries
-            .firstOrNull { (_, count) -> count > 1 }
-            ?.key
-        if (duplicateBuilderName != null) {
-            throw TypedTuplePrecompileException(
-                declarationId = type.id,
-                message = "Typed tuple '${type.qualifiedName}' produces duplicate builder '$duplicateBuilderName'",
             )
         }
         val dependencies = TypedTupleDependencies(
@@ -108,63 +93,61 @@ class TypedTuplePrecompiler {
             qualifiedName = type.qualifiedName,
             packageName = packageName,
             simpleName = type.name,
-            mapperSimpleName = mapperSimpleName,
-            mapperQualifiedName = mapperQualifiedName,
-            platform = platform,
+            sourceLanguage = sourceLanguage,
             properties = properties,
             construction = preparedType.construction,
             dependencies = dependencies,
         )
     }
 
-    private fun determinePlatform(
+    private fun determineSourceLanguage(
         type: LsiTypeDeclaration,
         members: List<LsiDeclaration>,
-    ): TypedTuplePlatform {
+    ): LsiLanguage {
         return when (type.origin.source?.language) {
-            LsiLanguage.JAVA -> TypedTuplePlatform.JAVA
-            LsiLanguage.KOTLIN -> TypedTuplePlatform.KOTLIN
+            LsiLanguage.JAVA -> LsiLanguage.JAVA
+            LsiLanguage.KOTLIN -> LsiLanguage.KOTLIN
             LsiLanguage.UNKNOWN,
             null,
             -> if (type.dataClass || members.filterIsInstance<LsiConstructor>().any(LsiConstructor::primary)) {
-                TypedTuplePlatform.KOTLIN
+                LsiLanguage.KOTLIN
             } else {
-                TypedTuplePlatform.JAVA
+                LsiLanguage.JAVA
             }
         }
     }
 
     private fun validateType(
         type: LsiTypeDeclaration,
-        platform: TypedTuplePlatform,
-        workspace: LsiWorkspace,
+        sourceLanguage: LsiLanguage,
     ) {
         if (type.kind != LsiTypeDeclarationKind.CLASS) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = type.id,
                 message = "Type decorated by '@${TYPED_TUPLE_ANNOTATION.value}' must be a class",
             )
         }
         if (type.enclosingTypeId != null) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = type.id,
                 message = "Typed tuple '${type.qualifiedName}' must be a top-level class",
             )
         }
         if (type.typeParameters.isNotEmpty()) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = type.id,
                 message = "Typed tuple '${type.qualifiedName}' cannot be generic",
             )
         }
-        if (type.annotations.any { annotation -> annotation.type == LOMBOK_BUILDER_ANNOTATION }) {
-            throw TypedTuplePrecompileException(
+        if (type.hasAnnotation(LOMBOK_BUILDER_ANNOTATION)) {
+            throw TypedTupleValidationException(
                 declarationId = type.id,
-                message = "Typed tuple '${type.qualifiedName}' cannot be decorated by '@${LOMBOK_BUILDER_ANNOTATION.value}'",
+                message = "Typed tuple '${type.qualifiedName}' cannot be decorated by " +
+                    "'@${LOMBOK_BUILDER_ANNOTATION.value}'",
             )
         }
-        if (platform == TypedTuplePlatform.KOTLIN && !type.dataClass) {
-            throw TypedTuplePrecompileException(
+        if (sourceLanguage == LsiLanguage.KOTLIN && !type.dataClass) {
+            throw TypedTupleValidationException(
                 declarationId = type.id,
                 message = "Kotlin typed tuple '${type.qualifiedName}' must be a data class",
             )
@@ -177,26 +160,26 @@ class TypedTuplePrecompiler {
                     }
                     val hierarchyEntry = workspace.typeHierarchyEntry(superType.declarationId)
                     if (hierarchyEntry != null && hierarchyEntry.kind in CLASS_LIKE_TYPE_KINDS) {
-                        throw TypedTuplePrecompileException(
+                        throw TypedTupleValidationException(
                             declarationId = type.id,
                             message = "Typed tuple '${type.qualifiedName}' cannot inherit class " +
                                 "'${hierarchyEntry.qualifiedName}'",
                         )
                     }
                 }
-                is LsiUnresolvedType -> throw TypedTuplePrecompileException(
+                is LsiUnresolvedType -> throw TypedTupleValidationException(
                     declarationId = type.id,
                     recoverable = true,
                     message = "Typed tuple '${type.qualifiedName}' has unresolved supertype '${superType.displayName}'",
                 )
-                is LsiTypeParameterRef -> throw TypedTuplePrecompileException(
+                is LsiTypeParameterRef -> throw TypedTupleValidationException(
                     declarationId = type.id,
                     message = "Typed tuple '${type.qualifiedName}' cannot inherit a type parameter",
                 )
                 is LsiArrayType,
                 is LsiFunctionType,
                 is LsiPrimitiveType,
-                -> throw TypedTuplePrecompileException(
+                -> throw TypedTupleValidationException(
                     declarationId = type.id,
                     message = "Typed tuple '${type.qualifiedName}' has an invalid supertype",
                 )
@@ -212,7 +195,7 @@ class TypedTuplePrecompiler {
             .filterNot(LsiField::static)
         fields.forEach { field -> validateMemberOwner(type, field.id, field.ownerId) }
         if (fields.isEmpty()) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = type.id,
                 message = "Java typed tuple '${type.qualifiedName}' must declare at least one non-static field",
             )
@@ -223,48 +206,50 @@ class TypedTuplePrecompiler {
         }
         val constructors = members.filterIsInstance<LsiConstructor>()
         constructors.forEach { constructor -> validateMemberOwner(type, constructor.id, constructor.ownerId) }
-        val construction = determineJavaConstruction(type, fields, constructors)
-        return PreparedTypedTupleType(properties, construction)
+        return PreparedTypedTupleType(
+            properties = properties,
+            construction = determineJavaConstruction(type, fields, constructors),
+        )
     }
 
     private fun determineJavaConstruction(
         type: LsiTypeDeclaration,
         fields: List<LsiField>,
         constructors: List<LsiConstructor>,
-    ): TypedTupleConstructionPlan {
+    ): TypedTupleConstruction {
         if (type.hasAnnotation(LOMBOK_ALL_ARGS_CONSTRUCTOR_ANNOTATION)) {
-            return positionalPlan(fields)
+            return constructorConstruction(fields)
         }
         if (type.hasAnnotation(LOMBOK_NO_ARGS_CONSTRUCTOR_ANNOTATION)) {
-            return setterPlan(fields, constructors.accessibleDefaultConstructor()?.id)
+            return setterConstruction(fields, constructors.accessibleDefaultConstructor()?.id)
         }
         if (type.hasAnnotation(LOMBOK_DATA_ANNOTATION)) {
             val mutableStates = fields.map(LsiField::mutable).distinct()
             if (mutableStates.size > 1) {
-                throw TypedTuplePrecompileException(
+                throw TypedTupleValidationException(
                     declarationId = type.id,
                     message = "Java typed tuple '${type.qualifiedName}' uses '@${LOMBOK_DATA_ANNOTATION.value}' " +
                         "and cannot mix final and non-final fields",
                 )
             }
             return if (mutableStates.single()) {
-                setterPlan(fields, constructors.accessibleDefaultConstructor()?.id)
+                setterConstruction(fields, constructors.accessibleDefaultConstructor()?.id)
             } else {
-                positionalPlan(fields)
+                constructorConstruction(fields)
             }
         }
         val defaultConstructor = constructors.accessibleDefaultConstructor()
         if (defaultConstructor != null || constructors.isEmpty()) {
-            return setterPlan(fields, defaultConstructor?.id)
+            return setterConstruction(fields, defaultConstructor?.id)
         }
         val constructorMatch = constructors.asSequence()
             .filterNot { constructor -> constructor.visibility == LsiVisibility.PRIVATE }
             .mapNotNull { constructor -> constructor.matchFields(fields) }
             .firstOrNull()
         if (constructorMatch != null) {
-            return positionalPlan(fields, constructorMatch)
+            return constructorConstruction(fields, constructorMatch)
         }
-        throw TypedTuplePrecompileException(
+        throw TypedTupleValidationException(
             declarationId = type.id,
             message = "Java typed tuple '${type.qualifiedName}' must declare an accessible no-argument constructor " +
                 "or a constructor whose parameters match all fields by name and type",
@@ -280,18 +265,18 @@ class TypedTuplePrecompiler {
         properties.forEach { property -> validateMemberOwner(type, property.id, property.ownerId) }
         val primaryConstructor = members.filterIsInstance<LsiConstructor>()
             .singleOrNull(LsiConstructor::primary)
-            ?: throw TypedTuplePrecompileException(
+            ?: throw TypedTupleValidationException(
                 declarationId = type.id,
                 message = "Kotlin typed tuple '${type.qualifiedName}' must declare one primary constructor",
             )
         if (primaryConstructor.visibility == LsiVisibility.PRIVATE) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = primaryConstructor.id,
                 message = "Kotlin typed tuple primary constructor '${primaryConstructor.id.value}' cannot be private",
             )
         }
         if (primaryConstructor.parameters.isEmpty()) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = primaryConstructor.id,
                 message = "Kotlin typed tuple '${type.qualifiedName}' must declare at least one primary property",
             )
@@ -299,12 +284,12 @@ class TypedTuplePrecompiler {
         val propertiesByName = properties.associateBy(LsiProperty::name)
         val sourceProperties = primaryConstructor.parameters.map { parameter ->
             val property = propertiesByName[parameter.name]
-                ?: throw TypedTuplePrecompileException(
+                ?: throw TypedTupleValidationException(
                     declarationId = parameter.id,
                     message = "Kotlin typed tuple primary parameter '${parameter.name}' must declare a property",
                 )
             if (property.type != parameter.type) {
-                throw TypedTuplePrecompileException(
+                throw TypedTupleValidationException(
                     declarationId = parameter.id,
                     message = "Kotlin typed tuple primary property '${property.name}' must have the same type as its parameter",
                 )
@@ -324,7 +309,7 @@ class TypedTuplePrecompiler {
         }
         return PreparedTypedTupleType(
             properties = sourceProperties,
-            construction = TypedTupleKotlinNamedPlan(primaryConstructor.id, arguments),
+            construction = TypedTupleKotlinConstructorConstruction(primaryConstructor.id, arguments),
         )
     }
 
@@ -334,7 +319,7 @@ class TypedTuplePrecompiler {
         ownerId: LsiSymbolId,
     ) {
         if (ownerId != type.id) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = memberId,
                 message = "Typed tuple member '${memberId.value}' is not declared by '${type.qualifiedName}'",
             )
@@ -344,7 +329,7 @@ class TypedTuplePrecompiler {
 
 private data class PreparedTypedTupleType(
     val properties: List<SourceProperty>,
-    val construction: TypedTupleConstructionPlan,
+    val construction: TypedTupleConstruction,
 )
 
 private data class SourceProperty(
@@ -382,11 +367,11 @@ private fun LsiConstructor.matchFields(fields: List<LsiField>): JavaConstructorM
     return JavaConstructorMatch(this, matchedFields)
 }
 
-private fun setterPlan(
+private fun setterConstruction(
     fields: List<LsiField>,
     constructorId: LsiSymbolId?,
-): TypedTupleJavaSetterPlan {
-    return TypedTupleJavaSetterPlan(
+): TypedTupleJavaSetterConstruction {
+    return TypedTupleJavaSetterConstruction(
         constructorId = constructorId,
         assignments = fields.mapIndexed { propertyIndex, field ->
             TypedTupleSetterAssignment(
@@ -398,14 +383,14 @@ private fun setterPlan(
     )
 }
 
-private fun positionalPlan(
+private fun constructorConstruction(
     fields: List<LsiField>,
     match: JavaConstructorMatch? = null,
-): TypedTupleJavaPositionalPlan {
+): TypedTupleJavaConstructorConstruction {
     val fieldIndexes = fields.withIndex().associate { (index, field) -> field.id to index }
     val parameters = match?.constructor?.parameters
     val orderedFields = match?.fieldsByParameter ?: fields
-    return TypedTupleJavaPositionalPlan(
+    return TypedTupleJavaConstructorConstruction(
         constructorId = match?.constructor?.id,
         arguments = orderedFields.mapIndexed { parameterIndex, field ->
             val parameter = parameters?.get(parameterIndex)
@@ -433,21 +418,21 @@ private fun LsiTypeRef.validateTuplePropertyType(
             argument.type?.validateTuplePropertyType(tupleId, sourceMemberId)
         }
         is LsiArrayType -> elementType.validateTuplePropertyType(tupleId, sourceMemberId)
-        is LsiFunctionType -> throw TypedTuplePrecompileException(
+        is LsiFunctionType -> throw TypedTupleValidationException(
             declarationId = sourceMemberId,
             message = "Typed tuple property '${sourceMemberId.value}' cannot use a function type",
         )
         is LsiPrimitiveType -> if (kind == LsiPrimitiveKind.UNIT || kind == LsiPrimitiveKind.VOID) {
-            throw TypedTuplePrecompileException(
+            throw TypedTupleValidationException(
                 declarationId = sourceMemberId,
                 message = "Typed tuple property '${sourceMemberId.value}' cannot use ${kind.name.lowercase()} type",
             )
         }
-        is LsiTypeParameterRef -> throw TypedTuplePrecompileException(
+        is LsiTypeParameterRef -> throw TypedTupleValidationException(
             declarationId = sourceMemberId,
             message = "Typed tuple property '${sourceMemberId.value}' cannot reference a type parameter",
         )
-        is LsiUnresolvedType -> throw TypedTuplePrecompileException(
+        is LsiUnresolvedType -> throw TypedTupleValidationException(
             declarationId = tupleId,
             recoverable = true,
             message = "Typed tuple property '${sourceMemberId.value}' has unresolved type '$displayName'",
@@ -455,93 +440,9 @@ private fun LsiTypeRef.validateTuplePropertyType(
     }
 }
 
-private fun LsiTypeRef.dependencyTypeIds(): List<LsiSymbolId> {
-    return sortedSetOf<LsiSymbolId>()
-        .apply { collectDependencyType(this@dependencyTypeIds) }
-        .toList()
-}
-
-private fun MutableSet<LsiSymbolId>.collectDependencyType(type: LsiTypeRef) {
-    type.annotations.forEach(::collectDependencyAnnotation)
-    when (type) {
-        is LsiDeclaredType -> {
-            add(type.declarationId)
-            type.arguments.forEach { argument -> argument.type?.let(::collectDependencyType) }
-        }
-        is LsiArrayType -> collectDependencyType(type.elementType)
-        is LsiFunctionType -> {
-            type.receiverType?.let(::collectDependencyType)
-            type.parameterTypes.forEach(::collectDependencyType)
-            collectDependencyType(type.returnType)
-        }
-        is LsiPrimitiveType,
-        is LsiTypeParameterRef,
-        is LsiUnresolvedType,
-        -> Unit
-    }
-}
-
-private fun MutableSet<LsiSymbolId>.collectDependencyAnnotation(annotation: LsiAnnotation) {
-    add(annotation.type)
-    annotation.arguments.values.forEach { argument -> collectDependencyAnnotationValue(argument.value) }
-}
-
-private fun MutableSet<LsiSymbolId>.collectDependencyAnnotationValue(value: LsiAnnotationValue) {
-    when (value) {
-        is LsiAnnotationValue.ArrayValue -> value.elements.forEach(::collectDependencyAnnotationValue)
-        is LsiAnnotationValue.ClassValue -> collectDependencyType(value.type)
-        is LsiAnnotationValue.EnumValue -> add(value.enumType)
-        is LsiAnnotationValue.NestedAnnotationValue -> collectDependencyAnnotation(value.annotation)
-        is LsiAnnotationValue.BooleanValue,
-        is LsiAnnotationValue.ByteValue,
-        is LsiAnnotationValue.ShortValue,
-        is LsiAnnotationValue.IntValue,
-        is LsiAnnotationValue.LongValue,
-        is LsiAnnotationValue.FloatValue,
-        is LsiAnnotationValue.DoubleValue,
-        is LsiAnnotationValue.CharValue,
-        is LsiAnnotationValue.StringValue,
-        -> Unit
-    }
-}
-
-private fun String.toTupleBuilderSimpleName(): String {
-    return typeName(this, "Builder")
-}
-
 private fun identifierName(vararg parts: String): String {
     val result = StringBuilder()
     var previousPartEndsWithLowercase = false
-    for (part in parts) {
-        if (part.isEmpty()) {
-            continue
-        }
-        if (previousPartEndsWithLowercase) {
-            if (part.first().isUpperCase()) {
-                result.append(part)
-            } else {
-                result.append(part.first().uppercaseChar()).append(part.drop(1))
-            }
-        } else if (part.first().isLowerCase()) {
-            result.append(part)
-        } else {
-            val characters = part.toCharArray()
-            for (index in characters.indices) {
-                if (characters[index].isLowerCase()) {
-                    break
-                }
-                characters[index] = characters[index].lowercaseChar()
-            }
-            result.append(characters)
-        }
-        previousPartEndsWithLowercase = part.last().isLowerCase()
-    }
-    return result.toString()
-}
-
-private fun typeName(vararg parts: String): String {
-    val result = StringBuilder()
-    var previousPartEndsWithLowercase = true
     for (part in parts) {
         if (part.isEmpty()) {
             continue

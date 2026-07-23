@@ -3,6 +3,12 @@ package org.babyfish.jimmer.compiler.tuple
 import site.addzero.lsi.codegen.classifyArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.tuple.TypedTupleJavaConstructorConstruction
+import site.addzero.lsi.jimmer.tuple.TypedTupleJavaSetterConstruction
+import site.addzero.lsi.jimmer.tuple.TypedTupleKotlinConstructorConstruction
+import site.addzero.lsi.jimmer.tuple.TypedTupleProperty
+import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
+import site.addzero.lsi.jimmer.tuple.TypedTupleType
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
@@ -26,24 +32,20 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
 
-internal fun TypedTuplePrecompiledSchema.toLsiPoetArtifacts(
+internal fun TypedTupleSchema.toLsiPoetArtifacts(
     workspace: LsiWorkspace,
 ): List<LsiPoetArtifact> {
     return tuples.map { tuple -> tuple.toLsiPoet(workspace) }
 }
 
 private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
-    val language = when (platform) {
-        TypedTuplePlatform.JAVA -> LsiLanguage.JAVA
-        TypedTuplePlatform.KOTLIN -> LsiLanguage.KOTLIN
-    }
     val originatingSymbols = setOf(id)
     val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencies.symbolIds.toSet()
     val dependencySources = workspace.originatingSources(dependencySymbols)
     return LsiPoetArtifact(
         file = LsiPoetFile(
-            language = language,
+            language = sourceLanguage,
             packageName = packageName,
             fileName = mapperSimpleName,
             members = listOf(mapperType()),
@@ -61,9 +63,10 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
 }
 
 private fun TypedTupleType.mapperType(): LsiPoetType {
-    return when (platform) {
-        TypedTuplePlatform.JAVA -> javaMapperType()
-        TypedTuplePlatform.KOTLIN -> kotlinMapperType()
+    return when (sourceLanguage) {
+        LsiLanguage.JAVA -> javaMapperType()
+        LsiLanguage.KOTLIN -> kotlinMapperType()
+        LsiLanguage.UNKNOWN -> error("Typed tuple '${id.value}' has unknown source language")
     }
 }
 
@@ -178,14 +181,14 @@ private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiTypeRef): LsiPo
 
 private fun TypedTupleType.javaCreateTupleBody(tupleType: LsiTypeRef): LsiPoetCodeBlock {
     return when (val plan = construction) {
-        is TypedTupleJavaPositionalPlan -> javaPositionalTupleBody(plan, tupleType)
-        is TypedTupleJavaSetterPlan -> javaSetterTupleBody(plan, tupleType)
+        is TypedTupleJavaConstructorConstruction -> javaPositionalTupleBody(plan, tupleType)
+        is TypedTupleJavaSetterConstruction -> javaSetterTupleBody(plan, tupleType)
         else -> error("Java typed tuple '${id.value}' has unsupported construction plan '$plan'")
     }
 }
 
 private fun TypedTupleType.javaPositionalTupleBody(
-    plan: TypedTupleJavaPositionalPlan,
+    plan: TypedTupleJavaConstructorConstruction,
     tupleType: LsiTypeRef,
 ): LsiPoetCodeBlock {
     return code {
@@ -217,7 +220,7 @@ private fun TypedTupleType.javaPositionalTupleBody(
 }
 
 private fun TypedTupleType.javaSetterTupleBody(
-    plan: TypedTupleJavaSetterPlan,
+    plan: TypedTupleJavaSetterConstruction,
     tupleType: LsiTypeRef,
 ): LsiPoetCodeBlock {
     return code {
@@ -284,7 +287,7 @@ private fun TypedTupleType.javaBuilderType(
     property: TypedTupleProperty,
     mapperType: LsiTypeRef,
 ): LsiPoetType {
-    val builderSimpleName = requireNotNull(property.builderSimpleName)
+    val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
     return LsiPoetType(
         name = builderSimpleName,
@@ -346,7 +349,7 @@ private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiTypeRef): Lsi
 }
 
 private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiTypeRef): LsiPoetCodeBlock {
-    val plan = construction as? TypedTupleKotlinNamedPlan
+    val plan = construction as? TypedTupleKotlinConstructorConstruction
         ?: error("Kotlin typed tuple '${id.value}' has unsupported construction plan '$construction'")
     return code {
         returnValue {
@@ -379,7 +382,7 @@ private fun TypedTupleType.kotlinBuilderType(
     property: TypedTupleProperty,
     mapperType: LsiTypeRef,
 ): LsiPoetType {
-    val builderSimpleName = requireNotNull(property.builderSimpleName)
+    val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
     return LsiPoetType(
         name = builderSimpleName,
@@ -451,10 +454,11 @@ private fun TypedTupleType.stepType(
     property: TypedTupleProperty,
     mapperType: LsiTypeRef,
 ): LsiTypeRef {
-    return if (property.nextStepTypeName == mapperSimpleName) {
+    val nextStepTypeName = nextStepTypeName(property)
+    return if (nextStepTypeName == mapperSimpleName) {
         mapperType
     } else {
-        declaredType("$mapperQualifiedName.${property.nextStepTypeName}")
+        declaredType("$mapperQualifiedName.$nextStepTypeName")
     }
 }
 

@@ -1,11 +1,13 @@
-package org.babyfish.jimmer.compiler.tuple
+package site.addzero.lsi.jimmer.tuple
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.stableSignature
 
-fun TypedTuplePrecompiledSchema.normalizedSnapshot(): String {
+/** 生成跨前端比较使用的 TypedTuple 规范化快照。 */
+fun TypedTupleSchema.normalizedSnapshot(): String {
     return buildString {
         tuples.sortedBy(TypedTupleType::id).forEach { tuple ->
             appendRecord(
@@ -14,8 +16,6 @@ fun TypedTuplePrecompiledSchema.normalizedSnapshot(): String {
                 tuple.qualifiedName,
                 tuple.packageName,
                 tuple.simpleName,
-                tuple.mapperSimpleName,
-                tuple.mapperQualifiedName,
             )
             tuple.dependencies.typeIds.forEach { typeId ->
                 appendRecord("type-dependency", tuple.id.value, typeId.value)
@@ -32,8 +32,6 @@ fun TypedTuplePrecompiledSchema.normalizedSnapshot(): String {
                     property.index.toString(),
                     property.type.normalizedTupleTypeSignature(),
                     property.nullable.toString(),
-                    property.builderSimpleName.orEmpty(),
-                    property.nextStepTypeName,
                     property.typeDependencyIds.joinToString(",") { typeId -> typeId.value },
                 )
             }
@@ -41,24 +39,23 @@ fun TypedTuplePrecompiledSchema.normalizedSnapshot(): String {
     }
 }
 
-fun TypedTuplePrecompiledSchema.fingerprint(): String {
+/** 计算包含源语言与构造契约的 TypedTuple SHA-256 指纹。 */
+fun TypedTupleSchema.fingerprint(): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes = digest.digest(renderSnapshot().toByteArray(StandardCharsets.UTF_8))
     return bytes.joinToString("") { byte -> "%02x".format(byte) }
 }
 
-private fun TypedTuplePrecompiledSchema.renderSnapshot(): String {
+private fun TypedTupleSchema.renderSnapshot(): String {
     return buildString {
-        tuples.forEach { tuple ->
+        tuples.sortedBy(TypedTupleType::id).forEach { tuple ->
             appendRecord(
                 "render-tuple",
                 tuple.id.value,
                 tuple.qualifiedName,
                 tuple.packageName,
                 tuple.simpleName,
-                tuple.mapperSimpleName,
-                tuple.mapperQualifiedName,
-                tuple.platform.name,
+                tuple.sourceLanguage.name,
             )
             tuple.dependencies.typeIds.forEach { typeId ->
                 appendRecord("render-type-dependency", tuple.id.value, typeId.value)
@@ -66,7 +63,7 @@ private fun TypedTuplePrecompiledSchema.renderSnapshot(): String {
             tuple.dependencies.memberIds.forEach { memberId ->
                 appendRecord("render-member-dependency", tuple.id.value, memberId.value)
             }
-            tuple.properties.forEach { property ->
+            tuple.properties.sortedBy(TypedTupleProperty::index).forEach { property ->
                 appendRecord(
                     "render-property",
                     tuple.id.value,
@@ -76,8 +73,6 @@ private fun TypedTuplePrecompiledSchema.renderSnapshot(): String {
                     property.index.toString(),
                     property.type.stableSignature(),
                     property.nullable.toString(),
-                    property.builderSimpleName.orEmpty(),
-                    property.nextStepTypeName,
                     property.typeDependencyIds.joinToString(",") { typeId -> typeId.value },
                 )
             }
@@ -88,7 +83,7 @@ private fun TypedTuplePrecompiledSchema.renderSnapshot(): String {
 
 private fun StringBuilder.appendConstruction(tuple: TypedTupleType) {
     when (val construction = tuple.construction) {
-        is TypedTupleJavaSetterPlan -> {
+        is TypedTupleJavaSetterConstruction -> {
             appendRecord(
                 "render-construction",
                 tuple.id.value,
@@ -105,22 +100,22 @@ private fun StringBuilder.appendConstruction(tuple: TypedTupleType) {
                 )
             }
         }
-        is TypedTupleJavaPositionalPlan -> {
+        is TypedTupleJavaConstructorConstruction -> {
             appendRecord(
                 "render-construction",
                 tuple.id.value,
-                "java-positional",
+                "java-constructor",
                 construction.constructorId?.value.orEmpty(),
             )
             construction.arguments.forEach { argument ->
                 appendConstructorArgument(tuple.id, argument)
             }
         }
-        is TypedTupleKotlinNamedPlan -> {
+        is TypedTupleKotlinConstructorConstruction -> {
             appendRecord(
                 "render-construction",
                 tuple.id.value,
-                "kotlin-named",
+                "kotlin-constructor",
                 construction.constructorId.value,
             )
             construction.arguments.forEach { argument ->
@@ -131,7 +126,7 @@ private fun StringBuilder.appendConstruction(tuple: TypedTupleType) {
 }
 
 private fun StringBuilder.appendConstructorArgument(
-    tupleId: site.addzero.lsi.core.LsiSymbolId,
+    tupleId: LsiSymbolId,
     argument: TypedTupleConstructorArgument,
 ) {
     appendRecord(

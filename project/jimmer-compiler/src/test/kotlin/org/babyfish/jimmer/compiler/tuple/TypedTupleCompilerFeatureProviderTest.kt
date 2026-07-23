@@ -85,12 +85,12 @@ class TypedTupleCompilerFeatureProviderTest {
     }
 
     @Test
-    fun `tuple feature is registered without unavailable dependencies`() {
+    fun `tuple feature declares immutable and dto dependencies`() {
         val descriptor = JimmerCompilerFeatureProviders.load()
             .single { candidate -> candidate.descriptor.id == "tuple" }
             .descriptor
 
-        assertTrue(descriptor.dependsOn.isEmpty())
+        assertEquals(setOf("immutable", "dto"), descriptor.dependsOn)
     }
 
     private fun context(
