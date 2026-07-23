@@ -55,8 +55,12 @@ import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.DtoInterfaceAccessorContract
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
+import site.addzero.lsi.jimmer.dto.DtoInterfacePropContract
 import site.addzero.lsi.jimmer.dto.DtoType
 
 class JimmerDtoCompilerFeatureProviderTest {
@@ -655,7 +659,27 @@ class JimmerDtoCompilerFeatureProviderTest {
                 if (contract.typeId != rootTypeId) {
                     contract
                 } else {
-                    contract.copy(superInterfaceTypeIds = listOf(LsiSymbolId.type("demo.RenderView")))
+                    val interfaceTypeId = LsiSymbolId.type("demo.RenderView")
+                    val propertyId = LsiSymbolId.property(interfaceTypeId, "label")
+                    val origin = LsiOrigin(LsiOriginKind.SYNTHETIC)
+                    contract.copy(
+                        superInterfaceTypeIds = listOf(interfaceTypeId),
+                        props = listOf(
+                            DtoInterfacePropContract(
+                                declaringTypeId = interfaceTypeId,
+                                name = "label",
+                                type = STRING_TYPE,
+                                mutable = false,
+                                getter = DtoInterfaceAccessorContract(
+                                    declarationId = propertyId,
+                                    name = "label",
+                                    origin = origin,
+                                ),
+                                setter = null,
+                                origin = origin,
+                            ),
+                        ),
+                    )
                 }
             },
         )
@@ -665,13 +689,217 @@ class JimmerDtoCompilerFeatureProviderTest {
         val interfaceChanged = JimmerDtoPrecompiledSchema(
             listOf(document.copy(interfaceContractResolution = interfaceResolution)),
         )
+        val interfaceBaseline = interfaceChanged
+        val interfaceProp = interfaceResolution.contracts.single { contract ->
+            contract.typeId == rootTypeId
+        }.props.single()
+        val interfaceSuperTypesChanged = interfaceResolution.copy(
+            contracts = interfaceResolution.contracts.map { contract ->
+                if (contract.typeId != rootTypeId) {
+                    contract
+                } else {
+                    contract.copy(
+                        superInterfaceTypeIds = contract.superInterfaceTypeIds +
+                            LsiSymbolId.type("demo.ExtraRenderView"),
+                    )
+                }
+            },
+        )
+        val interfacePropDeclaringTypeChanged = interfaceResolution.copy(
+            contracts = interfaceResolution.contracts.map { contract ->
+                if (contract.typeId != rootTypeId) {
+                    contract
+                } else {
+                    contract.copy(
+                        props = listOf(
+                            interfaceProp.copy(
+                                declaringTypeId = LsiSymbolId.type("demo.OtherRenderView"),
+                            ),
+                        ),
+                    )
+                }
+            },
+        )
+        val interfacePropTypeChanged = interfaceResolution.copy(
+            contracts = interfaceResolution.contracts.map { contract ->
+                if (contract.typeId != rootTypeId) {
+                    contract
+                } else {
+                    contract.copy(
+                        props = listOf(interfaceProp.copy(type = LONG_TYPE)),
+                    )
+                }
+            },
+        )
+        val interfacePropMutabilityChanged = interfaceResolution.copy(
+            contracts = interfaceResolution.contracts.map { contract ->
+                if (contract.typeId != rootTypeId) {
+                    contract
+                } else {
+                    val setterId = LsiSymbolId.function(
+                        interfaceProp.declaringTypeId,
+                        "setLabel",
+                        listOf(interfaceProp.type.stableSignature()),
+                    )
+                    contract.copy(
+                        props = listOf(
+                            interfaceProp.copy(
+                                mutable = true,
+                                setter = DtoInterfaceAccessorContract(
+                                    declarationId = setterId,
+                                    name = "setLabel",
+                                    origin = interfaceProp.origin,
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            },
+        )
+        val interfacePropAccessorChanged = interfaceResolution.copy(
+            contracts = interfaceResolution.contracts.map { contract ->
+                if (contract.typeId != rootTypeId) {
+                    contract
+                } else {
+                    contract.copy(
+                        props = listOf(
+                            interfaceProp.copy(
+                                getter = requireNotNull(interfaceProp.getter).copy(name = "getLabel"),
+                            ),
+                        ),
+                    )
+                }
+            },
+        )
+        val interfacePropAccessorDeclarationChanged = interfaceResolution.copy(
+            contracts = interfaceResolution.contracts.map { contract ->
+                if (contract.typeId != rootTypeId) {
+                    contract
+                } else {
+                    contract.copy(
+                        props = listOf(
+                            interfaceProp.copy(
+                                getter = requireNotNull(interfaceProp.getter).copy(
+                                    declarationId = LsiSymbolId.property(
+                                        interfaceProp.declaringTypeId,
+                                        "alternateLabel",
+                                    ),
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            },
+        )
+        val interfacePropOriginChanged = interfaceResolution.copy(
+            contracts = interfaceResolution.contracts.map { contract ->
+                if (contract.typeId != rootTypeId) {
+                    contract
+                } else {
+                    val origin = LsiOrigin(
+                        kind = LsiOriginKind.GENERATED,
+                        originatingSymbols = setOf(interfaceProp.declaringTypeId),
+                    )
+                    contract.copy(
+                        props = listOf(
+                            interfaceProp.copy(
+                                getter = requireNotNull(interfaceProp.getter).copy(origin = origin),
+                                origin = origin,
+                            ),
+                        ),
+                    )
+                }
+            },
+        )
 
         assertTrue("annotation-contract|" in baseline.normalizedSnapshot())
         assertTrue("interface-contract|" in baseline.normalizedSnapshot())
         assertNotEquals(baseline.normalizedSnapshot(), annotationChanged.normalizedSnapshot())
         assertNotEquals(baseline.normalizedSnapshot(), interfaceChanged.normalizedSnapshot())
+        assertNotEquals(
+            interfaceBaseline.normalizedSnapshot(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfaceSuperTypesChanged)),
+            ).normalizedSnapshot(),
+        )
+        assertNotEquals(
+            interfaceBaseline.normalizedSnapshot(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropDeclaringTypeChanged)),
+            ).normalizedSnapshot(),
+        )
+        assertNotEquals(
+            interfaceBaseline.normalizedSnapshot(),
+            JimmerDtoPrecompiledSchema(listOf(document.copy(interfaceContractResolution = interfacePropTypeChanged)))
+                .normalizedSnapshot(),
+        )
+        assertNotEquals(
+            interfaceBaseline.normalizedSnapshot(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropMutabilityChanged)),
+            ).normalizedSnapshot(),
+        )
+        assertNotEquals(
+            interfaceBaseline.normalizedSnapshot(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropAccessorChanged)),
+            ).normalizedSnapshot(),
+        )
+        assertNotEquals(
+            interfaceBaseline.normalizedSnapshot(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropAccessorDeclarationChanged)),
+            ).normalizedSnapshot(),
+        )
+        assertNotEquals(
+            interfaceBaseline.normalizedSnapshot(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropOriginChanged)),
+            ).normalizedSnapshot(),
+        )
         assertNotEquals(baseline.fingerprint(), annotationChanged.fingerprint())
         assertNotEquals(baseline.fingerprint(), interfaceChanged.fingerprint())
+        assertNotEquals(
+            interfaceBaseline.fingerprint(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfaceSuperTypesChanged)),
+            ).fingerprint(),
+        )
+        assertNotEquals(
+            interfaceBaseline.fingerprint(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropDeclaringTypeChanged)),
+            ).fingerprint(),
+        )
+        assertNotEquals(
+            interfaceBaseline.fingerprint(),
+            JimmerDtoPrecompiledSchema(listOf(document.copy(interfaceContractResolution = interfacePropTypeChanged)))
+                .fingerprint(),
+        )
+        assertNotEquals(
+            interfaceBaseline.fingerprint(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropMutabilityChanged)),
+            ).fingerprint(),
+        )
+        assertNotEquals(
+            interfaceBaseline.fingerprint(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropAccessorChanged)),
+            ).fingerprint(),
+        )
+        assertNotEquals(
+            interfaceBaseline.fingerprint(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropAccessorDeclarationChanged)),
+            ).fingerprint(),
+        )
+        assertNotEquals(
+            interfaceBaseline.fingerprint(),
+            JimmerDtoPrecompiledSchema(
+                listOf(document.copy(interfaceContractResolution = interfacePropOriginChanged)),
+            ).fingerprint(),
+        )
         assertNotEquals(dtoState(baseline).fingerprint, dtoState(annotationChanged).fingerprint)
         assertNotEquals(dtoState(baseline).fingerprint, dtoState(interfaceChanged).fingerprint)
     }

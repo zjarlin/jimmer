@@ -39,10 +39,18 @@ import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
 import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
 import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
 import org.babyfish.jimmer.dto.compiler.DtoModifier
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiOrigin
+import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiNullability
+import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 
 class JimmerDtoFrontendParityTest {
 
@@ -69,8 +77,8 @@ class JimmerDtoFrontendParityTest {
             kspDocument.annotationContract.propPlans,
         )
         assertEquals(
-            aptDocument.interfaceContractResolution,
-            kspDocument.interfaceContractResolution,
+            aptDocument.interfaceContractResolution.canonicalizeFrontendMetadata(),
+            kspDocument.interfaceContractResolution.canonicalizeFrontendMetadata(),
         )
         val aptConfigContract = aptDocument.configContractResolution.contracts.single()
         val kspConfigContract = kspDocument.configContractResolution.contracts.single()
@@ -100,11 +108,53 @@ class JimmerDtoFrontendParityTest {
                             }
                         },
                     ),
+                    interfaceContractResolution = aptDocument.interfaceContractResolution
+                        .canonicalizeFrontendMetadata(),
                 ),
             ),
         )
-        assertEquals(canonicalAptSchema.normalizedSnapshot(), ksp.dtoSchema.normalizedSnapshot())
-        assertEquals(canonicalAptSchema.fingerprint(), ksp.dtoSchema.fingerprint())
+        val canonicalKspSchema = JimmerDtoPrecompiledSchema(
+            documents = listOf(
+                kspDocument.copy(
+                    interfaceContractResolution = kspDocument.interfaceContractResolution
+                        .canonicalizeFrontendMetadata(),
+                ),
+            ),
+        )
+        assertEquals(canonicalAptSchema.normalizedSnapshot(), canonicalKspSchema.normalizedSnapshot())
+        assertEquals(canonicalAptSchema.fingerprint(), canonicalKspSchema.fingerprint())
+
+        val interfaceContract = aptDocument.interfaceContractResolution.contracts.single { contract ->
+            VIEW_CONTRACT_ID in contract.superInterfaceTypeIds
+        }
+        assertEquals(VIEW_CONTRACT_ID, interfaceContract.superInterfaceTypeIds.single())
+        val aptLabelProp = interfaceContract.props.single()
+        val kspInterfaceContract = kspDocument.interfaceContractResolution.contracts.single { contract ->
+            VIEW_CONTRACT_ID in contract.superInterfaceTypeIds
+        }
+        val kspLabelProp = kspInterfaceContract.props.single()
+        assertEquals("label", aptLabelProp.name)
+        assertEquals(VIEW_CONTRACT_ID, aptLabelProp.declaringTypeId)
+        assertEquals(LABEL_VALUE_ID, (aptLabelProp.type as LsiDeclaredType).declarationId)
+        assertEquals(LABEL_VALUE_ID, (kspLabelProp.type as LsiDeclaredType).declarationId)
+        assertEquals("type:demo.LabelValue!platform", aptLabelProp.type.stableSignature())
+        assertEquals("type:demo.LabelValue!non-null", kspLabelProp.type.stableSignature())
+        assertEquals(false, aptLabelProp.mutable)
+        assertEquals("label", aptLabelProp.getter?.name)
+        assertEquals(null, aptLabelProp.setter)
+        assertEquals(LsiOriginKind.SOURCE, aptLabelProp.origin.kind)
+        assertEquals(LsiLanguage.JAVA, aptLabelProp.origin.language)
+        assertTrue(aptLabelProp.origin.source?.path?.endsWith("demo/AuthorFilter.java") == true)
+        assertTrue(aptLabelProp.origin.originatingSymbols.isEmpty())
+        assertEquals(aptLabelProp.origin, aptLabelProp.getter?.origin)
+        assertEquals(LsiOriginKind.SOURCE, kspLabelProp.origin.kind)
+        assertEquals(LsiLanguage.KOTLIN, kspLabelProp.origin.language)
+        assertTrue(kspLabelProp.origin.source?.path?.endsWith("demo/Models.kt") == true)
+        assertTrue(kspLabelProp.origin.originatingSymbols.isEmpty())
+        assertEquals(kspLabelProp.origin, kspLabelProp.getter?.origin)
+        val aptSnapshot = apt.dtoSchema.normalizedSnapshot()
+        assertTrue("interface-prop|" in aptSnapshot)
+        assertTrue("type:demo.ViewContract/property:label" in aptSnapshot)
 
         val bookType = apt.immutableSchema.typesById.getValue(BOOK_ID)
         val nameProp = bookType.props.single { prop -> prop.name == "name" }
@@ -323,6 +373,40 @@ class JimmerDtoFrontendParityTest {
         val dtoSchema: JimmerDtoPrecompiledSchema,
     )
 
+    /**
+     * Java 未标注的泛型返回值是 platform 类型，Kotlin 同义声明是 non-null 类型。
+     */
+    private fun DtoInterfaceContractResolution.canonicalizeFrontendMetadata(): DtoInterfaceContractResolution {
+        val origin = LsiOrigin(LsiOriginKind.SYNTHETIC)
+        return copy(
+            contracts = contracts.map { contract ->
+                contract.copy(
+                    props = contract.props.map { prop ->
+                        prop.copy(
+                            type = prop.type.canonicalizeFrontendNullability(),
+                            getter = prop.getter?.copy(origin = origin),
+                            setter = prop.setter?.copy(origin = origin),
+                            origin = origin,
+                        )
+                    },
+                )
+            },
+        )
+    }
+
+    private fun LsiTypeRef.canonicalizeFrontendNullability(): LsiTypeRef {
+        return when (this) {
+            is LsiDeclaredType -> copy(
+                nullability = if (nullability == LsiNullability.PLATFORM) {
+                    LsiNullability.NON_NULL
+                } else {
+                    nullability
+                },
+            )
+            else -> this
+        }
+    }
+
     private companion object {
         val BOOK_ID: LsiSymbolId = LsiSymbolId.type("demo.Book")
         val STORE_ID: LsiSymbolId = LsiSymbolId.type("demo.Store")
@@ -330,9 +414,11 @@ class JimmerDtoFrontendParityTest {
         val AUTHOR_TABLE_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorTable")
         val FILTER_ID: LsiSymbolId = LsiSymbolId.type("demo.AuthorFilter")
         val MARKER_ID: LsiSymbolId = LsiSymbolId.type("demo.Marker")
+        val LABEL_VALUE_ID: LsiSymbolId = LsiSymbolId.type("demo.LabelValue")
+        val VIEW_CONTRACT_ID: LsiSymbolId = LsiSymbolId.type("demo.ViewContract")
 
         val DTO_SOURCE = """
-            BookView {
+            BookView implements demo.ViewContract<demo.LabelValue> {
                 id
                 name
                 rating
@@ -398,6 +484,12 @@ class JimmerDtoFrontendParityTest {
             }
 
             interface AuthorTable extends Table<Author> {}
+
+            interface LabelValue {}
+
+            interface ViewContract<T> {
+                T label();
+            }
 
             public class AuthorFilter implements FieldFilter<AuthorTable> {
                 public AuthorFilter() {}
@@ -471,6 +563,12 @@ class JimmerDtoFrontendParityTest {
 
             class AuthorFilter() : KFieldFilter<Author> {
                 override fun KFieldFilterDsl<Author>.applyTo() = Unit
+            }
+
+            interface LabelValue
+
+            interface ViewContract<T> {
+                val label: T
             }
 
             /**

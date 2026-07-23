@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
@@ -27,12 +27,15 @@ import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
-import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoType
-import site.addzero.lsi.jimmer.dto.DtoTypeRef
-import site.addzero.lsi.jimmer.dto.DtoVariance
 
-internal class DtoInterfaceContractResolver(
+/** 解析 DTO 图声明的接口契约。 */
+fun LsiWorkspace.resolveDtoInterfaceContracts(
+    graph: DtoGraph,
+): DtoInterfaceContractResolution {
+    return DtoInterfaceContractResolver(this).resolve(graph)
+}
+
+private class DtoInterfaceContractResolver(
     private val workspace: LsiWorkspace,
     private val typeSystem: LsiTypeSystem = LsiTypeSystem(workspace),
 ) {

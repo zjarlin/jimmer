@@ -13,6 +13,8 @@ import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
 import site.addzero.lsi.jimmer.dto.DtoConfigValue
 import site.addzero.lsi.jimmer.dto.DtoEnumType
 import site.addzero.lsi.jimmer.dto.DtoFoldProp
+import site.addzero.lsi.jimmer.dto.DtoInterfaceAccessorContract
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoLikeOption
 import site.addzero.lsi.jimmer.dto.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPredicate

@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +35,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoVariance
 
-class DtoInterfaceContractResolverTest {
+class DtoInterfaceContractTest {
 
     @Test
     fun `accepts binary java setter projection without a source and rejects kotlin projection`() {
@@ -93,10 +93,10 @@ class DtoInterfaceContractResolverTest {
             )
         }
 
-        val javaResolution = DtoInterfaceContractResolver(workspace(LsiLanguage.JAVA)).resolve(
+        val javaResolution = workspace(LsiLanguage.JAVA).resolveDtoInterfaceContracts(
             graph(listOf(typeRef("contract.BinaryContract"))),
         )
-        val kotlinResolution = DtoInterfaceContractResolver(workspace(LsiLanguage.KOTLIN)).resolve(
+        val kotlinResolution = workspace(LsiLanguage.KOTLIN).resolveDtoInterfaceContracts(
             graph(listOf(typeRef("contract.BinaryContract"))),
         )
 
@@ -193,7 +193,7 @@ class DtoInterfaceContractResolverTest {
             ),
         )
 
-        val resolution = DtoInterfaceContractResolver(workspace).resolve(graph)
+        val resolution = workspace.resolveDtoInterfaceContracts(graph)
 
         assertTrue(resolution.successful)
         val prop = resolution.contracts.single().props.single()
@@ -241,7 +241,7 @@ class DtoInterfaceContractResolverTest {
             ),
         )
 
-        val resolution = DtoInterfaceContractResolver(workspace).resolve(
+        val resolution = workspace.resolveDtoInterfaceContracts(
             graph(listOf(typeRef("contract.Properties"))),
         )
 
@@ -304,7 +304,7 @@ class DtoInterfaceContractResolverTest {
         )
         val stringArgument = listOf(typeArgument(typeRef("String")))
 
-        val resolution = DtoInterfaceContractResolver(workspace).resolve(
+        val resolution = workspace.resolveDtoInterfaceContracts(
             graph(
                 listOf(
                     typeRef("contract.DiamondLeft", stringArgument),
@@ -334,7 +334,7 @@ class DtoInterfaceContractResolverTest {
                 ),
             ),
         )
-        val resolution = DtoInterfaceContractResolver(workspace).resolve(
+        val resolution = workspace.resolveDtoInterfaceContracts(
             graph(
                 listOf(
                     typeRef("contract.Missing"),
@@ -368,7 +368,7 @@ class DtoInterfaceContractResolverTest {
                 ),
             ),
         )
-        val resolution = DtoInterfaceContractResolver(workspace).resolve(
+        val resolution = workspace.resolveDtoInterfaceContracts(
             graph(
                 listOf(
                     typeRef(
@@ -439,7 +439,7 @@ class DtoInterfaceContractResolverTest {
             ),
         )
 
-        val resolution = DtoInterfaceContractResolver(workspace).resolve(
+        val resolution = workspace.resolveDtoInterfaceContracts(
             graph(listOf(typeRef("contract.Illegal"))),
         )
 
@@ -511,7 +511,7 @@ class DtoInterfaceContractResolverTest {
             ),
         )
 
-        val resolution = DtoInterfaceContractResolver(workspace).resolve(
+        val resolution = workspace.resolveDtoInterfaceContracts(
             graph(listOf(typeRef("contract.Functions"))),
         )
 
@@ -555,8 +555,8 @@ class DtoInterfaceContractResolverTest {
         )
         val graph = graph(listOf(typeRef("contract.Left"), typeRef("contract.Right")))
 
-        val first = DtoInterfaceContractResolver(LsiWorkspace(declarations = declarations)).resolve(graph)
-        val second = DtoInterfaceContractResolver(LsiWorkspace(declarations = declarations.reversed())).resolve(graph)
+        val first = LsiWorkspace(declarations = declarations).resolveDtoInterfaceContracts(graph)
+        val second = LsiWorkspace(declarations = declarations.reversed()).resolveDtoInterfaceContracts(graph)
 
         assertEquals(first.diagnostics, second.diagnostics)
         assertEquals(listOf("jimmer.dto.interface.conflicting-property-type"), first.diagnostics.map { it.code })

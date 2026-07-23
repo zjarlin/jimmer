@@ -1,12 +1,11 @@
-package org.babyfish.jimmer.compiler.dto
+package site.addzero.lsi.jimmer.dto
 
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.jimmer.dto.DtoTypeId
 
-internal data class DtoInterfaceContractResolution(
+data class DtoInterfaceContractResolution(
     val contracts: List<DtoInterfaceContract>,
     val diagnostics: List<LsiDiagnostic>,
 ) {
@@ -25,7 +24,7 @@ internal data class DtoInterfaceContractResolution(
     }
 }
 
-internal data class DtoInterfaceContract(
+data class DtoInterfaceContract(
     val typeId: DtoTypeId,
     val superInterfaceTypeIds: List<LsiSymbolId>,
     val props: List<DtoInterfacePropContract>,
@@ -47,7 +46,7 @@ internal data class DtoInterfaceContract(
     }
 }
 
-internal data class DtoInterfacePropContract(
+data class DtoInterfacePropContract(
     val declaringTypeId: LsiSymbolId,
     val name: String,
     val type: LsiTypeRef,
@@ -68,7 +67,7 @@ internal data class DtoInterfacePropContract(
     }
 }
 
-internal data class DtoInterfaceAccessorContract(
+data class DtoInterfaceAccessorContract(
     val declarationId: LsiSymbolId,
     val name: String,
     val origin: LsiOrigin,

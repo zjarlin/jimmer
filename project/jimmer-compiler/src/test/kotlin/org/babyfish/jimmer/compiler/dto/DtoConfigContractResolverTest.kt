@@ -47,6 +47,8 @@ import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
 import site.addzero.lsi.jimmer.dto.DtoFetchType
 import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPropConfig
 import site.addzero.lsi.jimmer.dto.DtoPropId
