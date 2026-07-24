@@ -5,6 +5,7 @@ import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -109,6 +110,45 @@ fun DtoType.polymorphicRootDiscriminatorPropNameOrNull(
     return requireNotNull(immutableSchema.propsById[discriminatorPropId]) {
         "No immutable discriminator property '${discriminatorPropId.value}' for DTO type: ${id.value}"
     }.name
+}
+
+/** 返回多态输入 DTO 显式选择的判别属性；未选择时返回空。 */
+fun DtoType.selectedPolymorphicInputDiscriminatorPropOrNull(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): DtoBaseProp? {
+    if (DtoModifier.INPUT !in modifiers) {
+        return null
+    }
+    val baseTypeId = requireNotNull(baseTypeId) {
+        "Polymorphic input discriminator resolution requires a base immutable type: ${id.value}"
+    }
+    val baseType = requireNotNull(immutableSchema.typesById[baseTypeId]) {
+        "No immutable base type '${baseTypeId.value}' for DTO type: ${id.value}"
+    }
+    if (baseType.kind != ImmutableTypeKind.ENTITY || baseType.inheritanceRootTypeId == null) {
+        return null
+    }
+    var result: DtoBaseProp? = null
+    for (prop in basePropsInDeclarationOrder(graph)) {
+        if (prop.nextPropId != null) {
+            continue
+        }
+        val basePropId = prop.baseProps.first().propId
+        val immutableProp = requireNotNull(immutableSchema.propsById[basePropId]) {
+            "No immutable base property '${basePropId.value}' for DTO property '${prop.id.value}'"
+        }
+        if (immutableProp.primaryMapping != PrimaryMapping.DISCRIMINATOR) {
+            continue
+        }
+        val previous = result
+        require(previous == null || previous.name == prop.name) {
+            "Discriminator property cannot be selected by polymorphic input DTO " +
+                "\"${name ?: id.value}\" more than once"
+        }
+        result = prop
+    }
+    return result
 }
 
 /** 判断 DTO 属性访问器是否接受 null 作为可写入值。 */

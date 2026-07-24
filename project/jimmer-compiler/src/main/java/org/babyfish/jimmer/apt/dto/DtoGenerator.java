@@ -513,8 +513,12 @@ public class DtoGenerator {
     }
 
     private void addJacksonTypeInfo(DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism) {
-        DtoProp<ImmutableType, ImmutableProp> discriminatorProp =
-                selectedPolymorphicInputDiscriminatorProp(dtoType);
+        DtoBaseProp discriminatorProp =
+                DtoAccessorExtensionsKt.selectedPolymorphicInputDiscriminatorPropOrNull(
+                        lsiDtoType,
+                        lsiGraph,
+                        immutableSchema
+                );
         String property = discriminatorProp != null ?
                 discriminatorProp.getName() :
                 DtoAccessorExtensionsKt.polymorphicRootDiscriminatorPropNameOrNull(
@@ -599,35 +603,6 @@ public class DtoGenerator {
                 annotationContract,
                 annotationType.reflectionName()
         );
-    }
-
-    @Nullable
-    private DtoProp<ImmutableType, ImmutableProp> selectedPolymorphicInputDiscriminatorProp(
-            DtoType<ImmutableType, ImmutableProp> dtoType
-    ) {
-        if (!dtoType.getModifiers().contains(DtoModifier.INPUT) ||
-                !dtoType.getBaseType().isEntity() ||
-                dtoType.getBaseType().getInheritanceRoot() == null) {
-            return null;
-        }
-        DtoProp<ImmutableType, ImmutableProp> result = null;
-        for (AbstractProp abstractProp : dtoType.getProps()) {
-            if (abstractProp instanceof DtoProp<?, ?>) {
-                DtoProp<ImmutableType, ImmutableProp> prop = asDtoProp(abstractProp);
-                if (prop.getNextProp() == null && prop.getBaseProp().isDiscriminator()) {
-                    if (result != null && !result.getName().equals(prop.getName())) {
-                        throw new GeneratorException(
-                                "Discriminator property cannot be selected by polymorphic input DTO \"" +
-                                        dtoType.getName() +
-                                        "\" more than once",
-                                null
-                        );
-                    }
-                    result = prop;
-                }
-            }
-        }
-        return result;
     }
 
     public String getSimpleName() {

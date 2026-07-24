@@ -55,6 +55,7 @@ import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiredPropNames
+import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
 import site.addzero.lsi.jimmer.dto.tailProp
 import site.addzero.lsi.jimmer.dto.userProp
 import site.addzero.lsi.model.LsiWorkspace
@@ -420,7 +421,10 @@ internal class DtoGenerator private constructor(
     private fun TypeSpec.Builder.addJacksonTypeInfo(
         polymorphism: DtoPolymorphism<ImmutableType, ImmutableProp>
     ) {
-        val discriminatorProp = selectedPolymorphicInputDiscriminatorProp(dtoType)
+        val discriminatorProp = lsiDtoType.selectedPolymorphicInputDiscriminatorPropOrNull(
+            lsiGraph,
+            immutableSchema,
+        )
         val property = discriminatorProp?.name
             ?: lsiDtoType.polymorphicRootDiscriminatorPropNameOrNull(immutableSchema)
             ?: return
@@ -499,34 +503,6 @@ internal class DtoGenerator private constructor(
             annotationContract = annotationContract,
             annotationTypeId = LsiSymbolId.type(annotationType.reflectionName()),
         )
-    }
-
-    private fun selectedPolymorphicInputDiscriminatorProp(
-        dtoType: DtoType<ImmutableType, ImmutableProp>
-    ): DtoProp<ImmutableType, ImmutableProp>? {
-        if (!dtoType.modifiers.contains(DtoModifier.INPUT) ||
-            !dtoType.baseType.isEntity ||
-            dtoType.baseType.inheritanceRoot === null
-        ) {
-            return null
-        }
-        var result: DtoProp<ImmutableType, ImmutableProp>? = null
-        for (prop in dtoType.props) {
-            if (prop is DtoProp<*, *>) {
-                val dtoProp = prop.asDtoProp()
-                if (dtoProp.nextProp === null && dtoProp.baseProp.isDiscriminator) {
-                    val old = result
-                    if (old !== null && old.name != dtoProp.name) {
-                        throw DtoException(
-                            "Discriminator property cannot be selected by polymorphic input DTO " +
-                                    "\"${dtoType.name}\" more than once"
-                        )
-                    }
-                    result = dtoProp
-                }
-            }
-        }
-        return result
     }
 
     private fun addDoc() {

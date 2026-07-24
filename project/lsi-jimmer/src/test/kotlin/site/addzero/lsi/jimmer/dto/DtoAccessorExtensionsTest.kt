@@ -259,7 +259,7 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
-    fun `resolves polymorphic discriminator name from the frozen inheritance root`() {
+    fun `resolves polymorphic discriminator semantics from frozen models`() {
         val rootTypeId = LsiSymbolId.type("demo.Publication")
         val rootIdProp = immutableProp(
             name = "id",
@@ -330,6 +330,113 @@ class DtoAccessorExtensionsTest {
         assertFailsWith<IllegalArgumentException> {
             rootType.copy(discriminatorPropId = rootIdProp.id)
         }
+
+        val selectedProp = baseProp(
+            name = "category",
+            idSuffix = "selected-discriminator",
+            baseName = inheritedDiscriminator.name,
+        ).copy(
+            baseProps = listOf(
+                DtoBasePropBinding(inheritedDiscriminator.name, inheritedDiscriminator.id),
+                DtoBasePropBinding(inheritedIdProp.name, inheritedIdProp.id),
+            ),
+        )
+        val selectedType = dtoType.copy(
+            modifiers = setOf(DtoModifier.INPUT),
+            propIds = listOf(selectedProp.id),
+            hiddenFlatPropIds = emptyList(),
+        )
+        val selectedGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(selectedType),
+            props = listOf(selectedProp),
+        )
+
+        assertEquals(
+            selectedProp,
+            selectedType.selectedPolymorphicInputDiscriminatorPropOrNull(selectedGraph, schema),
+        )
+        val scalarFirstPropId = DtoPropId("dto#scalar-first")
+        val scalarFirstProp = selectedProp.copy(
+            id = scalarFirstPropId,
+            name = "ignored",
+            alias = "ignored",
+            tailPropId = scalarFirstPropId,
+            baseProps = listOf(
+                DtoBasePropBinding(inheritedIdProp.name, inheritedIdProp.id),
+                DtoBasePropBinding(inheritedDiscriminator.name, inheritedDiscriminator.id),
+            ),
+        )
+        val scalarFirstType = selectedType.copy(propIds = listOf(scalarFirstProp.id))
+        val scalarFirstGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(scalarFirstType),
+            props = listOf(scalarFirstProp),
+        )
+        assertEquals(
+            null,
+            scalarFirstType.selectedPolymorphicInputDiscriminatorPropOrNull(
+                scalarFirstGraph,
+                schema,
+            ),
+        )
+        assertEquals(
+            null,
+            selectedType
+                .copy(modifiers = emptySet())
+                .selectedPolymorphicInputDiscriminatorPropOrNull(
+                    selectedGraph.copy(
+                        types = listOf(selectedType.copy(modifiers = emptySet())),
+                    ),
+                    schema,
+                ),
+        )
+        val secondSelectedProp = selectedProp.copy(
+            id = DtoPropId("dto#second-selected-discriminator"),
+            name = "type",
+            alias = "type",
+            tailPropId = DtoPropId("dto#second-selected-discriminator"),
+        )
+        val duplicateType = selectedType.copy(
+            propIds = listOf(selectedProp.id, secondSelectedProp.id),
+        )
+        val duplicateGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(duplicateType),
+            props = listOf(selectedProp, secondSelectedProp).sortedBy(DtoProp::id),
+        )
+        val duplicateException = assertFailsWith<IllegalArgumentException> {
+            duplicateType.selectedPolymorphicInputDiscriminatorPropOrNull(duplicateGraph, schema)
+        }
+        assertEquals(
+            "Discriminator property cannot be selected by polymorphic input DTO " +
+                "\"BookInput\" more than once",
+            duplicateException.message,
+        )
+        val missingBindingId = LsiSymbolId.property(BASE_TYPE_ID, "missing")
+        val missingBindingProp = selectedProp.copy(
+            baseProps = listOf(DtoBasePropBinding("missing", missingBindingId)),
+        )
+        val missingBindingGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(selectedType),
+            props = listOf(missingBindingProp),
+        )
+        val missingBindingException = assertFailsWith<IllegalArgumentException> {
+            selectedType.selectedPolymorphicInputDiscriminatorPropOrNull(
+                missingBindingGraph,
+                schema,
+            )
+        }
+        assertEquals(
+            "No immutable base property '${missingBindingId.value}' for DTO property " +
+                "'${selectedProp.id.value}'",
+            missingBindingException.message,
+        )
     }
 
     @Test
