@@ -111,6 +111,20 @@ fun DtoType.polymorphicRootDiscriminatorPropNameOrNull(
     }.name
 }
 
+/** 判断 DTO 属性访问器是否接受 null 作为可写入值。 */
+fun DtoBaseProp.acceptsNullInAccessor(graph: DtoGraph): Boolean {
+    require(graph.propsById[id] == this) {
+        "DTO property does not belong to this graph: ${id.value}"
+    }
+    val ownerType = graph.typesById.getValue(ownerTypeId)
+    return !(nullable && (
+        !tailProp(graph).baseNullable ||
+            DtoModifier.SPECIFICATION in ownerType.modifiers ||
+            DtoModifier.FUZZY in ownerType.modifiers ||
+            inputModifier == DtoModifier.FUZZY
+    ))
+}
+
 /** 返回动态输入属性对应的加载状态访问器名称。 */
 fun DtoBaseProp.loadedAccessorName(): String {
     require(inputModifier == DtoModifier.DYNAMIC && nullable) {

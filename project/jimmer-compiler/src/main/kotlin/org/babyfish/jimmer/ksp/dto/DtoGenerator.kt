@@ -37,6 +37,7 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
+import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
 import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.configImplementationTypeOrNull
 import site.addzero.lsi.jimmer.dto.contractFor
@@ -1992,7 +1993,7 @@ internal class DtoGenerator private constructor(
         addAccessorField(
             prop,
             accessorFieldName(prop.name),
-            accessorAcceptsNull(prop),
+            lsiDtoType.baseProp(lsiGraph, prop.name).acceptsNullInAccessor(lsiGraph),
             true
         )
     }
@@ -2160,14 +2161,6 @@ internal class DtoGenerator private constructor(
         )
         addProperty(builder.build())
     }
-
-    private fun accessorAcceptsNull(prop: DtoProp<ImmutableType, ImmutableProp>): Boolean =
-        !(prop.isNullable() && (!prop.toTailProp().getBaseProp().isNullable ||
-                dtoType.modifiers.contains(DtoModifier.SPECIFICATION) ||
-                dtoType.modifiers.contains(DtoModifier.FUZZY) ||
-                prop.inputModifier == DtoModifier.FUZZY
-                )
-                )
 
     private fun TypeSpec.Builder.addSpecificationConverter(prop: DtoProp<ImmutableType, ImmutableProp>) {
         if (!isSpecificationConverterRequired(prop)) {

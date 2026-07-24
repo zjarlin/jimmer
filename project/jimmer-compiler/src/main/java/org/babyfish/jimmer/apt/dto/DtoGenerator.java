@@ -1216,7 +1216,10 @@ public class DtoGenerator {
         addAccessorField(
                 prop,
                 accessorFieldName(prop.getName()),
-                accessorAcceptsNull(prop),
+                DtoAccessorExtensionsKt.acceptsNullInAccessor(
+                        DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, prop.getName()),
+                        lsiGraph
+                ),
                 true
         );
     }
@@ -1371,15 +1374,6 @@ public class DtoGenerator {
         cb.add("\n)");
         builder.initializer(cb.build());
         typeBuilder.addField(builder.build());
-    }
-
-    private boolean accessorAcceptsNull(DtoProp<ImmutableType, ImmutableProp> prop) {
-        return !(prop.isNullable() && (
-                !prop.toTailProp().getBaseProp().isNullable() ||
-                        dtoType.getModifiers().contains(DtoModifier.SPECIFICATION) ||
-                        dtoType.getModifiers().contains(DtoModifier.FUZZY) ||
-                        prop.getInputModifier() == DtoModifier.FUZZY)
-        );
     }
 
     private void addValueToEnum(CodeBlock.Builder cb, DtoProp<ImmutableType, ImmutableProp> prop, String variableName) {

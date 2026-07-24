@@ -333,6 +333,92 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `derives accessor null acceptance from frozen tail and input semantics`() {
+        fun acceptsNull(
+            nullable: Boolean,
+            baseNullable: Boolean,
+            ownerModifiers: Set<DtoModifier> = setOf(DtoModifier.INPUT),
+            inputModifier: DtoModifier = DtoModifier.STATIC,
+        ): Boolean {
+            val prop = baseProp(
+                name = "value",
+                nullable = nullable,
+                baseNullable = baseNullable,
+                modifier = inputModifier,
+            )
+            val graph = singlePropGraph(prop)
+            val ownerType = graph.types.single().copy(modifiers = ownerModifiers)
+            val semanticGraph = DtoGraph(
+                source = graph.source,
+                rootTypeIds = graph.rootTypeIds,
+                types = listOf(ownerType),
+                props = graph.props,
+            )
+            return prop.acceptsNullInAccessor(semanticGraph)
+        }
+
+        assertTrue(acceptsNull(nullable = false, baseNullable = false))
+        assertTrue(acceptsNull(nullable = true, baseNullable = true))
+        assertFalse(acceptsNull(nullable = true, baseNullable = false))
+        assertFalse(
+            acceptsNull(
+                nullable = true,
+                baseNullable = true,
+                ownerModifiers = setOf(DtoModifier.SPECIFICATION),
+            ),
+        )
+        assertFalse(
+            acceptsNull(
+                nullable = true,
+                baseNullable = true,
+                ownerModifiers = setOf(DtoModifier.INPUT, DtoModifier.FUZZY),
+            ),
+        )
+        assertFalse(
+            acceptsNull(
+                nullable = true,
+                baseNullable = true,
+                inputModifier = DtoModifier.FUZZY,
+            ),
+        )
+
+        val tailProp = baseProp(
+            name = "tail",
+            idSuffix = "tail",
+            baseNullable = false,
+        )
+        val pathProp = baseProp(
+            name = "path",
+            idSuffix = "path",
+            nullable = true,
+            baseNullable = true,
+        ).copy(
+            nextPropId = tailProp.id,
+            tailPropId = tailProp.id,
+        )
+        val ownerType = singlePropGraph(
+            pathProp.copy(nextPropId = null, tailPropId = pathProp.id),
+        ).types.single()
+        val pathGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(ownerType),
+            props = listOf(pathProp, tailProp).sortedBy(DtoProp::id),
+        )
+
+        assertFalse(pathProp.acceptsNullInAccessor(pathGraph))
+        val otherPropId = DtoPropId("dto#other")
+        val otherProp = pathProp.copy(
+            id = otherPropId,
+            nextPropId = null,
+            tailPropId = otherPropId,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            pathProp.acceptsNullInAccessor(singlePropGraph(otherProp))
+        }
+    }
+
+    @Test
     fun `derives Java accessors from final DTO value semantics`() {
         assertEquals("isActive", valueAccessorName("active"))
         assertEquals("isEnabled", valueAccessorName("isEnabled"))
@@ -679,6 +765,7 @@ class DtoAccessorExtensionsTest {
         modifier: DtoModifier = DtoModifier.STATIC,
         idSuffix: String = name,
         nullable: Boolean = false,
+        baseNullable: Boolean = false,
         baseName: String = name,
     ): DtoBaseProp {
         val propId = DtoPropId("dto#$idSuffix")
@@ -701,7 +788,7 @@ class DtoAccessorExtensionsTest {
             basePath = baseName,
             nextPropId = null,
             tailPropId = propId,
-            baseNullable = false,
+            baseNullable = baseNullable,
             inputModifier = modifier,
             functionName = null,
             targetTypeId = null,
