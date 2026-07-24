@@ -18,6 +18,10 @@ internal object KspDtoTypeRefRenderer {
         return render(typeRef.toLsiType(LsiLanguage.KOTLIN), workspace)
     }
 
+    fun render(type: LsiTypeRef, workspace: LsiWorkspace): TypeName {
+        return render(type, workspace, emptyList())
+    }
+
     fun render(
         typeRef: DtoReusableTypeReference,
         workspace: LsiWorkspace,
@@ -29,7 +33,7 @@ internal object KspDtoTypeRefRenderer {
     private fun render(
         type: LsiTypeRef,
         workspace: LsiWorkspace,
-        generatedTypeNames: Collection<LsiPoetTypeName> = emptyList(),
+        generatedTypeNames: Collection<LsiPoetTypeName>,
     ): TypeName {
         return LsiKotlinPoetRenderer().renderTypeName(
             type = type,

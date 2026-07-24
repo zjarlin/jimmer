@@ -76,6 +76,7 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                             workspace = lsiRoundResult.round.workspace,
                             annotationContractsBySource = dtoState.annotationContractsBySource,
                             interfaceContractsBySource = dtoState.interfaceContractsBySource,
+                            configContractsBySource = dtoState.configContractsBySource,
                         ).process()
                         generated = generated || generatedDto
                     }

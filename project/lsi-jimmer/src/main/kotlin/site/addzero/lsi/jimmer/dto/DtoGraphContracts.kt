@@ -18,4 +18,31 @@ fun DtoGraph.requireResolvedContracts(
     require(configContractResolution.contracts.all { contract -> contract.propId in propsById }) {
         "DTO config contracts must reference frozen DTO properties: ${source.path}"
     }
+    val expectedConfigImplementations = buildList {
+        props.filterIsInstance<DtoBaseProp>().forEach { prop ->
+            prop.config?.filter?.let { filter ->
+                add(DtoConfigImplementation(prop.id, DtoConfigContractKind.FILTER, filter.typeId))
+            }
+            prop.config?.recursion?.let { recursion ->
+                add(DtoConfigImplementation(prop.id, DtoConfigContractKind.RECURSION, recursion.typeId))
+            }
+        }
+    }
+    val resolvedConfigImplementations = configContractResolution.contracts.map { contract ->
+        DtoConfigImplementation(contract.propId, contract.kind, contract.implementationTypeId)
+    }
+    require(resolvedConfigImplementations.all(expectedConfigImplementations::contains)) {
+        "DTO config contracts must exactly match frozen property configs: ${source.path}; " +
+            "expected=$expectedConfigImplementations, resolved=$resolvedConfigImplementations"
+    }
+    require(!configContractResolution.successful || resolvedConfigImplementations == expectedConfigImplementations) {
+        "Successful DTO config contracts must cover every frozen property config: ${source.path}; " +
+            "expected=$expectedConfigImplementations, resolved=$resolvedConfigImplementations"
+    }
 }
+
+private data class DtoConfigImplementation(
+    val propId: DtoPropId,
+    val kind: DtoConfigContractKind,
+    val typeId: site.addzero.lsi.core.LsiSymbolId,
+)

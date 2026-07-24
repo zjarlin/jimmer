@@ -154,6 +154,57 @@ class DtoGraphSnapshotTest {
             )
         }
         assertContains(requireNotNull(unknownConfigProp.message), "frozen DTO properties")
+
+        graph.requireResolvedContracts(
+            annotationContract,
+            interfaceResolution,
+            DtoConfigContractResolution(
+                contracts = emptyList(),
+                diagnostics = emptyList(),
+                unresolvedTypeIds = listOf(FILTER_TYPE_ID),
+            ),
+        )
+
+        val missingConfig = assertFailsWith<IllegalArgumentException> {
+            graph.requireResolvedContracts(
+                annotationContract,
+                interfaceResolution,
+                DtoConfigContractResolution(emptyList(), emptyList()),
+            )
+        }
+        assertContains(requireNotNull(missingConfig.message), "cover every frozen property config")
+
+        val wrongConfig = assertFailsWith<IllegalArgumentException> {
+            graph.requireResolvedContracts(
+                annotationContract,
+                interfaceResolution,
+                DtoConfigContractResolution(
+                    contracts = listOf(
+                        configContract(BASE_PROP_ID).copy(kind = DtoConfigContractKind.RECURSION)
+                    ),
+                    diagnostics = emptyList(),
+                ),
+            )
+        }
+        assertContains(requireNotNull(wrongConfig.message), "exactly match frozen property configs")
+
+        val wrongImplementationTypeId = LsiSymbolId.type("demo.WrongBookFilter")
+        val wrongImplementation = assertFailsWith<IllegalArgumentException> {
+            graph.requireResolvedContracts(
+                annotationContract,
+                interfaceResolution,
+                DtoConfigContractResolution(
+                    contracts = listOf(
+                        configContract(BASE_PROP_ID).copy(
+                            implementationTypeId = wrongImplementationTypeId,
+                            dependencyTypeIds = listOf(BOOK_TYPE_ID, wrongImplementationTypeId).sorted(),
+                        )
+                    ),
+                    diagnostics = emptyList(),
+                ),
+            )
+        }
+        assertContains(requireNotNull(wrongImplementation.message), "exactly match frozen property configs")
     }
 
     private fun graph(): DtoGraph {

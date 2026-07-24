@@ -17,6 +17,7 @@ import org.babyfish.jimmer.ksp.util.fastResolve
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoTypeId
@@ -35,6 +36,7 @@ internal class DtoProcessor(
     private val workspace: LsiWorkspace,
     private val annotationContractsBySource: Map<LsiSource, DtoAnnotationContract>,
     private val interfaceContractsBySource: Map<LsiSource, DtoInterfaceContractResolution>,
+    private val configContractsBySource: Map<LsiSource, DtoConfigContractResolution>,
 ) {
     private val graphBySourcePath = graphs.associateBy { graph -> graph.source.path }.also { graphMap ->
         require(graphMap.size == graphs.size) { "Frozen DTO graph source paths must be unique" }
@@ -143,6 +145,10 @@ internal class DtoProcessor(
                 ?: throw DtoException(
                     "No frozen DTO interface contract for \"${graph.source.path}\""
                 )
+            val configContractResolution = configContractsBySource[graph.source]
+                ?: throw DtoException(
+                    "No frozen DTO config contract for \"${graph.source.path}\""
+                )
             DtoGenerator(
                 ctx = ctx,
                 mutable = mutable,
@@ -155,6 +161,7 @@ internal class DtoProcessor(
                 workspace = workspace,
                 annotationContract = annotationContract,
                 interfaceContractResolution = interfaceContractResolution,
+                configContractResolution = configContractResolution,
                 rootDtoTypeNamesByTypeId = rootDtoTypeNamesByTypeId,
             ).generate(allFiles)
         }

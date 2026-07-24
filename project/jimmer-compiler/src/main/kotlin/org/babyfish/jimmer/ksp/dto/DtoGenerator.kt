@@ -30,12 +30,15 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
+import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.baseProp
+import site.addzero.lsi.jimmer.dto.configImplementationTypeOrNull
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
@@ -66,6 +69,7 @@ internal class DtoGenerator private constructor(
     private val workspace: LsiWorkspace,
     private val annotationContract: DtoAnnotationContract,
     private val interfaceContractResolution: DtoInterfaceContractResolution,
+    private val configContractResolution: DtoConfigContractResolution,
     private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     private val generatedDtoPackageName: String,
     private val generatedDtoSimpleNames: List<String>,
@@ -124,6 +128,7 @@ internal class DtoGenerator private constructor(
         workspace: LsiWorkspace,
         annotationContract: DtoAnnotationContract,
         interfaceContractResolution: DtoInterfaceContractResolution,
+        configContractResolution: DtoConfigContractResolution,
         rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     ) : this(
         ctx,
@@ -137,6 +142,7 @@ internal class DtoGenerator private constructor(
         workspace,
         annotationContract,
         interfaceContractResolution,
+        configContractResolution,
         rootDtoTypeNamesByTypeId,
         rootDtoTypeNamesByTypeId.getValue(lsiDtoType.id).packageName,
         rootDtoTypeNamesByTypeId.getValue(lsiDtoType.id).simpleNames,
@@ -167,6 +173,7 @@ internal class DtoGenerator private constructor(
         workspace = parent.workspace,
         annotationContract = parent.annotationContract,
         interfaceContractResolution = parent.interfaceContractResolution,
+        configContractResolution = parent.configContractResolution,
         rootDtoTypeNamesByTypeId = parent.rootDtoTypeNamesByTypeId,
         generatedDtoPackageName = parent.generatedDtoPackageName,
         generatedDtoSimpleNames = parent.generatedDtoSimpleNames + innerClassName,
@@ -1013,6 +1020,17 @@ internal class DtoGenerator private constructor(
         prop: DtoProp<ImmutableType, ImmutableProp>,
     ) {
         val cfg = prop.getConfig() ?: return
+        val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
+        val filterType = lsiProp.configImplementationTypeOrNull(
+            graph = lsiGraph,
+            resolution = configContractResolution,
+            kind = DtoConfigContractKind.FILTER,
+        )
+        val recursionType = lsiProp.configImplementationTypeOrNull(
+            graph = lsiGraph,
+            resolution = configContractResolution,
+            kind = DtoConfigContractKind.RECURSION,
+        )
         add(" {")
         indent()
         when {
@@ -1055,14 +1073,14 @@ internal class DtoGenerator private constructor(
                 add("\n}")
             }
 
-            cfg.filterType != null -> {
-                val filterTypeName = cfg.filterType!!.qualifiedName
-                add("\nfilter(%L())", filterTypeName)
+            filterType != null -> {
+                val filterTypeName = KspDtoTypeRefRenderer.render(filterType, workspace)
+                add("\nfilter(%L())", filterTypeName.toString())
             }
         }
-        if (cfg.recursionType !== null) {
-            val recursionTypeName = cfg.recursionType!!.qualifiedName
-            add("\nrecursive(%L())", recursionTypeName)
+        if (recursionType != null) {
+            val recursionTypeName = KspDtoTypeRefRenderer.render(recursionType, workspace)
+            add("\nrecursive(%L())", recursionTypeName.toString())
         }
         if (cfg.fetchType !== "AUTO") {
             add("\nfetchType(%T.%L)", REFERENCE_FETCH_TYPE_CLASS_NAME, cfg.fetchType)

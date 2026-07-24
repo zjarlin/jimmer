@@ -57,6 +57,9 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
+import site.addzero.lsi.jimmer.dto.DtoConfigConstructionKind
+import site.addzero.lsi.jimmer.dto.DtoConfigContract
+import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoConfigValue
@@ -912,12 +915,47 @@ class DtoGraphTest {
             ),
             configContractsBySource = sortedMapOf(
                 graph.source to DtoConfigContractResolution(
-                    contracts = emptyList(),
+                    contracts = listOf(
+                        configContract(
+                            STORE_PROP_ID,
+                            DtoConfigContractKind.FILTER,
+                            FILTER_TYPE_ID,
+                            STORE_TYPE_ID,
+                        ),
+                        configContract(
+                            STORE_PROP_ID,
+                            DtoConfigContractKind.RECURSION,
+                            RECURSION_TYPE_ID,
+                            STORE_TYPE_ID,
+                        ),
+                        configContract(
+                            CHILDREN_PROP_ID,
+                            DtoConfigContractKind.RECURSION,
+                            RECURSION_TYPE_ID,
+                            BOOK_TYPE_ID,
+                        ),
+                    ),
                     diagnostics = emptyList(),
                 )
             ),
             unresolvedDocuments = emptyList(),
             failures = emptyList(),
+        )
+    }
+
+    private fun configContract(
+        propId: DtoPropId,
+        kind: DtoConfigContractKind,
+        implementationTypeId: LsiSymbolId,
+        targetEntityTypeId: LsiSymbolId,
+    ): DtoConfigContract {
+        return DtoConfigContract(
+            propId = propId,
+            kind = kind,
+            implementationTypeId = implementationTypeId,
+            targetEntityTypeId = targetEntityTypeId,
+            construction = DtoConfigConstructionKind.ZERO_ARGUMENT_CONSTRUCTOR,
+            dependencyTypeIds = listOf(implementationTypeId, targetEntityTypeId).distinct().sorted(),
         )
     }
 

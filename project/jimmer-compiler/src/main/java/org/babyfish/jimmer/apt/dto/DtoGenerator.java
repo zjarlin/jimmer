@@ -27,12 +27,16 @@ import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
+import site.addzero.lsi.jimmer.dto.DtoConfigContractKind;
+import site.addzero.lsi.jimmer.dto.DtoConfigContractKt;
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoTypeId;
+import site.addzero.lsi.model.LsiDeclaredType;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
@@ -55,6 +59,8 @@ public class DtoGenerator {
     private final DtoAnnotationContract annotationContract;
 
     private final DtoInterfaceContractResolution interfaceContractResolution;
+
+    private final DtoConfigContractResolution configContractResolution;
 
     private final ImmutableSchema immutableSchema;
 
@@ -94,6 +100,7 @@ public class DtoGenerator {
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
             DtoInterfaceContractResolution interfaceContractResolution,
+            DtoConfigContractResolution configContractResolution,
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
@@ -106,6 +113,7 @@ public class DtoGenerator {
                 lsiDtoType,
                 annotationContract,
                 interfaceContractResolution,
+                configContractResolution,
                 immutableSchema,
                 lsiWorkspace,
                 batchRootDtoTypeNames,
@@ -133,6 +141,7 @@ public class DtoGenerator {
                 lsiDtoType,
                 parent.annotationContract,
                 parent.interfaceContractResolution,
+                parent.configContractResolution,
                 parent.immutableSchema,
                 parent.lsiWorkspace,
                 parent.batchRootDtoTypeNames,
@@ -153,6 +162,7 @@ public class DtoGenerator {
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
             DtoInterfaceContractResolution interfaceContractResolution,
+            DtoConfigContractResolution configContractResolution,
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
@@ -178,6 +188,9 @@ public class DtoGenerator {
         this.interfaceContractResolution = parent != null ?
                 parent.interfaceContractResolution :
                 interfaceContractResolution;
+        this.configContractResolution = parent != null ?
+                parent.configContractResolution :
+                configContractResolution;
         this.immutableSchema = parent != null ? parent.immutableSchema : immutableSchema;
         this.lsiWorkspace = parent != null ? parent.lsiWorkspace : lsiWorkspace;
         this.batchRootDtoTypeNames = parent != null ?
@@ -427,6 +440,7 @@ public class DtoGenerator {
                 lsiMergedPolymorphicType(branch),
                 annotationContract,
                 interfaceContractResolution,
+                configContractResolution,
                 immutableSchema,
                 lsiWorkspace,
                 batchRootDtoTypeNames,
@@ -1006,6 +1020,23 @@ public class DtoGenerator {
     ) {
         PropConfig<ImmutableProp> cfg = prop.getConfig();
         assert cfg != null;
+        DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
+                lsiDtoType,
+                lsiGraph,
+                prop.getName()
+        );
+        LsiDeclaredType filterType = DtoConfigContractKt.configImplementationTypeOrNull(
+                lsiProp,
+                lsiGraph,
+                configContractResolution,
+                DtoConfigContractKind.FILTER
+        );
+        LsiDeclaredType recursionType = DtoConfigContractKt.configImplementationTypeOrNull(
+                lsiProp,
+                lsiGraph,
+                configContractResolution,
+                DtoConfigContractKind.RECURSION
+        );
         cb.add("cfg -> cfg$>");
         if (cfg.getPredicate() != null || !cfg.getOrderItems().isEmpty()) {
             cb.add("\n.filter(it -> it$>\n");
@@ -1041,13 +1072,11 @@ public class DtoGenerator {
         if (!cfg.getFetchType().equals("AUTO")) {
             cb.add("\n.fetchType($T.$L)", Constants.REFERENCE_FETCH_TYPE_CLASS_NAME, cfg.getFetchType());
         }
-        if (cfg.getFilterType() != null) {
-            String filterClassName = cfg.getFilterType().getQualifiedName();
-            cb.add("\n.filter(new $T())", ClassName.bestGuess(filterClassName));
+        if (filterType != null) {
+            cb.add("\n.filter(new $T())", AptDtoTypeRefRenderer.render(filterType, lsiWorkspace));
         }
-        if (cfg.getRecursionType() != null) {
-            String recursionClassName = cfg.getRecursionType().getQualifiedName();
-            cb.add("\n.recursive(new $T())", ClassName.bestGuess(recursionClassName));
+        if (recursionType != null) {
+            cb.add("\n.recursive(new $T())", AptDtoTypeRefRenderer.render(recursionType, lsiWorkspace));
         }
         if (cfg.getLimit() != Integer.MAX_VALUE) {
             if (cfg.getOffset() != 0) {

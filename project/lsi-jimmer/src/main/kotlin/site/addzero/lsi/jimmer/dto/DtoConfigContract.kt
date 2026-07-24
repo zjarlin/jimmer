@@ -4,6 +4,7 @@ import java.security.MessageDigest
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
+import site.addzero.lsi.model.LsiDeclaredType
 
 data class DtoConfigContractResolution(
     val contracts: List<DtoConfigContract>,
@@ -54,6 +55,40 @@ data class DtoConfigContract(
             "DTO config dependencies must include the target entity type: ${propId.value}"
         }
     }
+}
+
+/** 返回属性指定配置类别的冻结实现类型；没有该配置时返回空。 */
+fun DtoBaseProp.configImplementationTypeOrNull(
+    graph: DtoGraph,
+    resolution: DtoConfigContractResolution,
+    kind: DtoConfigContractKind,
+): LsiDeclaredType? {
+    require(graph.propsById[id] == this) {
+        "DTO config property does not belong to this graph: ${id.value}"
+    }
+    require(resolution.successful) {
+        "DTO config implementation type requires a successful contract resolution"
+    }
+    val expectedTypeId = when (kind) {
+        DtoConfigContractKind.FILTER -> config?.filter?.typeId
+        DtoConfigContractKind.RECURSION -> config?.recursion?.typeId
+    }
+    val contract = resolution.contractsByPropId[id]
+        .orEmpty()
+        .singleOrNull { contract -> contract.kind == kind }
+    require((expectedTypeId == null) == (contract == null)) {
+        "DTO config contract presence must match the frozen property config: ${id.value} ($kind)"
+    }
+    if (contract == null) {
+        return null
+    }
+    require(contract.implementationTypeId == expectedTypeId) {
+        "DTO config contract implementation must match the frozen property config: ${id.value} ($kind)"
+    }
+    require(contract.construction == DtoConfigConstructionKind.ZERO_ARGUMENT_CONSTRUCTOR) {
+        "Unsupported DTO config construction '${contract.construction}': ${id.value}"
+    }
+    return LsiDeclaredType(declarationId = contract.implementationTypeId)
 }
 
 enum class DtoConfigContractKind {

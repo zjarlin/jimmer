@@ -20,6 +20,11 @@ internal object AptDtoTypeRefRenderer {
     }
 
     @JvmStatic
+    fun render(type: LsiTypeRef, workspace: LsiWorkspace): TypeName {
+        return render(type, workspace, emptyList())
+    }
+
+    @JvmStatic
     fun render(
         typeRef: DtoReusableTypeReference,
         workspace: LsiWorkspace,
@@ -31,7 +36,7 @@ internal object AptDtoTypeRefRenderer {
     private fun render(
         type: LsiTypeRef,
         workspace: LsiWorkspace,
-        generatedTypeNames: Collection<LsiPoetTypeName> = emptyList(),
+        generatedTypeNames: Collection<LsiPoetTypeName>,
     ): TypeName {
         return LsiJavaPoetRenderer().renderTypeName(
             type = type,

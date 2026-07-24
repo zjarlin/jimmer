@@ -1,0 +1,3 @@
+import demo.Configurations;
+.filter(new Configurations.AuthorFilter())
+.recursive(new Configurations.BookRecursionStrategy())

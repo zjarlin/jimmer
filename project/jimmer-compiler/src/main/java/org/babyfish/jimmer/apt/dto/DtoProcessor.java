@@ -13,6 +13,7 @@ import org.babyfish.jimmer.dto.compiler.*;
 import site.addzero.lsi.core.LsiSource;
 import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
+import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
@@ -47,6 +48,8 @@ public class DtoProcessor {
 
     private final Map<LsiSource, DtoInterfaceContractResolution> interfaceContractsBySource;
 
+    private final Map<LsiSource, DtoConfigContractResolution> configContractsBySource;
+
     private final ImmutableSchema immutableSchema;
 
     private final LsiWorkspace lsiWorkspace;
@@ -63,6 +66,7 @@ public class DtoProcessor {
             Collection<DtoGraph> graphs,
             Map<LsiSource, DtoAnnotationContract> annotationContractsBySource,
             Map<LsiSource, DtoInterfaceContractResolution> interfaceContractsBySource,
+            Map<LsiSource, DtoConfigContractResolution> configContractsBySource,
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             JimmerDtoJacksonVersion jacksonVersion
@@ -85,6 +89,9 @@ public class DtoProcessor {
         );
         this.interfaceContractsBySource = Collections.unmodifiableMap(
                 new LinkedHashMap<>(interfaceContractsBySource)
+        );
+        this.configContractsBySource = Collections.unmodifiableMap(
+                new LinkedHashMap<>(configContractsBySource)
         );
         this.immutableSchema = immutableSchema;
         this.lsiWorkspace = lsiWorkspace;
@@ -200,6 +207,13 @@ public class DtoProcessor {
                         "No frozen DTO interface contract for \"" + graph.getSource().getPath() + "\""
                 );
             }
+            DtoConfigContractResolution configContractResolution =
+                    configContractsBySource.get(graph.getSource());
+            if (configContractResolution == null) {
+                throw new DtoException(
+                        "No frozen DTO config contract for \"" + graph.getSource().getPath() + "\""
+                );
+            }
             new DtoGenerator(
                     context,
                     dtoType,
@@ -207,6 +221,7 @@ public class DtoProcessor {
                     DtoGenerationExtensionsKt.rootType(graph, qualifiedName),
                     annotationContract,
                     interfaceContractResolution,
+                    configContractResolution,
                     immutableSchema,
                     lsiWorkspace,
                     batchRootDtoTypeNames,

@@ -1,0 +1,2 @@
+filter(demo.Configurations.AuthorFilter())
+recursive(demo.Configurations.BookRecursionStrategy())

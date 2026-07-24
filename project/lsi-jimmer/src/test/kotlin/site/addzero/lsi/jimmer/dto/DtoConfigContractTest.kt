@@ -2,7 +2,9 @@ package site.addzero.lsi.jimmer.dto
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
@@ -43,6 +45,92 @@ import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 
 class DtoConfigContractTest {
+
+    @Test
+    fun `exposes nested config implementation type from frozen contracts`() {
+        val outerTypeId = LsiSymbolId.type("demo.Filters")
+        val implementationTypeId = LsiSymbolId.type("demo.Filters.AuthorFilter")
+        val graph = graph(
+            implementationTypeId = implementationTypeId,
+            kind = DtoConfigContractKind.FILTER,
+            targetPackageName = "demo.dto",
+        )
+        val resolution = resolve(
+            targetLanguage = LsiLanguage.KOTLIN,
+            implementationTypeId = implementationTypeId,
+            implementationSuperTypes = listOf(
+                declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID)),
+            ),
+            enclosingTypeId = outerTypeId,
+        )
+        val prop = graph.props.single() as DtoBaseProp
+
+        assertEquals(
+            LsiDeclaredType(declarationId = implementationTypeId),
+            prop.configImplementationTypeOrNull(
+                graph = graph,
+                resolution = resolution,
+                kind = DtoConfigContractKind.FILTER,
+            ),
+        )
+        assertNull(
+            prop.configImplementationTypeOrNull(
+                graph = graph,
+                resolution = resolution,
+                kind = DtoConfigContractKind.RECURSION,
+            ),
+        )
+    }
+
+    @Test
+    fun `rejects config contracts that do not exactly match the frozen property`() {
+        val graph = graph(
+            implementationTypeId = FILTER_TYPE_ID,
+            kind = DtoConfigContractKind.FILTER,
+            targetPackageName = "demo.dto",
+        )
+        val resolution = resolve(
+            targetLanguage = LsiLanguage.KOTLIN,
+            implementationTypeId = FILTER_TYPE_ID,
+            implementationSuperTypes = listOf(
+                declared(K_FIELD_FILTER_TYPE_ID, declared(AUTHOR_TYPE_ID)),
+            ),
+        )
+        val prop = graph.props.single() as DtoBaseProp
+        val contract = resolution.contracts.single()
+
+        assertFailsWith<IllegalArgumentException> {
+            prop.configImplementationTypeOrNull(
+                graph,
+                resolution.copy(contracts = emptyList()),
+                DtoConfigContractKind.FILTER,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            prop.configImplementationTypeOrNull(
+                graph,
+                resolution.copy(
+                    contracts = listOf(contract.copy(kind = DtoConfigContractKind.RECURSION)),
+                ),
+                DtoConfigContractKind.RECURSION,
+            )
+        }
+        val wrongImplementationTypeId = LsiSymbolId.type("demo.WrongAuthorFilter")
+        assertFailsWith<IllegalArgumentException> {
+            prop.configImplementationTypeOrNull(
+                graph,
+                resolution.copy(
+                    contracts = listOf(
+                        contract.copy(
+                            implementationTypeId = wrongImplementationTypeId,
+                            dependencyTypeIds = listOf(AUTHOR_TYPE_ID, wrongImplementationTypeId).sorted(),
+                        )
+                    ),
+                ),
+                DtoConfigContractKind.FILTER,
+            )
+        }
+    }
 
     @Test
     fun `java filter requires exact generated table and freezes canonical dependencies`() {
