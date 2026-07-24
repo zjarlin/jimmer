@@ -39,6 +39,9 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.poet.referencedTypeIds
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 import site.addzero.lsi.poet.toLsiPoetAnnotation
 
 internal fun TransactionalSchema.toLsiPoetArtifacts(
@@ -52,18 +55,20 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
     val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencySymbols()
     val dependencySources = workspace.originatingSources(dependencySymbols)
+    val file = LsiPoetFile(
+        language = platformLanguage,
+        packageName = packageName,
+        fileName = generatedSimpleName,
+        annotations = if (sqlClient.platform == TransactionalPlatform.KOTLIN) {
+            listOf(FILE_WARNING_SUPPRESSION)
+        } else {
+            emptyList()
+        },
+        members = listOf(toLsiPoetType()),
+    )
     return LsiPoetArtifact(
-        file = LsiPoetFile(
-            language = platformLanguage,
-            packageName = packageName,
-            fileName = generatedSimpleName,
-            annotations = if (sqlClient.platform == TransactionalPlatform.KOTLIN) {
-                listOf(FILE_WARNING_SUPPRESSION)
-            } else {
-                emptyList()
-            },
-            members = listOf(toLsiPoetType()),
-        ),
+        file = file,
+        typeNames = workspace.toLsiPoetTypeNames(file.referencedTypeIds, BUILT_IN_TYPE_NAMES),
         aggregationMode = classifyArtifactAggregationMode(
             originatingSymbols = originatingSymbols,
             originatingSources = originatingSources,
@@ -481,6 +486,27 @@ private val PROPAGATION_TYPE = LsiDeclaredType(
 )
 private val JAVA_OVERRIDE_ID = LsiSymbolId.type("java.lang.Override")
 private val KOTLIN_SUPPRESS_ID = LsiSymbolId.type("kotlin.Suppress")
+private val BUILT_IN_TYPE_NAMES = listOf(
+    LsiPoetTypeName(
+        PROPAGATION_TYPE.declarationId,
+        "org.babyfish.jimmer.sql.transaction",
+        listOf("Propagation"),
+    ),
+    LsiPoetTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
+    LsiPoetTypeName(KOTLIN_SUPPRESS_ID, "kotlin", listOf("Suppress")),
+    LsiPoetTypeName(LsiSymbolId.type("java.lang.String"), "java.lang", listOf("String")),
+    LsiPoetTypeName(LsiSymbolId.type("java.io.IOException"), "java.io", listOf("IOException")),
+    LsiPoetTypeName(
+        LsiSymbolId.type("org.babyfish.jimmer.sql.JSqlClient"),
+        "org.babyfish.jimmer.sql",
+        listOf("JSqlClient"),
+    ),
+    LsiPoetTypeName(
+        LsiSymbolId.type("org.babyfish.jimmer.sql.kt.KSqlClient"),
+        "org.babyfish.jimmer.sql.kt",
+        listOf("KSqlClient"),
+    ),
+)
 private val JAVA_OVERRIDE_ANNOTATION = LsiPoetAnnotation(
     JAVA_OVERRIDE_ID
 )

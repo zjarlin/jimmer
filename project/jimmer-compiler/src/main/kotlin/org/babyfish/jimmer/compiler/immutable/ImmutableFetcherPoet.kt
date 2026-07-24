@@ -57,6 +57,8 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.referencedTypeIds
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 internal fun ImmutableSchema.toFetcherPoetArtifacts(
     types: List<ImmutableType>,
@@ -108,6 +110,12 @@ private class FetcherPoetContext(
         }
         return LsiPoetArtifact(
             file = file,
+            typeNames = workspace.toLsiPoetTypeNames(
+                file.referencedTypeIds,
+                additional = schema.generatedFetcherPoetTypeNames() + FETCHER_RUNTIME_TYPE_IDS.map(
+                    LsiSymbolId::topLevelPoetTypeName
+                ),
+            ),
             aggregationMode = aggregationMode,
             emissionMode = if (branchDependent) {
                 ArtifactEmissionMode.STABLE
@@ -119,6 +127,25 @@ private class FetcherPoetContext(
             dependencySymbols = dependencies.dependencySymbols,
             dependencySources = dependencies.dependencySources,
         )
+    }
+
+    private fun ImmutableSchema.generatedFetcherPoetTypeNames(): List<site.addzero.lsi.poet.LsiPoetTypeName> {
+        return types.flatMap { immutableType ->
+            listOf(
+                generatedTopLevelPoetTypeName(
+                    immutableType.packageName,
+                    "${immutableType.simpleName}$FETCHER_SUFFIX",
+                ),
+                generatedTopLevelPoetTypeName(
+                    immutableType.packageName,
+                    "${immutableType.simpleName}$FETCHER_DSL_SUFFIX",
+                ),
+                generatedTopLevelPoetTypeName(
+                    immutableType.packageName,
+                    "${immutableType.simpleName}Table",
+                ),
+            )
+        }.distinctBy { typeName -> typeName.typeId }
     }
 
     private fun javaFile(): LsiPoetFile {
@@ -1458,6 +1485,38 @@ private val FILE_WARNING_SUPPRESSION = LsiPoetAnnotation(
     ),
     useSiteTarget = LsiAnnotationUseSiteTarget.FILE,
 )
+
+private val FETCHER_RUNTIME_TYPE_IDS = listOf(
+    "org.babyfish.jimmer.internal.GeneratedBy",
+    "org.babyfish.jimmer.lang.NewChain",
+    "org.babyfish.jimmer.kt.DslScope",
+    "kotlin.Suppress",
+    "kotlin.jvm.JvmName",
+    "kotlin.reflect.KClass",
+    "org.babyfish.jimmer.sql.fetcher.spi.AbstractTypedFetcher",
+    "org.babyfish.jimmer.sql.fetcher.Fetcher",
+    "org.babyfish.jimmer.sql.fetcher.impl.FetcherImpl",
+    "org.babyfish.jimmer.sql.fetcher.impl.FetcherImplementor",
+    "org.babyfish.jimmer.sql.kt.fetcher.FetcherCreator",
+    "org.babyfish.jimmer.sql.fetcher.IdOnlyFetchType",
+    "org.babyfish.jimmer.sql.fetcher.ReferenceFetchType",
+    "org.babyfish.jimmer.sql.fetcher.FieldConfig",
+    "org.babyfish.jimmer.sql.fetcher.ReferenceFieldConfig",
+    "org.babyfish.jimmer.sql.fetcher.ListFieldConfig",
+    "org.babyfish.jimmer.sql.fetcher.RecursiveReferenceFieldConfig",
+    "org.babyfish.jimmer.sql.fetcher.RecursiveListFieldConfig",
+    "org.babyfish.jimmer.sql.ast.table.Table",
+    "org.babyfish.jimmer.meta.ImmutableProp",
+    "java.util.function.Consumer",
+    "java.lang.Override",
+    "org.babyfish.jimmer.sql.kt.fetcher.impl.JavaFieldConfigUtils",
+    "org.babyfish.jimmer.sql.kt.fetcher.KFieldDsl",
+    "org.babyfish.jimmer.sql.kt.fetcher.KReferenceFieldDsl",
+    "org.babyfish.jimmer.sql.kt.fetcher.KListFieldDsl",
+    "org.babyfish.jimmer.sql.kt.fetcher.KRecursiveReferenceFieldDsl",
+    "org.babyfish.jimmer.sql.kt.fetcher.KRecursiveListFieldDsl",
+    "org.babyfish.jimmer.sql.JoinTable",
+).map(LsiSymbolId::type)
 
 private val JAVA_RUNTIME_DEPENDENCIES = setOf(
     GENERATED_BY_ID,

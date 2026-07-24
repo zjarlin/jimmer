@@ -31,6 +31,9 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.poet.referencedTypeIds
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 internal fun TypedTupleSchema.toLsiPoetArtifacts(
     workspace: LsiWorkspace,
@@ -43,12 +46,17 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
     val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencies.symbolIds.toSet()
     val dependencySources = workspace.originatingSources(dependencySymbols)
+    val file = LsiPoetFile(
+        language = sourceLanguage,
+        packageName = packageName,
+        fileName = mapperSimpleName,
+        members = listOf(mapperType()),
+    )
     return LsiPoetArtifact(
-        file = LsiPoetFile(
-            language = sourceLanguage,
-            packageName = packageName,
-            fileName = mapperSimpleName,
-            members = listOf(mapperType()),
+        file = file,
+        typeNames = workspace.toLsiPoetTypeNames(
+            typeIds = file.referencedTypeIds,
+            additional = generatedTypeNames(),
         ),
         aggregationMode = classifyArtifactAggregationMode(
             originatingSymbols = originatingSymbols,
@@ -60,6 +68,28 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
         dependencySymbols = dependencySymbols,
         dependencySources = dependencySources,
     )
+}
+
+private fun TypedTupleType.generatedTypeNames(): List<LsiPoetTypeName> {
+    return buildList {
+        addAll(BUILT_IN_TYPE_NAMES)
+        add(
+            LsiPoetTypeName(
+                typeId = LsiSymbolId.type(mapperQualifiedName),
+                packageName = packageName,
+                simpleNames = listOf(mapperSimpleName),
+            )
+        )
+        properties.drop(1).forEach { property ->
+            add(
+                LsiPoetTypeName(
+                    typeId = LsiSymbolId.type("$mapperQualifiedName.${property.builderSimpleName}"),
+                    packageName = packageName,
+                    simpleNames = listOf(mapperSimpleName, property.builderSimpleName),
+                )
+            )
+        }
+    }
 }
 
 private fun TypedTupleType.mapperType(): LsiPoetType {
@@ -518,6 +548,15 @@ private val COLLECTIONS_TYPE = declaredType("java.util.Collections")
 private val ARRAYS_TYPE = declaredType("java.util.Arrays")
 private val OBJECT_TYPE = declaredType("java.lang.Object")
 private val SUPPRESS_ID = LsiSymbolId.type("kotlin.Suppress")
+private val BUILT_IN_TYPE_NAMES = listOf(
+    LsiPoetTypeName(SELECTION_ID, "org.babyfish.jimmer.sql.ast", listOf("Selection")),
+    LsiPoetTypeName(TUPLE_MAPPER_ID, "org.babyfish.jimmer.sql.runtime", listOf("TupleMapper")),
+    LsiPoetTypeName(LIST_ID, "java.util", listOf("List")),
+    LsiPoetTypeName(COLLECTIONS_TYPE.declarationId, "java.util", listOf("Collections")),
+    LsiPoetTypeName(ARRAYS_TYPE.declarationId, "java.util", listOf("Arrays")),
+    LsiPoetTypeName(OBJECT_TYPE.declarationId, "java.lang", listOf("Object")),
+    LsiPoetTypeName(SUPPRESS_ID, "kotlin", listOf("Suppress")),
+)
 private val SELECTION_STAR_TYPE = LsiDeclaredType(
     declarationId = SELECTION_ID,
     arguments = listOf(LsiTypeArgument.STAR),

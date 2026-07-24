@@ -89,6 +89,13 @@ class TypedTupleRendererTest {
             kind = LsiTypeDeclarationKind.CLASS,
             origin = origin,
         )
+        val bookViewDeclaration = LsiTypeDeclaration(
+            id = BOOK_VIEW_ID,
+            name = "BookView",
+            qualifiedName = "demo.BookView",
+            kind = LsiTypeDeclarationKind.CLASS,
+            origin = origin,
+        )
         val sourceMemberIds = if (language == LsiLanguage.JAVA) {
             listOf(
                 LsiSymbolId.field(TUPLE_ID, "book"),
@@ -171,7 +178,7 @@ class TypedTupleRendererTest {
         )
         val workspace = LsiWorkspace(
             sources = listOf(tupleSource, unrelatedSource),
-            declarations = listOf(tupleDeclaration),
+            declarations = listOf(tupleDeclaration, bookViewDeclaration),
         )
         return Fixture(
             schema = schema,

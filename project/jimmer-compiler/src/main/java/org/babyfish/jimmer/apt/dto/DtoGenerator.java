@@ -737,7 +737,8 @@ public class DtoGenerator {
                             lsiGraph,
                             immutableSchema,
                             jacksonVersion,
-                            getDtoClassName().canonicalName()
+                            getDtoClassName().packageName(),
+                            getDtoClassName().simpleNames()
                     )
             );
         }

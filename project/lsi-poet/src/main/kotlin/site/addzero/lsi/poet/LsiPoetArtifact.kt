@@ -13,6 +13,7 @@ import site.addzero.lsi.core.LsiSymbolId
  */
 data class LsiPoetArtifact(
     val file: LsiPoetFile,
+    val typeNames: List<LsiPoetTypeName>,
     val aggregationMode: ArtifactAggregationMode,
     val emissionMode: ArtifactEmissionMode = ArtifactEmissionMode.IMMEDIATE,
     val originatingSymbols: Set<LsiSymbolId> = emptySet(),
@@ -48,6 +49,20 @@ data class LsiPoetArtifact(
     }
 
     init {
+        val duplicateTypeIds = typeNames
+            .groupingBy(LsiPoetTypeName::typeId)
+            .eachCount()
+            .filterValues { count -> count > 1 }
+            .keys
+            .sorted()
+        require(duplicateTypeIds.isEmpty()) {
+            "Duplicate LSI Poet type ids: ${duplicateTypeIds.joinToString { id -> id.value }}"
+        }
+        val missingTypeIds = file.referencedTypeIds - typeNames.mapTo(hashSetOf(), LsiPoetTypeName::typeId)
+        require(missingTypeIds.isEmpty()) {
+            "Missing LSI Poet type names for $qualifiedFileName: " +
+                missingTypeIds.joinToString { id -> id.value }
+        }
         if (aggregationMode == ArtifactAggregationMode.ISOLATING) {
             require(originatingSymbols.size == 1) {
                 "Isolating LSI Poet artifact requires exactly one originating symbol: $qualifiedFileName"

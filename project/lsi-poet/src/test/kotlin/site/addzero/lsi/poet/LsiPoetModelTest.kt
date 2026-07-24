@@ -55,6 +55,7 @@ class LsiPoetModelTest {
         )
         val artifact = LsiPoetArtifact(
             file = file,
+            typeNames = listOf(LsiPoetTypeName(bookTypeId, "demo", listOf("Book"))),
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(bookTypeId),
             originatingSources = setOf(source),
@@ -93,6 +94,7 @@ class LsiPoetModelTest {
         val exception = assertFailsWith<IllegalArgumentException> {
             LsiPoetArtifact(
                 file = file,
+                typeNames = emptyList(),
                 aggregationMode = ArtifactAggregationMode.ISOLATING,
             )
         }
@@ -100,6 +102,7 @@ class LsiPoetModelTest {
         assertFailsWith<IllegalArgumentException> {
             LsiPoetArtifact(
                 file = file,
+                typeNames = emptyList(),
                 aggregationMode = ArtifactAggregationMode.ISOLATING,
                 emissionMode = ArtifactEmissionMode.STABLE,
                 originatingSymbols = setOf(LsiSymbolId.type("demo.Book")),

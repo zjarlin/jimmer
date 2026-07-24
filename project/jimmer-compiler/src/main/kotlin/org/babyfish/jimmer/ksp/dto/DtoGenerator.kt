@@ -621,7 +621,8 @@ internal class DtoGenerator private constructor(
                     graph = lsiGraph,
                     immutableSchema = immutableSchema,
                     jacksonVersion = jacksonVersion,
-                    generatedDtoQualifiedName = getDtoClassName().canonicalName,
+                    generatedDtoPackageName = getDtoClassName().packageName,
+                    generatedDtoSimpleNames = getDtoClassName().simpleNames,
                 )
             )
         }

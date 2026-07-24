@@ -62,6 +62,7 @@ class LsiKotlinPoetTopLevelMemberTest {
                 fileName = "References",
                 members = listOf(type),
             ),
+            typeNames = emptyList(),
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )

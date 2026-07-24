@@ -42,6 +42,9 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.poet.referencedTypeIds
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 internal fun ErrorSchema.toLsiPoetArtifacts(
     workspace: LsiWorkspace,
@@ -55,20 +58,25 @@ private fun ErrorFamily.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtif
     val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencySymbols(language)
     val dependencySources = workspace.originatingSources(dependencySymbols)
+    val file = LsiPoetFile(
+        language = language,
+        packageName = packageName,
+        fileName = exceptionSimpleName,
+        members = listOf(
+            when (language) {
+                LsiLanguage.JAVA -> toJavaPoetType()
+                LsiLanguage.KOTLIN -> toKotlinPoetType()
+                LsiLanguage.UNKNOWN -> error(
+                    "Error family '${id.value}' has no Java or Kotlin source language"
+                )
+            }
+        ),
+    )
     return LsiPoetArtifact(
-        file = LsiPoetFile(
-            language = language,
-            packageName = packageName,
-            fileName = exceptionSimpleName,
-            members = listOf(
-                when (language) {
-                    LsiLanguage.JAVA -> toJavaPoetType()
-                    LsiLanguage.KOTLIN -> toKotlinPoetType()
-                    LsiLanguage.UNKNOWN -> error(
-                        "Error family '${id.value}' has no Java or Kotlin source language"
-                    )
-                }
-            ),
+        file = file,
+        typeNames = workspace.toLsiPoetTypeNames(
+            file.referencedTypeIds,
+            additional = generatedTypeNames(),
         ),
         aggregationMode = classifyArtifactAggregationMode(
             originatingSymbols = originatingSymbols,
@@ -80,6 +88,22 @@ private fun ErrorFamily.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtif
         dependencySymbols = dependencySymbols,
         dependencySources = dependencySources,
     )
+}
+
+private fun ErrorFamily.generatedTypeNames(): List<LsiPoetTypeName> {
+    return buildList {
+        addAll(BUILT_IN_TYPE_NAMES)
+        add(LsiPoetTypeName(exceptionTypeId, packageName, listOf(exceptionSimpleName)))
+        codes.forEach { code ->
+            add(
+                LsiPoetTypeName(
+                    typeId = code.exceptionTypeId,
+                    packageName = packageName,
+                    simpleNames = listOf(exceptionSimpleName, code.exceptionSimpleName),
+                )
+            )
+        }
+    }
 }
 
 private fun ErrorFamily.toJavaPoetType(): LsiPoetType {
@@ -809,6 +833,36 @@ private val LIST_ID = LsiSymbolId.type("java.util.List")
 private val MAP_ID = LsiSymbolId.type("java.util.Map")
 private val COLLECTIONS_ID = LsiSymbolId.type("java.util.Collections")
 private val LINKED_HASH_MAP_ID = LsiSymbolId.type("java.util.LinkedHashMap")
+private val BUILT_IN_TYPE_NAMES = listOf(
+    LsiPoetTypeName(CLIENT_EXCEPTION_ID, "org.babyfish.jimmer", listOf("ClientException")),
+    LsiPoetTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
+    LsiPoetTypeName(CODE_BASED_EXCEPTION_ID, "org.babyfish.jimmer.error", listOf("CodeBasedException")),
+    LsiPoetTypeName(
+        CODE_BASED_RUNTIME_EXCEPTION_ID,
+        "org.babyfish.jimmer.error",
+        listOf("CodeBasedRuntimeException"),
+    ),
+    LsiPoetTypeName(JSON_IGNORE_ID, "com.fasterxml.jackson.annotation", listOf("JsonIgnore")),
+    LsiPoetTypeName(NON_NULL_ID, "org.jspecify.annotations", listOf("NonNull")),
+    LsiPoetTypeName(NULLABLE_ID, "org.jspecify.annotations", listOf("Nullable")),
+    LsiPoetTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
+    LsiPoetTypeName(JVM_STATIC_ID, "kotlin.jvm", listOf("JvmStatic")),
+    LsiPoetTypeName(JAVA_STRING_ID, "java.lang", listOf("String")),
+    LsiPoetTypeName(JAVA_OBJECT_ID, "java.lang", listOf("Object")),
+    LsiPoetTypeName(JAVA_THROWABLE_ID, "java.lang", listOf("Throwable")),
+    LsiPoetTypeName(KOTLIN_STRING_ID, "kotlin", listOf("String")),
+    LsiPoetTypeName(KOTLIN_ANY_ID, "kotlin", listOf("Any")),
+    LsiPoetTypeName(KOTLIN_THROWABLE_ID, "kotlin", listOf("Throwable")),
+    LsiPoetTypeName(LIST_ID, "java.util", listOf("List")),
+    LsiPoetTypeName(MAP_ID, "java.util", listOf("Map")),
+    LsiPoetTypeName(COLLECTIONS_ID, "java.util", listOf("Collections")),
+    LsiPoetTypeName(LINKED_HASH_MAP_ID, "java.util", listOf("LinkedHashMap")),
+    LsiPoetTypeName(
+        LsiSymbolId.type("java.time.LocalDateTime"),
+        "java.time",
+        listOf("LocalDateTime"),
+    ),
+)
 
 private val JAVA_STRING_TYPE = LsiDeclaredType(JAVA_STRING_ID)
 private val KOTLIN_STRING_TYPE = LsiDeclaredType(KOTLIN_STRING_ID)

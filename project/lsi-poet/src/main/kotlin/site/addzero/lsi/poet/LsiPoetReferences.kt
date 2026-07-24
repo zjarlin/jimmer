@@ -17,6 +17,12 @@ fun LsiPoetFile.referencedSymbolIds(): Set<LsiSymbolId> {
     }
 }
 
+/**
+ * 收集渲染源码所需的直接类型身份，不包含类型参数和成员身份。
+ */
+val LsiPoetFile.referencedTypeIds: Set<LsiSymbolId>
+    get() = referencedSymbolIds().filterTo(sortedSetOf(), LsiSymbolId::isTypeId)
+
 private fun MutableSet<LsiSymbolId>.collectPoetMemberDependencies(member: LsiPoetMember) {
     member.annotations.forEach(::collectPoetAnnotationDependencies)
     when (member) {

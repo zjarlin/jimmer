@@ -17,6 +17,7 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
 
 internal fun DtoType.toSerializerPoetType(
     graph: DtoGraph,
@@ -165,3 +166,53 @@ private val JACKSON_3_GENERATOR_TYPE_ID =
 private val JACKSON_3_PROVIDER_TYPE_ID =
     LsiSymbolId.type("tools.jackson.databind.SerializationContext")
 private val JAVA_IO_EXCEPTION_TYPE_ID = LsiSymbolId.type("java.io.IOException")
+
+internal fun JimmerDtoJacksonVersion.serializerPoetTypeNames(
+    dtoTypeName: LsiPoetTypeName,
+): List<LsiPoetTypeName> {
+    val jacksonTypeNames = when (this) {
+        JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_POET_TYPE_NAMES
+        JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_POET_TYPE_NAMES
+    }
+    return listOf(dtoTypeName) + jacksonTypeNames + JAVA_IO_EXCEPTION_POET_TYPE_NAME
+}
+
+private val JACKSON_2_POET_TYPE_NAMES = listOf(
+    LsiPoetTypeName(
+        JACKSON_2_SERIALIZER_TYPE_ID,
+        "com.fasterxml.jackson.databind",
+        listOf("JsonSerializer"),
+    ),
+    LsiPoetTypeName(
+        JACKSON_2_GENERATOR_TYPE_ID,
+        "com.fasterxml.jackson.core",
+        listOf("JsonGenerator"),
+    ),
+    LsiPoetTypeName(
+        JACKSON_2_PROVIDER_TYPE_ID,
+        "com.fasterxml.jackson.databind",
+        listOf("SerializerProvider"),
+    ),
+)
+private val JACKSON_3_POET_TYPE_NAMES = listOf(
+    LsiPoetTypeName(
+        JACKSON_3_SERIALIZER_TYPE_ID,
+        "tools.jackson.databind",
+        listOf("ValueSerializer"),
+    ),
+    LsiPoetTypeName(
+        JACKSON_3_GENERATOR_TYPE_ID,
+        "tools.jackson.core",
+        listOf("JsonGenerator"),
+    ),
+    LsiPoetTypeName(
+        JACKSON_3_PROVIDER_TYPE_ID,
+        "tools.jackson.databind",
+        listOf("SerializationContext"),
+    ),
+)
+private val JAVA_IO_EXCEPTION_POET_TYPE_NAME = LsiPoetTypeName(
+    JAVA_IO_EXCEPTION_TYPE_ID,
+    "java.io",
+    listOf("IOException"),
+)

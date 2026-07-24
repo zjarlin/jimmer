@@ -106,5 +106,9 @@ class LsiPoetReferencesTest {
             ),
             file.referencedSymbolIds(),
         )
+        assertEquals(
+            file.referencedSymbolIds().filterTo(sortedSetOf(), LsiSymbolId::isTypeId),
+            file.referencedTypeIds,
+        )
     }
 }

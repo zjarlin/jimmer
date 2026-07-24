@@ -37,6 +37,7 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 import site.addzero.lsi.poet.LsiPoetFile
 
@@ -52,12 +53,12 @@ class LsiJavaPoetRendererTest {
             modifiers = setOf(LsiPoetModifier.PUBLIC),
         )
 
-        val rendered = LsiJavaPoetRenderer().renderType(type)
+        val rendered = LsiJavaPoetRenderer().renderType(type, emptyList())
 
         assertEquals(
             TypeSpec::class.java,
             LsiJavaPoetRenderer::class.java
-                .getDeclaredMethod("renderType", LsiPoetType::class.java)
+                .getDeclaredMethod("renderType", LsiPoetType::class.java, List::class.java)
                 .returnType,
         )
         assertEquals("public interface Marker {\n}\n", rendered.toString())
@@ -78,7 +79,17 @@ class LsiJavaPoetRendererTest {
         )
 
         val exception = assertFailsWith<IllegalArgumentException> {
-            LsiJavaPoetRenderer().renderType(type)
+            LsiJavaPoetRenderer().renderType(
+                type,
+                listOf(
+                    typeName(
+                        LsiSymbolId.type("demo.generated.Owner.Nested"),
+                        "demo.generated",
+                        "Owner",
+                        "Nested",
+                    )
+                ),
+            )
         }
 
         assertContains(exception.message.orEmpty(), "requires file package context")
@@ -156,6 +167,7 @@ class LsiJavaPoetRendererTest {
                 fileName = "Greeting",
                 members = listOf(type),
             ),
+            typeNames = commonTypeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
             originatingSources = setOf(LsiSource.of("demo/Source.java", LsiLanguage.JAVA)),
@@ -458,6 +470,7 @@ class LsiJavaPoetRendererTest {
                 imports = listOf(LsiPoetImport("demo.child", "by")),
                 members = listOf(LsiPoetType("Imported", LsiPoetTypeKind.CLASS)),
             ),
+            typeNames = emptyList(),
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )
@@ -584,6 +597,79 @@ class LsiJavaPoetRendererTest {
     }
 
     @Test
+    fun `renders exact uppercase package lowercase and deeply nested names`() {
+        val lowercaseId = LsiSymbolId.type("UPPER.pkg.lowercase")
+        val nestedId = LsiSymbolId.type("UPPER.pkg.outer.middle.inner")
+        val annotationId = LsiSymbolId.type("UPPER.meta.marker")
+        val enumId = LsiSymbolId.type("UPPER.values.outer.mode")
+        val type = LsiPoetType(
+            name = "ExactNames",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = annotationId,
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "kind",
+                            value = LsiPoetAnnotationValue.EnumValue(enumId, "ON"),
+                        ),
+                        LsiPoetAnnotationArgument.Named(
+                            name = "target",
+                            value = LsiPoetAnnotationValue.ClassValue(LsiDeclaredType(lowercaseId)),
+                        ),
+                    ),
+                )
+            ),
+            members = listOf(
+                LsiPoetFunction(name = "lower", returnType = LsiDeclaredType(lowercaseId)),
+                LsiPoetFunction(name = "nested", returnType = LsiDeclaredType(nestedId)),
+            ),
+        )
+        val artifact = LsiPoetArtifact(
+            file = LsiPoetFile(
+                language = LsiLanguage.JAVA,
+                packageName = "demo.generated",
+                fileName = "ExactNames",
+                members = listOf(type),
+            ),
+            typeNames = listOf(
+                typeName(lowercaseId, "UPPER.pkg", "lowercase"),
+                typeName(nestedId, "UPPER.pkg", "outer", "middle", "inner"),
+                typeName(annotationId, "UPPER.meta", "marker"),
+                typeName(enumId, "UPPER.values", "outer", "mode"),
+            ),
+            aggregationMode = ArtifactAggregationMode.ISOLATING,
+            originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
+        )
+
+        val content = LsiJavaPoetRenderer().render(artifact).content
+
+        assertContains(content, "import UPPER.meta.marker;")
+        assertContains(content, "import UPPER.pkg.lowercase;")
+        assertContains(content, "import UPPER.values.outer;")
+        assertContains(content, "kind = outer.mode.ON")
+        assertContains(content, "target = lowercase.class")
+        assertContains(content, "lowercase lower()")
+        assertContains(content, "UPPER.pkg.outer.middle.inner nested()")
+    }
+
+    @Test
+    fun `rejects a declared type without an exact source name`() {
+        val type = LsiPoetType(
+            name = "MissingName",
+            kind = LsiPoetTypeKind.CLASS,
+            members = listOf(LsiPoetFunction(name = "value", returnType = stringType)),
+        )
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            LsiJavaPoetRenderer().renderType(type, emptyList())
+        }
+
+        assertContains(exception.message.orEmpty(), "requires exactly one source type name")
+        assertContains(exception.message.orEmpty(), "java.lang.String")
+    }
+
+    @Test
     fun `rejects expression bodies at the Java adapter boundary`() {
         val function = LsiPoetFunction(
             name = "message",
@@ -644,10 +730,42 @@ class LsiJavaPoetRendererTest {
                 fileName = fileName,
                 members = listOf(type),
             ),
+            typeNames = commonTypeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )
     }
+
+    private fun typeName(
+        typeId: LsiSymbolId,
+        packageName: String,
+        vararg simpleNames: String,
+    ): LsiPoetTypeName = LsiPoetTypeName(typeId, packageName, simpleNames.toList())
+
+    private val commonTypeNames = listOf(
+        typeName(LsiSymbolId.type("Owner.Nested"), "", "Owner", "Nested"),
+        typeName(LsiSymbolId.type("demo.Ordered"), "demo", "Ordered"),
+        typeName(LsiSymbolId.type("demo.annotation.Container"), "demo.annotation", "Container"),
+        typeName(LsiSymbolId.type("demo.annotation.Label"), "demo.annotation", "Label"),
+        typeName(LsiSymbolId.type("demo.annotation.Nested"), "demo.annotation", "Nested"),
+        typeName(LsiSymbolId.type("demo.annotation.TypeMarker"), "demo.annotation", "TypeMarker"),
+        typeName(
+            LsiSymbolId.type("demo.generated.BasicBookDraft.Producer"),
+            "demo.generated",
+            "BasicBookDraft",
+            "Producer",
+        ),
+        typeName(
+            LsiSymbolId.type("demo.generated.Owner.Nested"),
+            "demo.generated",
+            "Owner",
+            "Nested",
+        ),
+        typeName(LsiSymbolId.type("java.io.IOException"), "java.io", "IOException"),
+        typeName(LsiSymbolId.type("java.lang.Object"), "java.lang", "Object"),
+        typeName(LsiSymbolId.type("java.lang.String"), "java.lang", "String"),
+        typeName(LsiSymbolId.type("java.util.List"), "java.util", "List"),
+    )
 
     private fun assertPublicApiDoesNotExposeOtherPoet(type: Class<*>) {
         val methodTypes = type.declaredMethods

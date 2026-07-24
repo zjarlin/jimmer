@@ -18,8 +18,10 @@ value class LsiSymbolId(
 
     override fun toString(): String = value
 
+    fun isTypeId(): Boolean = value.startsWith(TYPE_PREFIX) && '/' !in value
+
     fun requireTypeQualifiedName(): String {
-        require(value.startsWith(TYPE_PREFIX) && '/' !in value) {
+        require(isTypeId()) {
             "LSI symbol id is not a type id: '$value'"
         }
         return decodeComponent(value.removePrefix(TYPE_PREFIX))

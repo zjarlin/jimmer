@@ -17,6 +17,9 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.poet.referencedTypeIds
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 internal fun JimmerModuleSchema.toLsiPoetArtifacts(
     workspace: LsiWorkspace,
@@ -40,25 +43,55 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtif
         JimmerModuleSummaryKind.FETCHERS -> members.map { member -> member.toSingletonField("Fetcher") }
     }
     val originatingSymbols = dependencies.originatingTypeIds.toSet()
+    val file = LsiPoetFile(
+        language = LsiLanguage.JAVA,
+        packageName = packageName,
+        fileName = simpleName,
+        members = listOf(
+            LsiPoetType(
+                name = simpleName,
+                kind = LsiPoetTypeKind.INTERFACE,
+                annotations = listOf(LsiPoetAnnotation(GENERATED_BY_ID)),
+                modifiers = setOf(LsiPoetModifier.PUBLIC),
+                members = typeMembers,
+            )
+        ),
+    )
     return LsiPoetArtifact(
-        file = LsiPoetFile(
-            language = LsiLanguage.JAVA,
-            packageName = packageName,
-            fileName = simpleName,
-            members = listOf(
-                LsiPoetType(
-                    name = simpleName,
-                    kind = LsiPoetTypeKind.INTERFACE,
-                    annotations = listOf(LsiPoetAnnotation(GENERATED_BY_ID)),
-                    modifiers = setOf(LsiPoetModifier.PUBLIC),
-                    members = typeMembers,
-                )
-            ),
+        file = file,
+        typeNames = workspace.toLsiPoetTypeNames(
+            file.referencedTypeIds,
+            additional = additionalTypeNames(),
         ),
         aggregationMode = dependencies.aggregationMode,
         originatingSymbols = originatingSymbols,
         originatingSources = workspace.originatingSources(originatingSymbols),
     )
+}
+
+private fun JimmerModuleSummary.additionalTypeNames(): List<LsiPoetTypeName> {
+    return buildList {
+        add(LsiPoetTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")))
+        add(LsiPoetTypeName(DRAFT_CONSUMER_ID, "org.babyfish.jimmer", listOf("DraftConsumer")))
+        members.forEach { member ->
+            add(
+                LsiPoetTypeName(
+                    typeId = LsiSymbolId.type(member.qualifiedTypeName + "Draft"),
+                    packageName = member.packageName,
+                    simpleNames = listOf(member.simpleTypeName + "Draft"),
+                )
+            )
+            listOf("Table", "TableEx", "Fetcher").forEach { suffix ->
+                add(
+                    LsiPoetTypeName(
+                        typeId = LsiSymbolId.type(member.qualifiedTypeName + suffix),
+                        packageName = member.packageName,
+                        simpleNames = listOf(member.simpleTypeName + suffix),
+                    )
+                )
+            }
+        }
+    }
 }
 
 private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiPoetFunction {
@@ -122,22 +155,38 @@ private fun JimmerModuleSummaryMember.toSingletonField(suffix: String): LsiPoetF
 private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
     val moduleType = LsiDeclaredType(LsiSymbolId.type(qualifiedName))
     val originatingSymbols = dependencies.originatingTypeIds.toSet()
+    val file = LsiPoetFile(
+        language = LsiLanguage.KOTLIN,
+        packageName = packageName,
+        fileName = simpleName,
+        members = listOf(
+            LsiPoetType(
+                name = simpleName,
+                kind = LsiPoetTypeKind.CLASS,
+                modifiers = setOf(LsiPoetModifier.PRIVATE),
+            ),
+            LsiPoetProperty(
+                name = "ENTITY_MANAGER",
+                type = ENTITY_MANAGER_TYPE,
+                mutable = false,
+                initializer = initializer(moduleType),
+            ),
+        ),
+    )
     return LsiPoetArtifact(
-        file = LsiPoetFile(
-            language = LsiLanguage.KOTLIN,
-            packageName = packageName,
-            fileName = simpleName,
-            members = listOf(
-                LsiPoetType(
-                    name = simpleName,
-                    kind = LsiPoetTypeKind.CLASS,
-                    modifiers = setOf(LsiPoetModifier.PRIVATE),
+        file = file,
+        typeNames = workspace.toLsiPoetTypeNames(
+            file.referencedTypeIds,
+            additional = listOf(
+                LsiPoetTypeName(
+                    typeId = moduleType.declarationId,
+                    packageName = packageName,
+                    simpleNames = listOf(simpleName),
                 ),
-                LsiPoetProperty(
-                    name = "ENTITY_MANAGER",
-                    type = ENTITY_MANAGER_TYPE,
-                    mutable = false,
-                    initializer = initializer(moduleType),
+                LsiPoetTypeName(
+                    typeId = ENTITY_MANAGER_TYPE.declarationId,
+                    packageName = "org.babyfish.jimmer.sql.runtime",
+                    simpleNames = listOf("EntityManager"),
                 ),
             ),
         ),

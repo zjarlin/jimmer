@@ -7,7 +7,9 @@ import site.addzero.lsi.model.stableSignature
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class LsiSymbolIdTest {
 
@@ -83,6 +85,16 @@ class LsiSymbolIdTest {
         )
 
         assertEquals("元素 类型", typeParameter.requireTypeParameterName())
+    }
+
+    @Test
+    fun `只识别直接类型标识`() {
+        val type = LsiSymbolId.type("example.Container")
+
+        assertTrue(type.isTypeId())
+        assertFalse(LsiSymbolId.property(type, "value").isTypeId())
+        assertFalse(LsiSymbolId.typeParameter(type, "T").isTypeId())
+        assertFalse(LsiSymbolId.packageScope("example").isTypeId())
     }
 
     @Test

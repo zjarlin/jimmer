@@ -56,6 +56,8 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
+import site.addzero.lsi.poet.referencedTypeIds
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 /**
  * 将不可变类型查询语义降低为共享 LSI Poet 产物。
@@ -109,6 +111,8 @@ private class KotlinQueryPoetContext(
             branchDependent = branchDependent,
         )
         return dependencies.artifact(
+            workspace = workspace,
+            schema = schema,
             file = LsiPoetFile(
                 language = LsiLanguage.KOTLIN,
                 packageName = type.packageName,
@@ -603,10 +607,24 @@ private class JavaQueryPoetContext(
             branchDependent = branchDependent,
         )
         return buildList {
-            add(dependencies.artifact(javaFile(propsType, propsDeclaration()), branchDependent))
+            add(dependencies.artifact(workspace, schema, javaFile(propsType, propsDeclaration()), branchDependent))
             if (type.kind == ImmutableTypeKind.ENTITY) {
-                add(dependencies.artifact(javaFile(tableType, tableDeclaration(tableEx = false)), branchDependent))
-                add(dependencies.artifact(javaFile(tableExType, tableDeclaration(tableEx = true)), branchDependent))
+                add(
+                    dependencies.artifact(
+                        workspace,
+                        schema,
+                        javaFile(tableType, tableDeclaration(tableEx = false)),
+                        branchDependent,
+                    )
+                )
+                add(
+                    dependencies.artifact(
+                        workspace,
+                        schema,
+                        javaFile(tableExType, tableDeclaration(tableEx = true)),
+                        branchDependent,
+                    )
+                )
             }
         }
     }
@@ -1483,11 +1501,17 @@ private fun ImmutableSchema.queryDependencies(
 }
 
 private fun QueryArtifactDependencies.artifact(
+    workspace: LsiWorkspace,
+    schema: ImmutableSchema,
     file: LsiPoetFile,
     branchDependent: Boolean,
 ): LsiPoetArtifact {
     return LsiPoetArtifact(
         file = file,
+        typeNames = workspace.toLsiPoetTypeNames(
+            file.referencedTypeIds,
+            additional = schema.generatedQueryPoetTypeNames() + QUERY_RUNTIME_TYPE_NAMES,
+        ),
         aggregationMode = if (branchDependent) {
             ArtifactAggregationMode.AGGREGATING
         } else {
@@ -1507,6 +1531,23 @@ private fun QueryArtifactDependencies.artifact(
         dependencySymbols = dependencySymbols,
         dependencySources = dependencySources,
     )
+}
+
+private fun ImmutableSchema.generatedQueryPoetTypeNames(): List<site.addzero.lsi.poet.LsiPoetTypeName> {
+    return types.flatMap { type ->
+        listOf(
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Props"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Table"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}TableEx"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}FetcherDsl"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Draft"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}PropExpression"),
+            generatedNestedPoetTypeName(
+                type.packageName,
+                listOf("${type.simpleName}Table", "Remote"),
+            ),
+        )
+    }.distinctBy { typeName -> typeName.typeId }
 }
 
 private data class QueryArtifactDependencies(
@@ -1744,8 +1785,6 @@ private val KOTLIN_QUERY_RUNTIME_DEPENDENCIES = setOf(
     KOTLIN_ANY_ID,
     KOTLIN_LIST_ID,
     LsiSymbolId.type("kotlin.Suppress"),
-    LsiSymbolId.type("org.babyfish.jimmer.sql.kt.fetcher.newFetcher"),
-    LsiSymbolId.type("org.babyfish.jimmer.kt.toImmutableProp"),
 )
 
 private val PROPS_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.ast.table.Props")
@@ -1807,6 +1846,77 @@ private val SUPPRESS_WARNINGS_ID = LsiSymbolId.type("java.lang.SuppressWarnings"
 private val DEPRECATED_ID = LsiSymbolId.type("java.lang.Deprecated")
 private val JAVA_OVERRIDE_ID = LsiSymbolId.type("java.lang.Override")
 private val UNSUPPORTED_OPERATION_EXCEPTION_ID = LsiSymbolId.type("java.lang.UnsupportedOperationException")
+
+private val QUERY_RUNTIME_TYPE_NAMES = listOf(
+    "org.babyfish.jimmer.internal.GeneratedBy",
+    "org.babyfish.jimmer.meta.TypedProp",
+    "org.babyfish.jimmer.sql.ast.Selection",
+    "org.babyfish.jimmer.sql.kt.ast.table.KProps",
+    "org.babyfish.jimmer.sql.kt.ast.table.KNonNullProps",
+    "org.babyfish.jimmer.sql.kt.ast.table.KNullableProps",
+    "org.babyfish.jimmer.sql.kt.ast.table.KNonNullTable",
+    "org.babyfish.jimmer.sql.kt.ast.table.KNullableTable",
+    "org.babyfish.jimmer.sql.kt.ast.table.KNonNullTableEx",
+    "org.babyfish.jimmer.sql.kt.ast.table.KNullableTableEx",
+    "org.babyfish.jimmer.sql.kt.ast.table.KTableEx",
+    "org.babyfish.jimmer.sql.kt.ast.table.KImplicitSubQueryTable",
+    "org.babyfish.jimmer.sql.kt.ast.table.impl.KRemoteRefImplementor",
+    "org.babyfish.jimmer.sql.kt.ast.table.impl.KPolymorphicTables",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNonNullExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNonNullPropExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNullablePropExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNonNullEmbeddedPropExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNullableEmbeddedPropExpression",
+    "kotlin.reflect.KClass",
+    "kotlin.Any",
+    "kotlin.collections.List",
+    "kotlin.Suppress",
+    "org.babyfish.jimmer.sql.ast.table.Props",
+    "org.babyfish.jimmer.sql.ast.table.PropsFor",
+    "org.babyfish.jimmer.meta.ImmutableType",
+    "org.babyfish.jimmer.sql.JoinType",
+    "org.babyfish.jimmer.sql.ast.Predicate",
+    "org.babyfish.jimmer.sql.ast.PropExpression",
+    "java.util.function.Function",
+    "org.babyfish.jimmer.sql.ast.table.Table",
+    "org.babyfish.jimmer.sql.ast.table.TableEx",
+    "org.babyfish.jimmer.sql.ast.table.PolymorphicTable",
+    "org.babyfish.jimmer.sql.ast.table.spi.AbstractTypedTable",
+    "org.babyfish.jimmer.sql.ast.table.spi.TableExProxy",
+    "org.babyfish.jimmer.sql.ast.impl.table.TableProxies",
+    "org.babyfish.jimmer.sql.ast.impl.table.TableImplementor",
+    "org.babyfish.jimmer.sql.ast.impl.base.BaseTableOwner",
+    "org.babyfish.jimmer.sql.ast.table.BaseTable",
+    "org.babyfish.jimmer.sql.ast.impl.base.BaseTableSymbol",
+    "org.babyfish.jimmer.sql.ast.impl.base.BaseTableSymbols",
+    "org.babyfish.jimmer.sql.ast.table.WeakJoin",
+    "org.babyfish.jimmer.sql.ast.impl.table.WeakJoinHandle",
+    "org.babyfish.jimmer.sql.ast.impl.table.WeakJoinLambda",
+    "org.babyfish.jimmer.sql.ast.impl.table.JWeakJoinLambdaFactory",
+    "org.babyfish.jimmer.sql.ast.table.spi.TableLike",
+    "java.lang.Class",
+    "java.lang.String",
+    "java.lang.SuppressWarnings",
+    "java.lang.Deprecated",
+    "java.lang.Override",
+    "java.lang.UnsupportedOperationException",
+).map(LsiSymbolId::type).map(LsiSymbolId::topLevelPoetTypeName) + listOf(
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "Scalar")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "ScalarList")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "Reference")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "ReferenceList")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.kt.ast.table", listOf("KRemoteRef", "NonNull")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.kt.ast.table", listOf("KRemoteRef", "Nullable")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Num")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Str")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Dt")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Tp")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Cmp")),
+    generatedNestedPoetTypeName(
+        "org.babyfish.jimmer.sql.ast.table.spi",
+        listOf("AbstractTypedTable", "DelayedOperation"),
+    ),
+)
 
 private val SUPPRESS_ALL_ANNOTATION = LsiPoetAnnotation(
     type = SUPPRESS_WARNINGS_ID,

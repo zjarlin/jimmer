@@ -28,6 +28,7 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -38,7 +39,12 @@ class DtoSerializerPoetTest {
         val graph = graph()
         val type = graph.types.single()
         val schema = immutableSchema()
-        val dtoType = LsiDeclaredType(LsiSymbolId.type("demo.BookInput"))
+        val dtoTypeName = LsiPoetTypeName(
+            LsiSymbolId.type("demo.BookInput"),
+            "demo",
+            listOf("BookInput"),
+        )
+        val dtoType = LsiDeclaredType(dtoTypeName.typeId)
 
         val java2 = LsiJavaPoetRenderer().renderType(
             type.toSerializerPoetType(
@@ -48,6 +54,7 @@ class DtoSerializerPoetTest {
                 JimmerDtoJacksonVersion.JACKSON_2,
                 dtoType,
             ),
+            JimmerDtoJacksonVersion.JACKSON_2.serializerPoetTypeNames(dtoTypeName),
         ).toString()
         val java3 = LsiJavaPoetRenderer().renderType(
             type.toSerializerPoetType(
@@ -57,6 +64,7 @@ class DtoSerializerPoetTest {
                 JimmerDtoJacksonVersion.JACKSON_3,
                 dtoType,
             ),
+            JimmerDtoJacksonVersion.JACKSON_3.serializerPoetTypeNames(dtoTypeName),
         ).toString()
         val kotlin2 = LsiKotlinPoetRenderer().renderType(
             type.toSerializerPoetType(
@@ -66,6 +74,7 @@ class DtoSerializerPoetTest {
                 JimmerDtoJacksonVersion.JACKSON_2,
                 dtoType,
             ),
+            JimmerDtoJacksonVersion.JACKSON_2.serializerPoetTypeNames(dtoTypeName),
         ).toString()
         val kotlin3 = LsiKotlinPoetRenderer().renderType(
             type.toSerializerPoetType(
@@ -75,6 +84,7 @@ class DtoSerializerPoetTest {
                 JimmerDtoJacksonVersion.JACKSON_3,
                 dtoType,
             ),
+            JimmerDtoJacksonVersion.JACKSON_3.serializerPoetTypeNames(dtoTypeName),
         ).toString()
 
         assertEquals(

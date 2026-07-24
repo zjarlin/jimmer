@@ -31,6 +31,7 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
 /**
@@ -39,8 +40,11 @@ import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 class LsiJavaPoetRenderer : LsiPoetRenderer {
 
     /** 将单个 LSI 类型渲染为可嵌入现有 JavaPoet 声明的结构。 */
-    fun renderType(type: LsiPoetType): TypeSpec {
-        return type.toJavaTypeSpec(currentPackageName = null)
+    fun renderType(
+        type: LsiPoetType,
+        typeNames: List<LsiPoetTypeName>,
+    ): TypeSpec {
+        return type.toJavaTypeSpec(typeNames, currentPackageName = null)
     }
 
     override fun render(artifact: LsiPoetArtifact): GeneratedArtifact {
@@ -59,7 +63,10 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
         require(type.name == file.fileName) {
             "Java LSI Poet file name must match its top-level type: ${artifact.qualifiedFileName}"
         }
-        val javaFile = JavaFile.builder(file.packageName, type.toJavaTypeSpec(file.packageName))
+        val javaFile = JavaFile.builder(
+            file.packageName,
+            type.toJavaTypeSpec(artifact.typeNames, file.packageName),
+        )
             .indent("    ")
             .apply {
                 file.headerComment?.let { comment -> addFileComment("\$L", comment) }
@@ -69,7 +76,10 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
     }
 }
 
-private fun LsiPoetType.toJavaTypeSpec(currentPackageName: String?): TypeSpec {
+private fun LsiPoetType.toJavaTypeSpec(
+    typeNames: List<LsiPoetTypeName>,
+    currentPackageName: String?,
+): TypeSpec {
     require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
         "JavaPoet renderer cannot emit an escaped Kotlin type name: $name"
     }
@@ -82,91 +92,118 @@ private fun LsiPoetType.toJavaTypeSpec(currentPackageName: String?): TypeSpec {
         LsiPoetTypeKind.RECORD -> error("JavaPoet 1.x renderer cannot emit a record type: $name")
     }
     builder.addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.TYPE))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
+    annotations.forEach { annotation ->
+        builder.addAnnotation(annotation.toJavaSourceAnnotationSpec(typeNames))
+    }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
-    typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toJavaTypeVariableName()) }
-    superClass?.let { type -> builder.superclass(type.toJavaTypeName()) }
-    superInterfaces.forEach { type -> builder.addSuperinterface(type.toJavaTypeName()) }
+    typeParameters.forEach { parameter ->
+        builder.addTypeVariable(parameter.toJavaTypeVariableName(typeNames))
+    }
+    superClass?.let { type -> builder.superclass(type.toJavaTypeName(typeNames)) }
+    superInterfaces.forEach { type ->
+        builder.addSuperinterface(type.toJavaTypeName(typeNames))
+    }
     require(superClassConstructorArguments.isEmpty()) {
         "Java superclass constructor arguments must be declared by a constructor delegation call: $name"
     }
-    primaryConstructor?.let { constructor -> builder.addMethod(constructor.toJavaConstructor()) }
-    enumConstants.forEach { constant -> builder.addJavaEnumConstant(constant, currentPackageName) }
-    members.forEach { member -> builder.addJavaMember(member, currentPackageName) }
+    primaryConstructor?.let { constructor ->
+        builder.addMethod(constructor.toJavaConstructor(typeNames))
+    }
+    enumConstants.forEach { constant ->
+        builder.addJavaEnumConstant(constant, typeNames, currentPackageName)
+    }
+    members.forEach { member -> builder.addJavaMember(member, typeNames, currentPackageName) }
     return builder.build()
 }
 
 private fun TypeSpec.Builder.addJavaEnumConstant(
     constant: LsiPoetEnumConstant,
+    typeNames: List<LsiPoetTypeName>,
     currentPackageName: String?,
 ) {
     if (constant.constructorArguments.isEmpty() && constant.anonymousType == null) {
         addEnumConstant(constant.name)
         return
     }
-    val arguments = constant.constructorArguments.toJavaArgumentList()
+    val arguments = constant.constructorArguments.toJavaArgumentList(typeNames)
     val anonymousBuilder = TypeSpec.anonymousClassBuilder(arguments)
     constant.anonymousType?.let { type ->
         require(type.primaryConstructor == null && type.enumConstants.isEmpty()) {
             "Java enum constant anonymous type cannot declare constructors or enum constants: ${constant.name}"
         }
         type.annotations.forEach { annotation ->
-            anonymousBuilder.addAnnotation(annotation.toJavaSourceAnnotationSpec())
+            anonymousBuilder.addAnnotation(annotation.toJavaSourceAnnotationSpec(typeNames))
         }
-        type.superInterfaces.forEach { superType -> anonymousBuilder.addSuperinterface(superType.toJavaTypeName()) }
-        type.members.forEach { member -> anonymousBuilder.addJavaMember(member, currentPackageName) }
+        type.superInterfaces.forEach { superType ->
+            anonymousBuilder.addSuperinterface(superType.toJavaTypeName(typeNames))
+        }
+        type.members.forEach { member ->
+            anonymousBuilder.addJavaMember(member, typeNames, currentPackageName)
+        }
     }
     addEnumConstant(constant.name, anonymousBuilder.build())
 }
 
 private fun TypeSpec.Builder.addJavaMember(
     member: LsiPoetMember,
+    typeNames: List<LsiPoetTypeName>,
     currentPackageName: String?,
 ) {
     when (member) {
-        is LsiPoetConstructor -> addMethod(member.toJavaConstructor())
-        is LsiPoetField -> addField(member.toJavaField(currentPackageName))
-        is LsiPoetFunction -> addMethod(member.toJavaMethod())
-        is LsiPoetInitializerBlock -> addJavaInitializer(member)
+        is LsiPoetConstructor -> addMethod(member.toJavaConstructor(typeNames))
+        is LsiPoetField -> addField(member.toJavaField(typeNames, currentPackageName))
+        is LsiPoetFunction -> addMethod(member.toJavaMethod(typeNames))
+        is LsiPoetInitializerBlock -> addJavaInitializer(member, typeNames)
         is LsiPoetProperty -> error("JavaPoet renderer cannot emit a Kotlin property: ${member.name}")
-        is LsiPoetType -> addType(member.toJavaTypeSpec(currentPackageName))
+        is LsiPoetType -> addType(member.toJavaTypeSpec(typeNames, currentPackageName))
     }
 }
 
-private fun TypeSpec.Builder.addJavaInitializer(initializer: LsiPoetInitializerBlock) {
+private fun TypeSpec.Builder.addJavaInitializer(
+    initializer: LsiPoetInitializerBlock,
+    typeNames: List<LsiPoetTypeName>,
+) {
     require(initializer.annotations.isEmpty() && initializer.documentation == null) {
         "Java initializer block cannot declare annotations or documentation"
     }
     if (initializer.static) {
-        addStaticBlock(initializer.body.toJavaCodeBlock())
+        addStaticBlock(initializer.body.toJavaCodeBlock(typeNames))
     } else {
-        addInitializerBlock(initializer.body.toJavaCodeBlock())
+        addInitializerBlock(initializer.body.toJavaCodeBlock(typeNames))
     }
 }
 
-private fun LsiPoetConstructor.toJavaConstructor(): MethodSpec {
+private fun LsiPoetConstructor.toJavaConstructor(
+    typeNames: List<LsiPoetTypeName>,
+): MethodSpec {
     val builder = MethodSpec.constructorBuilder()
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.CONSTRUCTOR))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
+    annotations.forEach { annotation ->
+        builder.addAnnotation(annotation.toJavaSourceAnnotationSpec(typeNames))
+    }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
-    typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toJavaTypeVariableName()) }
-    parameters.forEach { parameter -> builder.addParameter(parameter.toJavaParameter()) }
+    typeParameters.forEach { parameter ->
+        builder.addTypeVariable(parameter.toJavaTypeVariableName(typeNames))
+    }
+    parameters.forEach { parameter -> builder.addParameter(parameter.toJavaParameter(typeNames)) }
     if (parameters.lastOrNull()?.modifiers?.contains(LsiPoetModifier.VARARG) == true) {
         builder.varargs(true)
     }
-    thrownTypes.forEach { type -> builder.addException(type.toJavaTypeName()) }
+    thrownTypes.forEach { type -> builder.addException(type.toJavaTypeName(typeNames)) }
     delegationCall?.let { delegation ->
         val target = when (delegation.target) {
             LsiPoetDelegationTarget.THIS -> "this"
             LsiPoetDelegationTarget.SUPER -> "super"
         }
-        builder.addStatement("\$L(\$L)", target, delegation.arguments.toJavaArgumentList())
+        builder.addStatement("\$L(\$L)", target, delegation.arguments.toJavaArgumentList(typeNames))
     }
-    builder.addCode(body.toJavaCodeBlock())
+    builder.addCode(body.toJavaCodeBlock(typeNames))
     return builder.build()
 }
 
-private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
+private fun LsiPoetFunction.toJavaMethod(
+    typeNames: List<LsiPoetTypeName>,
+): MethodSpec {
     require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
         "JavaPoet renderer cannot emit an escaped Kotlin function name: $name"
     }
@@ -181,7 +218,9 @@ private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
     }
     val builder = MethodSpec.methodBuilder(name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.FUNCTION))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
+    annotations.forEach { annotation ->
+        builder.addAnnotation(annotation.toJavaSourceAnnotationSpec(typeNames))
+    }
     if (
         LsiPoetModifier.OVERRIDE in modifiers &&
         annotations.none { annotation -> annotation.type == JAVA_LANG_OVERRIDE }
@@ -189,51 +228,64 @@ private fun LsiPoetFunction.toJavaMethod(): MethodSpec {
         builder.addAnnotation(Override::class.java)
     }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
-    typeParameters.forEach { parameter -> builder.addTypeVariable(parameter.toJavaTypeVariableName()) }
-    parameters.forEach { parameter -> builder.addParameter(parameter.toJavaParameter()) }
+    typeParameters.forEach { parameter ->
+        builder.addTypeVariable(parameter.toJavaTypeVariableName(typeNames))
+    }
+    parameters.forEach { parameter -> builder.addParameter(parameter.toJavaParameter(typeNames)) }
     if (parameters.lastOrNull()?.modifiers?.contains(LsiPoetModifier.VARARG) == true) {
         builder.varargs(true)
     }
-    returnType?.let { type -> builder.returns(type.toJavaTypeName()) }
-    thrownTypes.forEach { type -> builder.addException(type.toJavaTypeName()) }
-    builder.addCode(body.toJavaCodeBlock())
+    returnType?.let { type -> builder.returns(type.toJavaTypeName(typeNames)) }
+    thrownTypes.forEach { type -> builder.addException(type.toJavaTypeName(typeNames)) }
+    builder.addCode(body.toJavaCodeBlock(typeNames))
     return builder.build()
 }
 
-private fun LsiPoetParameter.toJavaParameter(): ParameterSpec {
+private fun LsiPoetParameter.toJavaParameter(
+    typeNames: List<LsiPoetTypeName>,
+): ParameterSpec {
     require(nameStyle == LsiPoetNameStyle.IDENTIFIER) {
         "JavaPoet renderer cannot emit an escaped Kotlin parameter name: $name"
     }
     require(defaultValue == null) {
         "JavaPoet renderer cannot emit a default parameter value: $name"
     }
-    val parameterType = type.toJavaTypeName().let { typeName ->
+    val parameterType = type.toJavaTypeName(typeNames).let { typeName ->
         if (LsiPoetModifier.VARARG in modifiers) ArrayTypeName.of(typeName) else typeName
     }
     val builder = ParameterSpec.builder(parameterType, name)
         .addModifiers(*modifiers.toJavaModifiers(JavaModifierContext.PARAMETER))
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
+    annotations.forEach { annotation ->
+        builder.addAnnotation(annotation.toJavaSourceAnnotationSpec(typeNames))
+    }
     return builder.build()
 }
 
-private fun LsiPoetField.toJavaField(currentPackageName: String?): FieldSpec {
+private fun LsiPoetField.toJavaField(
+    typeNames: List<LsiPoetTypeName>,
+    currentPackageName: String?,
+): FieldSpec {
     val javaModifiers = modifiers.toJavaModifiers(JavaModifierContext.FIELD).toMutableSet()
     if (LsiPoetModifier.CONST in modifiers) {
         javaModifiers += Modifier.STATIC
         javaModifiers += Modifier.FINAL
     }
     val builder = FieldSpec.builder(
-        type.toJavaTypeName(typeReferenceStyle, currentPackageName),
+        type.toJavaTypeName(typeNames, typeReferenceStyle, currentPackageName),
         name,
         *javaModifiers.toTypedArray(),
     )
-    annotations.forEach { annotation -> builder.addAnnotation(annotation.toJavaSourceAnnotationSpec()) }
+    annotations.forEach { annotation ->
+        builder.addAnnotation(annotation.toJavaSourceAnnotationSpec(typeNames))
+    }
     documentation?.let { value -> builder.addJavadoc("\$L", value) }
-    initializer?.let { value -> builder.initializer(value.toJavaCodeBlock()) }
+    initializer?.let { value -> builder.initializer(value.toJavaCodeBlock(typeNames)) }
     return builder.build()
 }
 
-private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
+private fun LsiPoetCodeBlock.toJavaCodeBlock(
+    typeNames: List<LsiPoetTypeName>,
+): CodeBlock {
     require(indentation == LsiPoetCodeBlockIndentation.PLATFORM_DEFAULT) {
         "JavaPoet renderer cannot honor explicit Kotlin code indentation"
     }
@@ -242,9 +294,9 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
         when (part) {
             is LsiPoetCodePart.BeginControlFlow -> builder.beginControlFlow(
                 "\$L",
-                part.header.toJavaCodeBlock(),
+                part.header.toJavaCodeBlock(typeNames),
             )
-            is LsiPoetCodePart.BracedExpression -> builder.addJavaBracedExpression(part)
+            is LsiPoetCodePart.BracedExpression -> builder.addJavaBracedExpression(part, typeNames)
             is LsiPoetCodePart.CharacterLiteral -> builder.add("\$L", part.value.javaCharacterLiteral())
             LsiPoetCodePart.EndControlFlow -> builder.endControlFlow()
             LsiPoetCodePart.Indent -> builder.indent()
@@ -253,12 +305,15 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
             LsiPoetCodePart.NewLine -> builder.add("\n")
             is LsiPoetCodePart.NextControlFlow -> builder.nextControlFlow(
                 "\$L",
-                part.header.toJavaCodeBlock(),
+                part.header.toJavaCodeBlock(typeNames),
             )
             is LsiPoetCodePart.Return -> part.value?.let { value ->
-                builder.addStatement("return \$L", value.toJavaCodeBlock())
+                builder.addStatement("return \$L", value.toJavaCodeBlock(typeNames))
             } ?: builder.addStatement("return")
-            is LsiPoetCodePart.Statement -> builder.addStatement("\$L", part.value.toJavaCodeBlock())
+            is LsiPoetCodePart.Statement -> builder.addStatement(
+                "\$L",
+                part.value.toJavaCodeBlock(typeNames),
+            )
             is LsiPoetCodePart.StringLiteral -> builder.add("\$S", part.value)
             is LsiPoetCodePart.Text -> builder.add("\$L", part.value)
             is LsiPoetCodePart.TopLevelMember -> error(
@@ -266,10 +321,13 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
                     "${part.packageName}.${part.simpleName}"
             )
             is LsiPoetCodePart.Type -> when (part.referenceStyle) {
-                LsiPoetTypeReferenceStyle.IMPORTED -> builder.add("\$T", part.value.toJavaTypeName())
+                LsiPoetTypeReferenceStyle.IMPORTED -> builder.add(
+                    "\$T",
+                    part.value.toJavaTypeName(typeNames),
+                )
                 LsiPoetTypeReferenceStyle.FULLY_QUALIFIED -> builder.add(
                     "\$L",
-                    part.value.toJavaTypeName(),
+                    part.value.toJavaTypeName(typeNames),
                 )
                 LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED -> error(
                     "Same-package outer-qualified type references require a declaration type position"
@@ -283,27 +341,30 @@ private fun LsiPoetCodeBlock.toJavaCodeBlock(): CodeBlock {
 
 private fun CodeBlock.Builder.addJavaBracedExpression(
     expression: LsiPoetCodePart.BracedExpression,
+    typeNames: List<LsiPoetTypeName>,
 ) {
     if (expression.completion == LsiPoetBracedExpressionCompletion.RETURN) {
         add("return ")
     }
-    add("\$L", expression.prefix.toJavaCodeBlock())
+    add("\$L", expression.prefix.toJavaCodeBlock(typeNames))
     add(" {\n")
     indent()
-    add("\$L", expression.body.toJavaCodeBlock())
+    add("\$L", expression.body.toJavaCodeBlock(typeNames))
     unindent()
     add("}")
-    add("\$L", expression.suffix.toJavaCodeBlock())
+    add("\$L", expression.suffix.toJavaCodeBlock(typeNames))
     add(";\n")
 }
 
-private fun List<LsiPoetCodeBlock>.toJavaArgumentList(): CodeBlock {
+private fun List<LsiPoetCodeBlock>.toJavaArgumentList(
+    typeNames: List<LsiPoetTypeName>,
+): CodeBlock {
     val builder = CodeBlock.builder()
     forEachIndexed { index, argument ->
         if (index != 0) {
             builder.add(", ")
         }
-        builder.add("\$L", argument.toJavaCodeBlock())
+        builder.add("\$L", argument.toJavaCodeBlock(typeNames))
     }
     return builder.build()
 }

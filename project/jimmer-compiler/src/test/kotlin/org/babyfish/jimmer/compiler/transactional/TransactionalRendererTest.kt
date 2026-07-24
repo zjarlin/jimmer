@@ -45,6 +45,7 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -93,23 +94,79 @@ class TransactionalRendererTest {
             type = LsiSymbolId.type("demo.TypeMarker"),
             useSiteTarget = LsiAnnotationUseSiteTarget.RETURN_TYPE,
         )
+        val markerDeclaration = annotationDeclaration("TypeMarker", "FUNCTION")
         val (javaSchema, javaWorkspace) = javaFixture()
+        val resolvedJavaWorkspace = javaWorkspace.withDeclaration(markerDeclaration)
         val javaArtifact = LsiJavaPoetRenderer().render(
             javaSchema
                 .withAnnotatedReturnType(returnAnnotation)
-                .toLsiPoetArtifacts(javaWorkspace)
+                .toLsiPoetArtifacts(resolvedJavaWorkspace)
                 .single()
         )
         val (kotlinSchema, kotlinWorkspace) = kotlinFixture()
+        val resolvedKotlinWorkspace = kotlinWorkspace.withDeclaration(markerDeclaration)
         val kotlinArtifact = LsiKotlinPoetRenderer().render(
             kotlinSchema
                 .withAnnotatedReturnType(returnAnnotation)
-                .toLsiPoetArtifacts(kotlinWorkspace)
+                .toLsiPoetArtifacts(resolvedKotlinWorkspace)
                 .single()
         )
 
         assertEquals(1, javaArtifact.content.lineSequence().count { line -> "@TypeMarker" in line })
         assertEquals(1, kotlinArtifact.content.lineSequence().count { line -> "@TypeMarker" in line })
+    }
+
+    @Test
+    fun `renderers preserve exact uppercase package and lowercase type boundaries`() {
+        val outerId = LsiSymbolId.type("UPPER.pkg.lowercase")
+        val nestedId = LsiSymbolId.type("UPPER.pkg.lowercase.item")
+        val outerDeclaration = LsiTypeDeclaration(
+            id = outerId,
+            name = "lowercase",
+            qualifiedName = "UPPER.pkg.lowercase",
+            kind = LsiTypeDeclarationKind.CLASS,
+            origin = LsiOrigin(LsiOriginKind.BINARY),
+        )
+        val nestedDeclaration = LsiTypeDeclaration(
+            id = nestedId,
+            name = "item",
+            qualifiedName = "UPPER.pkg.lowercase.item",
+            kind = LsiTypeDeclarationKind.CLASS,
+            enclosingTypeId = outerId,
+            origin = LsiOrigin(LsiOriginKind.BINARY),
+        )
+        val expectedTypeNames = listOf(
+            LsiPoetTypeName(outerId, "UPPER.pkg", listOf("lowercase")),
+            LsiPoetTypeName(nestedId, "UPPER.pkg", listOf("lowercase", "item")),
+        )
+
+        val (javaSchema, javaWorkspace) = javaFixture()
+        val javaPoetArtifact = javaSchema
+            .withMethodReturnTypes(LsiDeclaredType(outerId), LsiDeclaredType(nestedId))
+            .toLsiPoetArtifacts(
+                javaWorkspace.withDeclaration(outerDeclaration).withDeclaration(nestedDeclaration)
+            )
+            .single()
+        val (kotlinSchema, kotlinWorkspace) = kotlinFixture()
+        val kotlinPoetArtifact = kotlinSchema
+            .withMethodReturnTypes(LsiDeclaredType(outerId), LsiDeclaredType(nestedId))
+            .toLsiPoetArtifacts(
+                kotlinWorkspace.withDeclaration(outerDeclaration).withDeclaration(nestedDeclaration)
+            )
+            .single()
+
+        expectedTypeNames.forEach { expected ->
+            assertEquals(expected, javaPoetArtifact.typeNames.single { it.typeId == expected.typeId })
+            assertEquals(expected, kotlinPoetArtifact.typeNames.single { it.typeId == expected.typeId })
+        }
+        val javaContent = LsiJavaPoetRenderer().render(javaPoetArtifact).content
+        val kotlinContent = LsiKotlinPoetRenderer().render(kotlinPoetArtifact).content
+        assertContains(javaContent, "import UPPER.pkg.lowercase;")
+        assertContains(javaContent, "public lowercase a()")
+        assertContains(javaContent, "lowercase.item b()")
+        assertContains(kotlinContent, "import UPPER.pkg.lowercase")
+        assertContains(kotlinContent, "override fun a(): lowercase")
+        assertContains(kotlinContent, "internal override fun b(): lowercase.item")
     }
 
     @Test
@@ -403,6 +460,7 @@ class TransactionalRendererTest {
     }
 
     private fun workspace(serviceId: LsiSymbolId, source: LsiSource): LsiWorkspace {
+        val packageName = serviceId.requireTypeQualifiedName().substringBeforeLast('.')
         return LsiWorkspace(
             sources = listOf(source),
             declarations = listOf(
@@ -413,7 +471,14 @@ class TransactionalRendererTest {
                     kind = LsiTypeDeclarationKind.CLASS,
                     modality = LsiModality.OPEN,
                     origin = LsiOrigin(LsiOriginKind.SOURCE, source),
-                )
+                ),
+                LsiTypeDeclaration(
+                    id = LsiSymbolId.type("$packageName.Component"),
+                    name = "Component",
+                    qualifiedName = "$packageName.Component",
+                    kind = LsiTypeDeclarationKind.ANNOTATION,
+                    origin = LsiOrigin(LsiOriginKind.SOURCE, source),
+                ),
             ),
         )
     }
@@ -445,6 +510,13 @@ class TransactionalRendererTest {
         )
     }
 
+    private fun LsiWorkspace.withDeclaration(declaration: LsiTypeDeclaration): LsiWorkspace {
+        return LsiWorkspace(
+            sources = sources + listOfNotNull(declaration.origin.source),
+            declarations = declarations + declaration,
+        )
+    }
+
     private fun TransactionalSchema.withAnnotatedReturnType(
         annotation: LsiAnnotation,
     ): TransactionalSchema {
@@ -463,6 +535,23 @@ class TransactionalRendererTest {
                     }
                 )
             }
+        )
+    }
+
+    private fun TransactionalSchema.withMethodReturnTypes(
+        vararg returnTypes: LsiTypeRef,
+    ): TransactionalSchema {
+        return copy(
+            types = types.map { type ->
+                require(type.methods.size == returnTypes.size) {
+                    "测试返回类型数量必须与事务方法数量一致"
+                }
+                type.copy(
+                    methods = type.methods.mapIndexed { index, method ->
+                        method.copy(returnType = returnTypes[index])
+                    },
+                )
+            },
         )
     }
 

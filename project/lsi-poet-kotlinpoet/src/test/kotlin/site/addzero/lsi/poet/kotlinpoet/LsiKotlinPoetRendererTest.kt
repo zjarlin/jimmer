@@ -41,11 +41,30 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
 class LsiKotlinPoetRendererTest {
 
     private val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+
+    private val typeNames = listOf(
+        LsiPoetTypeName(LsiSymbolId.type("java.lang.String"), "java.lang", listOf("String")),
+        LsiPoetTypeName(LsiSymbolId.type("java.io.IOException"), "java.io", listOf("IOException")),
+        LsiPoetTypeName(LsiSymbolId.type("kotlin.Suppress"), "kotlin", listOf("Suppress")),
+        LsiPoetTypeName(LsiSymbolId.type("demo.annotation.Container"), "demo.annotation", listOf("Container")),
+        LsiPoetTypeName(LsiSymbolId.type("demo.annotation.Nested"), "demo.annotation", listOf("Nested")),
+        LsiPoetTypeName(LsiSymbolId.type("demo.annotation.Ordered"), "demo.annotation", listOf("Ordered")),
+        LsiPoetTypeName(LsiSymbolId.type("demo.annotation.TypeMarker"), "demo.annotation", listOf("TypeMarker")),
+        LsiPoetTypeName(LsiSymbolId.type("demo.external.External"), "demo.external", listOf("External")),
+        LsiPoetTypeName(
+            LsiSymbolId.type("demo.generated.QueryExtensions"),
+            "demo.generated",
+            listOf("QueryExtensions"),
+        ),
+        LsiPoetTypeName(LsiSymbolId.type("demo.Order"), "demo", listOf("Order")),
+        LsiPoetTypeName(LsiSymbolId.type("demo.Source"), "demo", listOf("Source")),
+    )
 
     @Test
     fun `renders an embeddable Kotlin type structure exactly`() {
@@ -55,12 +74,12 @@ class LsiKotlinPoetRendererTest {
             modifiers = setOf(LsiPoetModifier.PUBLIC),
         )
 
-        val rendered = LsiKotlinPoetRenderer().renderType(type)
+        val rendered = LsiKotlinPoetRenderer().renderType(type, emptyList())
 
         assertEquals(
             TypeSpec::class.java,
             LsiKotlinPoetRenderer::class.java
-                .getDeclaredMethod("renderType", LsiPoetType::class.java)
+                .getDeclaredMethod("renderType", LsiPoetType::class.java, List::class.java)
                 .returnType,
         )
         assertEquals("public interface Marker\n", rendered.toString())
@@ -176,6 +195,7 @@ class LsiKotlinPoetRendererTest {
                 ),
                 members = listOf(type),
             ),
+            typeNames = typeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )
@@ -334,6 +354,7 @@ class LsiKotlinPoetRendererTest {
                     )
                 ),
             ),
+            typeNames = typeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )
@@ -433,6 +454,7 @@ class LsiKotlinPoetRendererTest {
                 fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
                 members = listOf(LsiPoetType("OrderFetcher", LsiPoetTypeKind.CLASS)),
             ),
+            typeNames = typeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Order")),
         )
@@ -472,6 +494,7 @@ class LsiKotlinPoetRendererTest {
                 fileName = "QueryExtensions",
                 members = listOf(function),
             ),
+            typeNames = typeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )
@@ -500,6 +523,7 @@ class LsiKotlinPoetRendererTest {
                 fileName = "Qualified",
                 members = listOf(function),
             ),
+            typeNames = typeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )
@@ -572,6 +596,7 @@ class LsiKotlinPoetRendererTest {
                 fileName = fileName,
                 members = listOf(type),
             ),
+            typeNames = typeNames,
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )

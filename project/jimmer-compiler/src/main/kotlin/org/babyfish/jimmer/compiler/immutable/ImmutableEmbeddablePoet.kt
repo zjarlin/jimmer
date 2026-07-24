@@ -46,6 +46,8 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.referencedTypeIds
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 internal fun ImmutableSchema.toEmbeddablePoetArtifacts(
     types: List<ImmutableType>,
@@ -64,6 +66,7 @@ internal fun ImmutableSchema.toEmbeddablePoetArtifacts(
             LsiLanguage.JAVA -> type.toJavaPoetArtifacts(
                 schema = this,
                 typeSystem = typeSystem,
+                workspace = workspace,
                 propsDependencies = type.embeddableDependencies(
                     workspace = workspace,
                     runtimeDependencies = JAVA_PROPS_RUNTIME_DEPENDENCIES,
@@ -228,11 +231,14 @@ private fun MutableSet<LsiSymbolId>.addAnnotationValueDependencies(value: LsiAnn
 private fun ImmutableType.toJavaPoetArtifacts(
     schema: ImmutableSchema,
     typeSystem: LsiTypeSystem,
+    workspace: LsiWorkspace,
     propsDependencies: EmbeddableArtifactDependencies,
     expressionDependencies: EmbeddableArtifactDependencies,
 ): List<LsiPoetArtifact> {
     return listOf(
         propsDependencies.artifact(
+            workspace,
+            schema,
             LsiPoetFile(
                 language = LsiLanguage.JAVA,
                 packageName = packageName,
@@ -241,6 +247,8 @@ private fun ImmutableType.toJavaPoetArtifacts(
             )
         ),
         expressionDependencies.artifact(
+            workspace,
+            schema,
             LsiPoetFile(
                 language = LsiLanguage.JAVA,
                 packageName = packageName,
@@ -419,6 +427,8 @@ private fun ImmutableType.toKotlinPoetArtifact(
 ): LsiPoetArtifact {
     val sourceBaseName = workspace.immutableSourceBaseName(this)
     return dependencies.artifact(
+        workspace,
+        schema,
         LsiPoetFile(
             language = LsiLanguage.KOTLIN,
             packageName = packageName,
@@ -689,9 +699,17 @@ private val JimmerImmutableTypedPropKind.factoryName: String
         JimmerImmutableTypedPropKind.REFERENCE_LIST -> "referenceList"
     }
 
-private fun EmbeddableArtifactDependencies.artifact(file: LsiPoetFile): LsiPoetArtifact {
+private fun EmbeddableArtifactDependencies.artifact(
+    workspace: LsiWorkspace,
+    schema: ImmutableSchema,
+    file: LsiPoetFile,
+): LsiPoetArtifact {
     return LsiPoetArtifact(
         file = file,
+        typeNames = workspace.toLsiPoetTypeNames(
+            file.referencedTypeIds,
+            additional = schema.generatedEmbeddablePoetTypeNames() + EMBEDDABLE_RUNTIME_TYPE_NAMES,
+        ),
         aggregationMode = classifyArtifactAggregationMode(
             originatingSymbols = originatingSymbols,
             originatingSources = originatingSources,
@@ -702,6 +720,16 @@ private fun EmbeddableArtifactDependencies.artifact(file: LsiPoetFile): LsiPoetA
         dependencySymbols = dependencySymbols,
         dependencySources = dependencySources,
     )
+}
+
+private fun ImmutableSchema.generatedEmbeddablePoetTypeNames(): List<site.addzero.lsi.poet.LsiPoetTypeName> {
+    return types.flatMap { type ->
+        listOf(
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Props"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}PropExpression"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}FetcherDsl"),
+        )
+    }.distinctBy { typeName -> typeName.typeId }
 }
 
 private data class EmbeddableArtifactDependencies(
@@ -764,6 +792,35 @@ private val FILE_WARNING_SUPPRESSION = LsiPoetAnnotation(
         )
     ),
     useSiteTarget = LsiAnnotationUseSiteTarget.FILE,
+)
+
+private val EMBEDDABLE_RUNTIME_TYPE_NAMES = listOf(
+    "org.babyfish.jimmer.internal.GeneratedBy",
+    "org.babyfish.jimmer.meta.TypedProp",
+    "org.babyfish.jimmer.meta.ImmutableType",
+    "org.babyfish.jimmer.sql.ast.PropExpression",
+    "org.babyfish.jimmer.sql.ast.embedded.AbstractTypedEmbeddedPropExpression",
+    "org.babyfish.jimmer.sql.ast.impl.base.BaseTableOwner",
+    "java.lang.Override",
+    "java.lang.String",
+    "kotlin.Suppress",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNonNullPropExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNullablePropExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNonNullEmbeddedPropExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KNullableEmbeddedPropExpression",
+    "org.babyfish.jimmer.sql.kt.ast.expression.KEmbeddedPropExpression",
+    "org.babyfish.jimmer.sql.ast.Selection",
+).map(LsiSymbolId::type).map(LsiSymbolId::topLevelPoetTypeName) + listOf(
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "Scalar")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "ScalarList")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "Reference")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.meta", listOf("TypedProp", "ReferenceList")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Embedded")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Num")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Str")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Dt")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Tp")),
+    generatedNestedPoetTypeName("org.babyfish.jimmer.sql.ast", listOf("PropExpression", "Cmp")),
 )
 
 private val JAVA_PROPS_RUNTIME_DEPENDENCIES = setOf(
