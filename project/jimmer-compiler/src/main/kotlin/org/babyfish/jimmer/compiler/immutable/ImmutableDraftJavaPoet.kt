@@ -1990,8 +1990,7 @@ private class JavaDraftPoetContext(
             parameters = listOf(
                 LsiPoetParameter(
                     name = "base",
-                    type = modelType,
-                    annotations = listOf(NULLABLE_ANNOTATION),
+                    type = modelType.withJavaDraftNullity(nullable = true),
                 )
             ),
             body = draftCode {
@@ -2022,8 +2021,9 @@ private class JavaDraftPoetContext(
             parameters = listOf(
                 LsiPoetParameter(
                     name = prop.codegenName,
-                    type = prop.type.boxedForJavaDraft(),
-                    annotations = listOf(if (prop.nullable) NULLABLE_ANNOTATION else NON_NULL_ANNOTATION),
+                    type = prop.type
+                        .boxedForJavaDraft()
+                        .withJavaDraftNullity(prop.nullable),
                 )
             ),
             returnType = builderType,
@@ -2133,11 +2133,10 @@ private class JavaDraftPoetContext(
             parameters = listOf(
                 LsiPoetParameter(
                     name = parameterName,
-                    type = idType,
-                    annotations = if (idType !is LsiPrimitiveType || idType.boxed) {
-                        listOf(if (prop.nullable) NULLABLE_ANNOTATION else NON_NULL_ANNOTATION)
+                    type = if (idType !is LsiPrimitiveType || idType.boxed) {
+                        idType.withJavaDraftNullity(prop.nullable)
                     } else {
-                        emptyList()
+                        idType
                     },
                 )
             ),
@@ -2287,6 +2286,23 @@ internal fun LsiTypeRef.boxedForJavaDraft(): LsiTypeRef {
         sourceType.copy(boxed = true)
     } else {
         sourceType
+    }
+}
+
+/**
+ * JSpecify 空值标记属于类型使用注解，不能挂到 Java 参数声明上。
+ */
+internal fun LsiTypeRef.withJavaDraftNullity(nullable: Boolean): LsiTypeRef {
+    val annotation = LsiAnnotation(
+        type = if (nullable) NULLABLE_ANNOTATION.type else NON_NULL_ANNOTATION.type,
+    )
+    return when (this) {
+        is LsiDeclaredType -> copy(annotations = listOf(annotation))
+        is LsiTypeParameterRef -> copy(annotations = listOf(annotation))
+        is LsiPrimitiveType -> copy(annotations = listOf(annotation))
+        is LsiArrayType -> copy(annotations = listOf(annotation))
+        is LsiFunctionType -> copy(annotations = listOf(annotation))
+        is LsiUnresolvedType -> copy(annotations = listOf(annotation))
     }
 }
 

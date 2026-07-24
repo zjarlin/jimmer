@@ -188,6 +188,8 @@ private val DRAFT_RUNTIME_TYPE_IDS = listOf(
     "java.time.LocalDateTime",
     "java.time.LocalTime",
     "java.util.regex.Pattern",
+    "jakarta.validation.ValidationException",
+    "javax.validation.ValidationException",
     "org.babyfish.jimmer.impl.validation.Validator",
     "org.babyfish.jimmer.sql.OneToOne",
     "org.babyfish.jimmer.sql.ManyToOne",
