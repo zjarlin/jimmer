@@ -3,6 +3,7 @@ package site.addzero.lsi.jimmer.dto
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.model.LsiNullability
@@ -45,6 +46,20 @@ fun DtoType.requiresInputBuilder(graph: DtoGraph): Boolean {
     return basePropsInDeclarationOrder(graph).any { prop ->
         prop.inputModifier == DtoModifier.FIXED || prop.inputModifier == DtoModifier.DYNAMIC
     }
+}
+
+/** 判断 DTO 是否为嵌套在实体 Specification 中的非实体过滤片段。 */
+fun DtoType.isNestedSpecificationFragment(
+    immutableSchema: ImmutableSchema,
+): Boolean {
+    val baseTypeId = requireNotNull(baseTypeId) {
+        "DTO semantic classification requires a base immutable type: ${id.value}"
+    }
+    val baseType = requireNotNull(immutableSchema.typesById[baseTypeId]) {
+        "No immutable base type '${baseTypeId.value}' for DTO type: ${id.value}"
+    }
+    return DtoModifier.SPECIFICATION in modifiers &&
+        baseType.kind != ImmutableTypeKind.ENTITY
 }
 
 /** 返回动态输入属性对应的加载状态访问器名称。 */

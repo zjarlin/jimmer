@@ -129,6 +129,53 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `identifies nested specification fragments from frozen DTO semantics`() {
+        val dtoType = graph(visibleDynamic = false).types.single()
+        val specification = dtoType.copy(modifiers = setOf(DtoModifier.SPECIFICATION))
+        val idProp = immutableProp(
+            name = "id",
+            type = STRING_TYPE,
+            primaryMapping = PrimaryMapping.ID,
+        )
+        val entityType = immutableType(
+            id = BASE_TYPE_ID,
+            props = listOf(idProp),
+            kind = ImmutableTypeKind.ENTITY,
+            idPropId = idProp.id,
+        )
+
+        assertFalse(
+            specification.isNestedSpecificationFragment(
+                ImmutableSchema(listOf(entityType)),
+            ),
+        )
+        assertTrue(
+            specification.isNestedSpecificationFragment(
+                ImmutableSchema(
+                    listOf(immutableType(BASE_TYPE_ID, emptyList(), ImmutableTypeKind.EMBEDDABLE)),
+                ),
+            ),
+        )
+        assertTrue(
+            specification.isNestedSpecificationFragment(
+                ImmutableSchema(
+                    listOf(immutableType(BASE_TYPE_ID, emptyList())),
+                ),
+            ),
+        )
+        assertFalse(
+            dtoType.isNestedSpecificationFragment(
+                ImmutableSchema(
+                    listOf(immutableType(BASE_TYPE_ID, emptyList(), ImmutableTypeKind.EMBEDDABLE)),
+                ),
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.isNestedSpecificationFragment(ImmutableSchema(emptyList()))
+        }
+    }
+
+    @Test
     fun `derives Java accessors from final DTO value semantics`() {
         assertEquals("isActive", valueAccessorName("active"))
         assertEquals("isEnabled", valueAccessorName("isEnabled"))

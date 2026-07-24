@@ -44,6 +44,7 @@ import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
+import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
@@ -557,7 +558,7 @@ internal class DtoGenerator private constructor(
         val isSpecification = dtoType.modifiers.contains(DtoModifier.SPECIFICATION)
         if (polymorphicSuperInterfaceName != null) {
             typeBuilder.addSuperinterface(polymorphicSuperInterfaceName)
-        } else if (isImpl && dtoType.baseType.isEntity) {
+        } else if (!isNestedSpecificationFragment && dtoType.baseType.isEntity) {
             typeBuilder.addSuperinterface(
                 when {
                     isSpecification ->
@@ -573,7 +574,7 @@ internal class DtoGenerator private constructor(
                 )
             )
         }
-        if (isImpl && dtoType.baseType.isEmbeddable) {
+        if (!isNestedSpecificationFragment && dtoType.baseType.isEmbeddable) {
             typeBuilder.addSuperinterface(
                 EMBEDDED_DTO_CLASS_NAME.parameterizedBy(
                     dtoType.baseType.className
@@ -1792,7 +1793,7 @@ internal class DtoGenerator private constructor(
             FunSpec
                 .builder("entityType")
                 .apply {
-                    if (isImpl) {
+                    if (!isNestedSpecificationFragment) {
                         addModifiers(KModifier.OVERRIDE)
                     }
                 }
@@ -1811,7 +1812,7 @@ internal class DtoGenerator private constructor(
             FunSpec
                 .builder("applyTo")
                 .apply {
-                    if (isImpl) {
+                    if (!isNestedSpecificationFragment) {
                         addParameter(
                             "args",
                             K_SPECIFICATION_ARGS_CLASS_NAME.parameterizedBy(dtoType.baseType.className)
@@ -2767,8 +2768,8 @@ internal class DtoGenerator private constructor(
             ?.takeIf(String::isNotEmpty)
             ?.replace("%", "%%")
 
-    private val isImpl: Boolean
-        get() = dtoType.baseType.isEntity || !dtoType.modifiers.contains(DtoModifier.SPECIFICATION)
+    private val isNestedSpecificationFragment: Boolean
+        get() = lsiDtoType.isNestedSpecificationFragment(immutableSchema)
 
     private val isSerializerRequired: Boolean by lazy {
         lsiDtoType.requiresDynamicInputSerialization(lsiGraph)

@@ -234,7 +234,7 @@ public class DtoGenerator {
         }
         if (polymorphicSuperInterfaceName != null) {
             typeBuilder.addSuperinterface(polymorphicSuperInterfaceName);
-        } else if (isImpl() && dtoType.getBaseType().isEntity()) {
+        } else if (!isNestedSpecificationFragment() && dtoType.getBaseType().isEntity()) {
             typeBuilder.addSuperinterface(
                     dtoType.getModifiers().contains(DtoModifier.SPECIFICATION) ?
                             ParameterizedTypeName.get(
@@ -250,7 +250,7 @@ public class DtoGenerator {
                             )
             );
         }
-        if (isImpl() && dtoType.getBaseType().isEmbeddable()) {
+        if (!isNestedSpecificationFragment() && dtoType.getBaseType().isEmbeddable()) {
             typeBuilder.addSuperinterface(
                     ParameterizedTypeName.get(
                             org.babyfish.jimmer.apt.immutable.generator.Constants.EMBEDDABLE_DTO_CLASS_NAME,
@@ -2056,7 +2056,7 @@ public class DtoGenerator {
                 )
                 .addModifiers(Modifier.PUBLIC)
                 .addStatement("return $T.class", dtoType.getBaseType().getClassName());
-        if (isImpl()) {
+        if (!isNestedSpecificationFragment()) {
             builder.addAnnotation(Override.class);
         }
         typeBuilder.addMethod(builder.build());
@@ -2066,7 +2066,7 @@ public class DtoGenerator {
         MethodSpec.Builder builder = MethodSpec
                 .methodBuilder("applyTo")
                 .addModifiers(Modifier.PUBLIC);
-        if (isImpl()) {
+        if (!isNestedSpecificationFragment()) {
             builder.addAnnotation(Override.class)
                     .addParameter(
                             ParameterSpec.builder(
@@ -2090,7 +2090,7 @@ public class DtoGenerator {
         }
 
         List<ImmutableProp> stack = Collections.emptyList();
-        if (isImpl()) {
+        if (!isNestedSpecificationFragment()) {
             builder.addStatement(
                     "$T __applier = args.getApplier()",
                     org.babyfish.jimmer.apt.immutable.generator.Constants.PREDICATE_APPLIER_CLASS_NAME
@@ -2844,9 +2844,11 @@ public class DtoGenerator {
                 null;
     }
 
-    private boolean isImpl() {
-        return dtoType.getBaseType().isEntity() ||
-                !dtoType.getModifiers().contains(DtoModifier.SPECIFICATION);
+    private boolean isNestedSpecificationFragment() {
+        return DtoAccessorExtensionsKt.isNestedSpecificationFragment(
+                lsiDtoType,
+                immutableSchema
+        );
     }
 
     TypeSpec.Builder getTypeBuilder() {
