@@ -70,6 +70,8 @@ public class DtoGenerator {
 
     private final JimmerDtoJacksonVersion jacksonVersion;
 
+    private final boolean hibernateValidatorEnhancement;
+
     private final DtoGenerator parent;
 
     private final DtoGenerator root;
@@ -104,7 +106,8 @@ public class DtoGenerator {
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
-            JimmerDtoJacksonVersion jacksonVersion
+            JimmerDtoJacksonVersion jacksonVersion,
+            boolean hibernateValidatorEnhancement
     ) {
         this(
                 ctx,
@@ -118,6 +121,7 @@ public class DtoGenerator {
                 lsiWorkspace,
                 batchRootDtoTypeNames,
                 jacksonVersion,
+                hibernateValidatorEnhancement,
                 null,
                 null,
                 null,
@@ -146,6 +150,7 @@ public class DtoGenerator {
                 parent.lsiWorkspace,
                 parent.batchRootDtoTypeNames,
                 parent.jacksonVersion,
+                parent.hibernateValidatorEnhancement,
                 parent,
                 innerClassName,
                 null,
@@ -167,6 +172,7 @@ public class DtoGenerator {
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
             JimmerDtoJacksonVersion jacksonVersion,
+            boolean hibernateValidatorEnhancement,
             DtoGenerator parent,
             String innerClassName,
             @Nullable TypeName polymorphicSuperInterfaceName,
@@ -201,6 +207,9 @@ public class DtoGenerator {
         );
         this.readOnlyGeneratedDtoTypeNames = Collections.unmodifiableMap(generatedDtoTypeNames);
         this.jacksonVersion = parent != null ? parent.jacksonVersion : jacksonVersion;
+        this.hibernateValidatorEnhancement = parent != null ?
+                parent.hibernateValidatorEnhancement :
+                hibernateValidatorEnhancement;
         this.polymorphicSuperInterfaceName = polymorphicSuperInterfaceName;
         this.polymorphicBranch = polymorphicBranch;
         this.polymorphicBranchKind = polymorphicBranchKind;
@@ -365,6 +374,11 @@ public class DtoGenerator {
         for (site.addzero.lsi.jimmer.dto.DtoTypeRef typeRef : lsiDtoType.getSuperInterfaces()) {
             typeBuilder.addSuperinterface(AptDtoTypeRefRenderer.render(typeRef, lsiWorkspace));
         }
+        if (isHibernateValidatorEnhancementRequired()) {
+            typeBuilder.addSuperinterface(
+                    org.babyfish.jimmer.apt.immutable.generator.Constants.HIBERNATE_VALIDATOR_ENHANCED_BEAN
+            );
+        }
         if (parent == null) {
             typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation(dtoType.getDtoFile()));
         } else {
@@ -445,6 +459,7 @@ public class DtoGenerator {
                 lsiWorkspace,
                 batchRootDtoTypeNames,
                 jacksonVersion,
+                hibernateValidatorEnhancement,
                 this,
                 branch.getClassName(),
                 superInterfaceName,
@@ -2872,10 +2887,11 @@ public class DtoGenerator {
     }
 
     private boolean isHibernateValidatorEnhancementRequired() {
-        return ctx.isHibernateValidatorEnhancement() &&
-                dtoType.getDtoProps().stream().anyMatch(
-                        it -> it.getInputModifier() == DtoModifier.DYNAMIC
-                );
+        return DtoAccessorExtensionsKt.requiresHibernateValidatorEnhancement(
+                lsiDtoType,
+                lsiGraph,
+                hibernateValidatorEnhancement
+        );
     }
 
 }

@@ -80,6 +80,33 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `requires Hibernate Validator enhancement only for visible dynamic properties`() {
+        val visibleGraph = graph(visibleDynamic = true)
+        val visibleType = visibleGraph.types.single()
+        val hiddenGraph = graph(visibleDynamic = false)
+        val hiddenType = hiddenGraph.types.single()
+
+        assertTrue(
+            visibleType.requiresHibernateValidatorEnhancement(
+                graph = visibleGraph,
+                enhancementEnabled = true,
+            ),
+        )
+        assertFalse(
+            visibleType.requiresHibernateValidatorEnhancement(
+                graph = visibleGraph,
+                enhancementEnabled = false,
+            ),
+        )
+        assertFalse(
+            hiddenType.requiresHibernateValidatorEnhancement(
+                graph = hiddenGraph,
+                enhancementEnabled = true,
+            ),
+        )
+    }
+
+    @Test
     fun `requires builders for merged branches but not polymorphic roots`() {
         val baseGraph = graph(visibleDynamic = true)
         val root = baseGraph.types.single()
@@ -126,6 +153,8 @@ class DtoAccessorExtensionsTest {
 
         assertFalse(polymorphicRoot.requiresInputBuilder(graph))
         assertTrue(merged.requiresInputBuilder(graph))
+        assertTrue(polymorphicRoot.requiresHibernateValidatorEnhancement(graph, true))
+        assertTrue(merged.requiresHibernateValidatorEnhancement(graph, true))
     }
 
     @Test

@@ -49,6 +49,7 @@ import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
+import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.tailProp
@@ -68,6 +69,7 @@ internal class DtoGenerator private constructor(
     private val lsiDtoType: LsiDtoType,
     private val immutableSchema: ImmutableSchema,
     private val jacksonVersion: JimmerDtoJacksonVersion,
+    private val hibernateValidatorEnhancement: Boolean,
     private val workspace: LsiWorkspace,
     private val annotationContract: DtoAnnotationContract,
     private val interfaceContractResolution: DtoInterfaceContractResolution,
@@ -127,6 +129,7 @@ internal class DtoGenerator private constructor(
         lsiDtoType: LsiDtoType,
         immutableSchema: ImmutableSchema,
         jacksonVersion: JimmerDtoJacksonVersion,
+        hibernateValidatorEnhancement: Boolean,
         workspace: LsiWorkspace,
         annotationContract: DtoAnnotationContract,
         interfaceContractResolution: DtoInterfaceContractResolution,
@@ -141,6 +144,7 @@ internal class DtoGenerator private constructor(
         lsiDtoType,
         immutableSchema,
         jacksonVersion,
+        hibernateValidatorEnhancement,
         workspace,
         annotationContract,
         interfaceContractResolution,
@@ -172,6 +176,7 @@ internal class DtoGenerator private constructor(
         lsiDtoType = lsiDtoType,
         immutableSchema = parent.immutableSchema,
         jacksonVersion = parent.jacksonVersion,
+        hibernateValidatorEnhancement = parent.hibernateValidatorEnhancement,
         workspace = parent.workspace,
         annotationContract = parent.annotationContract,
         interfaceContractResolution = parent.interfaceContractResolution,
@@ -2780,8 +2785,10 @@ internal class DtoGenerator private constructor(
     }
 
     private val isHibernateValidatorEnhancementRequired: Boolean by lazy {
-        ctx.isHibernateValidatorEnhancement &&
-                dtoType.dtoProps.any { it.inputModifier == DtoModifier.DYNAMIC }
+        lsiDtoType.requiresHibernateValidatorEnhancement(
+            graph = lsiGraph,
+            enhancementEnabled = hibernateValidatorEnhancement,
+        )
     }
 
     companion object {

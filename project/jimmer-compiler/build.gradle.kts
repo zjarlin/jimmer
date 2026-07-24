@@ -31,6 +31,7 @@ dependencies {
     testImplementation(kotlin("compiler-embeddable"))
     testImplementation(projects.jimmerSql)
     testImplementation(projects.jimmerSqlKotlin)
+    testImplementation(libs.hibernate.validation)
     testImplementation(libs.jackson3.databind)
     testImplementation(libs.ksp.symbolProcessing.aa.embeddable)
     testImplementation(libs.ksp.symbolProcessing.common.deps)

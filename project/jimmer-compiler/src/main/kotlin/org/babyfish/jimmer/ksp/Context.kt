@@ -34,9 +34,6 @@ class Context(
         ?.asStarProjectedType()
         ?: error("Internal bug")
 
-    val isHibernateValidatorEnhancement: Boolean =
-        environment.options["jimmer.dto.hibernateValidatorEnhancement"] == "true"
-
     val isBuddyIgnoreResourceGeneration: Boolean =
         environment.options["jimmer.buddy.ignoreResourceGeneration"]?.trim() == "true"
 

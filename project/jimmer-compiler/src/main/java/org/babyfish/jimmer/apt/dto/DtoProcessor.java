@@ -58,6 +58,8 @@ public class DtoProcessor {
 
     private final JimmerDtoJacksonVersion jacksonVersion;
 
+    private final boolean hibernateValidatorEnhancement;
+
     public DtoProcessor(
             Context context,
             Elements elements,
@@ -69,7 +71,8 @@ public class DtoProcessor {
             Map<LsiSource, DtoConfigContractResolution> configContractsBySource,
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
-            JimmerDtoJacksonVersion jacksonVersion
+            JimmerDtoJacksonVersion jacksonVersion,
+            boolean hibernateValidatorEnhancement
     ) {
         this.context = context;
         this.elements = elements;
@@ -97,6 +100,7 @@ public class DtoProcessor {
         this.lsiWorkspace = lsiWorkspace;
         this.batchRootDtoTypeNames = JimmerDtoPoetTypeNames.roots(graphs);
         this.jacksonVersion = jacksonVersion;
+        this.hibernateValidatorEnhancement = hibernateValidatorEnhancement;
     }
 
     public boolean process() {
@@ -225,7 +229,8 @@ public class DtoProcessor {
                     immutableSchema,
                     lsiWorkspace,
                     batchRootDtoTypeNames,
-                    jacksonVersion
+                    jacksonVersion,
+                    hibernateValidatorEnhancement
             ).generate();
             result = true;
         }

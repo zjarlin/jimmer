@@ -30,6 +30,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         val source = compileApt()
         val personBody = source.classBody("final class Person implements ClientInput")
         val organizationBody = source.classBody("final class Organization implements ClientInput")
+        val addressBody = source.classBody("class TargetOf_address implements EmbeddableDto<Address>")
 
         assertContains(source, "@Description(\"Client base documentation.\\n\")")
         assertContains(source, "@Description(\"Address reference documentation.\\n\")")
@@ -38,14 +39,24 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertEquals(3, source.countOccurrences("@JsonDeserialize("))
         assertEquals(3, source.countOccurrences("public static class Builder"))
         assertEquals(1, source.countOccurrences("class TargetOf_address implements EmbeddableDto<Address>"))
+        assertContains(
+            source,
+            "public interface ClientInput extends Input<Client>, HibernateValidatorEnhancedBean",
+        )
         assertContains(source, "TargetOf_address getAddress();")
+        assertContains(addressBody, "\$\$_hibernateValidator_getFieldValue")
+        assertContains(addressBody, "\$\$_hibernateValidator_getGetterValue")
         assertFalse("class TargetOf_address" in personBody)
         assertContains(personBody, "private TargetOf_address address;")
         assertContains(personBody, "Builder address(TargetOf_address address)")
+        assertContains(personBody, "\$\$_hibernateValidator_getFieldValue")
+        assertContains(personBody, "\$\$_hibernateValidator_getGetterValue")
 
         assertFalse("class TargetOf_address" in organizationBody)
         assertContains(organizationBody, "private TargetOf_address address;")
         assertContains(organizationBody, "Builder address(TargetOf_address address)")
+        assertContains(organizationBody, "\$\$_hibernateValidator_getFieldValue")
+        assertContains(organizationBody, "\$\$_hibernateValidator_getGetterValue")
     }
 
     @Test
@@ -53,6 +64,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         val source = compileKsp()
         val personBody = source.classBody("public class Person(")
         val organizationBody = source.classBody("public class Organization(")
+        val addressBody = source.classBody("public open class TargetOf_address(")
 
         assertContains(source, "@Description(value = \"Client base documentation.\\n\")")
         assertContains(source, "@Description(value = \"Address reference documentation.\\n\")")
@@ -61,14 +73,24 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertEquals(3, source.countOccurrences("@JsonDeserialize("))
         assertEquals(3, source.countOccurrences("public class Builder"))
         assertEquals(1, source.countOccurrences("public open class TargetOf_address("))
+        assertContains(
+            source,
+            "public interface ClientInput : Input<Client>, HibernateValidatorEnhancedBean",
+        )
         assertContains(source, "public val address: TargetOf_address")
+        assertContains(addressBody, "\$\$_hibernateValidator_getFieldValue")
+        assertContains(addressBody, "\$\$_hibernateValidator_getGetterValue")
         assertFalse("class TargetOf_address" in personBody)
         assertContains(personBody, "private var address: TargetOf_address? = null")
         assertContains(personBody, "fun address(address: TargetOf_address): Builder")
+        assertContains(personBody, "\$\$_hibernateValidator_getFieldValue")
+        assertContains(personBody, "\$\$_hibernateValidator_getGetterValue")
 
         assertFalse("class TargetOf_address" in organizationBody)
         assertContains(organizationBody, "private var address: TargetOf_address? = null")
         assertContains(organizationBody, "fun address(address: TargetOf_address): Builder")
+        assertContains(organizationBody, "\$\$_hibernateValidator_getFieldValue")
+        assertContains(organizationBody, "\$\$_hibernateValidator_getGetterValue")
     }
 
     private fun compileApt(): String {
@@ -91,6 +113,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     "-proc:only",
                     "-classpath",
                     System.getProperty("java.class.path"),
+                    "-Ajimmer.dto.hibernateValidatorEnhancement=true",
                 ),
                 null,
                 fileManager.getJavaFileObjectsFromFiles(sourceFiles),
@@ -119,7 +142,10 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             javaOutputDir = outputDir.resolve("java").apply(File::mkdirs)
             this.kotlinOutputDir = kotlinOutputDir
             resourceOutputDir = outputDir.resolve("resources").apply(File::mkdirs)
-            processorOptions = mapOf("jimmer.dto.mutable" to "true")
+            processorOptions = mapOf(
+                "jimmer.dto.mutable" to "true",
+                "jimmer.dto.hibernateValidatorEnhancement" to "true",
+            )
             languageVersion = "2.1"
             apiVersion = "2.1"
             jvmTarget = "17"
@@ -451,10 +477,10 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
             @Marker(order = 1, value = "first")
             @Marker(order = 2, value = "second")
-            input ClientInput {
+            dynamic input ClientInput {
                 id?
                 address {
-                    city
+                    dynamic city?
                 }
                 #types {
                     #exhaustive

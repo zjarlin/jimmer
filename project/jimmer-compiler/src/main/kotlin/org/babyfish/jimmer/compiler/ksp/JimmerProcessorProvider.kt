@@ -72,6 +72,8 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                             graphs = dtoState.graphs,
                             immutableSchema = immutableState.schema,
                             jacksonVersion = dtoState.rendererOptions.jacksonVersion,
+                            hibernateValidatorEnhancement =
+                                dtoState.rendererOptions.hibernateValidatorEnhancement,
                             effectiveMutableByRootTypeId = dtoState.effectiveKspMutableByRootTypeId,
                             workspace = lsiRoundResult.round.workspace,
                             annotationContractsBySource = dtoState.annotationContractsBySource,

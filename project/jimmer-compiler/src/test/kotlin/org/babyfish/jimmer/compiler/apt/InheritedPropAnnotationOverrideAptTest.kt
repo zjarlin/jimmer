@@ -492,7 +492,6 @@ class InheritedPropAnnotationOverrideAptTest {
                     null,
                     null,
                     false,
-                    false,
                     Modifier.PRIVATE,
                 )
                 val prop = context.getImmutableType(typeElement).props.getValue(propName)

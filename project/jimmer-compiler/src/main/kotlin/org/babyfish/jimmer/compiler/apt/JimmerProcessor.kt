@@ -89,7 +89,6 @@ class JimmerProcessor : AbstractProcessor() {
             processingEnv.options["jimmer.entry.tables"],
             processingEnv.options["jimmer.entry.tableExes"],
             processingEnv.options["jimmer.entry.fetchers"],
-            processingEnv.options["jimmer.dto.hibernateValidatorEnhancement"] == "true",
             processingEnv.options["jimmer.buddy.ignoreResourceGeneration"] == "true",
             dtoFieldModifier,
         )
@@ -133,6 +132,7 @@ class JimmerProcessor : AbstractProcessor() {
                     immutableState.schema,
                     lsiRoundResult.round.workspace,
                     dtoState.rendererOptions.jacksonVersion,
+                    dtoState.rendererOptions.hibernateValidatorEnhancement,
                 ).process()
             }
             if (generated) {

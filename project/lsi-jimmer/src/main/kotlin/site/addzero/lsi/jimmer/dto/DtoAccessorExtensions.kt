@@ -48,6 +48,17 @@ fun DtoType.requiresInputBuilder(graph: DtoGraph): Boolean {
     }
 }
 
+/** 判断 DTO 是否需要生成 Hibernate Validator 动态属性增强协议。 */
+fun DtoType.requiresHibernateValidatorEnhancement(
+    graph: DtoGraph,
+    enhancementEnabled: Boolean,
+): Boolean {
+    val baseProps = basePropsInDeclarationOrder(graph)
+    return enhancementEnabled && baseProps.any { prop ->
+        prop.inputModifier == DtoModifier.DYNAMIC
+    }
+}
+
 /** 判断 DTO 是否为嵌套在实体 Specification 中的非实体过滤片段。 */
 fun DtoType.isNestedSpecificationFragment(
     immutableSchema: ImmutableSchema,

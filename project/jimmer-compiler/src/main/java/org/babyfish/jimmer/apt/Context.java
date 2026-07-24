@@ -73,8 +73,6 @@ public class Context {
 
     private final String fetchersTypeName;
 
-    private final boolean hibernateValidatorEnhancement;
-
     private final boolean buddyIgnoreResourceGeneration;
 
     private final Modifier dtoFieldModifier;
@@ -92,7 +90,6 @@ public class Context {
             String tablesTypeName,
             String tableExesTypeName,
             String fetchersTypeName,
-            boolean hibernateValidatorEnhancement,
             boolean buddyIgnoreResourceGeneration,
             Modifier dtoFieldModifier
     ) {
@@ -135,7 +132,6 @@ public class Context {
         this.fetchersTypeName = fetchersTypeName != null && !fetchersTypeName.isEmpty() ?
                 fetchersTypeName :
                 "Fetchers";
-        this.hibernateValidatorEnhancement = hibernateValidatorEnhancement;
         this.buddyIgnoreResourceGeneration = buddyIgnoreResourceGeneration;
         this.dtoFieldModifier = dtoFieldModifier;
         comparableType = types
@@ -368,10 +364,6 @@ public class Context {
 
     public boolean isJackson3() {
         return jackson3;
-    }
-
-    public boolean isHibernateValidatorEnhancement() {
-        return hibernateValidatorEnhancement;
     }
 
     public boolean isBuddyIgnoreResourceGeneration() {
