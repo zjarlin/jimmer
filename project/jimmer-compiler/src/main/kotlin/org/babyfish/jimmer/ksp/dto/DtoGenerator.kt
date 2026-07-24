@@ -34,6 +34,7 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
@@ -85,7 +86,7 @@ internal class DtoGenerator private constructor(
     private val innerClassName: String?,
     private val polymorphicSuperInterfaceName: TypeName? = null,
     private val polymorphicBranch: Boolean = false,
-    private val polymorphicBranchKind: DtoPolymorphicBranch.Kind? = null,
+    private val polymorphicBranchKind: DtoPolymorphicBranchKind? = null,
     private val polymorphicBranchOrder: Int = -1,
 ) {
     private val root: DtoGenerator = parent?.root ?: this
@@ -169,7 +170,7 @@ internal class DtoGenerator private constructor(
         innerClassName: String,
         polymorphicSuperInterfaceName: TypeName? = null,
         polymorphicBranch: Boolean = false,
-        polymorphicBranchKind: DtoPolymorphicBranch.Kind? = null,
+        polymorphicBranchKind: DtoPolymorphicBranchKind? = null,
         polymorphicBranchOrder: Int = -1,
     ) : this(
         ctx = ctx,
@@ -749,23 +750,24 @@ internal class DtoGenerator private constructor(
         superInterfaceName: TypeName,
         branchOrder: Int,
     ) {
+        val lsiBranch = lsiPolymorphicBranch(branch)
         DtoGenerator(
             ctx = ctx,
             mutable = mutable,
             dtoType = dtoType.mergedWith(branch.dtoType),
-            lsiDtoType = lsiMergedPolymorphicType(branch),
+            lsiDtoType = lsiBranch.mergedType(lsiGraph),
             parent = this,
             innerClassName = branch.className,
             polymorphicSuperInterfaceName = superInterfaceName,
             polymorphicBranch = true,
-            polymorphicBranchKind = branch.kind,
+            polymorphicBranchKind = lsiBranch.kind,
             polymorphicBranchOrder = branchOrder,
         ).generate(emptyList())
     }
 
-    private fun lsiMergedPolymorphicType(
+    private fun lsiPolymorphicBranch(
         branch: DtoPolymorphicBranch<ImmutableType, ImmutableProp>,
-    ): LsiDtoType {
+    ): site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch {
         val polymorphism = lsiDtoType.polymorphism
             ?: throw DtoException("Frozen DTO type is not polymorphic")
         val matches = polymorphism.branches.filter { candidate ->
@@ -776,7 +778,7 @@ internal class DtoGenerator private constructor(
                 "Frozen DTO polymorphism must contain exactly one generated branch \"${branch.className}\""
             )
         }
-        return matches.single().mergedType(lsiGraph)
+        return matches.single()
     }
 
     private fun FileSpec.Builder.addExtensions(includeBlockConverter: Boolean = true) {
@@ -1730,10 +1732,10 @@ internal class DtoGenerator private constructor(
     }
 
     private val isDefaultPolymorphicInputBranch: Boolean
-        get() = polymorphicBranchKind == DtoPolymorphicBranch.Kind.DEFAULT
+        get() = polymorphicBranchKind == DtoPolymorphicBranchKind.DEFAULT
 
     private val isTypedPolymorphicInputBranch: Boolean
-        get() = polymorphicBranchKind == DtoPolymorphicBranch.Kind.TYPE
+        get() = polymorphicBranchKind == DtoPolymorphicBranchKind.TYPE
 
     private val polymorphicRootType: ImmutableType
         get() = dtoType.baseType.inheritanceRoot ?: dtoType.baseType
