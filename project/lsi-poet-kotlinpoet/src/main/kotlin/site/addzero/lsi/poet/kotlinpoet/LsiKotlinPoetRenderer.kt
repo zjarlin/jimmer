@@ -8,6 +8,7 @@ import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.MemberName
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.PropertySpec
+import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
@@ -40,6 +41,14 @@ import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
  * 在边界内使用 KotlinPoet 渲染 Kotlin 源码。
  */
 class LsiKotlinPoetRenderer : LsiPoetRenderer {
+
+    /** 将单个 LSI 类型引用渲染为可嵌入现有 KotlinPoet 声明的类型。 */
+    fun renderTypeName(
+        type: LsiTypeRef,
+        typeNames: List<LsiPoetTypeName>,
+    ): TypeName {
+        return type.toKotlinTypeName(typeNames)
+    }
 
     /** 将单个 LSI 类型渲染为可嵌入现有 KotlinPoet 声明的结构。 */
     fun renderType(

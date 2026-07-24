@@ -27,6 +27,12 @@ fun DtoType.userPropsInDeclarationOrder(graph: DtoGraph): List<DtoUserProp> {
     return propsInDeclarationOrder(graph).filterIsInstance<DtoUserProp>()
 }
 
+/** 按属性名返回用户属性。 */
+fun DtoType.userProp(graph: DtoGraph, name: String): DtoUserProp {
+    return userPropsInDeclarationOrder(graph).singleOrNull { prop -> prop.name == name }
+        ?: throw IllegalArgumentException("DTO type '${id.value}' has no user property '$name'")
+}
+
 /** 按 DTO 声明顺序返回折叠属性。 */
 fun DtoType.foldPropsInDeclarationOrder(graph: DtoGraph): List<DtoFoldProp> {
     return propsInDeclarationOrder(graph).filterIsInstance<DtoFoldProp>()

@@ -12,6 +12,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeAnnotationRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeRefRenderer
 import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.dto.compiler.PropConfig.PathNode
 import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate
@@ -33,16 +34,20 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
+import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiredPropNames
+import site.addzero.lsi.jimmer.dto.tailProp
+import site.addzero.lsi.jimmer.dto.userProp
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 import java.io.OutputStreamWriter
@@ -567,8 +572,8 @@ internal class DtoGenerator private constructor(
                 )
             )
         }
-        for (typeRef in dtoType.superInterfaces) {
-            typeBuilder.addSuperinterface(typeName(typeRef))
+        for (typeRef in lsiDtoType.superInterfaces) {
+            typeBuilder.addSuperinterface(KspDtoTypeRefRenderer.render(typeRef, workspace))
         }
         if (isHibernateValidatorEnhancementRequired) {
             typeBuilder.addSuperinterface(HIBERNATE_VALIDATOR_ENHANCED_BEAN)
@@ -723,8 +728,8 @@ internal class DtoGenerator private constructor(
                 VIEW_CLASS_NAME
             }).parameterizedBy(dtoType.baseType.className)
         )
-        for (typeRef in dtoType.superInterfaces) {
-            typeBuilder.addSuperinterface(typeName(typeRef))
+        for (typeRef in lsiDtoType.superInterfaces) {
+            typeBuilder.addSuperinterface(KspDtoTypeRefRenderer.render(typeRef, workspace))
         }
         if (isHibernateValidatorEnhancementRequired) {
             typeBuilder.addSuperinterface(HIBERNATE_VALIDATOR_ENHANCED_BEAN)
@@ -1340,11 +1345,13 @@ internal class DtoGenerator private constructor(
                 .constructorBuilder()
                 .apply {
                     for (prop in dtoType.props) {
+                        val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
                         addParameter(
                             ParameterSpec.builder(prop.name, propTypeName(prop))
                                 .apply {
-                                    if (prop is UserProp && prop.defaultValueText != null) {
-                                        defaultValue(prop.defaultValueText!!)
+                                    val defaultValueText = (lsiProp as? DtoUserProp)?.defaultValueText
+                                    if (defaultValueText != null) {
+                                        defaultValue(defaultValueText)
                                     } else if (isGeneratedNullable(prop)) {
                                         defaultValue("null")
                                     } else if (propTypeName(prop) == BOOLEAN) {
@@ -1353,8 +1360,7 @@ internal class DtoGenerator private constructor(
                                 }
                                 .build()
                         )
-                        lsiDtoType
-                            .prop(lsiGraph, prop.name)
+                        lsiProp
                             .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                             ?.let { statePropName ->
                                 addParameter(
@@ -1384,13 +1390,18 @@ internal class DtoGenerator private constructor(
                 .addParameter("base", dtoType.baseType.className)
                 .apply {
                     for (userProp in dtoType.userProps) {
+                        val frozenUserProp = lsiDtoType.userProp(lsiGraph, userProp.name)
                         addParameter(
                             ParameterSpec
-                                .builder(userProp.alias, typeName(userProp.typeRef))
+                                .builder(
+                                    userProp.alias,
+                                    KspDtoTypeRefRenderer.render(
+                                        frozenUserProp.type,
+                                        workspace,
+                                    ),
+                                )
                                 .apply {
-                                    defaultValue(userProp)?.let {
-                                        defaultValue(it)
-                                    }
+                                    frozenUserProp.kotlinDefaultValueTextOrNull()?.let(::defaultValue)
                                 }
                                 .build()
                         )
@@ -2046,8 +2057,8 @@ internal class DtoGenerator private constructor(
                         if (dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
                             add(",\nnull")
                         } else {
-                            val targetTypeRef = tailProp.targetTypeRef
-                            if (targetTypeRef !== null || tailProp.targetType!!.polymorphism !== null) {
+                            val reusableTargetType = lsiTailProp(prop).targetTypeReference != null
+                            if (reusableTargetType || tailProp.targetType!!.polymorphism !== null) {
                                 add(
                                     ",\n%T.%L<%T, %L>(%T.METADATA.converter)",
                                     DTO_PROP_ACCESSOR,
@@ -2080,7 +2091,7 @@ internal class DtoGenerator private constructor(
                             indent()
                             add(
                                 "\nit.%L()",
-                                if (targetTypeRef !== null) {
+                                if (reusableTargetType) {
                                     "toImmutable"
                                 } else if (tailBaseProp.targetType!!.isEntity) {
                                     "toEntity"
@@ -2244,7 +2255,10 @@ internal class DtoGenerator private constructor(
         when (prop) {
             is FoldProp<*, *> -> propTypeName(prop.asFoldProp())
             is DtoProp<*, *> -> propTypeName(prop.asDtoProp())
-            is UserProp -> typeName(prop.typeRef)
+            is UserProp -> KspDtoTypeRefRenderer.render(
+                lsiDtoType.userProp(lsiGraph, prop.name).type,
+                workspace,
+            )
             else -> error("Internal bug")
         }
 
@@ -2322,8 +2336,13 @@ internal class DtoGenerator private constructor(
             )
         }
         val tailProp = prop.toTailProp()
-        tailProp.targetTypeRef?.let {
-            return ClassName.bestGuess(it.qualifiedName)
+        val lsiTailProp = lsiTailProp(prop)
+        lsiTailProp.targetTypeReference?.let { targetTypeReference ->
+            return KspDtoTypeRefRenderer.render(
+                targetTypeReference,
+                workspace,
+                JimmerDtoPoetTypeNames.reusableTarget(targetTypeReference, rootDtoTypeNamesByTypeId),
+            )
         }
         val targetType = tailProp.targetType
         if (targetType !== null) {
@@ -2356,6 +2375,10 @@ internal class DtoGenerator private constructor(
             tailProp.baseProp.clientClassName
         }.copy(nullable = false)
     }
+
+    private fun lsiTailProp(prop: DtoProp<ImmutableType, ImmutableProp>) =
+        (lsiDtoType.prop(lsiGraph, prop.name) as site.addzero.lsi.jimmer.dto.DtoBaseProp)
+            .tailProp(lsiGraph)
 
     private fun collectNames(list: MutableList<String>) {
         if (parent == null) {
@@ -2748,149 +2771,6 @@ internal class DtoGenerator private constructor(
 
         @JvmStatic
         private val NEW = MemberName("org.babyfish.jimmer.kt", "new")
-
-        fun typeName(typeRef: TypeRef?): TypeName {
-            val typeName = if (typeRef === null) {
-                STAR
-            } else {
-                when (typeRef.typeName) {
-                    TypeRef.TN_BOOLEAN -> BOOLEAN
-                    TypeRef.TN_CHAR -> CHAR
-                    TypeRef.TN_BYTE -> BYTE
-                    TypeRef.TN_SHORT -> SHORT
-                    TypeRef.TN_INT -> INT
-                    TypeRef.TN_LONG -> LONG
-                    TypeRef.TN_FLOAT -> FLOAT
-                    TypeRef.TN_DOUBLE -> DOUBLE
-                    TypeRef.TN_ANY -> ANY
-                    TypeRef.TN_STRING -> STRING
-                    TypeRef.TN_ARRAY ->
-                        if (typeRef.arguments[0].typeRef == null) {
-                            ARRAY.parameterizedBy(STAR)
-                        } else if (typeRef.arguments[0].typeRef?.isNullable == true) {
-                            ARRAY.parameterizedBy(typeName(typeRef.arguments[0].typeRef))
-                        } else {
-                            val componentTypeRef = typeRef.arguments[0].typeRef
-                            if (componentTypeRef == null) {
-                                ARRAY.parameterizedBy(
-                                    WildcardTypeName.producerOf(ANY)
-                                )
-                            } else {
-                                when (componentTypeRef.typeName) {
-                                    TypeRef.TN_BOOLEAN -> BOOLEAN_ARRAY
-                                    TypeRef.TN_CHAR -> CHAR_ARRAY
-                                    TypeRef.TN_BYTE -> BYTE_ARRAY
-                                    TypeRef.TN_SHORT -> SHORT_ARRAY
-                                    TypeRef.TN_INT -> INT_ARRAY
-                                    TypeRef.TN_LONG -> LONG_ARRAY
-                                    TypeRef.TN_FLOAT -> FLOAT_ARRAY
-                                    TypeRef.TN_DOUBLE -> DOUBLE_ARRAY
-                                    else -> ARRAY.parameterizedBy(typeName(typeRef.arguments[0].typeRef))
-                                }
-                            }
-                        }
-
-                    TypeRef.TN_ITERABLE -> ITERABLE
-                    TypeRef.TN_MUTABLE_ITERABLE -> MUTABLE_ITERABLE
-                    TypeRef.TN_COLLECTION -> COLLECTION
-                    TypeRef.TN_MUTABLE_COLLECTION -> MUTABLE_COLLECTION
-                    TypeRef.TN_LIST -> LIST
-                    TypeRef.TN_MUTABLE_LIST -> MUTABLE_LIST
-                    TypeRef.TN_SET -> SET
-                    TypeRef.TN_MUTABLE_SET -> MUTABLE_SET
-                    TypeRef.TN_MAP -> MAP
-                    TypeRef.TN_MUTABLE_MAP -> MUTABLE_MAP
-                    else -> ClassName.bestGuess(typeRef.typeName)
-                }
-            }
-            val args = typeRef
-                ?.arguments
-                ?.takeIf { it.isNotEmpty() && typeRef.typeName != TypeRef.TN_ARRAY }
-                ?.let { args ->
-                    Array(args.size) { i ->
-                        typeName(args[i].typeRef).let {
-                            when {
-                                args[i].isIn -> WildcardTypeName.consumerOf(it)
-                                args[i].isOut -> WildcardTypeName.producerOf(it)
-                                else -> it
-                            }
-                        }
-                    }
-                }
-            return if (args == null) {
-                typeName
-            } else {
-                (typeName as ClassName).parameterizedBy(*args)
-            }.copy(
-                nullable = typeRef?.isNullable ?: false
-            )
-        }
-
-        private fun defaultValue(prop: UserProp): String? {
-            val typeRef = prop.typeRef
-            return if (prop.defaultValueText !== null) {
-                prop.defaultValueText!!
-            } else if (typeRef.isNullable) {
-                "null"
-            } else {
-                when (typeRef.typeName) {
-                    TypeRef.TN_BOOLEAN -> "false"
-                    TypeRef.TN_CHAR -> "'\\0'"
-
-                    TypeRef.TN_BYTE, TypeRef.TN_SHORT, TypeRef.TN_INT -> "0"
-                    TypeRef.TN_LONG -> "0L"
-                    TypeRef.TN_FLOAT -> "0F"
-                    TypeRef.TN_DOUBLE -> "0.0"
-
-                    TypeRef.TN_STRING -> "\"\""
-
-                    TypeRef.TN_ARRAY -> if (typeRef.arguments[0].typeRef == null) {
-                        "emptyArray<Any?>()"
-                    } else if (typeRef.arguments[0].typeRef?.isNullable == true) {
-                        "emptyArray()"
-                    } else {
-                        val componentTypeRef = typeRef.arguments[0].typeRef
-                        if (componentTypeRef === null) {
-                            "emptyArray()"
-                        } else {
-                            when (componentTypeRef.typeName) {
-                                TypeRef.TN_BOOLEAN -> "booleanArrayOf()"
-                                TypeRef.TN_CHAR -> "charArrayOf()"
-                                TypeRef.TN_BYTE -> "byteArrayOf()"
-                                TypeRef.TN_SHORT -> "shortArrayOf()"
-                                TypeRef.TN_INT -> "intArrayOf()"
-                                TypeRef.TN_LONG -> "longArrayOf()"
-                                TypeRef.TN_FLOAT -> "floatArrayOf()"
-                                TypeRef.TN_DOUBLE -> "doubleArrayOf()"
-                                else -> "emptyArray()"
-                            }
-                        }
-                    }
-
-                    TypeRef.TN_ITERABLE, TypeRef.TN_COLLECTION, TypeRef.TN_LIST ->
-                        if (typeRef.arguments[0].typeRef === null) {
-                            "emptyList<Any?>()"
-                        } else {
-                            "emptyList()"
-                        }
-
-                    TypeRef.TN_MUTABLE_ITERABLE, TypeRef.TN_MUTABLE_COLLECTION, TypeRef.TN_MUTABLE_LIST ->
-                        if (typeRef.arguments[0].typeRef === null) {
-                            "mutableListOf<Any?>()"
-                        } else {
-                            "mutableListOf()"
-                        }
-
-                    TypeRef.TN_SET -> "emptySet()"
-                    TypeRef.TN_MUTABLE_SET -> "mutableSetOf()"
-
-                    TypeRef.TN_MAP -> "emptyMap()"
-                    TypeRef.TN_MUTABLE_MAP -> "mutableMapOf()"
-
-                    else -> null
-                }
-            }
-        }
 
         private fun String.simpleName() =
             lastIndexOf('.').let {

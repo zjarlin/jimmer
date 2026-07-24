@@ -7,11 +7,13 @@ import com.squareup.javapoet.FieldSpec
 import com.squareup.javapoet.JavaFile
 import com.squareup.javapoet.MethodSpec
 import com.squareup.javapoet.ParameterSpec
+import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeSpec
 import javax.lang.model.element.Modifier
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetBodyStyle
@@ -40,6 +42,14 @@ import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
  * 在边界内使用 JavaPoet 渲染 Java 源码。
  */
 class LsiJavaPoetRenderer : LsiPoetRenderer {
+
+    /** 将单个 LSI 类型引用渲染为可嵌入现有 JavaPoet 声明的类型。 */
+    fun renderTypeName(
+        type: LsiTypeRef,
+        typeNames: List<LsiPoetTypeName>,
+    ): TypeName {
+        return type.toJavaTypeName(typeNames)
+    }
 
     /** 将单个 LSI 类型渲染为可嵌入现有 JavaPoet 声明的结构。 */
     fun renderType(

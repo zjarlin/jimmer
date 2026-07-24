@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeRefRenderer;
 import org.babyfish.jimmer.dto.compiler.*;
 import org.babyfish.jimmer.impl.util.StringUtil;
 import org.babyfish.jimmer.runtime.ImmutableSpi;
@@ -244,8 +245,8 @@ public class DtoGenerator {
                     )
             );
         }
-        for (TypeRef typeRef : dtoType.getSuperInterfaces()) {
-            typeBuilder.addSuperinterface(getTypeName(typeRef));
+        for (site.addzero.lsi.jimmer.dto.DtoTypeRef typeRef : lsiDtoType.getSuperInterfaces()) {
+            typeBuilder.addSuperinterface(AptDtoTypeRefRenderer.render(typeRef, lsiWorkspace));
         }
         if (isHibernateValidatorEnhancementRequired()) {
             typeBuilder.addSuperinterface(
@@ -348,8 +349,8 @@ public class DtoGenerator {
                         dtoType.getBaseType().getClassName()
                 )
         );
-        for (TypeRef typeRef : dtoType.getSuperInterfaces()) {
-            typeBuilder.addSuperinterface(getTypeName(typeRef));
+        for (site.addzero.lsi.jimmer.dto.DtoTypeRef typeRef : lsiDtoType.getSuperInterfaces()) {
+            typeBuilder.addSuperinterface(AptDtoTypeRefRenderer.render(typeRef, lsiWorkspace));
         }
         if (parent == null) {
             typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation(dtoType.getDtoFile()));
@@ -1265,32 +1266,32 @@ public class DtoGenerator {
             if (dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
                 cb.add(",\nnull");
             } else {
-                DtoTypeRef<ImmutableType, ImmutableProp> targetTypeRef = tailProp.getTargetTypeRef();
-                if (targetTypeRef != null || tailProp.getTargetType().getPolymorphism() != null) {
+                boolean reusableTargetType = lsiTailProp(prop).getTargetTypeReference() != null;
+                if (reusableTargetType || tailProp.getTargetType().getPolymorphism() != null) {
                     cb.add(
                             ",\n$T.<$T, $T>$L($T.METADATA.getConverter())",
                             org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
                             tailProp.getBaseProp().getTargetType().getClassName(),
-                            getPropElementName(tailProp),
+                            getPropElementName(prop),
                             tailProp.getBaseProp().isList() ? "objectListGetter" : "objectReferenceGetter",
-                            getPropElementName(tailProp)
+                            getPropElementName(prop)
                     );
                 } else {
                     cb.add(
                             ",\n$T.<$T, $T>$L($T::new)",
                             org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
                             tailProp.getBaseProp().getTargetType().getClassName(),
-                            getPropElementName(tailProp),
+                            getPropElementName(prop),
                             tailProp.getBaseProp().isList() ? "objectListGetter" : "objectReferenceGetter",
-                            getPropElementName(tailProp)
+                            getPropElementName(prop)
                     );
                 }
                 cb.add(
                         ",\n$T.$L($T::$L)",
                         org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
                         tailProp.getBaseProp().isList() ? "objectListSetter" : "objectReferenceSetter",
-                        getPropElementName(tailProp),
-                        targetTypeRef != null ?
+                        getPropElementName(prop),
+                        reusableTargetType ?
                                 "toImmutable" :
                                 tailProp.getTargetType().getBaseType().isEntity() ? "toEntity" : "toImmutable"
                 );
@@ -1460,8 +1461,11 @@ public class DtoGenerator {
         FieldSpec.Builder builder = FieldSpec
                 .builder(typeName, prop.getAlias())
                 .addModifiers(ctx.getDtoFieldModifier());
-        if (prop.getDefaultValueText() != null) {
-            builder.initializer(prop.getDefaultValueText());
+        String defaultValueText = DtoGenerationExtensionsKt
+                .userProp(lsiDtoType, lsiGraph, prop.getName())
+                .getDefaultValueText();
+        if (defaultValueText != null) {
+            builder.initializer(defaultValueText);
         }
         String doc = doc(prop, true);
         if (doc != null) {
@@ -2315,7 +2319,10 @@ public class DtoGenerator {
             }
             return getDtoClassName(targetSimpleName(foldProp));
         }
-        return getTypeName(((UserProp) prop).getTypeRef());
+        return AptDtoTypeRefRenderer.render(
+                DtoGenerationExtensionsKt.userProp(lsiDtoType, lsiGraph, prop.getName()).getType(),
+                lsiWorkspace
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -2389,98 +2396,6 @@ public class DtoGenerator {
 
     private static TypeName toListType(TypeName typeName, boolean isList) {
         return isList ? ParameterizedTypeName.get(Constants.LIST_CLASS_NAME, typeName.box()) : typeName;
-    }
-
-    private static TypeName getTypeName(@Nullable TypeRef typeRef) {
-        return getTypeName(typeRef, false);
-    }
-
-    private static TypeName getTypeName(@Nullable TypeRef typeRef, boolean toBoxType) {
-        if (typeRef == null) {
-            return WildcardTypeName.subtypeOf(TypeName.OBJECT);
-        }
-        TypeName typeName;
-        switch (typeRef.getTypeName()) {
-            case "Boolean":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.BOOLEAN.box() : TypeName.BOOLEAN;
-                break;
-            case "Char":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.CHAR.box() : TypeName.CHAR;
-                break;
-            case "Byte":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.BYTE.box() : TypeName.BYTE;
-                break;
-            case "Short":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.SHORT.box() : TypeName.SHORT;
-                break;
-            case "Int":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.INT.box() : TypeName.INT;
-                break;
-            case "Long":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.LONG.box() : TypeName.LONG;
-                break;
-            case "Float":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.FLOAT.box() : TypeName.FLOAT;
-                break;
-            case "Double":
-                typeName = toBoxType || typeRef.isNullable() ? TypeName.DOUBLE.box() : TypeName.DOUBLE;
-                break;
-            case "Any":
-                typeName = TypeName.OBJECT;
-                break;
-            case "String":
-                typeName = org.babyfish.jimmer.apt.immutable.generator.Constants.STRING_CLASS_NAME;
-                break;
-            case "Array":
-                typeName = ArrayTypeName.of(
-                        typeRef.getArguments().get(0).getTypeRef() == null ?
-                                TypeName.OBJECT :
-                                getTypeName(typeRef.getArguments().get(0).getTypeRef(), false)
-                );
-                break;
-            case "Iterable":
-            case "MutableIterable":
-                typeName = ClassName.get(Iterable.class);
-                break;
-            case "Collection":
-            case "MutableCollection":
-                typeName = ClassName.get(Collection.class);
-                break;
-            case "List":
-            case "MutableList":
-                typeName = ClassName.get(List.class);
-                break;
-            case "Set":
-            case "MutableSet":
-                typeName = ClassName.get(Set.class);
-                break;
-            case "Map":
-            case "MutableMap":
-                typeName = ClassName.get(Map.class);
-                break;
-            default:
-                typeName = ClassName.bestGuess(typeRef.getTypeName());
-                break;
-        }
-        int argCount = typeRef.getArguments().size();
-        if (argCount == 0 || typeName instanceof ArrayTypeName) {
-            return typeName;
-        }
-        TypeName[] argTypeNames = new TypeName[argCount];
-        for (int i = 0; i < argCount; i++) {
-            TypeRef.Argument arg = typeRef.getArguments().get(i);
-            TypeName argTypeName = getTypeName(arg.getTypeRef(), true);
-            if (arg.isIn()) {
-                argTypeName = WildcardTypeName.supertypeOf(argTypeName);
-            } else if (arg.getTypeRef() != null && (arg.isOut() || isForceOut(typeRef.getTypeName()))) {
-                argTypeName = WildcardTypeName.subtypeOf(argTypeName);
-            }
-            argTypeNames[i] = argTypeName;
-        }
-        return ParameterizedTypeName.get(
-                (ClassName) typeName,
-                argTypeNames
-        );
     }
 
     private void addHashCode() {
@@ -2652,9 +2567,15 @@ public class DtoGenerator {
             return parent.getDtoClassName(parent.targetSimpleName(polymorphicRootProp));
         }
         DtoProp<ImmutableType, ImmutableProp> tailProp = prop.toTailProp();
-        DtoTypeRef<ImmutableType, ImmutableProp> targetTypeRef = tailProp.getTargetTypeRef();
-        if (targetTypeRef != null) {
-            return ClassName.bestGuess(targetTypeRef.getQualifiedName());
+        DtoBaseProp lsiTailProp = lsiTailProp(prop);
+        if (lsiTailProp.getTargetTypeReference() != null) {
+            site.addzero.lsi.jimmer.dto.DtoReusableTypeReference targetTypeReference =
+                    lsiTailProp.getTargetTypeReference();
+            return AptDtoTypeRefRenderer.render(
+                    targetTypeReference,
+                    lsiWorkspace,
+                    JimmerDtoPoetTypeNames.reusableTarget(targetTypeReference, batchRootDtoTypeNames)
+            );
         }
         DtoType<ImmutableType, ImmutableProp> targetType = tailProp.getTargetType();
         if (targetType != null) {
@@ -2691,6 +2612,13 @@ public class DtoGenerator {
             return typeName.box();
         }
         return typeName;
+    }
+
+    private DtoBaseProp lsiTailProp(DtoProp<ImmutableType, ImmutableProp> prop) {
+        return DtoGenerationExtensionsKt.tailProp(
+                (DtoBaseProp) DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                lsiGraph
+        );
     }
 
     @Nullable
@@ -2828,19 +2756,6 @@ public class DtoGenerator {
             }
         }
         return null;
-    }
-
-    private static boolean isForceOut(String typeName) {
-        switch (typeName) {
-            case "Iterable":
-            case "Collection":
-            case "List":
-            case "Set":
-            case "Map":
-                return true;
-            default:
-                return false;
-        }
     }
 
     String getterName(AbstractProp prop) {

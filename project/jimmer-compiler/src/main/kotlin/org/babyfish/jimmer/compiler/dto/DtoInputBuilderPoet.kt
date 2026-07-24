@@ -527,7 +527,7 @@ internal fun LsiWorkspace.inputBuilderPoetTypeNames(
     generatedDtoTypeNames.forEach(::add)
     add(currentDtoTypeName)
     add(builderTypeName)
-    INPUT_BUILDER_COMMON_POET_TYPE_NAMES.forEach(::add)
+    DTO_COMMON_POET_TYPE_NAMES.forEach(::add)
     jacksonVersion.inputBuilderJacksonPoetTypeNames().forEach(::add)
     return toLsiPoetTypeNames(
         typeIds = inputBuilderType.referencedTypeIds,
@@ -572,32 +572,6 @@ private val JACKSON_3_JSON_POJO_BUILDER_TYPE_ID =
     LsiSymbolId.type("tools.jackson.databind.annotation.JsonPOJOBuilder")
 private val JACKSON_3_JSON_NAMING_TYPE_ID =
     LsiSymbolId.type("tools.jackson.databind.annotation.JsonNaming")
-
-private val INPUT_BUILDER_COMMON_POET_TYPE_NAMES = listOf(
-    JimmerDtoPoetTypeNames.create("org.babyfish.jimmer", listOf("Input")),
-    JimmerDtoPoetTypeNames.create("org.babyfish.jimmer.internal", listOf("GeneratedBy")),
-    JimmerDtoPoetTypeNames.create("java.lang", listOf("Object")),
-    JimmerDtoPoetTypeNames.create("java.lang", listOf("String")),
-    JimmerDtoPoetTypeNames.create("java.lang", listOf("Iterable")),
-    JimmerDtoPoetTypeNames.create("java.util", listOf("Collection")),
-    JimmerDtoPoetTypeNames.create("java.util", listOf("List")),
-    JimmerDtoPoetTypeNames.create("java.util", listOf("Set")),
-    JimmerDtoPoetTypeNames.create("java.util", listOf("Map")),
-    JimmerDtoPoetTypeNames.create("java.util", listOf("Objects")),
-    JimmerDtoPoetTypeNames.create("kotlin", listOf("Any")),
-    JimmerDtoPoetTypeNames.create("kotlin", listOf("String")),
-    JimmerDtoPoetTypeNames.create("kotlin", listOf("Array")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("Iterable")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("MutableIterable")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("Collection")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("MutableCollection")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("List")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("MutableList")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("Set")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("MutableSet")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("Map")),
-    JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("MutableMap")),
-)
 
 private val JACKSON_2_INPUT_BUILDER_POET_TYPE_NAMES = listOf(
     JimmerDtoPoetTypeNames.create(

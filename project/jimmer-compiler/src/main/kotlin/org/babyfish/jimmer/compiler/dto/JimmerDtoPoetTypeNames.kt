@@ -2,6 +2,7 @@ package org.babyfish.jimmer.compiler.dto
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.poet.LsiPoetTypeName
@@ -61,10 +62,33 @@ internal object JimmerDtoPoetTypeNames {
         require(graph.typesById[type.id] === type) {
             "Current frozen DTO type does not belong to its graph: ${type.id.value}"
         }
-        val previous = typeNamesByTypeId.put(type.id, typeName)
+        val previous = typeNamesByTypeId[type.id]
         require(previous == null || previous == typeName) {
             "Frozen DTO type maps to conflicting generated names: " +
                 "${previous?.canonicalName} and ${typeName.canonicalName}"
         }
+        val canonicalConflict = typeNamesByTypeId.entries.firstOrNull { (typeId, existingName) ->
+            typeId != type.id && existingName.canonicalName == typeName.canonicalName
+        }
+        require(canonicalConflict == null) {
+            "Generated DTO canonical name '${typeName.canonicalName}' is already mapped to " +
+                "frozen type '${canonicalConflict?.key?.value}'"
+        }
+        typeNamesByTypeId[type.id] = typeName
+    }
+
+    /** 返回可复用 DTO 目标在当前生成批次中的精确源码名称。 */
+    @JvmStatic
+    fun reusableTarget(
+        reference: DtoReusableTypeReference,
+        rootTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
+    ): LsiPoetTypeName? {
+        val matches = rootTypeNamesByTypeId.values.filter { typeName ->
+            typeName.canonicalName == reference.qualifiedName
+        }
+        require(matches.size <= 1) {
+            "Reusable DTO target has duplicate generated names: ${reference.qualifiedName}"
+        }
+        return matches.singleOrNull()
     }
 }

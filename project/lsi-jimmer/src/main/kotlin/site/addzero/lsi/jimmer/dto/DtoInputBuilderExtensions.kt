@@ -19,7 +19,6 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
-import site.addzero.lsi.model.LsiVariance
 
 /** InputBuilder 将属性写入 DTO 时采用的稳定策略。 */
 enum class DtoInputBuilderBuildStrategy {
@@ -118,7 +117,7 @@ fun DtoProp.inputBuilderParameterType(
     val valueType = when (this) {
         is DtoBaseProp -> inputBuilderBaseValueType(graph, immutableSchema, language, generatedDtoType)
         is DtoFoldProp -> generatedDtoType(generatedTargetType(graph))
-        is DtoUserProp -> type.toInputBuilderType(language)
+        is DtoUserProp -> type.toLsiType(language)
     }
     return valueType
         .toInputBuilderTargetType(language)
@@ -269,7 +268,7 @@ private fun DtoBaseProp.inputBuilderBaseValueType(
     }
     return LsiDeclaredType(
         declarationId = targetLanguage.listTypeId(),
-        arguments = listOf(LsiTypeArgument.invariant(elementType.toTypeArgument(targetLanguage))),
+        arguments = listOf(LsiTypeArgument.invariant(elementType.boxedForTypeArgument(targetLanguage))),
     )
 }
 
@@ -296,67 +295,6 @@ private fun ImmutableProp.inputBuilderClientElementType(immutableSchema: Immutab
     return targetIdProp?.converter?.targetType ?: targetIdProp?.elementTypeOrSelf() ?: elementTypeOrSelf()
 }
 
-private fun DtoTypeRef.toInputBuilderType(targetLanguage: LsiLanguage): LsiTypeRef {
-    if (typeName == "Array") {
-        val argument = arguments.singleOrNull()
-        if (argument?.variance == DtoVariance.STAR && targetLanguage == LsiLanguage.KOTLIN) {
-            return LsiDeclaredType(
-                declarationId = KOTLIN_ARRAY_TYPE_ID,
-                arguments = listOf(LsiTypeArgument.STAR),
-                nullability = nullability(),
-            )
-        }
-        val elementType = argument?.type?.toInputBuilderType(targetLanguage)
-            ?: LsiDeclaredType(targetLanguage.anyTypeId())
-        return LsiArrayType(
-            elementType = elementType,
-            nullability = nullability(),
-        )
-    }
-    val primitiveKind = DTO_PRIMITIVE_KINDS[typeName]
-    if (primitiveKind != null) {
-        return LsiPrimitiveType(
-            kind = primitiveKind,
-            nullability = nullability(),
-            boxed = targetLanguage == LsiLanguage.JAVA && nullable,
-        )
-    }
-    val declarationId = targetLanguage.dtoDeclaredTypeId(typeName)
-    val forceOutput = targetLanguage == LsiLanguage.JAVA && typeName in JAVA_FORCE_OUTPUT_TYPE_NAMES
-    return LsiDeclaredType(
-        declarationId = declarationId,
-        arguments = arguments.map { argument ->
-            argument.toInputBuilderTypeArgument(targetLanguage, forceOutput)
-        },
-        nullability = nullability(),
-    )
-}
-
-private fun DtoTypeArgument.toInputBuilderTypeArgument(
-    targetLanguage: LsiLanguage,
-    forceOutput: Boolean,
-): LsiTypeArgument {
-    return when (variance) {
-        DtoVariance.STAR -> LsiTypeArgument.STAR
-        DtoVariance.INVARIANT -> {
-            val argumentType = requireNotNull(type)
-                .toInputBuilderType(targetLanguage)
-                .toTypeArgument(targetLanguage)
-            if (forceOutput) {
-                LsiTypeArgument.output(argumentType)
-            } else {
-                LsiTypeArgument.invariant(argumentType)
-            }
-        }
-        DtoVariance.IN -> LsiTypeArgument.input(
-            requireNotNull(type).toInputBuilderType(targetLanguage).toTypeArgument(targetLanguage),
-        )
-        DtoVariance.OUT -> LsiTypeArgument.output(
-            requireNotNull(type).toInputBuilderType(targetLanguage).toTypeArgument(targetLanguage),
-        )
-    }
-}
-
 private fun DtoProp.requireInputBuilderOwner(graph: DtoGraph): DtoType {
     require(graph.propsById[id] == this) {
         "DTO property does not belong to this graph: ${id.value}"
@@ -368,31 +306,9 @@ private fun DtoProp.requireInputBuilderOwner(graph: DtoGraph): DtoType {
     return ownerType
 }
 
-private fun LsiLanguage.requireDtoTargetLanguage(): LsiLanguage {
-    require(this == LsiLanguage.JAVA || this == LsiLanguage.KOTLIN) {
-        "DTO target language must be Java or Kotlin"
-    }
-    return this
-}
-
-private fun LsiLanguage.dtoDeclaredTypeId(typeName: String): LsiSymbolId {
-    val canonicalName = when (this) {
-        LsiLanguage.JAVA -> JAVA_DTO_DECLARED_TYPES[typeName]
-        LsiLanguage.KOTLIN -> KOTLIN_DTO_DECLARED_TYPES[typeName]
-        LsiLanguage.UNKNOWN -> error("DTO target language must be Java or Kotlin")
-    } ?: typeName
-    return LsiSymbolId.type(canonicalName)
-}
-
 private fun LsiLanguage.stringTypeId(): LsiSymbolId = when (this) {
     LsiLanguage.JAVA -> LsiSymbolId.type("java.lang.String")
     LsiLanguage.KOTLIN -> LsiSymbolId.type("kotlin.String")
-    LsiLanguage.UNKNOWN -> error("DTO target language must be Java or Kotlin")
-}
-
-private fun LsiLanguage.anyTypeId(): LsiSymbolId = when (this) {
-    LsiLanguage.JAVA -> LsiSymbolId.type("java.lang.Object")
-    LsiLanguage.KOTLIN -> LsiSymbolId.type("kotlin.Any")
     LsiLanguage.UNKNOWN -> error("DTO target language must be Java or Kotlin")
 }
 
@@ -412,7 +328,11 @@ private fun LsiTypeRef.toInputBuilderTargetType(targetLanguage: LsiLanguage): Ls
         is LsiDeclaredType -> copy(
             declarationId = declarationId.toInputBuilderTargetTypeId(targetLanguage),
             arguments = arguments.map { argument ->
-                argument.copy(type = argument.type?.toInputBuilderTargetType(targetLanguage)?.toTypeArgument(targetLanguage))
+                argument.copy(
+                    type = argument.type
+                        ?.toInputBuilderTargetType(targetLanguage)
+                        ?.boxedForTypeArgument(targetLanguage),
+                )
             },
             annotations = emptyList(),
         )
@@ -443,14 +363,6 @@ private fun LsiSymbolId.toInputBuilderTargetTypeId(targetLanguage: LsiLanguage):
         LsiLanguage.UNKNOWN -> error("DTO target language must be Java or Kotlin")
     }
     return targetName?.let { name -> LsiSymbolId.type(name) } ?: this
-}
-
-private fun LsiTypeRef.toTypeArgument(targetLanguage: LsiLanguage): LsiTypeRef {
-    return if (targetLanguage == LsiLanguage.JAVA && this is LsiPrimitiveType) {
-        copy(boxed = true)
-    } else {
-        this
-    }
 }
 
 private fun LsiTypeRef.toNullableInputBuilderStorage(targetLanguage: LsiLanguage): LsiTypeRef {
@@ -486,80 +398,4 @@ private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
     }
 }
 
-private fun DtoTypeRef.nullability(): LsiNullability {
-    return if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
-}
-
 private val NON_NULL_BACKING_FUNCTIONS = setOf("null", "notNull")
-
-private val DTO_PRIMITIVE_KINDS = mapOf(
-    "Boolean" to LsiPrimitiveKind.BOOLEAN,
-    "Char" to LsiPrimitiveKind.CHAR,
-    "Byte" to LsiPrimitiveKind.BYTE,
-    "Short" to LsiPrimitiveKind.SHORT,
-    "Int" to LsiPrimitiveKind.INT,
-    "Long" to LsiPrimitiveKind.LONG,
-    "Float" to LsiPrimitiveKind.FLOAT,
-    "Double" to LsiPrimitiveKind.DOUBLE,
-)
-
-private val JAVA_FORCE_OUTPUT_TYPE_NAMES = setOf(
-    "Iterable",
-    "Collection",
-    "List",
-    "Set",
-    "Map",
-)
-
-private val JAVA_DTO_DECLARED_TYPES = mapOf(
-    "Any" to "java.lang.Object",
-    "kotlin.Any" to "java.lang.Object",
-    "String" to "java.lang.String",
-    "kotlin.String" to "java.lang.String",
-    "Iterable" to "java.lang.Iterable",
-    "kotlin.collections.Iterable" to "java.lang.Iterable",
-    "MutableIterable" to "java.lang.Iterable",
-    "kotlin.collections.MutableIterable" to "java.lang.Iterable",
-    "Collection" to "java.util.Collection",
-    "kotlin.collections.Collection" to "java.util.Collection",
-    "MutableCollection" to "java.util.Collection",
-    "kotlin.collections.MutableCollection" to "java.util.Collection",
-    "List" to "java.util.List",
-    "kotlin.collections.List" to "java.util.List",
-    "MutableList" to "java.util.List",
-    "kotlin.collections.MutableList" to "java.util.List",
-    "Set" to "java.util.Set",
-    "kotlin.collections.Set" to "java.util.Set",
-    "MutableSet" to "java.util.Set",
-    "kotlin.collections.MutableSet" to "java.util.Set",
-    "Map" to "java.util.Map",
-    "kotlin.collections.Map" to "java.util.Map",
-    "MutableMap" to "java.util.Map",
-    "kotlin.collections.MutableMap" to "java.util.Map",
-)
-
-private val KOTLIN_DTO_DECLARED_TYPES = mapOf(
-    "Any" to "kotlin.Any",
-    "java.lang.Object" to "kotlin.Any",
-    "String" to "kotlin.String",
-    "java.lang.String" to "kotlin.String",
-    "Iterable" to "kotlin.collections.Iterable",
-    "java.lang.Iterable" to "kotlin.collections.Iterable",
-    "MutableIterable" to "kotlin.collections.MutableIterable",
-    "Collection" to "kotlin.collections.Collection",
-    "java.util.Collection" to "kotlin.collections.Collection",
-    "MutableCollection" to "kotlin.collections.MutableCollection",
-    "List" to "kotlin.collections.List",
-    "java.util.List" to "kotlin.collections.List",
-    "MutableList" to "kotlin.collections.MutableList",
-    "Set" to "kotlin.collections.Set",
-    "java.util.Set" to "kotlin.collections.Set",
-    "MutableSet" to "kotlin.collections.MutableSet",
-    "Map" to "kotlin.collections.Map",
-    "java.util.Map" to "kotlin.collections.Map",
-    "MutableMap" to "kotlin.collections.MutableMap",
-)
-
-private val JAVA_LIST_TYPE_ID = LsiSymbolId.type("java.util.List")
-private val KOTLIN_LIST_TYPE_ID = LsiSymbolId.type("kotlin.collections.List")
-private val KOTLIN_ARRAY_TYPE_ID = LsiSymbolId.type("kotlin.Array")
