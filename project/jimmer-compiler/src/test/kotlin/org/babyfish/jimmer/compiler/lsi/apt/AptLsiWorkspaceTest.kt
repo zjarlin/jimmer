@@ -44,6 +44,40 @@ import kotlin.test.assertTrue
 class AptLsiWorkspaceTest {
 
     @Test
+    fun `deduplicates one java annotation projected as method and return type use`() {
+        val compilation = compile(
+            "demo/Marker.java" to """
+                package demo;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Target;
+
+                @Target({ElementType.METHOD, ElementType.TYPE_USE})
+                public @interface Marker {
+                    String value();
+                }
+            """.trimIndent(),
+            "demo/Model.java" to """
+                package demo;
+
+                interface Model {
+                    @Marker("value")
+                    String name();
+                }
+            """.trimIndent(),
+        )
+
+        assertTrue(compilation.success, compilation.diagnostics)
+        val annotations = compilation.workspace
+            .requireProperty(LsiSymbolId.type("demo.Model"), "name")
+            .annotations
+
+        assertEquals(1, annotations.size)
+        assertEquals(LsiSymbolId.type("demo.Marker"), annotations.single().type)
+        assertEquals(LsiAnnotationUseSiteTarget.METHOD, annotations.single().useSiteTarget)
+    }
+
+    @Test
     fun `freezes description after direct doc comment`() {
         val compilation = compile(
             "demo/DocumentedModels.java" to """

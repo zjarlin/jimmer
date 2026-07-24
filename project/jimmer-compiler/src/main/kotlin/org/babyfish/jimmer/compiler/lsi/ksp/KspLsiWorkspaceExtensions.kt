@@ -518,7 +518,7 @@ internal class KspLsiWorkspaceBuilder(
             visibility = toLsiVisibility(),
             documentation = context.documentation(this),
             sourceDocumentation = context.sourceDocumentation(this),
-            annotations = (declarationAnnotations + typeAnnotations).distinct(),
+            annotations = mergeProjectedAnnotationChannels(declarationAnnotations, typeAnnotations),
             location = context.location(this),
             origin = context.origin(this),
         )
@@ -643,7 +643,7 @@ internal class KspLsiWorkspaceBuilder(
             vararg = isVararg,
             hasDefault = hasDefault,
             sourceDocumentation = context.sourceDocumentation(this),
-            annotations = (parameterAnnotations + typeAnnotations).distinct(),
+            annotations = mergeProjectedAnnotationChannels(parameterAnnotations, typeAnnotations),
             location = context.location(this),
             origin = context.origin(this),
         )
@@ -686,7 +686,12 @@ internal class KspLsiWorkspaceBuilder(
                 useSiteTarget = LsiAnnotationUseSiteTarget.RETURN_TYPE,
             )
         }.orEmpty()
-        return (propertyAnnotations + getterAnnotations + typeAnnotations + getterTypeAnnotations).distinct()
+        return mergeProjectedAnnotationChannels(
+            propertyAnnotations,
+            getterAnnotations,
+            typeAnnotations,
+            getterTypeAnnotations,
+        )
     }
 
     private fun KSFunctionDeclaration.toLsiFunctionAnnotations(): List<LsiAnnotation> {
@@ -700,7 +705,7 @@ internal class KspLsiWorkspaceBuilder(
                 useSiteTarget = LsiAnnotationUseSiteTarget.RETURN_TYPE,
             )
         }.orEmpty()
-        return (functionAnnotations + returnAnnotations).distinct()
+        return mergeProjectedAnnotationChannels(functionAnnotations, returnAnnotations)
     }
 
     private fun KSDeclaration.toLsiOverrides(owner: KSClassDeclaration): List<LsiOverride> {
@@ -782,6 +787,31 @@ internal class KspLsiWorkspaceBuilder(
                 .mapTo(pending) { type -> type to distance + 1 }
         }
         return result
+    }
+}
+
+/** 跨 KSP 投影通道按 occurrence 合并，保留任一通道中的最大重复次数。 */
+private fun mergeProjectedAnnotationChannels(
+    vararg channels: List<LsiAnnotation>,
+): List<LsiAnnotation> {
+    val maxOccurrences = mutableMapOf<LsiAnnotation, Int>()
+    return buildList {
+        channels.forEach { channel ->
+            val channelOccurrences = mutableMapOf<LsiAnnotation, Int>()
+            channel.forEach { annotation ->
+                val occurrence = channelOccurrences.getOrDefault(annotation, 0) + 1
+                channelOccurrences[annotation] = occurrence
+                if (occurrence > maxOccurrences.getOrDefault(annotation, 0)) {
+                    add(annotation)
+                }
+            }
+            channelOccurrences.forEach { (annotation, occurrences) ->
+                val previous = maxOccurrences.getOrDefault(annotation, 0)
+                if (occurrences > previous) {
+                    maxOccurrences[annotation] = occurrences
+                }
+            }
+        }
     }
 }
 

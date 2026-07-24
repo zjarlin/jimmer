@@ -251,6 +251,63 @@ fun DtoType.hasTypeAnnotation(
     }
 }
 
+/** 返回当前 DTO 属性的已冻结注解计划。 */
+fun DtoProp.propAnnotationPlan(
+    annotationContract: DtoAnnotationContract,
+): DtoPropAnnotationPlan {
+    return requireNotNull(annotationContract.propPlansByPropId[id]) {
+        "DTO annotation contract has no property plan: ${id.value}"
+    }
+}
+
+/** 返回当前 DTO 属性的全部已冻结有效注解应用。 */
+fun DtoProp.propertyAnnotationApplications(
+    annotationContract: DtoAnnotationContract,
+): List<DtoAnnotationApplication> {
+    return propAnnotationPlan(annotationContract).propertyApplications
+}
+
+/** 返回用于源码保真的属性注解应用，并从不可变模型快照恢复默认参数。 */
+fun DtoProp.propertySourceAnnotationApplications(
+    annotationContract: DtoAnnotationContract,
+    immutableSchema: ImmutableSchema,
+): List<DtoAnnotationApplication> {
+    val nextOccurrenceBySourceAndType = mutableMapOf<Pair<LsiSymbolId, LsiSymbolId>, Int>()
+    return propertyAnnotationApplications(annotationContract).map { application ->
+        if (application.origin != DtoAnnotationOrigin.IMMUTABLE) {
+            return@map application
+        }
+        val sourceSymbolId = requireNotNull(application.sourceSymbolId) {
+            "Frozen immutable DTO property annotation has no source symbol: ${application.annotation.type.value}"
+        }
+        val occurrenceKey = sourceSymbolId to application.annotation.type
+        val occurrence = nextOccurrenceBySourceAndType.getOrDefault(occurrenceKey, 0)
+        nextOccurrenceBySourceAndType[occurrenceKey] = occurrence + 1
+        val sourceAnnotation = immutableSchema.propsById[sourceSymbolId]
+            ?.annotations
+            ?.filter { annotation -> annotation.type == application.annotation.type }
+            ?.getOrNull(occurrence)
+            ?: error(
+                "Frozen DTO property annotation application has no immutable source occurrence: " +
+                    "${sourceSymbolId.value}:${application.annotation.type.value}#$occurrence"
+            )
+        application.copy(annotation = sourceAnnotation.copy(useSiteTarget = null))
+    }
+}
+
+/** 按属性落点返回已冻结有效注解应用，并保留契约中的精确顺序。 */
+fun DtoProp.propertyAnnotationApplications(
+    annotationContract: DtoAnnotationContract,
+    placement: DtoAnnotationPlacement,
+): List<DtoAnnotationApplication> {
+    require(placement in PROP_APPLICATION_PLACEMENTS) {
+        "DTO property annotation placement is not supported: ${placement.name}"
+    }
+    return propertyAnnotationApplications(annotationContract).filter { application ->
+        placement in application.placements
+    }
+}
+
 private class DtoAnnotationContractResolver(
     private val workspace: LsiWorkspace,
     private val immutableSchema: ImmutableSchema,
@@ -1033,9 +1090,9 @@ private sealed interface CandidateAnnotation {
 
 private fun LsiTypeDeclaration.annotationDeclarationKind(): DtoAnnotationDeclarationKind {
     if (
-        annotations.any { annotation ->
-            annotation.type == KOTLIN_METADATA || annotation.type == KOTLIN_TARGET
-        } || annotationMembers.any { member -> member.vararg } || origin.language == LsiLanguage.KOTLIN
+        annotations.any { annotation -> annotation.type == KOTLIN_METADATA } ||
+            annotationMembers.any { member -> member.vararg } ||
+            origin.language == LsiLanguage.KOTLIN
     ) {
         return DtoAnnotationDeclarationKind.KOTLIN
     }
@@ -1352,9 +1409,7 @@ private fun LsiAnnotation.collectAnnotationTypeIds(
 ) {
     destination.add(type)
     arguments.values.forEach { argument ->
-        if (argument.origin == LsiAnnotationArgumentOrigin.EXPLICIT) {
-            argument.value.collectAnnotationTypeIds(destination)
-        }
+        argument.value.collectAnnotationTypeIds(destination)
     }
 }
 
@@ -1656,7 +1711,6 @@ private val LSI_LOCATION_COMPARATOR = compareBy<LsiLocation>(
     { location -> location.end },
 )
 
-private val KOTLIN_TARGET = LsiSymbolId.type("kotlin.annotation.Target")
 private val KOTLIN_METADATA = LsiSymbolId.type("kotlin.Metadata")
 
 private const val JIMMER_PREFIX = "org.babyfish.jimmer."

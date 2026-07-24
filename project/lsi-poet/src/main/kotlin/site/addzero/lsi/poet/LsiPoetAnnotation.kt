@@ -100,7 +100,10 @@ sealed interface LsiPoetAnnotationValue {
         }
     }
 
-    data class ClassValue(val type: LsiTypeRef) : LsiPoetAnnotationValue
+    data class ClassValue(
+        val type: LsiTypeRef,
+        val sourceStyle: LsiPoetClassLiteralStyle = LsiPoetClassLiteralStyle.PLATFORM_TYPE,
+    ) : LsiPoetAnnotationValue
 
     data class NestedAnnotationValue(
         val annotation: LsiPoetAnnotation,
@@ -110,6 +113,12 @@ sealed interface LsiPoetAnnotationValue {
         val elements: List<LsiPoetAnnotationValue>,
         val sourceStyle: LsiPoetAnnotationArrayStyle = LsiPoetAnnotationArrayStyle.LITERAL,
     ) : LsiPoetAnnotationValue
+}
+
+/** 控制类字面量使用 Poet 类型引用或 Java 装箱类型全限定源码。 */
+enum class LsiPoetClassLiteralStyle {
+    PLATFORM_TYPE,
+    JAVA_BOXED_PRIMITIVE_QUALIFIED,
 }
 
 /**

@@ -1,38 +1,29 @@
 package org.babyfish.jimmer.ksp.dto
 
-import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
-import com.google.devtools.ksp.processing.Resolver
-import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSFile
-import com.google.devtools.ksp.symbol.Origin
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.ksp.toAnnotationSpec
 import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeAnnotationRenderer
 import org.babyfish.jimmer.dto.compiler.*
-import org.babyfish.jimmer.dto.compiler.Anno.*
 import org.babyfish.jimmer.dto.compiler.PropConfig.PathNode
 import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate
 import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate.*
 import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.impl.util.StringUtil.SnakeCase
 import org.babyfish.jimmer.ksp.Context
-import org.babyfish.jimmer.ksp.annotation
-import org.babyfish.jimmer.ksp.fullName
-import org.babyfish.jimmer.ksp.get
 import org.babyfish.jimmer.ksp.immutable.generator.*
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.ConverterMetadata
 import org.babyfish.jimmer.ksp.util.GenericParser
-import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -82,8 +73,6 @@ internal class DtoGenerator private constructor(
 
     private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiPoetTypeName> =
         (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
-
-    private val useSiteTargetMap = mutableMapOf<String, Set<AnnotationSpec.UseSiteTarget>>()
 
     private val interfacePropNames = interfaceContractResolution
         .contractFor(lsiDtoType)
@@ -1230,6 +1219,7 @@ internal class DtoGenerator private constructor(
     @Suppress("UNCHECKED_CAST")
     private fun addProp(prop: AbstractProp) {
         val typeName = propTypeName(prop)
+        val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
         typeBuilder.addProperty(
             PropertySpec
                 .builder(prop.name, typeName)
@@ -1247,7 +1237,12 @@ internal class DtoGenerator private constructor(
                                 .build()
                         )
                     }
-                    if (!isBuilderRequired && prop.annotations.none { it.qualifiedName == ctx.jacksonTypes.jsonProperty.reflectionName() }) {
+                    if (
+                        !isBuilderRequired &&
+                        lsiProp.annotations.none { annotation ->
+                            annotation.typeId.value == ctx.jacksonTypes.jsonProperty.reflectionName()
+                        }
+                    ) {
                         addAnnotation(
                             AnnotationSpec
                                 .builder(ctx.jacksonTypes.jsonProperty)
@@ -1266,36 +1261,20 @@ internal class DtoGenerator private constructor(
                         if (dtoType.modifiers.contains(DtoModifier.INPUT) && dtoProp.inputModifier == DtoModifier.FIXED) {
                             addAnnotation(FIXED_INPUT_FIELD_CLASS_NAME)
                         }
-                        for (anno in dtoProp.toTailProp().baseProp.annotations {
-                            isCopyableAnnotation(it, dtoProp.annotations)
-                        }) {
-                            if (isBuilderRequired && anno.fullName == ctx.jacksonTypes.jsonDeserialize.reflectionName()) {
-                                continue
-                            }
-                            allowedTargets(anno.fullName).firstOrNull()?.let {
-                                addAnnotation(
-                                    standardSpec(
-                                        annotationOf(anno, it)
-                                    )
-                                )
-                            }
-                        }
                     }
-                    for (anno in prop.annotations) {
-                        if (isBuilderRequired && anno.qualifiedName == ctx.jacksonTypes.jsonDeserialize.reflectionName()) {
-                            continue
-                        }
-                        val target = if (anno.qualifiedName.startsWith("com.fasterxml.jackson.")) {
-                            AnnotationSpec.UseSiteTarget.GET
-                        } else {
-                            allowedTargets(anno.qualifiedName).firstOrNull() ?: continue
-                        }
-                        addAnnotation(
-                            standardSpec(
-                                annotationOf(anno, ctx.resolver, target)
-                            )
+                    addAnnotations(
+                        KspDtoPropAnnotationRenderer.renderConcrete(
+                            dtoProp = lsiProp,
+                            annotationContract = annotationContract,
+                            immutableSchema = immutableSchema,
+                            workspace = workspace,
+                            excludedAnnotationQualifiedName = if (isBuilderRequired) {
+                                ctx.jacksonTypes.jsonDeserialize.reflectionName()
+                            } else {
+                                null
+                            },
                         )
-                    }
+                    )
                     initializer(prop.name)
                     if (mutable) {
                         statePropName(prop, false)?.let { stateProp ->
@@ -1317,6 +1296,7 @@ internal class DtoGenerator private constructor(
 
     private fun TypeSpec.Builder.addAccessorDeclaration(prop: AbstractProp) {
         val typeName = propTypeName(prop)
+        val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
         addProperty(
             PropertySpec
                 .builder(prop.name, typeName)
@@ -1334,38 +1314,14 @@ internal class DtoGenerator private constructor(
                                 .build()
                         )
                     }
-                    if (prop is DtoProp<*, *>) {
-                        val dtoProp = prop.asDtoProp()
-                        for (anno in dtoProp.toTailProp().baseProp.annotations {
-                            isCopyableAnnotation(it, dtoProp.annotations)
-                        }) {
-                            allowedTargets(anno.fullName).firstOrNull {
-                                it == AnnotationSpec.UseSiteTarget.GET ||
-                                    it == AnnotationSpec.UseSiteTarget.PROPERTY
-                            }?.let {
-                                addAnnotation(
-                                    standardSpec(
-                                        annotationOf(anno, it)
-                                    )
-                                )
-                            }
-                        }
-                    }
-                    for (anno in prop.annotations) {
-                        val target = if (anno.qualifiedName.startsWith("com.fasterxml.jackson.")) {
-                            AnnotationSpec.UseSiteTarget.GET
-                        } else {
-                            allowedTargets(anno.qualifiedName).firstOrNull {
-                                it == AnnotationSpec.UseSiteTarget.GET ||
-                                    it == AnnotationSpec.UseSiteTarget.PROPERTY
-                            } ?: continue
-                        }
-                        addAnnotation(
-                            standardSpec(
-                                annotationOf(anno, ctx.resolver, target)
-                            )
+                    addAnnotations(
+                        KspDtoPropAnnotationRenderer.renderAbstractAccessor(
+                            dtoProp = lsiProp,
+                            annotationContract = annotationContract,
+                            immutableSchema = immutableSchema,
+                            workspace = workspace,
                         )
-                    }
+                    )
                 }
                 .build()
         )
@@ -2549,65 +2505,6 @@ internal class DtoGenerator private constructor(
             return null
         }
 
-    private fun allowedTargets(typeName: String): Set<AnnotationSpec.UseSiteTarget> =
-        useSiteTargetMap.computeIfAbsent(typeName) { tn ->
-            val annotation = ctx.resolver.getClassDeclarationByName(tn)
-                ?: error("Internal bug, cannot resolve annotation type \"$typeName\"")
-            var field = false
-            var getter = false
-            var setter = false
-            var property = false
-            annotation.annotation(kotlin.annotation.Target::class)?.let {
-                it
-                    .get<List<Any>>("allowedTargets")
-                    ?.forEach {
-                        val s = it.toString()
-                        when {
-                            s.endsWith("FIELD") ->
-                                field = true
-
-                            s.endsWith("PROPERTY_GETTER") ->
-                                getter = true
-
-                            s.endsWith("FUNCTION") ->
-                                getter = true
-
-                            s.endsWith("PROPERTY_SETTER") ->
-                                setter = true
-
-                            s.endsWith("PROPERTY") ->
-                                property = true
-                        }
-                    }
-            }
-            annotation.annotation(java.lang.annotation.Target::class)
-                ?.get<List<java.lang.annotation.ElementType>>("value")
-                ?.forEach {
-                    val s = it.toString()
-                    when {
-                        s.endsWith("FIELD") ->
-                            field = true
-
-                        s.endsWith("METHOD") ->
-                            getter = true
-                    }
-                }
-            val targets = linkedSetOf<AnnotationSpec.UseSiteTarget>()
-            if (field) {
-                targets += AnnotationSpec.UseSiteTarget.FIELD
-            }
-            if (getter) {
-                targets += AnnotationSpec.UseSiteTarget.GET
-            }
-            if (setter) {
-                targets += AnnotationSpec.UseSiteTarget.SET
-            }
-            if (property) {
-                targets += AnnotationSpec.UseSiteTarget.PROPERTY
-            }
-            targets
-        }
-
     private fun TypeSpec.Builder.addCopy() {
         addFunction(
             FunSpec
@@ -2836,165 +2733,6 @@ internal class DtoGenerator private constructor(
         @JvmStatic
         private val NEW = MemberName("org.babyfish.jimmer.kt", "new")
 
-        @JvmStatic
-        private val KOTLIN_DTO_TYPE_NAME = "org.babyfish.jimmer.kt.dto.KotlinDto"
-
-        private fun isCopyableAnnotation(annotation: KSAnnotation, dtoAnnotations: Collection<Anno>): Boolean {
-            val qualifiedName =
-                annotation.annotationType.fastResolve().declaration.qualifiedName?.asString()
-                    ?: throw DtoException(
-                        """
-                        Unable to resolve qualifiedName for annotation: '${annotation.annotationType.fastResolve()}'
-                        Possible reasons:
-                        1. The annotation's dependency is missing from compilation classpath
-                        2. Required library is not included as a dependency
-                        3. Dependency is declared with 'implementation' instead of 'api' configuration
-                        
-                        Solution: Add the corresponding dependency to your build configuration.
-                        """.trimIndent()
-                    )
-            return (
-                    qualifiedName != KOTLIN_DTO_TYPE_NAME && (
-                            !qualifiedName.startsWith("org.babyfish.jimmer.") ||
-                                    qualifiedName.startsWith("org.babyfish.jimmer.client.")
-                            ) && dtoAnnotations.none {
-                        it.qualifiedName == annotation.annotationType.fastResolve().declaration.qualifiedName?.asString()
-                    }
-                    )
-        }
-
-        internal fun annotationOf(
-            anno: Anno,
-            resolver: Resolver,
-            target: AnnotationSpec.UseSiteTarget? = null
-        ): AnnotationSpec =
-            AnnotationSpec
-                .builder(ClassName.bestGuess(anno.qualifiedName))
-                .apply {
-                    if (anno.valueMap.isNotEmpty()) {
-                        addMember(
-                            CodeBlock
-                                .builder()
-                                .apply {
-                                    var vararg = false
-                                    if (anno.valueMap.let { it.size == 1 && it.keys.first() == "value" }) {
-                                        val declaration = resolver.getClassDeclarationByName(anno.qualifiedName)
-                                        if (declaration?.origin == Origin.KOTLIN || declaration?.origin == Origin.KOTLIN_LIB) {
-                                            vararg = declaration.primaryConstructor?.parameters?.any {
-                                                it.name?.asString() == "value" && it.isVararg
-                                            } ?: false
-                                        }
-                                    }
-                                    if (vararg) {
-                                        val value = anno.valueMap.values.first()
-                                        if (value is ArrayValue) {
-                                            for (i in 0 until value.elements.size) {
-                                                if (i != 0) {
-                                                    add(", ")
-                                                }
-                                                add(value.elements[i])
-                                            }
-                                        } else {
-                                            add(value)
-                                        }
-                                    } else {
-                                        add("\n")
-                                        add(anno.valueMap)
-                                        add("\n")
-                                    }
-                                }
-                                .build()
-                        )
-                    }
-                    target?.let {
-                        useSiteTarget(it)
-                    }
-                }
-                .build()
-
-        private fun annotationOf(
-            anno: KSAnnotation,
-            target: AnnotationSpec.UseSiteTarget
-        ): AnnotationSpec =
-            anno
-                .toAnnotationSpec()
-                .toBuilder()
-                .useSiteTarget(target)
-                .build()
-
-        private fun CodeBlock.Builder.add(value: Value) {
-            when (value) {
-                is ArrayValue -> {
-                    add("[\n")
-                    indent()
-                    var addSeparator = false
-                    for (element in value.elements) {
-                        if (addSeparator) {
-                            add(", \n")
-                        } else {
-                            addSeparator = true
-                        }
-                        add(element)
-                    }
-                    unindent()
-                    add("\n]")
-                }
-
-                is AnnoValue -> {
-                    add("%T", ClassName.bestGuess(value.anno.qualifiedName))
-                    if (value.anno.valueMap.isEmpty()) {
-                        add("{}")
-                    } else if (value.anno.valueMap.let { it.size == 1 && it.keys.first() == "value" }) {
-                        add("(")
-                        add(value.anno.valueMap.values.first())
-                        add(")")
-                    } else {
-                        add("(\n")
-                        add(value.anno.valueMap)
-                        add("\n)")
-                    }
-                }
-
-                is TypeRefValue -> value.typeRef.let {
-                    if (it.isNullable) {
-                        add(
-                            "java.lang.%L::class",
-                            when (it.typeName) {
-                                "Char" -> "Character"
-                                "Int" -> "Integer"
-                                else -> it.typeName
-                            }
-                        )
-                    } else {
-                        add("%T::class", typeName(it))
-                    }
-                }
-
-                is EnumValue -> add(
-                    "%T.%N",
-                    ClassName.bestGuess(value.qualifiedName),
-                    value.constant
-                )
-
-                else -> add((value as LiteralValue).value.replace("%", "%%"))
-            }
-        }
-
-        private fun CodeBlock.Builder.add(valueMap: Map<String, Value>) {
-            indent()
-            var addSeparator = false
-            for ((name, value) in valueMap) {
-                if (addSeparator) {
-                    add(", \n")
-                } else {
-                    addSeparator = true
-                }
-                add("%N = ", name)
-                add(value)
-            }
-            unindent()
-        }
-
         fun typeName(typeRef: TypeRef?): TypeName {
             val typeName = if (typeRef === null) {
                 STAR
@@ -3175,35 +2913,5 @@ internal class DtoGenerator private constructor(
 
         private val EXPRESSION_PACKAGE = "org.babyfish.jimmer.sql.kt.ast.expression"
 
-        // Issue#1218, Avoid bug of kotlinpoet
-        private fun standardSpec(spec: AnnotationSpec): AnnotationSpec {
-            var modifiedIndex = -1
-            for (i in spec.members.indices) {
-                val text = spec.members[i].toString()
-                val eqIndex = text.indexOf('=')
-                val modified = if (eqIndex == -1) {
-                    true
-                } else {
-                    val quoteIndex = text.indexOf('"')
-                    quoteIndex != -1 && quoteIndex < eqIndex
-                }
-                if (modified) {
-                    if (modifiedIndex != -1) {
-                        return spec
-                    }
-                    modifiedIndex = i
-                }
-            }
-            if (modifiedIndex == -1) {
-                return spec
-            }
-            val builder = spec.toBuilder()
-            builder.members[modifiedIndex] = CodeBlock
-                .builder()
-                .add("value = ")
-                .add(builder.members[modifiedIndex])
-                .build()
-            return builder.build()
-        }
     }
 }

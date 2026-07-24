@@ -4,10 +4,13 @@ import com.squareup.kotlinpoet.ClassName
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiPrimitiveKind
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
 import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
+import site.addzero.lsi.poet.LsiPoetClassLiteralStyle
 import site.addzero.lsi.poet.LsiPoetTypeName
 
 class LsiKotlinPoetAnnotationRendererTest {
@@ -48,6 +51,33 @@ class LsiKotlinPoetAnnotationRendererTest {
         assertEquals(
             listOf("@sample.First(\"first\")", "@sample.Second(count = 2)"),
             renderedAll.map(Any::toString),
+        )
+    }
+
+    @Test
+    fun `renders qualified java boxed primitive class literal without an import`() {
+        val annotationId = LsiSymbolId.type("sample.Boxed")
+        val annotation = LsiPoetAnnotation(
+            type = annotationId,
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Named(
+                    name = "type",
+                    value = LsiPoetAnnotationValue.ClassValue(
+                        type = LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true),
+                        sourceStyle = LsiPoetClassLiteralStyle.JAVA_BOXED_PRIMITIVE_QUALIFIED,
+                    ),
+                ),
+            ),
+        )
+
+        val rendered = LsiKotlinPoetRenderer().renderAnnotation(
+            annotation,
+            listOf(LsiPoetTypeName(annotationId, "sample", listOf("Boxed"))),
+        )
+
+        assertEquals(
+            "@sample.Boxed(type = java.lang.Integer::class)",
+            rendered.toString(),
         )
     }
 }

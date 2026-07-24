@@ -28,6 +28,7 @@ import site.addzero.lsi.poet.LsiPoetAnnotationArgument
 import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
 import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
+import site.addzero.lsi.poet.LsiPoetClassLiteralStyle
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
@@ -291,10 +292,16 @@ private fun LsiPoetAnnotationValue.toJavaSourceAnnotationValue(
             typeNames.requireJavaClassName(enumType),
             entryName,
         )
-        is LsiPoetAnnotationValue.ClassValue -> CodeBlock.of(
-            "\$T.class",
-            type.toJavaClassLiteralTypeName(typeNames),
-        )
+        is LsiPoetAnnotationValue.ClassValue -> when (sourceStyle) {
+            LsiPoetClassLiteralStyle.PLATFORM_TYPE -> CodeBlock.of(
+                "\$T.class",
+                type.toJavaClassLiteralTypeName(typeNames),
+            )
+            LsiPoetClassLiteralStyle.JAVA_BOXED_PRIMITIVE_QUALIFIED -> CodeBlock.of(
+                "\$L.class",
+                type.toJavaBoxedQualifiedName(),
+            )
+        }
         is LsiPoetAnnotationValue.NestedAnnotationValue -> CodeBlock.of(
             "\$L",
             annotation.toJavaSourceAnnotationSpec(typeNames),
@@ -339,6 +346,26 @@ private fun LsiTypeRef.toJavaClassLiteralTypeName(
         ClassName.get("kotlin", "Unit")
     } else {
         toJavaTypeName(typeNames)
+    }
+}
+
+private fun LsiTypeRef.toJavaBoxedQualifiedName(): String {
+    val primitive = this as? LsiPrimitiveType
+    require(primitive?.boxed == true) {
+        "Qualified Java boxed class literal requires a boxed primitive type: $this"
+    }
+    return when (primitive.kind) {
+        LsiPrimitiveKind.BOOLEAN -> "java.lang.Boolean"
+        LsiPrimitiveKind.BYTE -> "java.lang.Byte"
+        LsiPrimitiveKind.SHORT -> "java.lang.Short"
+        LsiPrimitiveKind.INT -> "java.lang.Integer"
+        LsiPrimitiveKind.LONG -> "java.lang.Long"
+        LsiPrimitiveKind.CHAR -> "java.lang.Character"
+        LsiPrimitiveKind.FLOAT -> "java.lang.Float"
+        LsiPrimitiveKind.DOUBLE -> "java.lang.Double"
+        LsiPrimitiveKind.UNIT,
+        LsiPrimitiveKind.VOID,
+        -> error("Java has no boxed primitive class literal for ${primitive.kind.name}")
     }
 }
 

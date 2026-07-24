@@ -45,6 +45,7 @@ import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
 import site.addzero.lsi.poet.LsiPoetAnnotationArgumentNameStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
+import site.addzero.lsi.poet.LsiPoetClassLiteralStyle
 import site.addzero.lsi.poet.LsiPoetTypeName
 
 internal fun LsiTypeRef.toKotlinTypeName(typeNames: List<LsiPoetTypeName>): TypeName {
@@ -353,7 +354,7 @@ private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(
             typeNames.requireKotlinClassName(enumType),
             entryName,
         )
-        is LsiPoetAnnotationValue.ClassValue -> type.toKotlinClassLiteral(typeNames)
+        is LsiPoetAnnotationValue.ClassValue -> type.toKotlinClassLiteral(typeNames, sourceStyle)
         is LsiPoetAnnotationValue.NestedAnnotationValue -> annotation.toKotlinNestedSourceAnnotationValue(typeNames)
         is LsiPoetAnnotationValue.ArrayValue -> when (sourceStyle) {
             LsiPoetAnnotationArrayStyle.LITERAL -> toKotlinInlineSourceAnnotationArray(
@@ -482,10 +483,19 @@ private fun LsiPoetAnnotationArgument.Named.toKotlinAnnotationArgumentName(): Co
     }
 }
 
-private fun LsiTypeRef.toKotlinClassLiteral(typeNames: List<LsiPoetTypeName>): CodeBlock {
+private fun LsiTypeRef.toKotlinClassLiteral(
+    typeNames: List<LsiPoetTypeName>,
+    sourceStyle: LsiPoetClassLiteralStyle = LsiPoetClassLiteralStyle.PLATFORM_TYPE,
+): CodeBlock {
     val primitive = this as? LsiPrimitiveType
     if (primitive?.kind == LsiPrimitiveKind.VOID && !primitive.boxed) {
         error("Kotlin annotation source cannot represent the primitive void class literal")
+    }
+    if (sourceStyle == LsiPoetClassLiteralStyle.JAVA_BOXED_PRIMITIVE_QUALIFIED) {
+        require(primitive?.boxed == true) {
+            "Qualified Java boxed class literal requires a boxed primitive type: $this"
+        }
+        return CodeBlock.of("%L::class", primitive.kind.toJavaBoxedQualifiedName())
     }
     val typeName = if (primitive?.boxed == true) {
         primitive.kind.toKotlinBoxedTypeName()
@@ -493,6 +503,22 @@ private fun LsiTypeRef.toKotlinClassLiteral(typeNames: List<LsiPoetTypeName>): C
         toKotlinTypeName(typeNames)
     }
     return CodeBlock.of("%T::class", typeName.copy(nullable = false))
+}
+
+private fun LsiPrimitiveKind.toJavaBoxedQualifiedName(): String {
+    return when (this) {
+        LsiPrimitiveKind.BOOLEAN -> "java.lang.Boolean"
+        LsiPrimitiveKind.BYTE -> "java.lang.Byte"
+        LsiPrimitiveKind.SHORT -> "java.lang.Short"
+        LsiPrimitiveKind.INT -> "java.lang.Integer"
+        LsiPrimitiveKind.LONG -> "java.lang.Long"
+        LsiPrimitiveKind.CHAR -> "java.lang.Character"
+        LsiPrimitiveKind.FLOAT -> "java.lang.Float"
+        LsiPrimitiveKind.DOUBLE -> "java.lang.Double"
+        LsiPrimitiveKind.UNIT,
+        LsiPrimitiveKind.VOID,
+        -> error("Kotlin has no Java boxed primitive class literal for $name")
+    }
 }
 
 private fun LsiAnnotationUseSiteTarget.toPoetUseSiteTarget(): AnnotationSpec.UseSiteTarget? {

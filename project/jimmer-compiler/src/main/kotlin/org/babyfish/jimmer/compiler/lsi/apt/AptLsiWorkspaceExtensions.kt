@@ -601,15 +601,29 @@ class AptLsiWorkspaceBuilder(
     }
 
     private fun toLsiCallableAnnotations(method: ExecutableElement): List<site.addzero.lsi.model.LsiAnnotation> {
+        val methodAnnotationMirrors = method.annotationMirrors
         val methodAnnotations = context.toLsiAnnotations(
-            annotations = method.annotationMirrors,
+            annotations = methodAnnotationMirrors,
             useSiteTarget = LsiAnnotationUseSiteTarget.METHOD,
         )
         val returnTypeAnnotations = context.toLsiAnnotations(
             annotations = method.returnType.annotationMirrors,
             useSiteTarget = LsiAnnotationUseSiteTarget.RETURN_TYPE,
         )
-        return methodAnnotations + returnTypeAnnotations
+        val unmatchedMethodAnnotations = methodAnnotations
+            .map { annotation -> annotation.copy(useSiteTarget = null) }
+            .toMutableList()
+        val distinctReturnTypeAnnotations = returnTypeAnnotations.filter { annotation ->
+            val annotationWithoutTarget = annotation.copy(useSiteTarget = null)
+            val duplicateIndex = unmatchedMethodAnnotations.indexOf(annotationWithoutTarget)
+            if (duplicateIndex == -1) {
+                true
+            } else {
+                unmatchedMethodAnnotations.removeAt(duplicateIndex)
+                false
+            }
+        }
+        return methodAnnotations + distinctReturnTypeAnnotations
     }
 
     private fun ExecutableElement.toLsiOverrides(owner: TypeElement): List<LsiOverride> {

@@ -93,6 +93,7 @@ public class BookInput implements Input<Book> {
             })
     private String name;
 
+    @JsonAlias("base-edition")
     private Integer edition;
 
     private boolean _isEditionLoaded;

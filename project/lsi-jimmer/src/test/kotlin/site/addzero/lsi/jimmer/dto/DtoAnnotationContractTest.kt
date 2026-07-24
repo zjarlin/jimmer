@@ -102,6 +102,131 @@ class DtoAnnotationContractTest {
     }
 
     @Test
+    fun `reads frozen property annotation plan and filters applications in exact order`() {
+        val fixture = fixture()
+        val dtoProp = fixture.graph.props.single()
+        val contract = fixture.freeze()
+        val expectedPlan = contract.propPlansByPropId.getValue(dtoProp.id)
+
+        assertSame(expectedPlan, dtoProp.propAnnotationPlan(contract))
+        assertSame(expectedPlan.propertyApplications, dtoProp.propertyAnnotationApplications(contract))
+
+        val fieldApplications = dtoProp.propertyAnnotationApplications(
+            contract,
+            DtoAnnotationPlacement.FIELD,
+        )
+        val propertyApplications = dtoProp.propertyAnnotationApplications(
+            contract,
+            DtoAnnotationPlacement.PROPERTY,
+        )
+
+        assertEquals(
+            listOf(JAVA_TAG, KOTLIN_TAG),
+            fieldApplications.map { application -> application.annotation.type },
+        )
+        assertSame(expectedPlan.propertyApplications[0], fieldApplications[0])
+        assertSame(expectedPlan.propertyApplications[1], fieldApplications[1])
+        assertEquals(listOf(KOTLIN_TAG), propertyApplications.map { application -> application.annotation.type })
+        assertSame(expectedPlan.propertyApplications[1], propertyApplications.single())
+    }
+
+    @Test
+    fun `rejects missing property plan and unsupported property placement`() {
+        val fixture = fixture()
+        val dtoProp = fixture.graph.props.single()
+        val contract = fixture.freeze()
+        val contractWithoutPropPlan = contract.copy(propPlans = emptyList())
+
+        val missingPlanError = assertFailsWith<IllegalArgumentException> {
+            dtoProp.propAnnotationPlan(contractWithoutPropPlan)
+        }
+        val invalidPlacementError = assertFailsWith<IllegalArgumentException> {
+            dtoProp.propertyAnnotationApplications(contract, DtoAnnotationPlacement.TYPE)
+        }
+
+        assertEquals(
+            "DTO annotation contract has no property plan: ${dtoProp.id.value}",
+            missingPlanError.message,
+        )
+        assertEquals(
+            "DTO property annotation placement is not supported: TYPE",
+            invalidPlacementError.message,
+        )
+    }
+
+    @Test
+    fun `restores immutable property defaults only for source applications`() {
+        val fixture = fixture()
+        val nestedAnnotationType = LsiSymbolId.type("demo.Nested")
+        val javaTagDeclaration = assertIs<LsiTypeDeclaration>(fixture.workspace[JAVA_TAG])
+        val declarations = fixture.workspace.declarations.map { declaration ->
+            if (declaration.id == JAVA_TAG) {
+                javaTagDeclaration.copy(
+                    annotationMembers = (
+                        javaTagDeclaration.annotationMembers + listOf(
+                            LsiAnnotationMember(
+                                name = "ignored",
+                                type = LsiDeclaredType(STRING_TYPE),
+                                hasDefault = true,
+                            ),
+                            LsiAnnotationMember(
+                                name = "nested",
+                                type = LsiDeclaredType(nestedAnnotationType),
+                                hasDefault = true,
+                            ),
+                        )
+                    ).sortedBy(LsiAnnotationMember::name),
+                )
+            } else {
+                declaration
+            }
+        } + typeDeclaration(
+            qualifiedName = nestedAnnotationType.requireTypeQualifiedName(),
+            kind = LsiTypeDeclarationKind.ANNOTATION,
+            annotations = emptyList(),
+            language = LsiLanguage.JAVA,
+        )
+        val workspace = LsiWorkspace(
+            sources = fixture.workspace.sources,
+            declarations = declarations,
+            typeHierarchy = fixture.workspace.typeHierarchy,
+            annotationScopes = fixture.workspace.annotationScopes,
+        )
+        val schema = immutableSchema(
+            typeAnnotations = fixture.schema.types.single().annotations,
+            propAnnotations = listOf(
+                lsiAnnotation(
+                    qualifiedName = JAVA_TAG.requireTypeQualifiedName(),
+                    value = "base",
+                    defaultArguments = mapOf(
+                        "ignored" to LsiAnnotationValue.StringValue("default"),
+                        "nested" to LsiAnnotationValue.NestedAnnotationValue(
+                            LsiAnnotation(nestedAnnotationType),
+                        ),
+                    ),
+                )
+            ),
+        )
+        val graph = graph(emptyList(), emptyList())
+        val contract = workspace.resolveDtoAnnotationContract(graph, schema)
+        val dtoProp = graph.props.single()
+
+        val semanticApplication = dtoProp.propertyAnnotationApplications(contract).single()
+        val sourceApplication = dtoProp.propertySourceAnnotationApplications(contract, schema).single()
+
+        assertFalse("ignored" in semanticApplication.annotation.arguments)
+        assertFalse("nested" in semanticApplication.annotation.arguments)
+        assertTrue(nestedAnnotationType in contract.declarationsByTypeId)
+        val restoredArgument = sourceApplication.annotation.arguments.getValue("ignored")
+        assertEquals(LsiAnnotationArgumentOrigin.DEFAULT, restoredArgument.origin)
+        assertEquals(LsiAnnotationValue.StringValue("default"), restoredArgument.value)
+        assertEquals(
+            LsiAnnotationValue.NestedAnnotationValue(LsiAnnotation(nestedAnnotationType)),
+            sourceApplication.annotation.arguments.getValue("nested").value,
+        )
+    }
+
+    @Test
     fun `freezes declaration kind placements and kotlin value vararg`() {
         val fixture = fixture()
         val contract = fixture.freeze()
@@ -750,7 +875,14 @@ class DtoAnnotationContractTest {
                 )
             )
             addAll(javaAnnotationDeclaration("org.babyfish.jimmer.client.ApiIgnore", listOf("TYPE"), emptyList()))
-            addAll(javaAnnotationDeclaration("demo.JavaTag", listOf("TYPE", "FIELD", "METHOD"), listOf("value")))
+            addAll(
+                javaAnnotationDeclaration(
+                    "demo.JavaTag",
+                    listOf("TYPE", "FIELD", "METHOD"),
+                    listOf("value"),
+                    kotlinTargetProjectionNames = listOf("CLASS", "FIELD", "PROPERTY_GETTER"),
+                )
+            )
             addAll(kotlinAnnotationDeclaration("demo.KotlinTag", kotlinTargets, kotlinValueVararg))
         }.maybeReversed(reversed)
         return Fixture(
@@ -1075,11 +1207,17 @@ class DtoAnnotationContractTest {
         argumentNames: List<String>,
         argumentTypes: Map<String, LsiTypeRef> = emptyMap(),
         defaultArgumentNames: Set<String> = emptySet(),
+        kotlinTargetProjectionNames: List<String> = emptyList(),
     ): List<LsiDeclaration> {
         val declaration = typeDeclaration(
             qualifiedName = qualifiedName,
             kind = LsiTypeDeclarationKind.ANNOTATION,
-            annotations = targetNames?.let { names -> listOf(javaTarget(names)) }.orEmpty(),
+            annotations = buildList {
+                targetNames?.let { names -> add(javaTarget(names)) }
+                if (kotlinTargetProjectionNames.isNotEmpty()) {
+                    add(kotlinTarget(kotlinTargetProjectionNames))
+                }
+            },
             annotationMembers = argumentNames.map { argumentName ->
                 LsiAnnotationMember(
                     argumentName,

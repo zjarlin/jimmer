@@ -12,6 +12,7 @@ import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer;
 import org.babyfish.jimmer.dto.compiler.*;
@@ -33,19 +34,13 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
 import java.io.IOException;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Target;
 import java.util.*;
 
 public class DtoGenerator {
 
     private static final String[] EMPTY_STR_ARR = new String[0];
-
-    private static final String KOTLIN_DTO_TYPE_NAME = "org.babyfish.jimmer.kt.dto.KotlinDto";
 
     public final Context ctx;
 
@@ -1443,29 +1438,16 @@ public class DtoGenerator {
                     dtoProp.getInputModifier() == DtoModifier.FIXED) {
                 builder.addAnnotation(org.babyfish.jimmer.apt.immutable.generator.Constants.FIXED_INPUT_FIELD_CLASS_NAME);
             }
-            for (AnnotationMirror annotationMirror : dtoProp.toTailProp().getBaseProp().getAnnotations()) {
-                if (isBuilderRequired) {
-                    String qualifiedName = ((TypeElement) annotationMirror.getAnnotationType()
-                            .asElement())
-                            .getQualifiedName()
-                            .toString();
-                    if (qualifiedName.equals(ctx.getJacksonTypes().jsonDeserialize.reflectionName())) {
-                        continue;
-                    }
-                }
-                if (isCopyableAnnotation(annotationMirror, dtoType.getAnnotations(), false)) {
-                    builder.addAnnotation(AnnotationSpec.get(annotationMirror));
-                }
-            }
         }
-        for (Anno anno : prop.getAnnotations()) {
-            if (isBuilderRequired && anno.getQualifiedName().equals(ctx.getJacksonTypes().jsonDeserialize.reflectionName())) {
-                continue;
-            }
-            if (hasElementType(anno, ElementType.FIELD)) {
-                builder.addAnnotation(annotationOf(anno));
-            }
-        }
+        builder.addAnnotations(
+                AptDtoPropAnnotationRenderer.renderField(
+                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        annotationContract,
+                        immutableSchema,
+                        lsiWorkspace,
+                        isBuilderRequired ? ctx.getJacksonTypes().jsonDeserialize.reflectionName() : null
+                )
+        );
         typeBuilder.addField(builder.build());
     }
 
@@ -1484,11 +1466,15 @@ public class DtoGenerator {
         if (doc != null) {
             builder.addJavadoc(doc);
         }
-        for (Anno anno : prop.getAnnotations()) {
-            if (hasElementType(anno, ElementType.FIELD)) {
-                builder.addAnnotation(annotationOf(anno));
-            }
-        }
+        builder.addAnnotations(
+                AptDtoPropAnnotationRenderer.renderField(
+                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        annotationContract,
+                        immutableSchema,
+                        lsiWorkspace,
+                        isBuildRequired() ? ctx.getJacksonTypes().jsonDeserialize.reflectionName() : null
+                )
+        );
         typeBuilder.addField(builder.build());
     }
 
@@ -1529,19 +1515,15 @@ public class DtoGenerator {
                 getterBuilder.addAnnotation(NonNull.class);
             }
         }
-        if (prop instanceof DtoProp<?, ?>) {
-            DtoProp<ImmutableType, ImmutableProp> dtoProp = asDtoProp(prop);
-            for (AnnotationMirror annotationMirror : dtoProp.toTailProp().getBaseProp().getAnnotations()) {
-                if (isCopyableAnnotation(annotationMirror, dtoProp.getAnnotations(), true)) {
-                    getterBuilder.addAnnotation(AnnotationSpec.get(annotationMirror));
-                }
-            }
-        }
-        for (Anno anno : prop.getAnnotations()) {
-            if (hasElementType(anno, ElementType.METHOD)) {
-                getterBuilder.addAnnotation(annotationOf(anno));
-            }
-        }
+        getterBuilder.addAnnotations(
+                AptDtoPropAnnotationRenderer.renderGetter(
+                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        annotationContract,
+                        immutableSchema,
+                        lsiWorkspace,
+                        null
+                )
+        );
         typeBuilder.addMethod(getterBuilder.build());
     }
 
@@ -1578,31 +1560,15 @@ public class DtoGenerator {
             }
         }
         boolean isBuilderRequired = isBuildRequired();
-        if (prop instanceof DtoProp<?, ?>) {
-            DtoProp<ImmutableType, ImmutableProp> dtoProp = asDtoProp(prop);
-            for (AnnotationMirror annotationMirror : dtoProp.toTailProp().getBaseProp().getAnnotations()) {
-                if (isBuilderRequired) {
-                    String qualifiedName = ((TypeElement) annotationMirror.getAnnotationType()
-                            .asElement())
-                            .getQualifiedName()
-                            .toString();
-                    if (qualifiedName.equals(ctx.getJacksonTypes().jsonDeserialize.reflectionName())) {
-                        continue;
-                    }
-                }
-                if (isCopyableAnnotation(annotationMirror, dtoProp.getAnnotations(), true)) {
-                    getterBuilder.addAnnotation(AnnotationSpec.get(annotationMirror));
-                }
-            }
-        }
-        for (Anno anno : prop.getAnnotations()) {
-            if (isBuilderRequired && anno.getQualifiedName().equals(ctx.getJacksonTypes().jsonDeserialize.reflectionName())) {
-                continue;
-            }
-            if (hasElementType(anno, ElementType.METHOD)) {
-                getterBuilder.addAnnotation(annotationOf(anno));
-            }
-        }
+        getterBuilder.addAnnotations(
+                AptDtoPropAnnotationRenderer.renderGetter(
+                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        annotationContract,
+                        immutableSchema,
+                        lsiWorkspace,
+                        isBuilderRequired ? ctx.getJacksonTypes().jsonDeserialize.reflectionName() : null
+                )
+        );
         if (stateFieldName != null) {
             getterBuilder.beginControlFlow(
                     "if ($L)",
@@ -2833,124 +2799,6 @@ public class DtoGenerator {
             }
         }
         return null;
-    }
-
-    private boolean hasElementType(Anno anno, ElementType elementType) {
-        TypeElement annoElement = ctx.getElements().getTypeElement(anno.getQualifiedName());
-        if (annoElement == null) {
-            throw new DtoException(
-                    "Cannot find the annotation declaration whose type is \"" +
-                            anno.getQualifiedName() +
-                            "\""
-            );
-        }
-        Target target = annoElement.getAnnotation(Target.class);
-        if (target != null) {
-            for (ElementType et : target.value()) {
-                if (et == elementType) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static boolean isCopyableAnnotation(
-            AnnotationMirror annotationMirror,
-            Collection<Anno> dtoAnnotations,
-            Boolean forMethod
-    ) {
-        String qualifiedName = ((TypeElement) annotationMirror.getAnnotationType().asElement()).getQualifiedName().toString();
-        if (qualifiedName.startsWith(KOTLIN_DTO_TYPE_NAME)) {
-            return false;
-        }
-        if (qualifiedName.startsWith("org.babyfish.jimmer.") &&
-                !qualifiedName.startsWith("org.babyfish.jimmer.client.")) {
-            return false;
-        }
-        if (isNullityAnnotation(qualifiedName)) {
-            return false;
-        }
-        if (forMethod != null) {
-            boolean accept = false;
-            Target target = annotationMirror.getAnnotationType().asElement().getAnnotation(Target.class);
-            if (target != null) {
-                if (Arrays.stream(target.value()).anyMatch(it -> it == ElementType.METHOD)) {
-                    accept = forMethod;
-                } else if (!forMethod) {
-                    accept = Arrays.stream(target.value()).anyMatch(it -> it == ElementType.FIELD);
-                }
-            }
-            if (!accept) {
-                return false;
-            }
-        }
-        for (Anno dtoAnno : dtoAnnotations) {
-            if (dtoAnno.getQualifiedName().endsWith(qualifiedName)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean isNullityAnnotation(String qualifiedName) {
-        int lastDotIndex = qualifiedName.lastIndexOf('.');
-        String simpleName;
-        if (lastDotIndex != -1) {
-            simpleName = qualifiedName.substring(lastDotIndex + 1);
-        } else {
-            simpleName = qualifiedName;
-        }
-        switch (simpleName) {
-            case "Null":
-            case "Nullable":
-            case "NotNull":
-            case "NonNull":
-                return true;
-            default:
-                return qualifiedName.equals(Constants.T_NULLABLE_QUALIFIED_NAME);
-        }
-    }
-
-    static AnnotationSpec annotationOf(Anno anno) {
-        AnnotationSpec.Builder builder = AnnotationSpec
-                .builder(ClassName.bestGuess(anno.getQualifiedName()));
-        for (Map.Entry<String, Anno.Value> e : anno.getValueMap().entrySet()) {
-            String name = e.getKey();
-            Anno.Value value = e.getValue();
-            builder.addMember(name, codeBlockOf(value));
-        }
-        return builder.build();
-    }
-
-    private static CodeBlock codeBlockOf(Anno.Value value) {
-        CodeBlock.Builder builder = CodeBlock.builder();
-        if (value instanceof Anno.ArrayValue) {
-            builder.add("{\n$>");
-            boolean addSeparator = false;
-            for (Anno.Value element : ((Anno.ArrayValue) value).elements) {
-                if (addSeparator) {
-                    builder.add(", \n");
-                } else {
-                    addSeparator = true;
-                }
-                builder.add("$L", codeBlockOf(element));
-            }
-            builder.add("$<\n}");
-        } else if (value instanceof Anno.AnnoValue) {
-            builder.add("$L", annotationOf(((Anno.AnnoValue) value).anno));
-        } else if (value instanceof Anno.TypeRefValue) {
-            builder.add("$T.class", getTypeName(((Anno.TypeRefValue) value).typeRef));
-        } else if (value instanceof Anno.EnumValue) {
-            builder.add(
-                    "$T.$L",
-                    ClassName.bestGuess(((Anno.EnumValue) value).qualifiedName),
-                    ((Anno.EnumValue) value).constant
-            );
-        } else if (value instanceof Anno.LiteralValue) {
-            builder.add(((Anno.LiteralValue) value).value.replace("$", "$$"));
-        }
-        return builder.build();
     }
 
     private static boolean isForceOut(String typeName) {

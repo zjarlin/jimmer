@@ -22,6 +22,7 @@ import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
@@ -47,6 +48,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
+import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
@@ -58,6 +60,20 @@ import site.addzero.lsi.jimmer.dto.fingerprint as dtoFingerprint
 import site.addzero.lsi.jimmer.dto.normalizedSnapshot as dtoNormalizedSnapshot
 
 class JimmerDtoFrontendParityTest {
+
+    @Test
+    fun `real ksp preserves identical repeatable property annotation occurrences`() {
+        val workspace = compileKsp(KSP_REPEATABLE_SOURCE)
+        val modelTypeId = LsiSymbolId.type("repeatable.Model")
+        val annotations = assertIs<LsiProperty>(
+            workspace[LsiSymbolId.property(modelTypeId, "name")],
+        )
+            .annotations
+            .filter { annotation -> annotation.type == LsiSymbolId.type("repeatable.Marker") }
+
+        assertEquals(2, annotations.size)
+        assertEquals(annotations[0], annotations[1])
+    }
 
     @Test
     fun `real apt and ksp frontends produce identical dto render contracts`() {
@@ -607,6 +623,21 @@ class JimmerDtoFrontendParityTest {
 
                 @ManyToMany
                 val authors: List<Author>
+            }
+        """.trimIndent()
+
+        val KSP_REPEATABLE_SOURCE = """
+            package repeatable
+
+            @Target(AnnotationTarget.PROPERTY_GETTER)
+            @Retention(AnnotationRetention.RUNTIME)
+            @Repeatable
+            annotation class Marker(val value: String)
+
+            interface Model {
+                @get:Marker("same")
+                @get:Marker("same")
+                val name: String
             }
         """.trimIndent()
     }
