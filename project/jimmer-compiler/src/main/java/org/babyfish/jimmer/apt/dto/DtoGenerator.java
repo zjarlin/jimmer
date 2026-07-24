@@ -501,7 +501,7 @@ public class DtoGenerator {
     private void addJacksonPolymorphicInputRootAnnotationsIfNecessary(
             DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism
     ) {
-        if (!isPolymorphicInputRoot()) {
+        if (!DtoAccessorExtensionsKt.isPolymorphicInputRoot(lsiDtoType, immutableSchema)) {
             return;
         }
         if (!hasTypeAnnotation(lsiDtoType, ctx.getJacksonTypes().jsonTypeInfo)) {
@@ -585,12 +585,6 @@ public class DtoGenerator {
                             .build()
             );
         }
-    }
-
-    private boolean isPolymorphicInputRoot() {
-        return dtoType.getModifiers().contains(DtoModifier.INPUT) &&
-                dtoType.getPolymorphism() != null &&
-                dtoType.getBaseType().isEntity();
     }
 
     private boolean hasTypeAnnotation(

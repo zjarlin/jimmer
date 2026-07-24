@@ -205,6 +205,58 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `identifies polymorphic input roots from frozen DTO semantics`() {
+        val dtoType = graph(visibleDynamic = false).types.single()
+        val branch = DtoPolymorphicBranch(
+            kind = DtoPolymorphicBranchKind.DEFAULT,
+            targetBaseTypeId = null,
+            declaredClassName = null,
+            className = "DefaultBookInput",
+            bodyTypeId = BODY_TYPE_ID,
+            mergedTypeId = MERGED_TYPE_ID,
+            implicit = false,
+            location = LOCATION,
+        )
+        val polymorphicInput = dtoType.copy(
+            polymorphism = DtoPolymorphism(exhaustive = true, branches = listOf(branch)),
+        )
+        val idProp = immutableProp(
+            name = "id",
+            type = STRING_TYPE,
+            primaryMapping = PrimaryMapping.ID,
+        )
+        val entitySchema = ImmutableSchema(
+            listOf(
+                immutableType(
+                    id = BASE_TYPE_ID,
+                    props = listOf(idProp),
+                    kind = ImmutableTypeKind.ENTITY,
+                    idPropId = idProp.id,
+                ),
+            ),
+        )
+
+        assertTrue(polymorphicInput.isPolymorphicInputRoot(entitySchema))
+        assertFalse(
+            polymorphicInput
+                .copy(modifiers = emptySet())
+                .isPolymorphicInputRoot(entitySchema),
+        )
+        assertFalse(dtoType.isPolymorphicInputRoot(entitySchema))
+        assertFalse(
+            polymorphicInput.isPolymorphicInputRoot(
+                ImmutableSchema(listOf(immutableType(BASE_TYPE_ID, emptyList()))),
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            polymorphicInput.copy(baseTypeId = null).isPolymorphicInputRoot(entitySchema)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            polymorphicInput.isPolymorphicInputRoot(ImmutableSchema(emptyList()))
+        }
+    }
+
+    @Test
     fun `derives Java accessors from final DTO value semantics`() {
         assertEquals("isActive", valueAccessorName("active"))
         assertEquals("isEnabled", valueAccessorName("isEnabled"))

@@ -73,6 +73,22 @@ fun DtoType.isNestedSpecificationFragment(
         baseType.kind != ImmutableTypeKind.ENTITY
 }
 
+/** 判断 DTO 是否为需要生成多态输入注解的实体根类型。 */
+fun DtoType.isPolymorphicInputRoot(
+    immutableSchema: ImmutableSchema,
+): Boolean {
+    if (DtoModifier.INPUT !in modifiers || polymorphism == null) {
+        return false
+    }
+    val baseTypeId = requireNotNull(baseTypeId) {
+        "Polymorphic input DTO requires a base immutable type: ${id.value}"
+    }
+    val baseType = requireNotNull(immutableSchema.typesById[baseTypeId]) {
+        "No immutable base type '${baseTypeId.value}' for DTO type: ${id.value}"
+    }
+    return baseType.kind == ImmutableTypeKind.ENTITY
+}
+
 /** 返回动态输入属性对应的加载状态访问器名称。 */
 fun DtoBaseProp.loadedAccessorName(): String {
     require(inputModifier == DtoModifier.DYNAMIC && nullable) {

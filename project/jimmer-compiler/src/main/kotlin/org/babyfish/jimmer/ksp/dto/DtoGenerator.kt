@@ -45,6 +45,7 @@ import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
+import site.addzero.lsi.jimmer.dto.isPolymorphicInputRoot
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
@@ -403,7 +404,7 @@ internal class DtoGenerator private constructor(
 
     private fun TypeSpec.Builder.addJacksonPolymorphicInputRootAnnotationsIfNecessary() {
         val polymorphism = dtoType.polymorphism ?: return
-        if (!isPolymorphicInputRoot) {
+        if (!lsiDtoType.isPolymorphicInputRoot(immutableSchema)) {
             return
         }
         if (!hasTypeAnnotation(lsiDtoType, ctx.jacksonTypes.jsonTypeInfo)) {
@@ -485,11 +486,6 @@ internal class DtoGenerator private constructor(
             )
         }
     }
-
-    private val isPolymorphicInputRoot: Boolean
-        get() = dtoType.modifiers.contains(DtoModifier.INPUT) &&
-                dtoType.polymorphism !== null &&
-                dtoType.baseType.isEntity
 
     private fun hasTypeAnnotation(
         dtoType: LsiDtoType,
