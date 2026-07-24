@@ -4,6 +4,17 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.collectTypeRefDependencies
 
+/** 收集单个源码注解中以结构化形式出现的全部稳定符号引用。 */
+fun LsiPoetAnnotation.referencedSymbolIds(): Set<LsiSymbolId> {
+    return sortedSetOf<LsiSymbolId>().apply {
+        collectPoetAnnotationDependencies(this@referencedSymbolIds)
+    }
+}
+
+/** 收集渲染单个源码注解所需的直接类型身份。 */
+val LsiPoetAnnotation.referencedTypeIds: Set<LsiSymbolId>
+    get() = referencedSymbolIds().filterTo(sortedSetOf(), LsiSymbolId::isTypeId)
+
 /**
  * 收集源码成员中以结构化形式出现的全部稳定符号引用。
  *

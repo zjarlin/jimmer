@@ -14,6 +14,7 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.poet.LsiPoetAccessor
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetBodyStyle
 import site.addzero.lsi.poet.LsiPoetCodeBlockIndentation
 import site.addzero.lsi.poet.LsiPoetBracedExpressionCompletion
@@ -46,6 +47,22 @@ class LsiKotlinPoetRenderer : LsiPoetRenderer {
         typeNames: List<LsiPoetTypeName>,
     ): TypeSpec {
         return type.toKotlinTypeSpec(typeNames)
+    }
+
+    /** 将单个 LSI Poet 注解渲染为可嵌入现有 KotlinPoet 声明的结构。 */
+    fun renderAnnotation(
+        annotation: LsiPoetAnnotation,
+        typeNames: List<LsiPoetTypeName>,
+    ): AnnotationSpec {
+        return annotation.toKotlinSourceAnnotationSpec(typeNames)
+    }
+
+    /** 按声明顺序将 LSI Poet 注解列表渲染为 KotlinPoet 结构。 */
+    fun renderAnnotations(
+        annotations: List<LsiPoetAnnotation>,
+        typeNames: List<LsiPoetTypeName>,
+    ): List<AnnotationSpec> {
+        return annotations.map { annotation -> renderAnnotation(annotation, typeNames) }
     }
 
     override fun render(artifact: LsiPoetArtifact): GeneratedArtifact {

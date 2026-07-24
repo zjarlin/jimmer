@@ -224,6 +224,33 @@ fun LsiWorkspace.resolveDtoAnnotationContract(
     return DtoAnnotationContractResolver(this, immutableSchema).resolve(graph)
 }
 
+/** 返回当前 DTO 类型的已冻结注解计划。 */
+fun DtoType.typeAnnotationPlan(
+    annotationContract: DtoAnnotationContract,
+): DtoTypeAnnotationPlan {
+    return requireNotNull(annotationContract.typePlansByTypeId[id]) {
+        "DTO annotation contract has no type plan: ${id.value}"
+    }
+}
+
+/** 返回当前 DTO 类型的已冻结有效注解应用。 */
+fun DtoType.typeAnnotationApplications(
+    annotationContract: DtoAnnotationContract,
+): List<DtoAnnotationApplication> {
+    return typeAnnotationPlan(annotationContract).applications
+}
+
+/** 判断当前 DTO 类型是否具有指定类型的已冻结有效注解。 */
+fun DtoType.hasTypeAnnotation(
+    annotationContract: DtoAnnotationContract,
+    annotationTypeId: LsiSymbolId,
+): Boolean {
+    annotationTypeId.requireTypeQualifiedName()
+    return typeAnnotationApplications(annotationContract).any { application ->
+        application.annotation.type == annotationTypeId
+    }
+}
+
 private class DtoAnnotationContractResolver(
     private val workspace: LsiWorkspace,
     private val immutableSchema: ImmutableSchema,

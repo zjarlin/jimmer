@@ -13,6 +13,7 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer;
 import org.babyfish.jimmer.dto.compiler.*;
 import org.babyfish.jimmer.impl.util.StringUtil;
 import org.babyfish.jimmer.runtime.ImmutableSpi;
@@ -293,16 +294,9 @@ public class DtoGenerator {
                             .build()
             );
         }
-        for (AnnotationMirror annotationMirror : dtoType.getBaseType().getTypeElement().getAnnotationMirrors()) {
-            if (isCopyableAnnotation(annotationMirror, dtoType.getAnnotations(), null)) {
-                typeBuilder.addAnnotation(AnnotationSpec.get(annotationMirror));
-            }
-        }
-        for (Anno anno : dtoType.getAnnotations()) {
-            if (!anno.getQualifiedName().equals(KOTLIN_DTO_TYPE_NAME)) {
-                typeBuilder.addAnnotation(annotationOf(anno));
-            }
-        }
+        typeBuilder.addAnnotations(
+                AptDtoTypeAnnotationRenderer.render(lsiDtoType, annotationContract, lsiWorkspace)
+        );
         addJacksonPolymorphicTypeNameIfNecessary();
         if (innerClassName != null) {
             typeBuilder.addModifiers(Modifier.STATIC);
@@ -376,16 +370,9 @@ public class DtoGenerator {
                             .build()
             );
         }
-        for (AnnotationMirror annotationMirror : dtoType.getBaseType().getTypeElement().getAnnotationMirrors()) {
-            if (isCopyableAnnotation(annotationMirror, dtoType.getAnnotations(), null)) {
-                typeBuilder.addAnnotation(AnnotationSpec.get(annotationMirror));
-            }
-        }
-        for (Anno anno : dtoType.getAnnotations()) {
-            if (!anno.getQualifiedName().equals(KOTLIN_DTO_TYPE_NAME)) {
-                typeBuilder.addAnnotation(annotationOf(anno));
-            }
-        }
+        typeBuilder.addAnnotations(
+                AptDtoTypeAnnotationRenderer.render(lsiDtoType, annotationContract, lsiWorkspace)
+        );
         DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism = dtoType.getPolymorphism();
         assert polymorphism != null;
         addJacksonPolymorphicInputRootAnnotationsIfNecessary(polymorphism);
@@ -491,10 +478,10 @@ public class DtoGenerator {
         if (!isPolymorphicInputRoot()) {
             return;
         }
-        if (!hasTypeAnnotation(dtoType, ctx.getJacksonTypes().jsonTypeInfo)) {
+        if (!hasTypeAnnotation(lsiDtoType, ctx.getJacksonTypes().jsonTypeInfo)) {
             addJacksonTypeInfo(polymorphism);
         }
-        if (!hasTypeAnnotation(dtoType, ctx.getJacksonTypes().jsonSubTypes)) {
+        if (!hasTypeAnnotation(lsiDtoType, ctx.getJacksonTypes().jsonSubTypes)) {
             addJacksonSubTypes(polymorphism);
         }
     }
@@ -559,8 +546,8 @@ public class DtoGenerator {
         if (!polymorphicBranch ||
                 !dtoType.getModifiers().contains(DtoModifier.INPUT) ||
                 !isTypedPolymorphicInputBranch() ||
-                hasTypeAnnotation(root.dtoType, ctx.getJacksonTypes().jsonSubTypes) ||
-                hasTypeAnnotation(dtoType, ctx.getJacksonTypes().jsonTypeName)) {
+                hasTypeAnnotation(root.lsiDtoType, ctx.getJacksonTypes().jsonSubTypes) ||
+                hasTypeAnnotation(lsiDtoType, ctx.getJacksonTypes().jsonTypeName)) {
             return;
         }
         String value = dtoType.getBaseType().getDiscriminatorValue();
@@ -580,22 +567,15 @@ public class DtoGenerator {
                 dtoType.getBaseType().isEntity();
     }
 
-    private boolean hasTypeAnnotation(DtoType<ImmutableType, ImmutableProp> dtoType, ClassName annotationType) {
-        String annotationName = annotationType.reflectionName();
-        for (Anno anno : dtoType.getAnnotations()) {
-            if (anno.getQualifiedName().equals(annotationName)) {
-                return true;
-            }
-        }
-        for (AnnotationMirror annotationMirror : dtoType.getBaseType().getTypeElement().getAnnotationMirrors()) {
-            String qualifiedName = ((TypeElement) annotationMirror.getAnnotationType().asElement())
-                    .getQualifiedName()
-                    .toString();
-            if (qualifiedName.equals(annotationName)) {
-                return true;
-            }
-        }
-        return false;
+    private boolean hasTypeAnnotation(
+            site.addzero.lsi.jimmer.dto.DtoType dtoType,
+            ClassName annotationType
+    ) {
+        return AptDtoTypeAnnotationRenderer.hasTypeAnnotation(
+                dtoType,
+                annotationContract,
+                annotationType.reflectionName()
+        );
     }
 
     @Nullable

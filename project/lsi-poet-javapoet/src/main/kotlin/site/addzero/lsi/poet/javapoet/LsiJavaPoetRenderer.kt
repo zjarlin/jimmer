@@ -1,5 +1,6 @@
 package site.addzero.lsi.poet.javapoet
 
+import com.squareup.javapoet.AnnotationSpec
 import com.squareup.javapoet.ArrayTypeName
 import com.squareup.javapoet.CodeBlock
 import com.squareup.javapoet.FieldSpec
@@ -12,6 +13,7 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetBodyStyle
 import site.addzero.lsi.poet.LsiPoetBracedExpressionCompletion
 import site.addzero.lsi.poet.LsiPoetCodeBlock
@@ -45,6 +47,22 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
         typeNames: List<LsiPoetTypeName>,
     ): TypeSpec {
         return type.toJavaTypeSpec(typeNames, currentPackageName = null)
+    }
+
+    /** 将单个 LSI Poet 注解渲染为可嵌入现有 JavaPoet 声明的结构。 */
+    fun renderAnnotation(
+        annotation: LsiPoetAnnotation,
+        typeNames: List<LsiPoetTypeName>,
+    ): AnnotationSpec {
+        return annotation.toJavaSourceAnnotationSpec(typeNames)
+    }
+
+    /** 按声明顺序将 LSI Poet 注解列表渲染为 JavaPoet 结构。 */
+    fun renderAnnotations(
+        annotations: List<LsiPoetAnnotation>,
+        typeNames: List<LsiPoetTypeName>,
+    ): List<AnnotationSpec> {
+        return annotations.map { annotation -> renderAnnotation(annotation, typeNames) }
     }
 
     override fun render(artifact: LsiPoetArtifact): GeneratedArtifact {

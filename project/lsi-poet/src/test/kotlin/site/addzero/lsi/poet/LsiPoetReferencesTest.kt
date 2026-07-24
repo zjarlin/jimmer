@@ -26,20 +26,19 @@ class LsiPoetReferencesTest {
                 )
             ),
         )
+        val typeAnnotation = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.TypeMarker"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Named(
+                    name = "nested",
+                    value = LsiPoetAnnotationValue.NestedAnnotationValue(nestedAnnotation),
+                )
+            ),
+        )
         val generatedType = LsiPoetType(
             name = "Generated",
             kind = LsiPoetTypeKind.CLASS,
-            annotations = listOf(
-                LsiPoetAnnotation(
-                    type = LsiSymbolId.type("demo.TypeMarker"),
-                    arguments = listOf(
-                        LsiPoetAnnotationArgument.Named(
-                            name = "nested",
-                            value = LsiPoetAnnotationValue.NestedAnnotationValue(nestedAnnotation),
-                        )
-                    ),
-                )
-            ),
+            annotations = listOf(typeAnnotation),
             typeParameters = listOf(
                 LsiTypeParameter(
                     id = parameterId,
@@ -101,6 +100,15 @@ class LsiPoetReferencesTest {
             LsiSymbolId.type("demo.Factory"),
             LsiSymbolId.type("demo.Runtime"),
         )
+        assertEquals(
+            sortedSetOf(
+                LsiSymbolId.type("demo.TypeMarker"),
+                LsiSymbolId.type("demo.Nested"),
+                LsiSymbolId.type("demo.Kind"),
+            ),
+            typeAnnotation.referencedSymbolIds(),
+        )
+        assertEquals(typeAnnotation.referencedSymbolIds(), typeAnnotation.referencedTypeIds)
         assertEquals(memberSymbolIds, generatedType.referencedSymbolIds())
         assertEquals(
             memberSymbolIds.filterTo(sortedSetOf(), LsiSymbolId::isTypeId),

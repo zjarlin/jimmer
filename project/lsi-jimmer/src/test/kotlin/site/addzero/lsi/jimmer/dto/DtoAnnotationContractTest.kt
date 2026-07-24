@@ -8,9 +8,11 @@ import java.util.Collections
 import java.util.IdentityHashMap
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
@@ -62,6 +64,43 @@ import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoVariance
 
 class DtoAnnotationContractTest {
+    @Test
+    fun `reads frozen type annotation plan applications and exact presence from dto type`() {
+        val fixture = fixture()
+        val dtoType = fixture.graph.types.single()
+        val contract = fixture.freeze()
+        val expectedPlan = contract.typePlansByTypeId.getValue(dtoType.id)
+
+        assertSame(expectedPlan, dtoType.typeAnnotationPlan(contract))
+        assertSame(expectedPlan.applications, dtoType.typeAnnotationApplications(contract))
+        assertTrue(dtoType.hasTypeAnnotation(contract, LsiSymbolId.type("demo.Shared")))
+        assertFalse(dtoType.hasTypeAnnotation(contract, LsiSymbolId.type("unrelated.demo.Shared")))
+    }
+
+    @Test
+    fun `rejects missing type plan and non-type annotation id`() {
+        val fixture = fixture()
+        val dtoType = fixture.graph.types.single()
+        val contract = fixture.freeze()
+        val contractWithoutTypePlan = contract.copy(typePlans = emptyList())
+
+        val missingPlanError = assertFailsWith<IllegalArgumentException> {
+            dtoType.typeAnnotationPlan(contractWithoutTypePlan)
+        }
+        val invalidAnnotationIdError = assertFailsWith<IllegalArgumentException> {
+            dtoType.hasTypeAnnotation(contract, NAME_PROP)
+        }
+
+        assertEquals(
+            "DTO annotation contract has no type plan: ${dtoType.id.value}",
+            missingPlanError.message,
+        )
+        assertEquals(
+            "LSI symbol id is not a type id: '${NAME_PROP.value}'",
+            invalidAnnotationIdError.message,
+        )
+    }
+
     @Test
     fun `freezes declaration kind placements and kotlin value vararg`() {
         val fixture = fixture()

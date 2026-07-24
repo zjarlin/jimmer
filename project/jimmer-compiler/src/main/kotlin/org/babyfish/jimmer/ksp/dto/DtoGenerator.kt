@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeAnnotationRenderer
 import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.dto.compiler.Anno.*
 import org.babyfish.jimmer.dto.compiler.PropConfig.PathNode
@@ -33,6 +34,7 @@ import org.babyfish.jimmer.ksp.util.ConverterMetadata
 import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoGraph
@@ -43,6 +45,7 @@ import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.generatedTargetType
+import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
@@ -379,16 +382,13 @@ internal class DtoGenerator private constructor(
     }
 
     private fun TypeSpec.Builder.addTypeAnnotations() {
-        for (anno in dtoType.baseType.classDeclaration.annotations) {
-            if (isCopyableAnnotation(anno, dtoType.annotations)) {
-                addAnnotation(anno.toAnnotationSpec())
-            }
-        }
-        for (anno in dtoType.annotations) {
-            if (anno.qualifiedName != KOTLIN_DTO_TYPE_NAME) {
-                addAnnotation(annotationOf(anno, ctx.resolver))
-            }
-        }
+        addAnnotations(
+            KspDtoTypeAnnotationRenderer.render(
+                dtoType = lsiDtoType,
+                annotationContract = annotationContract,
+                workspace = workspace,
+            )
+        )
     }
 
     private fun TypeSpec.Builder.addJacksonPolymorphicInputRootAnnotationsIfNecessary() {
@@ -396,10 +396,10 @@ internal class DtoGenerator private constructor(
         if (!isPolymorphicInputRoot) {
             return
         }
-        if (!hasTypeAnnotation(dtoType, ctx.jacksonTypes.jsonTypeInfo)) {
+        if (!hasTypeAnnotation(lsiDtoType, ctx.jacksonTypes.jsonTypeInfo)) {
             addJacksonTypeInfo(polymorphism)
         }
-        if (!hasTypeAnnotation(dtoType, ctx.jacksonTypes.jsonSubTypes)) {
+        if (!hasTypeAnnotation(lsiDtoType, ctx.jacksonTypes.jsonSubTypes)) {
             addJacksonSubTypes(polymorphism)
         }
     }
@@ -461,8 +461,8 @@ internal class DtoGenerator private constructor(
         if (!polymorphicBranch ||
             !dtoType.modifiers.contains(DtoModifier.INPUT) ||
             !isTypedPolymorphicInputBranch ||
-            hasTypeAnnotation(root.dtoType, ctx.jacksonTypes.jsonSubTypes) ||
-            hasTypeAnnotation(dtoType, ctx.jacksonTypes.jsonTypeName)
+            hasTypeAnnotation(root.lsiDtoType, ctx.jacksonTypes.jsonSubTypes) ||
+            hasTypeAnnotation(lsiDtoType, ctx.jacksonTypes.jsonTypeName)
         ) {
             return
         }
@@ -482,16 +482,13 @@ internal class DtoGenerator private constructor(
                 dtoType.baseType.isEntity
 
     private fun hasTypeAnnotation(
-        dtoType: DtoType<ImmutableType, ImmutableProp>,
+        dtoType: LsiDtoType,
         annotationType: ClassName
     ): Boolean {
-        val annotationName = annotationType.reflectionName()
-        if (dtoType.annotations.any { it.qualifiedName == annotationName }) {
-            return true
-        }
-        return dtoType.baseType.classDeclaration.annotations.any {
-            it.annotationType.fastResolve().declaration.qualifiedName?.asString() == annotationName
-        }
+        return dtoType.hasTypeAnnotation(
+            annotationContract = annotationContract,
+            annotationTypeId = LsiSymbolId.type(annotationType.reflectionName()),
+        )
     }
 
     private fun selectedPolymorphicInputDiscriminatorProp(

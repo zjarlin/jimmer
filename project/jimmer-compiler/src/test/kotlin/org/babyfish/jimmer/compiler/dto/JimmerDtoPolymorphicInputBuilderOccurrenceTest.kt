@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
 import org.babyfish.jimmer.compiler.ksp.JimmerProcessorProvider
 import org.jetbrains.kotlin.cli.common.ExitCode
@@ -33,6 +34,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(source, "@Description(\"Client base documentation.\\n\")")
         assertContains(source, "@Description(\"Address reference documentation.\\n\")")
         assertContains(source, "@Description(\"Address embeddable documentation.\\n\")")
+        source.assertRepeatedTypeAnnotations()
         assertEquals(1, source.countOccurrences("class TargetOf_address implements EmbeddableDto<Address>"))
         assertContains(source, "TargetOf_address getAddress();")
         assertFalse("class TargetOf_address" in personBody)
@@ -53,6 +55,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(source, "@Description(value = \"Client base documentation.\\n\")")
         assertContains(source, "@Description(value = \"Address reference documentation.\\n\")")
         assertContains(source, "@Description(value = \"Address embeddable documentation.\\n\")")
+        source.assertRepeatedTypeAnnotations()
         assertEquals(1, source.countOccurrences("public open class TargetOf_address("))
         assertContains(source, "public val address: TargetOf_address")
         assertFalse("class TargetOf_address" in personBody)
@@ -214,6 +217,23 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
     private fun String.countOccurrences(value: String): Int = split(value).size - 1
 
+    private fun String.assertRepeatedTypeAnnotations() {
+        assertEquals(2, countOccurrences("@Marker("))
+        assertFalse("\"base\"" in this)
+        val firstOrder = indexOf("order = 1")
+        val firstValue = firstIndexOf("value = \"first\"", "`value` = \"first\"")
+        val secondOrder = indexOf("order = 2")
+        val secondValue = firstIndexOf("value = \"second\"", "`value` = \"second\"")
+        assertTrue(firstOrder >= 0)
+        assertTrue(firstOrder < firstValue)
+        assertTrue(firstValue < secondOrder)
+        assertTrue(secondOrder < secondValue)
+    }
+
+    private fun String.firstIndexOf(vararg candidates: String): Int {
+        return candidates.map(::indexOf).filter { index -> index >= 0 }.minOrNull() ?: -1
+    }
+
     private fun DiagnosticCollector<JavaFileObject>.toErrorMessage(): String {
         return diagnostics.joinToString("\n") { diagnostic ->
             "${diagnostic.kind} ${diagnostic.source?.name.orEmpty()}:" +
@@ -249,6 +269,37 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
     private companion object {
         val JAVA_SOURCES = linkedMapOf(
+            "Marker.java" to """
+                package demo;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Repeatable;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                @Target(ElementType.TYPE)
+                @Retention(RetentionPolicy.RUNTIME)
+                @Repeatable(Markers.class)
+                public @interface Marker {
+                    String value();
+                    int order();
+                }
+            """.trimIndent(),
+            "Markers.java" to """
+                package demo;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                @Target(ElementType.TYPE)
+                @Retention(RetentionPolicy.RUNTIME)
+                public @interface Markers {
+                    Marker[] value();
+                }
+            """.trimIndent(),
             "Address.java" to """
                 package demo;
 
@@ -277,6 +328,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                  */
                 @Entity
                 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+                @Marker(value = "base", order = 0)
                 public interface Client {
                     @Id
                     long id();
@@ -313,6 +365,17 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         )
 
         val KOTLIN_SOURCES = linkedMapOf(
+            "Marker.kt" to """
+                package demo
+
+                @Target(AnnotationTarget.CLASS)
+                @Retention(AnnotationRetention.RUNTIME)
+                @Repeatable
+                annotation class Marker(
+                    val value: String,
+                    val order: Int,
+                )
+            """.trimIndent(),
             "Address.kt" to """
                 package demo
 
@@ -341,6 +404,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                  */
                 @Entity
                 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+                @Marker(value = "base", order = 0)
                 interface Client {
                     @Id
                     val id: Long
@@ -379,6 +443,10 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         val DTO_SOURCE = """
             package demo.dto
 
+            import demo.Marker
+
+            @Marker(order = 1, value = "first")
+            @Marker(order = 2, value = "second")
             input ClientInput {
                 id?
                 address {
