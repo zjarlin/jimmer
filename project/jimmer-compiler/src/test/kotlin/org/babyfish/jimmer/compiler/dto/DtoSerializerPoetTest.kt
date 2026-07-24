@@ -88,6 +88,8 @@ class DtoSerializerPoetTest {
                       provider.defaultSerializeField("when", input.getWhen(), gen);
                     }
                     provider.defaultSerializeField("enabled", input.isEnabled(), gen);
+                    provider.defaultSerializeField("isbn", input.getIsbn(), gen);
+                    provider.defaultSerializeField("price", input.getPrice(), gen);
                     gen.writeEndObject();
                   }
                 }
@@ -105,6 +107,8 @@ class DtoSerializerPoetTest {
                       provider.defaultSerializeProperty("when", input.getWhen(), gen);
                     }
                     provider.defaultSerializeProperty("enabled", input.isEnabled(), gen);
+                    provider.defaultSerializeProperty("isbn", input.getIsbn(), gen);
+                    provider.defaultSerializeProperty("price", input.getPrice(), gen);
                     gen.writeEndObject();
                   }
                 }
@@ -124,6 +128,8 @@ class DtoSerializerPoetTest {
                       provider.defaultSerializeField("when", input.`when`, gen)
                     }
                     provider.defaultSerializeField("enabled", input.enabled, gen)
+                    provider.defaultSerializeField("isbn", input.isbn, gen)
+                    provider.defaultSerializeField("price", input.price, gen)
                     gen.writeEndObject()
                   }
                 }
@@ -143,6 +149,8 @@ class DtoSerializerPoetTest {
                       provider.defaultSerializeProperty("when", input.`when`, gen)
                     }
                     provider.defaultSerializeProperty("enabled", input.enabled, gen)
+                    provider.defaultSerializeProperty("isbn", input.isbn, gen)
+                    provider.defaultSerializeProperty("price", input.price, gen)
                     gen.writeEndObject()
                   }
                 }
@@ -203,6 +211,20 @@ class DtoSerializerPoetTest {
             nullable = false,
             modifier = DtoModifier.FIXED,
         )
+        val staticProp = dtoProp(
+            id = STATIC_PROP_ID,
+            name = "isbn",
+            baseName = "isbn",
+            nullable = true,
+            modifier = DtoModifier.STATIC,
+        )
+        val fuzzyProp = dtoProp(
+            id = FUZZY_PROP_ID,
+            name = "price",
+            baseName = "price",
+            nullable = true,
+            modifier = DtoModifier.FUZZY,
+        )
         val type = DtoType(
             id = DTO_TYPE_ID,
             baseTypeId = IMMUTABLE_TYPE_ID,
@@ -214,7 +236,7 @@ class DtoSerializerPoetTest {
             documentation = null,
             location = LOCATION,
             focusedRecursion = false,
-            propIds = listOf(dynamicProp.id, fixedProp.id),
+            propIds = listOf(dynamicProp.id, fixedProp.id, staticProp.id, fuzzyProp.id),
             hiddenFlatPropIds = emptyList(),
             polymorphism = null,
         )
@@ -222,7 +244,7 @@ class DtoSerializerPoetTest {
             source = SOURCE,
             rootTypeIds = listOf(type.id),
             types = listOf(type),
-            props = listOf(dynamicProp, fixedProp).sortedBy(DtoProp::id),
+            props = listOf(dynamicProp, fixedProp, staticProp, fuzzyProp).sortedBy(DtoProp::id),
         )
     }
 
@@ -267,6 +289,8 @@ class DtoSerializerPoetTest {
         val props = listOf(
             immutableProp("title", LsiDeclaredType(LsiSymbolId.type("java.lang.String"))),
             immutableProp("active", LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN)),
+            immutableProp("isbn", LsiDeclaredType(LsiSymbolId.type("java.lang.String"))),
+            immutableProp("price", LsiDeclaredType(LsiSymbolId.type("java.math.BigDecimal"))),
         )
         return ImmutableSchema(
             listOf(
@@ -341,6 +365,8 @@ class DtoSerializerPoetTest {
         val DTO_TYPE_ID = DtoTypeId("dto#book-input")
         val DYNAMIC_PROP_ID = DtoPropId("dto#z-dynamic")
         val FIXED_PROP_ID = DtoPropId("dto#a-fixed")
+        val STATIC_PROP_ID = DtoPropId("dto#m-static")
+        val FUZZY_PROP_ID = DtoPropId("dto#b-fuzzy")
         val IMMUTABLE_TYPE_ID = LsiSymbolId.type("demo.Book")
     }
 }

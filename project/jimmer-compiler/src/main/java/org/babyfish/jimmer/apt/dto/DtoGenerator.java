@@ -11,12 +11,19 @@ import org.babyfish.jimmer.apt.util.ConverterMetadata;
 import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.client.meta.Doc;
+import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
 import org.babyfish.jimmer.dto.compiler.*;
 import org.babyfish.jimmer.impl.util.StringUtil;
 import org.babyfish.jimmer.runtime.ImmutableSpi;
 import org.babyfish.jimmer.sql.Id;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import site.addzero.lsi.jimmer.ImmutableSchema;
+import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
+import site.addzero.lsi.jimmer.dto.DtoBaseProp;
+import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
+import site.addzero.lsi.jimmer.dto.DtoGraph;
 
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Modifier;
@@ -37,6 +44,14 @@ public class DtoGenerator {
     private final DocMetadata docMetadata;
 
     final DtoType<ImmutableType, ImmutableProp> dtoType;
+
+    private final DtoGraph lsiGraph;
+
+    private final site.addzero.lsi.jimmer.dto.DtoType lsiDtoType;
+
+    private final ImmutableSchema immutableSchema;
+
+    private final JimmerDtoJacksonVersion jacksonVersion;
 
     private final Document document;
 
@@ -62,25 +77,62 @@ public class DtoGenerator {
     public DtoGenerator(
             Context ctx,
             DocMetadata docMetadata,
-            DtoType<ImmutableType, ImmutableProp> dtoType
+            DtoType<ImmutableType, ImmutableProp> dtoType,
+            DtoGraph lsiGraph,
+            site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
+            ImmutableSchema immutableSchema,
+            JimmerDtoJacksonVersion jacksonVersion
     ) {
-        this(ctx, docMetadata, dtoType, null, null);
+        this(
+                ctx,
+                docMetadata,
+                dtoType,
+                lsiGraph,
+                lsiDtoType,
+                immutableSchema,
+                jacksonVersion,
+                null,
+                null,
+                null,
+                false,
+                null,
+                -1
+        );
     }
 
     private DtoGenerator(
             Context ctx,
             DocMetadata docMetadata,
             DtoType<ImmutableType, ImmutableProp> dtoType,
+            site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoGenerator parent,
             String innerClassName
     ) {
-        this(ctx, docMetadata, dtoType, parent, innerClassName, null, false, null, -1);
+        this(
+                ctx,
+                docMetadata,
+                dtoType,
+                parent.lsiGraph,
+                lsiDtoType,
+                parent.immutableSchema,
+                parent.jacksonVersion,
+                parent,
+                innerClassName,
+                null,
+                false,
+                null,
+                -1
+        );
     }
 
     private DtoGenerator(
             Context ctx,
             DocMetadata docMetadata,
             DtoType<ImmutableType, ImmutableProp> dtoType,
+            DtoGraph lsiGraph,
+            site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
+            ImmutableSchema immutableSchema,
+            JimmerDtoJacksonVersion jacksonVersion,
             DtoGenerator parent,
             String innerClassName,
             @Nullable TypeName polymorphicSuperInterfaceName,
@@ -94,6 +146,10 @@ public class DtoGenerator {
         this.ctx = ctx;
         this.docMetadata = docMetadata;
         this.dtoType = dtoType;
+        this.lsiGraph = lsiGraph;
+        this.lsiDtoType = lsiDtoType;
+        this.immutableSchema = immutableSchema;
+        this.jacksonVersion = jacksonVersion;
         this.document = new Document(ctx, dtoType);
         this.parent = parent;
         this.root = parent != null ? parent.root : this;
@@ -348,6 +404,10 @@ public class DtoGenerator {
                 ctx,
                 docMetadata,
                 dtoType.mergedWith(branch.getDtoType()),
+                lsiGraph,
+                lsiMergedPolymorphicType(branch),
+                immutableSchema,
+                jacksonVersion,
                 this,
                 branch.getClassName(),
                 superInterfaceName,
@@ -355,6 +415,35 @@ public class DtoGenerator {
                 branch.getKind(),
                 branchOrder
         ).generate();
+    }
+
+    private site.addzero.lsi.jimmer.dto.DtoType lsiMergedPolymorphicType(
+            DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch
+    ) {
+        site.addzero.lsi.jimmer.dto.DtoPolymorphism polymorphism = lsiDtoType.getPolymorphism();
+        if (polymorphism == null) {
+            throw new DtoException("Frozen DTO type is not polymorphic");
+        }
+        site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch matchedBranch = null;
+        for (site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch candidate : polymorphism.getBranches()) {
+            if (candidate.getClassName().equals(branch.getClassName()) &&
+                    candidate.getKind().name().equals(branch.getKind().name())) {
+                if (matchedBranch != null) {
+                    throw new DtoException(
+                            "Frozen DTO polymorphism contains duplicate generated branch \"" +
+                                    branch.getClassName() + "\""
+                    );
+                }
+                matchedBranch = candidate;
+            }
+        }
+        if (matchedBranch == null) {
+            throw new DtoException(
+                    "Frozen DTO polymorphism does not contain generated branch \"" +
+                            branch.getClassName() + "\""
+            );
+        }
+        return DtoGenerationExtensionsKt.mergedType(matchedBranch, lsiGraph);
     }
 
     private void addJacksonPolymorphicInputRootAnnotationsIfNecessary(
@@ -610,27 +699,47 @@ public class DtoGenerator {
                 continue;
             }
             if (!prop.isRecursive() || targetType.isFocusedRecursion()) {
+                DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, prop.getName());
+                site.addzero.lsi.jimmer.dto.DtoType lsiTargetType =
+                        DtoGenerationExtensionsKt.generatedTargetType(lsiProp, lsiGraph);
+                if (lsiTargetType == null) {
+                    throw new DtoException(
+                            "Frozen DTO property \"" + prop.getName() + "\" has no generated target"
+                    );
+                }
                 new DtoGenerator(
                         ctx,
                         docMetadata,
                         targetType,
+                        lsiTargetType,
                         this,
                         targetSimpleName(prop)
                 ).generate();
             }
         }
         for (FoldProp<ImmutableType, ImmutableProp> prop : dtoType.getFoldProps()) {
+            site.addzero.lsi.jimmer.dto.DtoFoldProp lsiProp =
+                    DtoGenerationExtensionsKt.foldProp(lsiDtoType, lsiGraph, prop.getName());
             new DtoGenerator(
                     ctx,
                     docMetadata,
                     prop.getTargetType(),
+                    DtoGenerationExtensionsKt.generatedTargetType(lsiProp, lsiGraph),
                     this,
                     targetSimpleName(prop)
             ).generate();
         }
 
         if (isSerializerRequired()) {
-            new SerializerGenerator(this).generate();
+            typeBuilder.addType(
+                    AptDtoSerializerRenderer.render(
+                            lsiDtoType,
+                            lsiGraph,
+                            immutableSchema,
+                            jacksonVersion,
+                            getDtoClassName().canonicalName()
+                    )
+            );
         }
         if (isBuildRequired()) {
             new InputBuilderGenerator(this).generate();
@@ -2896,16 +3005,7 @@ public class DtoGenerator {
     }
 
     private boolean isSerializerRequired() {
-        if (!dtoType.getModifiers().contains(DtoModifier.INPUT)) {
-            return false;
-        }
-        for (DtoProp<?, ?> prop : dtoType.getDtoProps()) {
-            DtoModifier inputModifier = prop.getInputModifier();
-            if (inputModifier == DtoModifier.DYNAMIC) {
-                return true;
-            }
-        }
-        return false;
+        return DtoAccessorExtensionsKt.requiresDynamicInputSerialization(lsiDtoType, lsiGraph);
     }
 
     private boolean isBuildRequired() {

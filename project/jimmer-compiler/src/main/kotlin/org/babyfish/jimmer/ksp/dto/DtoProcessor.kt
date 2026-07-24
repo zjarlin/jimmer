@@ -4,8 +4,8 @@ import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.Input
 import org.babyfish.jimmer.View
+import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.dto.compiler.*
-import org.babyfish.jimmer.dto.compiler.Anno.EnumValue
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.KspDtoCompiler
 import org.babyfish.jimmer.ksp.client.DocMetadata
@@ -14,13 +14,24 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.fastResolve
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.rootType
 
-class DtoProcessor(
+internal class DtoProcessor(
     private val ctx: Context,
-    private val mutable: Boolean,
     private val dtoFiles: Collection<DtoFile>,
-    private val defaultNullableInputModifier: DtoModifier
+    private val defaultNullableInputModifier: DtoModifier,
+    graphs: Collection<DtoGraph>,
+    private val immutableSchema: ImmutableSchema,
+    private val jacksonVersion: JimmerDtoJacksonVersion,
+    private val effectiveMutableByRootTypeId: Map<DtoTypeId, Boolean>,
 ) {
+    private val graphBySourcePath = graphs.associateBy { graph -> graph.source.path }.also { graphMap ->
+        require(graphMap.size == graphs.size) { "Frozen DTO graph source paths must be unique" }
+    }
+
     fun process(): Boolean {
         val dtoTypes = findDtoTypes()
         generateDtoTypes(dtoTypes)
@@ -107,17 +118,24 @@ class DtoProcessor(
         val allFiles = ctx.resolver.getAllFiles().toList()
         val docMetadata = DocMetadata(ctx)
         for (dtoType in dtoTypes) {
-            val mutable = dtoType.annotations.firstOrNull {
-                it.qualifiedName == "org.babyfish.jimmer.kt.dto.KotlinDto"
-            }?.let {
-                val value = it.valueMap["immutability"] as EnumValue
-                when (value.constant) {
-                    "IMMUTABLE" -> false
-                    "MUTABLE" -> true
-                    else -> null
-                }
-            } ?: mutable
-            DtoGenerator(ctx, docMetadata, mutable, dtoType, ctx.environment.codeGenerator).generate(allFiles)
+            val graph = graphBySourcePath[dtoType.dtoFile.sourcePath]
+                ?: throw DtoException("No frozen DTO graph for \"${dtoType.dtoFile.sourcePath}\"")
+            val qualifiedName = requireNotNull(dtoType.qualifiedName) {
+                "Root DTO type must have a qualified name"
+            }
+            val lsiDtoType = graph.rootType(qualifiedName)
+            val mutable = effectiveMutableByRootTypeId.getValue(lsiDtoType.id)
+            DtoGenerator(
+                ctx = ctx,
+                docMetadata = docMetadata,
+                mutable = mutable,
+                dtoType = dtoType,
+                codeGenerator = ctx.environment.codeGenerator,
+                lsiGraph = graph,
+                lsiDtoType = lsiDtoType,
+                immutableSchema = immutableSchema,
+                jacksonVersion = jacksonVersion,
+            ).generate(allFiles)
         }
     }
 }

@@ -6,12 +6,13 @@ import org.babyfish.jimmer.apt.dto.DtoProcessor
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
+import org.babyfish.jimmer.compiler.dto.dtoStateOrNull
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
 import org.babyfish.jimmer.compiler.input.toDtoFile
+import org.babyfish.jimmer.compiler.immutable.immutableStateOrNull
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
-import org.babyfish.jimmer.dto.compiler.DtoModifier
 import org.babyfish.jimmer.dto.compiler.SourceTypeFilter
 import org.babyfish.jimmer.sql.EnableDtoGeneration
 import javax.annotation.processing.AbstractProcessor
@@ -49,8 +50,6 @@ class JimmerProcessor : AbstractProcessor() {
 
     private lateinit var messager: javax.annotation.processing.Messager
 
-    private var defaultNullableInputModifier = DtoModifier.STATIC
-
     private var dtoGenerated = false
 
     private lateinit var dtoFieldModifier: Modifier
@@ -70,20 +69,6 @@ class JimmerProcessor : AbstractProcessor() {
         messager = processingEnv.messager
         val includes = processingEnv.options["jimmer.source.includes"]
         val excludes = processingEnv.options["jimmer.source.excludes"]
-        defaultNullableInputModifier = processingEnv.options["jimmer.dto.defaultNullableInputModifier"]
-            ?.takeIf { it.isNotEmpty() }
-            ?.let {
-                when (it) {
-                    "fixed" -> DtoModifier.FIXED
-                    "static" -> DtoModifier.STATIC
-                    "dynamic" -> DtoModifier.DYNAMIC
-                    "fuzzy" -> DtoModifier.FUZZY
-                    else -> throw IllegalArgumentException(
-                        "The apt options `jimmer.dto.defaultNullableInputModifier` can only be " +
-                            "\"fixed\", \"static\", \"dynamic\" or \"fuzzy\"",
-                    )
-                }
-            } ?: DtoModifier.STATIC
         dtoFieldModifier = when (val visibility = processingEnv.options["jimmer.dto.fieldVisibility"]) {
             null, "private" -> Modifier.PRIVATE
             "protected" -> Modifier.PROTECTED
@@ -125,6 +110,12 @@ class JimmerProcessor : AbstractProcessor() {
                 lsiRoundResult.dtoGenerationReady()
             ) {
                 dtoGenerated = true
+                val dtoState = requireNotNull(lsiRoundResult.dtoStateOrNull()) {
+                    "DTO generation requires the frozen DTO compiler state"
+                }
+                val immutableState = requireNotNull(lsiRoundResult.immutableStateOrNull()) {
+                    "DTO generation requires the frozen immutable compiler state"
+                }
                 generated = DtoProcessor(
                     context,
                     elements,
@@ -134,7 +125,10 @@ class JimmerProcessor : AbstractProcessor() {
                         .filter { document -> document.kind == CompilerInputDocumentKind.DTO }
                         .map { document -> document.toDtoFile() }
                         .toList(),
-                    defaultNullableInputModifier,
+                    dtoState.defaultNullableInputModifier,
+                    dtoState.graphs,
+                    immutableState.schema,
+                    dtoState.rendererOptions.jacksonVersion,
                 ).process()
             }
             if (generated) {

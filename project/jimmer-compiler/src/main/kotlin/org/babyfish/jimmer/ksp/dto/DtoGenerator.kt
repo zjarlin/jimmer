@@ -12,6 +12,8 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.ksp.toAnnotationSpec
 import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.client.meta.Doc
+import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
 import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.dto.compiler.Anno.*
 import org.babyfish.jimmer.dto.compiler.PropConfig.PathNode
@@ -31,16 +33,28 @@ import org.babyfish.jimmer.ksp.util.ConverterMetadata
 import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
+import site.addzero.lsi.jimmer.dto.baseProp
+import site.addzero.lsi.jimmer.dto.foldProp
+import site.addzero.lsi.jimmer.dto.generatedTargetType
+import site.addzero.lsi.jimmer.dto.mergedType
+import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import java.io.OutputStreamWriter
 import java.util.*
 import kotlin.math.min
 
-class DtoGenerator private constructor(
+internal class DtoGenerator private constructor(
     val ctx: Context,
     private val docMetadata: DocMetadata,
     private val mutable: Boolean,
     val dtoType: DtoType<ImmutableType, ImmutableProp>,
     private val codeGenerator: CodeGenerator?,
+    private val lsiGraph: DtoGraph,
+    private val lsiDtoType: LsiDtoType,
+    private val immutableSchema: ImmutableSchema,
+    private val jacksonVersion: JimmerDtoJacksonVersion,
     private val parent: DtoGenerator?,
     private val innerClassName: String?,
     private val polymorphicSuperInterfaceName: TypeName? = null,
@@ -79,7 +93,23 @@ class DtoGenerator private constructor(
         mutable: Boolean,
         dtoType: DtoType<ImmutableType, ImmutableProp>,
         codeGenerator: CodeGenerator?,
-    ) : this(ctx, docMetadata, mutable, dtoType, codeGenerator, null, null)
+        lsiGraph: DtoGraph,
+        lsiDtoType: LsiDtoType,
+        immutableSchema: ImmutableSchema,
+        jacksonVersion: JimmerDtoJacksonVersion,
+    ) : this(
+        ctx,
+        docMetadata,
+        mutable,
+        dtoType,
+        codeGenerator,
+        lsiGraph,
+        lsiDtoType,
+        immutableSchema,
+        jacksonVersion,
+        null,
+        null,
+    )
 
     val typeBuilder: TypeSpec.Builder
         get() = _typeBuilder ?: error("Type builder is not ready")
@@ -540,24 +570,41 @@ class DtoGenerator private constructor(
         for (prop in dtoType.dtoProps) {
             val targetType = prop.targetType ?: continue
             if (!prop.isRecursive || targetType.isFocusedRecursion) {
+                val lsiTargetType = lsiDtoType
+                    .baseProp(lsiGraph, prop.name)
+                    .generatedTargetType(lsiGraph)
+                    ?: throw DtoException(
+                        "Frozen DTO property \"${prop.name}\" has no generated target"
+                    )
                 DtoGenerator(
                     ctx,
                     docMetadata,
                     mutable,
                     targetType,
                     null,
+                    lsiGraph,
+                    lsiTargetType,
+                    immutableSchema,
+                    jacksonVersion,
                     this,
                     targetSimpleName(prop)
                 ).generate(emptyList())
             }
         }
         for (foldProp in dtoType.foldProps) {
+            val lsiTargetType = lsiDtoType
+                .foldProp(lsiGraph, foldProp.name)
+                .generatedTargetType(lsiGraph)
             DtoGenerator(
                 ctx,
                 docMetadata,
                 mutable,
                 foldProp.targetType,
                 null,
+                lsiGraph,
+                lsiTargetType,
+                immutableSchema,
+                jacksonVersion,
                 this,
                 targetSimpleName(foldProp)
             ).generate(emptyList())
@@ -568,7 +615,15 @@ class DtoGenerator private constructor(
             typeBuilder.addHibernateValidatorEnhancement(true)
         }
         if (isSerializerRequired) {
-            SerializerGenerator(this).generate()
+            typeBuilder.addType(
+                KspDtoSerializerRenderer.render(
+                    dtoType = lsiDtoType,
+                    graph = lsiGraph,
+                    immutableSchema = immutableSchema,
+                    jacksonVersion = jacksonVersion,
+                    generatedDtoQualifiedName = getDtoClassName().canonicalName,
+                )
+            )
         }
         if (isBuilderRequired) {
             InputBuilderGenerator(this).generate()
@@ -622,6 +677,10 @@ class DtoGenerator private constructor(
             mutable,
             dtoType.mergedWith(branch.dtoType),
             null,
+            lsiGraph,
+            lsiMergedPolymorphicType(branch),
+            immutableSchema,
+            jacksonVersion,
             this,
             branch.className,
             superInterfaceName,
@@ -629,6 +688,22 @@ class DtoGenerator private constructor(
             branch.kind,
             branchOrder,
         ).generate(emptyList())
+    }
+
+    private fun lsiMergedPolymorphicType(
+        branch: DtoPolymorphicBranch<ImmutableType, ImmutableProp>,
+    ): LsiDtoType {
+        val polymorphism = lsiDtoType.polymorphism
+            ?: throw DtoException("Frozen DTO type is not polymorphic")
+        val matches = polymorphism.branches.filter { candidate ->
+            candidate.className == branch.className && candidate.kind.name == branch.kind.name
+        }
+        if (matches.size != 1) {
+            throw DtoException(
+                "Frozen DTO polymorphism must contain exactly one generated branch \"${branch.className}\""
+            )
+        }
+        return matches.single().mergedType(lsiGraph)
     }
 
     private fun FileSpec.Builder.addExtensions(includeBlockConverter: Boolean = true) {
@@ -2660,8 +2735,7 @@ class DtoGenerator private constructor(
         }
 
     private val isSerializerRequired: Boolean by lazy {
-        dtoType.modifiers.contains(DtoModifier.INPUT) &&
-                dtoType.dtoProps.any { it.inputModifier == DtoModifier.DYNAMIC }
+        lsiDtoType.requiresDynamicInputSerialization(lsiGraph)
     }
 
     private val isBuilderRequired: Boolean by lazy {

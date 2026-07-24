@@ -14,7 +14,7 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
 
-class InputBuilderGenerator(
+internal class InputBuilderGenerator(
     private val parentGenerator: DtoGenerator
 ) {
 

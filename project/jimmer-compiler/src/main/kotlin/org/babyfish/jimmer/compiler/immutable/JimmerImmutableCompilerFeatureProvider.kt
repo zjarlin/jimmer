@@ -3,6 +3,7 @@ package org.babyfish.jimmer.compiler.immutable
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
+import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
@@ -477,4 +478,8 @@ private val COMPILATION_ORIGIN_KINDS = setOf(
 
 private val KOTLIN_METADATA = LsiSymbolId.type("kotlin.Metadata")
 
-private const val JIMMER_IMMUTABLE_FEATURE_ID = "immutable"
+internal const val JIMMER_IMMUTABLE_FEATURE_ID = "immutable"
+
+internal fun CompilerRoundResult.immutableStateOrNull(): JimmerImmutableCompilerFeatureState? {
+    return featureResults[JIMMER_IMMUTABLE_FEATURE_ID]?.state as? JimmerImmutableCompilerFeatureState
+}

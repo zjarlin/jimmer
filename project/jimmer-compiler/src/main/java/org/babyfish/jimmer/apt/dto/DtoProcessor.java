@@ -8,7 +8,11 @@ import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.apt.util.GenericParser;
+import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.dto.compiler.*;
+import site.addzero.lsi.jimmer.ImmutableSchema;
+import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
+import site.addzero.lsi.jimmer.dto.DtoGraph;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
@@ -16,7 +20,9 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class DtoProcessor {
@@ -29,16 +35,36 @@ public class DtoProcessor {
 
     private final DtoModifier defaultNullableInputModifier;
 
+    private final Map<String, DtoGraph> graphBySourcePath;
+
+    private final ImmutableSchema immutableSchema;
+
+    private final JimmerDtoJacksonVersion jacksonVersion;
+
     public DtoProcessor(
             Context context,
             Elements elements,
             Collection<DtoFile> dtoFiles,
-            DtoModifier defaultNullableInputModifier
+            DtoModifier defaultNullableInputModifier,
+            Collection<DtoGraph> graphs,
+            ImmutableSchema immutableSchema,
+            JimmerDtoJacksonVersion jacksonVersion
     ) {
         this.context = context;
         this.elements = elements;
         this.dtoFiles = dtoFiles;
         this.defaultNullableInputModifier = defaultNullableInputModifier;
+        this.graphBySourcePath = new LinkedHashMap<>();
+        for (DtoGraph graph : graphs) {
+            DtoGraph conflict = graphBySourcePath.put(graph.getSource().getPath(), graph);
+            if (conflict != null) {
+                throw new IllegalArgumentException(
+                        "Duplicate frozen DTO graph source path: " + graph.getSource().getPath()
+                );
+            }
+        }
+        this.immutableSchema = immutableSchema;
+        this.jacksonVersion = jacksonVersion;
     }
 
     public boolean process() {
@@ -127,7 +153,25 @@ public class DtoProcessor {
         boolean result = false;
         DocMetadata docMetadata = new DocMetadata(context);
         for (DtoType<ImmutableType, ImmutableProp> dtoType : dtoTypes) {
-            new DtoGenerator(context, docMetadata, dtoType).generate();
+            DtoGraph graph = graphBySourcePath.get(dtoType.getDtoFile().getSourcePath());
+            if (graph == null) {
+                throw new DtoException(
+                        "No frozen DTO graph for \"" + dtoType.getDtoFile().getSourcePath() + "\""
+                );
+            }
+            String qualifiedName = dtoType.getQualifiedName();
+            if (qualifiedName == null) {
+                throw new DtoException("Root DTO type must have a qualified name");
+            }
+            new DtoGenerator(
+                    context,
+                    docMetadata,
+                    dtoType,
+                    graph,
+                    DtoGenerationExtensionsKt.rootType(graph, qualifiedName),
+                    immutableSchema,
+                    jacksonVersion
+            ).generate();
             result = true;
         }
         return result;

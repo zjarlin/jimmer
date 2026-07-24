@@ -4,11 +4,10 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoType
-import site.addzero.lsi.jimmer.dto.basePropsInDeclarationOrder
-import site.addzero.lsi.jimmer.dto.loadedAccessorName
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
+import site.addzero.lsi.jimmer.dto.serializerLoadedAccessorNameOrNull
+import site.addzero.lsi.jimmer.dto.serializerPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.serializerValueAccessorName
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
@@ -86,13 +85,14 @@ private fun DtoType.serializerBody(
         name("gen")
         text(".writeStartObject()")
     }
-    basePropsInDeclarationOrder(graph).forEach { prop ->
-        if (prop.inputModifier == DtoModifier.DYNAMIC) {
+    serializerPropsInDeclarationOrder(graph).forEach { prop ->
+        val loadedAccessorName = prop.serializerLoadedAccessorNameOrNull()
+        if (loadedAccessorName != null) {
             beginControlFlow {
                 text("if (")
                 name("input")
                 text(".")
-                name(prop.loadedAccessorName())
+                name(loadedAccessorName)
                 if (targetLanguage == LsiLanguage.JAVA) {
                     text("()")
                 }
@@ -122,7 +122,7 @@ private fun DtoType.serializerBody(
             name("gen")
             text(")")
         }
-        if (prop.inputModifier == DtoModifier.DYNAMIC) {
+        if (loadedAccessorName != null) {
             endControlFlow()
         }
     }
