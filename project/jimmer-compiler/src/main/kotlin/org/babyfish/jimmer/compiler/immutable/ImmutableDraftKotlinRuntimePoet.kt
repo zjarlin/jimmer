@@ -898,7 +898,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
                         text(".")
                         name(prop.name)
                         text(", ")
-                        type(context.propElementType(prop).withDraftRootNullability(false))
+                        type(context.propElementType(prop).toKotlinDraftListClassTokenType())
                         text("::class.java, ${prop.immutableReference})")
                     }
                 }
@@ -1459,6 +1459,18 @@ internal class ImmutableDraftKotlinRuntimePoet(
             text("($DRAFT_MODIFIED_FIELD ?: $DRAFT_BASE_FIELD!!.clone())\n")
             text(".also { $DRAFT_MODIFIED_FIELD = it }")
         }
+}
+
+/**
+ * Draft 列表的类型令牌必须与 Kotlin 属性元素类型一致，不能保留 JVM 装箱类型。
+ */
+private fun LsiTypeRef.toKotlinDraftListClassTokenType(): LsiTypeRef {
+    val type = withDraftRootNullability(nullable = false)
+    return if (type is LsiPrimitiveType) {
+        type.copy(boxed = false)
+    } else {
+        type
+    }
 }
 
 private enum class DraftPropertyArgument(

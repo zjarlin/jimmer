@@ -1,7 +1,9 @@
 package org.babyfish.jimmer.compiler.immutable
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactEmissionMode
@@ -20,9 +22,11 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
+import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class ImmutableDraftPoetTest {
 
@@ -284,6 +288,52 @@ class ImmutableDraftPoetTest {
         })
     }
 
+    @Test
+    fun `kotlin scalar list class token uses the property element type`() {
+        val source = source("src/main/kotlin/demo/Book.kt")
+        val bookId = typeId("demo.Book")
+        val idPropId = LsiSymbolId.property(bookId, "id")
+        val scoresPropId = LsiSymbolId.property(bookId, "scores")
+        val origin = origin(source)
+        val workspace = LsiWorkspace(
+            sources = listOf(source),
+            declarations = listOf(
+                immutableType(
+                    id = bookId,
+                    memberIds = listOf(idPropId, scoresPropId),
+                    origin = origin,
+                ),
+                property(
+                    id = idPropId,
+                    ownerId = bookId,
+                    type = LONG_TYPE,
+                    annotations = listOf(LsiAnnotation(ID)),
+                    origin = origin,
+                ),
+                property(
+                    id = scoresPropId,
+                    ownerId = bookId,
+                    type = LsiDeclaredType(
+                        declarationId = LIST,
+                        arguments = listOf(
+                            LsiTypeArgument.invariant(
+                                LsiPrimitiveType(LsiPrimitiveKind.LONG, boxed = true)
+                            )
+                        ),
+                    ),
+                    origin = origin,
+                ),
+            ),
+        )
+        val artifact = workspace.draftArtifacts(bookId)
+            .single { candidate -> candidate.file.language == LsiLanguage.KOTLIN }
+
+        val content = LsiKotlinPoetRenderer().render(artifact).content
+
+        assertContains(content, "scores, KotlinLong::class.java, false")
+        assertFalse("scores, LangLong::class.java, false" in content)
+    }
+
     private fun LsiWorkspace.draftArtifacts(typeId: LsiSymbolId): List<LsiPoetArtifact> {
         val schema = toImmutableSchema()
         val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
@@ -400,5 +450,6 @@ class ImmutableDraftPoetTest {
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
         val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
         val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
+        val LIST = LsiSymbolId.type("java.util.List")
     }
 }
