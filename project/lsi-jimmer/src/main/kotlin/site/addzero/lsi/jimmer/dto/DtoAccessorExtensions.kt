@@ -141,7 +141,7 @@ private fun ImmutableProp.hasPrimitiveBooleanValue(
         valueType.nullability == LsiNullability.NON_NULL
 }
 
-private fun dtoIdentifier(vararg parts: String): String = buildString {
+internal fun dtoIdentifier(vararg parts: String): String = buildString {
     var previousPartEndsWithLowerCase = false
     parts.forEach { part ->
         require(part.isNotEmpty()) { "DTO identifier part cannot be empty" }
