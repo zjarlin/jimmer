@@ -27,6 +27,9 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoTypeId;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
@@ -56,6 +59,8 @@ public class DtoGenerator {
     private final site.addzero.lsi.jimmer.dto.DtoType lsiDtoType;
 
     private final DtoAnnotationContract annotationContract;
+
+    private final DtoInterfaceContractResolution interfaceContractResolution;
 
     private final ImmutableSchema immutableSchema;
 
@@ -97,6 +102,7 @@ public class DtoGenerator {
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
+            DtoInterfaceContractResolution interfaceContractResolution,
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
@@ -109,6 +115,7 @@ public class DtoGenerator {
                 lsiGraph,
                 lsiDtoType,
                 annotationContract,
+                interfaceContractResolution,
                 immutableSchema,
                 lsiWorkspace,
                 batchRootDtoTypeNames,
@@ -137,6 +144,7 @@ public class DtoGenerator {
                 parent.lsiGraph,
                 lsiDtoType,
                 parent.annotationContract,
+                parent.interfaceContractResolution,
                 parent.immutableSchema,
                 parent.lsiWorkspace,
                 parent.batchRootDtoTypeNames,
@@ -157,6 +165,7 @@ public class DtoGenerator {
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
+            DtoInterfaceContractResolution interfaceContractResolution,
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
@@ -180,6 +189,9 @@ public class DtoGenerator {
         this.root = parent != null ? parent.root : this;
         this.innerClassName = innerClassName;
         this.annotationContract = parent != null ? parent.annotationContract : annotationContract;
+        this.interfaceContractResolution = parent != null ?
+                parent.interfaceContractResolution :
+                interfaceContractResolution;
         this.immutableSchema = parent != null ? parent.immutableSchema : immutableSchema;
         this.lsiWorkspace = parent != null ? parent.lsiWorkspace : lsiWorkspace;
         this.batchRootDtoTypeNames = parent != null ?
@@ -195,7 +207,11 @@ public class DtoGenerator {
         this.polymorphicBranch = polymorphicBranch;
         this.polymorphicBranchKind = polymorphicBranchKind;
         this.polymorphicBranchOrder = polymorphicBranchOrder;
-        this.interfaceMethodNames = DtoInterfaces.abstractMethodNames(ctx, dtoType);
+        DtoInterfaceContract interfaceContract = DtoInterfaceContractExtensionsKt.contractFor(
+                this.interfaceContractResolution,
+                lsiDtoType
+        );
+        this.interfaceMethodNames = DtoInterfaceContractExtensionsKt.requiredAccessorNames(interfaceContract);
         registerGeneratedDtoTypeName();
     }
 
@@ -446,6 +462,7 @@ public class DtoGenerator {
                 lsiGraph,
                 lsiMergedPolymorphicType(branch),
                 annotationContract,
+                interfaceContractResolution,
                 immutableSchema,
                 lsiWorkspace,
                 batchRootDtoTypeNames,

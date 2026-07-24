@@ -128,6 +128,7 @@ class JimmerProcessor : AbstractProcessor() {
                     dtoState.defaultNullableInputModifier,
                     dtoState.graphs,
                     dtoState.annotationContractsBySource,
+                    dtoState.interfaceContractsBySource,
                     immutableState.schema,
                     lsiRoundResult.round.workspace,
                     dtoState.rendererOptions.jacksonVersion,

@@ -75,6 +75,7 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                             effectiveMutableByRootTypeId = dtoState.effectiveKspMutableByRootTypeId,
                             workspace = lsiRoundResult.round.workspace,
                             annotationContractsBySource = dtoState.annotationContractsBySource,
+                            interfaceContractsBySource = dtoState.interfaceContractsBySource,
                         ).process()
                         generated = generated || generatedDto
                     }

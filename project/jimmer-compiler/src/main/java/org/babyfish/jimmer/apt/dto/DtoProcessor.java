@@ -16,6 +16,7 @@ import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
@@ -45,6 +46,8 @@ public class DtoProcessor {
 
     private final Map<LsiSource, DtoAnnotationContract> annotationContractsBySource;
 
+    private final Map<LsiSource, DtoInterfaceContractResolution> interfaceContractsBySource;
+
     private final ImmutableSchema immutableSchema;
 
     private final LsiWorkspace lsiWorkspace;
@@ -60,6 +63,7 @@ public class DtoProcessor {
             DtoModifier defaultNullableInputModifier,
             Collection<DtoGraph> graphs,
             Map<LsiSource, DtoAnnotationContract> annotationContractsBySource,
+            Map<LsiSource, DtoInterfaceContractResolution> interfaceContractsBySource,
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             JimmerDtoJacksonVersion jacksonVersion
@@ -79,6 +83,9 @@ public class DtoProcessor {
         }
         this.annotationContractsBySource = Collections.unmodifiableMap(
                 new LinkedHashMap<>(annotationContractsBySource)
+        );
+        this.interfaceContractsBySource = Collections.unmodifiableMap(
+                new LinkedHashMap<>(interfaceContractsBySource)
         );
         this.immutableSchema = immutableSchema;
         this.lsiWorkspace = lsiWorkspace;
@@ -188,6 +195,13 @@ public class DtoProcessor {
                         "No frozen DTO annotation contract for \"" + graph.getSource().getPath() + "\""
                 );
             }
+            DtoInterfaceContractResolution interfaceContractResolution =
+                    interfaceContractsBySource.get(graph.getSource());
+            if (interfaceContractResolution == null) {
+                throw new DtoException(
+                        "No frozen DTO interface contract for \"" + graph.getSource().getPath() + "\""
+                );
+            }
             new DtoGenerator(
                     context,
                     docMetadata,
@@ -195,6 +209,7 @@ public class DtoProcessor {
                     graph,
                     DtoGenerationExtensionsKt.rootType(graph, qualifiedName),
                     annotationContract,
+                    interfaceContractResolution,
                     immutableSchema,
                     lsiWorkspace,
                     batchRootDtoTypeNames,

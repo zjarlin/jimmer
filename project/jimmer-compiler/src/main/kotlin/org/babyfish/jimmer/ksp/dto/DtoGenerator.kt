@@ -38,13 +38,16 @@ import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.baseProp
+import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
+import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 import java.io.OutputStreamWriter
@@ -63,6 +66,7 @@ internal class DtoGenerator private constructor(
     private val jacksonVersion: JimmerDtoJacksonVersion,
     private val workspace: LsiWorkspace,
     private val annotationContract: DtoAnnotationContract,
+    private val interfaceContractResolution: DtoInterfaceContractResolution,
     private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     private val generatedDtoPackageName: String,
     private val generatedDtoSimpleNames: List<String>,
@@ -82,13 +86,16 @@ internal class DtoGenerator private constructor(
 
     private val useSiteTargetMap = mutableMapOf<String, Set<AnnotationSpec.UseSiteTarget>>()
 
-    private val interfacePropNames = abstractPropNames(ctx, dtoType).let {
-        if (polymorphicBranch) {
-            it + root.dtoType.props.map { prop -> prop.name }
-        } else {
-            it
+    private val interfacePropNames = interfaceContractResolution
+        .contractFor(lsiDtoType)
+        .requiredPropNames()
+        .let {
+            if (polymorphicBranch) {
+                it + root.dtoType.props.map { prop -> prop.name }
+            } else {
+                it
+            }
         }
-    }
 
     init {
         if ((codeGenerator === null) == (parent === null)) {
@@ -122,6 +129,7 @@ internal class DtoGenerator private constructor(
         jacksonVersion: JimmerDtoJacksonVersion,
         workspace: LsiWorkspace,
         annotationContract: DtoAnnotationContract,
+        interfaceContractResolution: DtoInterfaceContractResolution,
         rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     ) : this(
         ctx,
@@ -135,6 +143,7 @@ internal class DtoGenerator private constructor(
         jacksonVersion,
         workspace,
         annotationContract,
+        interfaceContractResolution,
         rootDtoTypeNamesByTypeId,
         rootDtoTypeNamesByTypeId.getValue(lsiDtoType.id).packageName,
         rootDtoTypeNamesByTypeId.getValue(lsiDtoType.id).simpleNames,
@@ -166,6 +175,7 @@ internal class DtoGenerator private constructor(
         jacksonVersion = parent.jacksonVersion,
         workspace = parent.workspace,
         annotationContract = parent.annotationContract,
+        interfaceContractResolution = parent.interfaceContractResolution,
         rootDtoTypeNamesByTypeId = parent.rootDtoTypeNamesByTypeId,
         generatedDtoPackageName = parent.generatedDtoPackageName,
         generatedDtoSimpleNames = parent.generatedDtoSimpleNames + innerClassName,
