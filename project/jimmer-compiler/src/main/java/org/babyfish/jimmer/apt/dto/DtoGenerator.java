@@ -21,6 +21,7 @@ import org.babyfish.jimmer.runtime.ImmutableSpi;
 import org.babyfish.jimmer.sql.Id;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import site.addzero.lsi.core.LsiLanguage;
 import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
@@ -1479,7 +1480,11 @@ public class DtoGenerator {
     }
 
     private void addStateField(DtoProp<ImmutableType, ImmutableProp> prop) {
-        String stateFieldName = stateFieldName(prop, false);
+        String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                lsiGraph,
+                LsiLanguage.JAVA
+        );
         if (stateFieldName == null) {
             return;
         }
@@ -1531,7 +1536,11 @@ public class DtoGenerator {
         TypeName typeName = getPropTypeName(prop);
         String getterName = getterName(prop);
         String setterName = setterName(prop);
-        String stateFieldName = stateFieldName(prop, false);
+        String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                lsiGraph,
+                LsiLanguage.JAVA
+        );
 
         MethodSpec.Builder getterBuilder = MethodSpec
                 .methodBuilder(getterName)
@@ -1784,7 +1793,11 @@ public class DtoGenerator {
             if (prop.getNextProp() == null && prop.getBaseProp().isDiscriminator()) {
                 continue;
             }
-            String stateFieldName = stateFieldName(prop, false);
+            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                    lsiGraph,
+                    LsiLanguage.JAVA
+            );
             boolean fuzzy = prop.getInputModifier() == DtoModifier.FUZZY && prop.isNullable();
             if (stateFieldName != null) {
                 builder.beginControlFlow("if (this.$L)", stateFieldName);
@@ -2498,7 +2511,11 @@ public class DtoGenerator {
                 cb.add("$T.hashCode($L)", Objects.class, prop.getName());
             }
             builder.addStatement(cb.build());
-            String stateFieldName = stateFieldName(prop, false);
+            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                    lsiGraph,
+                    LsiLanguage.JAVA
+            );
             if (stateFieldName != null) {
                 builder.addStatement("hash = hash * 31 + Boolean.hashCode($L)", stateFieldName);
             }
@@ -2520,7 +2537,11 @@ public class DtoGenerator {
         builder.addStatement("$L other = ($L) o", getSimpleName(), getSimpleName());
         for (AbstractProp prop : dtoType.getProps()) {
             String propName = prop.getName();
-            String stateFieldName = stateFieldName(prop, false);
+            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                    lsiGraph,
+                    LsiLanguage.JAVA
+            );
             if (stateFieldName != null) {
                 builder.beginControlFlow("if ($L != other.$L)", stateFieldName, stateFieldName);
                 builder.addStatement("return false");
@@ -2571,7 +2592,11 @@ public class DtoGenerator {
         builder.addStatement("builder.append($S).append('(')", simpleNamePath());
         String separator = "\"\"";
         boolean dynamicSeparator = dtoType.getDtoProps().stream().anyMatch(prop ->
-                stateFieldName(prop, false) != null || (
+                DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        lsiGraph,
+                        LsiLanguage.JAVA
+                ) != null || (
                         prop.getInputModifier() == DtoModifier.FUZZY && prop.isNullable()
                 )
         );
@@ -2579,7 +2604,11 @@ public class DtoGenerator {
             builder.addStatement("String _sp = \"\"");
         }
         for (AbstractProp prop : dtoType.getProps()) {
-            String stateFieldName = stateFieldName(prop, false);
+            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                    lsiGraph,
+                    LsiLanguage.JAVA
+            );
             boolean fuzzy = prop instanceof DtoProp<?, ?> &&
                     prop.getInputModifier() == DtoModifier.FUZZY &&
                     prop.isNullable();
@@ -2878,27 +2907,6 @@ public class DtoGenerator {
 
     TypeSpec.Builder getTypeBuilder() {
         return typeBuilder;
-    }
-
-    @Nullable
-    String stateFieldName(AbstractProp prop, boolean builder) {
-        if (!prop.isNullable()) {
-            return null;
-        }
-        if (!dtoType.getModifiers().contains(DtoModifier.INPUT)) {
-            return null;
-        }
-        DtoModifier modifier = prop.getInputModifier();
-        if (modifier == null) {
-            return null;
-        }
-        if (modifier == DtoModifier.FIXED && !builder) {
-            return null;
-        }
-        if (modifier == DtoModifier.STATIC || modifier == DtoModifier.FUZZY) {
-            return null;
-        }
-        return StringUtil.identifier("_is", prop.getName(), "Loaded");
     }
 
     private static boolean isFieldNullable(AbstractProp prop) {

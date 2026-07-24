@@ -25,6 +25,7 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.ConverterMetadata
 import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
@@ -35,6 +36,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
+import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
 import site.addzero.lsi.jimmer.dto.mergedType
@@ -1198,7 +1200,10 @@ internal class DtoGenerator private constructor(
     }
 
     private fun addStateProp(prop: DtoProp<ImmutableType, ImmutableProp>) {
-        statePropName(prop, false)?.let {
+        lsiDtoType
+            .prop(lsiGraph, prop.name)
+            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
+            ?.let {
             typeBuilder.addProperty(
                 PropertySpec
                     .builder(it, BOOLEAN)
@@ -1277,7 +1282,9 @@ internal class DtoGenerator private constructor(
                     )
                     initializer(prop.name)
                     if (mutable) {
-                        statePropName(prop, false)?.let { stateProp ->
+                        lsiProp
+                            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
+                            ?.let { stateProp ->
                             val name = prop.name.takeIf { it != "field" } ?: "value"
                             setter(
                                 FunSpec
@@ -1346,23 +1353,23 @@ internal class DtoGenerator private constructor(
                                 }
                                 .build()
                         )
-                        statePropName(prop, false)?.let {
-                            addParameter(
-                                ParameterSpec
-                                    .builder(
-                                        StringUtil.identifier("is", prop.name, "Loaded"),
-                                        BOOLEAN
-                                    )
-                                    .apply {
-                                        if (prop.isNullable) {
-                                            defaultValue("%L !== null", prop.name)
-                                        } else {
-                                            defaultValue("true")
+                        lsiDtoType
+                            .prop(lsiGraph, prop.name)
+                            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
+                            ?.let { statePropName ->
+                                addParameter(
+                                    ParameterSpec
+                                        .builder(statePropName, BOOLEAN)
+                                        .apply {
+                                            if (prop.isNullable) {
+                                                defaultValue("%L !== null", prop.name)
+                                            } else {
+                                                defaultValue("true")
+                                            }
                                         }
-                                    }
-                                    .build()
-                            )
-                        }
+                                        .build()
+                                )
+                            }
                     }
                 }
                 .build()
@@ -1434,7 +1441,10 @@ internal class DtoGenerator private constructor(
                                         propTypeName(dtoProp)
                                     )
                                 }
-                                statePropName(dtoProp, false)?.let {
+                                lsiDtoType
+                                    .prop(lsiGraph, dtoProp.name)
+                                    .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
+                                    ?.let {
                                     if (isSimpleProp(dtoProp)) {
                                         add(
                                             ",\n%T.%L.isLoaded(base)",
@@ -1635,7 +1645,9 @@ internal class DtoGenerator private constructor(
                                 if (dtoProp.nextProp == null && dtoProp.baseProp.isDiscriminator) {
                                     continue
                                 }
-                                val statePropName = statePropName(dtoProp, false)
+                                val statePropName = lsiDtoType
+                                    .prop(lsiGraph, dtoProp.name)
+                                    .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                                 if (statePropName !== null) {
                                     beginControlFlow("if (%L)", statePropName)
                                     addDraftAssignment(dtoProp, dtoProp.name)
@@ -2519,7 +2531,10 @@ internal class DtoGenerator private constructor(
                                 .build()
                         )
                         args += prop.name
-                        statePropName(prop, false)?.let {
+                        lsiDtoType
+                            .prop(lsiGraph, prop.name)
+                            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
+                            ?.let {
                             addParameter(
                                 ParameterSpec.builder(it, BOOLEAN)
                                     .defaultValue("this.$it")
@@ -2559,7 +2574,10 @@ internal class DtoGenerator private constructor(
                                         "${prop.alias}.$hashCodeFunName()"
                                     }
                                 )
-                                statePropName(prop, false)?.let {
+                                lsiDtoType
+                                    .prop(lsiGraph, prop.name)
+                                    .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
+                                    ?.let {
                                     addStatement("_hash = _hash * 31 + %L.hashCode()", it)
                                 }
                             }
@@ -2586,7 +2604,9 @@ internal class DtoGenerator private constructor(
                                 if (index == 0) {
                                     add("return ")
                                 }
-                                val statePropName = statePropName(prop, false)
+                                val statePropName = lsiDtoType
+                                    .prop(lsiGraph, prop.name)
+                                    .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                                 if (statePropName !== null) {
                                     add("%L == _other.%L && (\n", statePropName, statePropName)
                                     indent()
@@ -2624,17 +2644,24 @@ internal class DtoGenerator private constructor(
                         .apply {
                             val hashCondProps = dtoType.modifiers.contains(DtoModifier.INPUT) &&
                                     dtoType.dtoProps.any {
-                                        statePropName(
-                                            it,
-                                            false
-                                        ) != null || it.inputModifier == DtoModifier.FUZZY
+                                        lsiDtoType
+                                            .prop(lsiGraph, it.name)
+                                            .dtoLoadedStateStorageNameOrNull(
+                                                lsiGraph,
+                                                LsiLanguage.KOTLIN,
+                                            ) != null || it.inputModifier == DtoModifier.FUZZY
                                     }
                             if (hashCondProps) {
                                 addStatement("val builder = StringBuilder()")
                                 addStatement("var separator = \"\"")
                                 addStatement("builder.append(%S).append('(')", simpleNamePart())
                                 for (prop in dtoType.props) {
-                                    val stateFieldName = statePropName(prop, false)
+                                    val stateFieldName = lsiDtoType
+                                        .prop(lsiGraph, prop.name)
+                                        .dtoLoadedStateStorageNameOrNull(
+                                            lsiGraph,
+                                            LsiLanguage.KOTLIN,
+                                        )
                                     if (stateFieldName != null) {
                                         beginControlFlow("if (%L)", stateFieldName)
                                     } else if (prop is DtoProp<*, *> && prop.getInputModifier() == DtoModifier.FUZZY) {
@@ -2700,17 +2727,6 @@ internal class DtoGenerator private constructor(
 
     private val isImpl: Boolean
         get() = dtoType.baseType.isEntity || !dtoType.modifiers.contains(DtoModifier.SPECIFICATION)
-
-    internal fun statePropName(prop: AbstractProp, builder: Boolean): String? =
-        when {
-            !prop.isNullable -> null
-            !dtoType.modifiers.contains(DtoModifier.INPUT) -> null
-            else -> prop.inputModifier?.takeIf {
-                (it == DtoModifier.FIXED && builder) || it == DtoModifier.DYNAMIC
-            }?.let {
-                StringUtil.identifier("is", prop.name, "Loaded")
-            }
-        }
 
     private val isSerializerRequired: Boolean by lazy {
         lsiDtoType.requiresDynamicInputSerialization(lsiGraph)

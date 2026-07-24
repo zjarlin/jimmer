@@ -244,6 +244,71 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `derives generated loaded state storage from the frozen DTO graph`() {
+        val graph = graph(visibleDynamic = true)
+        val type = graph.types.single()
+        val dynamicProp = type.baseProp(graph, "dynamicValue")
+
+        assertEquals(
+            "_isDynamicValueLoaded",
+            dynamicProp.dtoLoadedStateStorageNameOrNull(graph, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            "isDynamicValueLoaded",
+            dynamicProp.dtoLoadedStateStorageNameOrNull(graph, LsiLanguage.KOTLIN),
+        )
+        assertEquals(
+            listOf(null, null, null, null),
+            listOf("userValue", "staticValue", "foldValue", "fuzzyValue").map { name ->
+                type.prop(graph, name)
+                    .dtoLoadedStateStorageNameOrNull(graph, LsiLanguage.JAVA)
+            },
+        )
+        assertEquals(
+            null,
+            graph.propsById.getValue(DtoPropId("dto#h-hidden"))
+                .dtoLoadedStateStorageNameOrNull(graph, LsiLanguage.JAVA),
+        )
+
+        val nonInputGraph = graph(visibleDynamic = true, input = false)
+        assertEquals(
+            null,
+            nonInputGraph.types.single().prop(nonInputGraph, "dynamicValue")
+                .dtoLoadedStateStorageNameOrNull(nonInputGraph, LsiLanguage.KOTLIN),
+        )
+
+        val fixedProp = baseProp("fixedValue", DtoModifier.FIXED, nullable = true)
+        val fixedGraph = singlePropGraph(fixedProp)
+        assertEquals(
+            null,
+            fixedProp.dtoLoadedStateStorageNameOrNull(fixedGraph, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            "_isFixedValueLoaded",
+            fixedProp.inputBuilderLoadedStateNameOrNull(fixedGraph, LsiLanguage.JAVA),
+        )
+
+        val acronymProp = baseProp("URL", DtoModifier.DYNAMIC, nullable = true)
+        val acronymGraph = singlePropGraph(acronymProp)
+        assertEquals(
+            "_isURLloaded",
+            acronymProp.dtoLoadedStateStorageNameOrNull(acronymGraph, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            "isURLloaded",
+            acronymProp.dtoLoadedStateStorageNameOrNull(acronymGraph, LsiLanguage.KOTLIN),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            dynamicProp.dtoLoadedStateStorageNameOrNull(graph, LsiLanguage.UNKNOWN)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            dynamicProp.copy(name = "foreign")
+                .dtoLoadedStateStorageNameOrNull(graph, LsiLanguage.JAVA)
+        }
+    }
+
+    @Test
     fun `rejects inconsistent Java boolean semantics across base bindings`() {
         val prop = baseProp("mixed", baseName = "active").copy(
             baseProps = listOf(
@@ -321,10 +386,10 @@ class DtoAccessorExtensionsTest {
                     ),
                 )
             }
-            add(userProp())
-            add(baseProp("staticValue", DtoModifier.STATIC, "a-static"))
-            add(foldProp())
-            add(baseProp("fuzzyValue", DtoModifier.FUZZY, "b-fuzzy"))
+            add(userProp().copy(nullable = true))
+            add(baseProp("staticValue", DtoModifier.STATIC, "a-static", nullable = true))
+            add(foldProp().copy(nullable = true))
+            add(baseProp("fuzzyValue", DtoModifier.FUZZY, "b-fuzzy", nullable = true))
         }
         val hiddenDynamic = baseProp(
             name = "hiddenDynamic",

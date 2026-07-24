@@ -55,6 +55,32 @@ fun DtoBaseProp.loadedAccessorName(): String {
     return dtoIdentifier("is", name, "Loaded")
 }
 
+/** 返回 DTO 本体的加载状态存储名；当前属性无需独立状态时返回空。 */
+fun DtoProp.dtoLoadedStateStorageNameOrNull(
+    graph: DtoGraph,
+    targetLanguage: LsiLanguage,
+): String? {
+    require(graph.propsById[id] == this) {
+        "DTO property does not belong to this graph: ${id.value}"
+    }
+    val ownerType = graph.typesById.getValue(ownerTypeId)
+    if (
+        id !in ownerType.propIds ||
+        DtoModifier.INPUT !in ownerType.modifiers ||
+        !nullable ||
+        (this as? DtoBaseProp)?.inputModifier != DtoModifier.DYNAMIC
+    ) {
+        return null
+    }
+    return when (targetLanguage) {
+        LsiLanguage.JAVA -> dtoIdentifier("_is", name, "Loaded")
+        LsiLanguage.KOTLIN -> loadedAccessorName()
+        LsiLanguage.UNKNOWN -> throw IllegalArgumentException(
+            "DTO target language must be Java or Kotlin",
+        )
+    }
+}
+
 /** 返回 Serializer 的加载状态访问器；非动态属性返回空。 */
 fun DtoBaseProp.serializerLoadedAccessorNameOrNull(): String? {
     return if (inputModifier == DtoModifier.DYNAMIC) loadedAccessorName() else null
