@@ -49,6 +49,7 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoReusableTypeKind
 
 class JimmerDtoReusableIntegrationTest {
 
@@ -97,6 +98,10 @@ class JimmerDtoReusableIntegrationTest {
         assertEquals("StoreView", storeView.name)
         assertEquals(STORE_TYPE_ID, storeView.baseTypeId)
         assertEquals(storeDocument.source, storeView.location.source)
+        assertEquals("demo.dto.StoreView", storeProp.targetTypeReference?.qualifiedName)
+        assertEquals(STORE_TYPE_ID, storeProp.targetTypeReference?.targetBaseTypeId)
+        assertEquals(DtoReusableTypeKind.VIEW, storeProp.targetTypeReference?.kind)
+        assertEquals(bookDocument.source, storeProp.targetTypeReference?.location?.source)
     }
 
     @Test
@@ -191,6 +196,9 @@ class JimmerDtoReusableIntegrationTest {
             .map(graph.propsById::getValue)
             .single { prop -> prop.name == "store" } as DtoBaseProp
         assertNull(storeProp.targetTypeId)
+        assertEquals("contract.StoreView", storeProp.targetTypeReference?.qualifiedName)
+        assertEquals(STORE_TYPE_ID, storeProp.targetTypeReference?.targetBaseTypeId)
+        assertEquals(DtoReusableTypeKind.VIEW, storeProp.targetTypeReference?.kind)
     }
 
     @Test
@@ -230,6 +238,9 @@ class JimmerDtoReusableIntegrationTest {
             assertTrue(result.diagnostics.isEmpty())
             assertTrue(DtoModifier.SPECIFICATION in rootType.modifiers)
             assertNull(storeProp.targetTypeId)
+            assertEquals("contract.StoreSpecification", storeProp.targetTypeReference?.qualifiedName)
+            assertEquals(STORE_TYPE_ID, storeProp.targetTypeReference?.targetBaseTypeId)
+            assertEquals(DtoReusableTypeKind.SPECIFICATION, storeProp.targetTypeReference?.kind)
         }
     }
 

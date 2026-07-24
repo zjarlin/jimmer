@@ -61,6 +61,16 @@ class DtoGraphSnapshotTest {
             graph.copy(rootTypeIds = graph.rootTypeIds.reversed()),
             graph.withRootType { type -> type.copy(documentation = "changed type documentation") },
             graph.withBaseProp { prop -> prop.copy(dtoDocumentation = "changed DTO documentation") },
+            graph.withBaseProp { prop ->
+                prop.copy(
+                    targetTypeReference = DtoReusableTypeReference(
+                        qualifiedName = "demo.dto.StoreView",
+                        targetBaseTypeId = STORE_TYPE_ID,
+                        kind = DtoReusableTypeKind.VIEW,
+                        location = prop.aliasLocation,
+                    ),
+                )
+            },
             graph.withUserProp { prop -> prop.copy(defaultValueText = "\"changed\"") },
             graph.withRootType { type ->
                 val polymorphism = requireNotNull(type.polymorphism)

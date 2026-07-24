@@ -41,7 +41,17 @@ class DtoAccessorExtensionsTest {
             listOf("dynamicValue", "staticValue", "fuzzyValue"),
             type.basePropsInDeclarationOrder(graph).map(DtoBaseProp::name),
         )
+        assertEquals(
+            listOf("dynamicValue", "staticValue", "fuzzyValue"),
+            type.serializerPropsInDeclarationOrder(graph).map(DtoBaseProp::name),
+        )
+        assertEquals(
+            listOf("isDynamicValueLoaded", null, null),
+            type.serializerPropsInDeclarationOrder(graph)
+                .map(DtoBaseProp::serializerLoadedAccessorNameOrNull),
+        )
         assertTrue(type.requiresDynamicInputSerialization(graph))
+        assertTrue(type.requiresInputBuilder(graph))
     }
 
     @Test
@@ -54,6 +64,7 @@ class DtoAccessorExtensionsTest {
             type.basePropsInDeclarationOrder(graph).map(DtoBaseProp::name),
         )
         assertFalse(type.requiresDynamicInputSerialization(graph))
+        assertFalse(type.requiresInputBuilder(graph))
     }
 
     @Test
@@ -62,6 +73,10 @@ class DtoAccessorExtensionsTest {
         val type = graph.types.single()
 
         assertFalse(type.requiresDynamicInputSerialization(graph))
+        assertFalse(type.requiresInputBuilder(graph))
+        assertFailsWith<IllegalArgumentException> {
+            type.serializerPropsInDeclarationOrder(graph)
+        }
     }
 
     @Test

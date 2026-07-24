@@ -18,6 +18,7 @@ fun DtoGraph.originatingSources(): Set<LsiSource> {
             when (prop) {
                 is DtoBaseProp -> {
                     add(prop.baseLocation.source)
+                    prop.targetTypeReference?.let { reference -> add(reference.location.source) }
                     prop.config?.filter?.let { filter -> add(filter.location.source) }
                     prop.config?.recursion?.let { recursion -> add(recursion.location.source) }
                 }

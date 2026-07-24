@@ -971,19 +971,6 @@ private sealed interface CandidateAnnotation {
     }
 }
 
-private fun DtoType.requiresInputBuilder(graph: DtoGraph): Boolean {
-    if (polymorphism != null || DtoModifier.INPUT !in modifiers) {
-        return false
-    }
-    return propIds.asSequence()
-        .map(graph.propsById::getValue)
-        .filterIsInstance<DtoBaseProp>()
-        .any { prop ->
-            prop.inputModifier == DtoModifier.FIXED ||
-                prop.inputModifier == DtoModifier.DYNAMIC
-        }
-}
-
 private fun LsiTypeDeclaration.annotationDeclarationKind(): DtoAnnotationDeclarationKind {
     if (
         annotations.any { annotation ->

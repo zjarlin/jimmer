@@ -10,6 +10,8 @@ import org.babyfish.jimmer.dto.compiler.DtoModifier as AstDtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranch as AstDtoPolymorphicBranch
 import org.babyfish.jimmer.dto.compiler.DtoProp as AstDtoProp
 import org.babyfish.jimmer.dto.compiler.DtoType as AstDtoType
+import org.babyfish.jimmer.dto.compiler.DtoTypeKind as AstDtoTypeKind
+import org.babyfish.jimmer.dto.compiler.DtoTypeRef as AstDtoTypeReference
 import org.babyfish.jimmer.dto.compiler.EnumType
 import org.babyfish.jimmer.dto.compiler.FoldProp
 import org.babyfish.jimmer.dto.compiler.LikeOption
@@ -157,11 +159,16 @@ private class DtoGraphFreezer(
         } else {
             freezeProp(tailProp, ownerType, ownerTypeId, "$path/tail:${tailProp.name}")
         }
-        val targetType = prop.targetType ?: prop.targetTypeRef?.sourceType
+        val targetTypeReference = prop.targetTypeRef
+        val targetType = prop.targetType ?: targetTypeReference?.sourceType
         val targetTypeId = targetType?.let {
             freezeType(
                 dtoType = it,
-                path = "$path/target:${it.name.orEmpty()}",
+                path = if (targetTypeReference == null) {
+                    "$path/target:${it.name.orEmpty()}"
+                } else {
+                    "$path/reference:${targetTypeReference.qualifiedName}"
+                },
                 location = location(it.dtoFile, prop.aliasLine, prop.aliasColumn),
             )
         }
@@ -189,6 +196,7 @@ private class DtoGraphFreezer(
             }.toDtoModifier(),
             functionName = prop.funcName,
             targetTypeId = targetTypeId,
+            targetTypeReference = targetTypeReference?.toDtoReusableTypeReference(prop.declaringFile),
             enumType = prop.enumType?.toDtoEnumType(),
             config = prop.config?.toDtoConfig(prop.declaringFile),
             recursive = prop.isRecursive,
@@ -324,6 +332,20 @@ private class DtoGraphFreezer(
         )
     }
 
+    private fun AstDtoTypeReference<LsiDtoBaseType, LsiDtoBaseProp>.toDtoReusableTypeReference(
+        declaringFile: DtoFile,
+    ): DtoReusableTypeReference {
+        val typeInfo = requireNotNull(typeInfo) {
+            "Reusable DTO reference must be linked before freezing: $qualifiedName"
+        }
+        return DtoReusableTypeReference(
+            qualifiedName = qualifiedName,
+            targetBaseTypeId = targetBaseType.id,
+            kind = typeInfo.kind.toDtoReusableTypeKind(),
+            location = location(declaringFile, line, column),
+        )
+    }
+
     private fun Anno.toDtoAnnotation(declaringFile: DtoFile): DtoAnnotation {
         return DtoAnnotation(
             typeId = LsiSymbolId.type(qualifiedName),
@@ -435,6 +457,9 @@ private class DtoGraphFreezer(
     }
 
     private fun AstDtoModifier.toDtoModifier(): DtoModifier = DtoModifier.valueOf(name)
+
+    private fun AstDtoTypeKind.toDtoReusableTypeKind(): DtoReusableTypeKind =
+        DtoReusableTypeKind.valueOf(name)
 
     private fun LikeOption.toDtoLikeOption(): DtoLikeOption = DtoLikeOption.valueOf(name)
 

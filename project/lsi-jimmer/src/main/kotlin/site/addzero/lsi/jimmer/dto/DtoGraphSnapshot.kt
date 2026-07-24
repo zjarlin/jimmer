@@ -97,6 +97,7 @@ private fun StringBuilder.appendProp(prop: DtoProp) {
             prop.inputModifier.name,
             prop.functionName.orEmpty(),
             prop.targetTypeId?.value.orEmpty(),
+            prop.targetTypeReference?.canonicalText().orEmpty(),
             prop.enumType?.canonicalText().orEmpty(),
             prop.config?.canonicalText().orEmpty(),
             prop.recursive.toString(),
@@ -176,6 +177,14 @@ private fun DtoEnumType.canonicalText(): String = canonicalValue(
     "enum",
     numeric.toString(),
     mappings.canonicalList { mapping -> canonicalValue("mapping", mapping.constant, mapping.value) },
+)
+
+private fun DtoReusableTypeReference.canonicalText(): String = canonicalValue(
+    "reusable-type",
+    qualifiedName,
+    targetBaseTypeId.value,
+    kind.name,
+    location.canonicalText(),
 )
 
 private fun DtoPropConfig.canonicalText(): String = canonicalValue(

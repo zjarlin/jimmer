@@ -68,6 +68,17 @@ data class DtoGraph(
         }) {
             "DTO type property owner must match the containing type: ${type.id.value}"
         }
+        require(type.propIds.map { propId -> propsById.getValue(propId).name }.distinct().size == type.propIds.size) {
+            "DTO type property names must be distinct: ${type.id.value}"
+        }
+        require(
+            type.hiddenFlatPropIds
+                .map { propId -> propsById.getValue(propId).name }
+                .distinct()
+                .size == type.hiddenFlatPropIds.size
+        ) {
+            "DTO type hidden flat property names must be distinct: ${type.id.value}"
+        }
         validateAnnotations(type.annotations)
         type.superInterfaces.forEach(::validateTypeRef)
         type.polymorphism?.branches.orEmpty().forEach { branch ->
@@ -109,6 +120,17 @@ data class DtoGraph(
                 }
                 require(prop.targetTypeId == null || typesById.containsKey(prop.targetTypeId)) {
                     "DTO target type must exist: ${prop.id.value}"
+                }
+                require(prop.targetTypeReference == null || !prop.recursive) {
+                    "Reusable DTO reference cannot be recursive: ${prop.id.value}"
+                }
+                val referencedSourceType = prop.targetTypeId?.let(typesById::getValue)
+                require(
+                    prop.targetTypeReference == null ||
+                        referencedSourceType == null ||
+                        referencedSourceType.baseTypeId == prop.targetTypeReference.targetBaseTypeId
+                ) {
+                    "Reusable DTO source type must use the referenced base type: ${prop.id.value}"
                 }
             }
             is DtoFoldProp -> {
@@ -207,6 +229,7 @@ data class DtoBaseProp(
     val inputModifier: DtoModifier,
     val functionName: String?,
     val targetTypeId: DtoTypeId?,
+    val targetTypeReference: DtoReusableTypeReference? = null,
     val enumType: DtoEnumType?,
     val config: DtoPropConfig?,
     val recursive: Boolean,
@@ -226,6 +249,28 @@ data class DtoBaseProp(
             "Dynamic DTO input property must be nullable: ${id.value}"
         }
     }
+}
+
+data class DtoReusableTypeReference(
+    val qualifiedName: String,
+    val targetBaseTypeId: LsiSymbolId,
+    val kind: DtoReusableTypeKind,
+    val location: LsiLocation,
+) {
+    init {
+        require(qualifiedName.isNotBlank()) { "Reusable DTO qualified name cannot be blank" }
+        require(qualifiedName == qualifiedName.trim()) {
+            "Reusable DTO qualified name cannot have surrounding whitespace: '$qualifiedName'"
+        }
+        LsiSymbolId.type(qualifiedName).requireTypeQualifiedName()
+        targetBaseTypeId.requireTypeQualifiedName()
+    }
+}
+
+enum class DtoReusableTypeKind {
+    VIEW,
+    INPUT,
+    SPECIFICATION,
 }
 
 data class DtoUserProp(

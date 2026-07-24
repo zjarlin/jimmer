@@ -22,10 +22,29 @@ fun DtoType.basePropsInDeclarationOrder(graph: DtoGraph): List<DtoBaseProp> {
     return propsInDeclarationOrder(graph).filterIsInstance<DtoBaseProp>()
 }
 
+/** 按 DTO 声明顺序返回 Serializer 需要写出的属性。 */
+fun DtoType.serializerPropsInDeclarationOrder(graph: DtoGraph): List<DtoBaseProp> {
+    require(DtoModifier.INPUT in modifiers) {
+        "DTO serializer properties require an input DTO type: ${id.value}"
+    }
+    return basePropsInDeclarationOrder(graph)
+}
+
 /** 判断输入 DTO 是否需要按加载状态执行动态序列化。 */
 fun DtoType.requiresDynamicInputSerialization(graph: DtoGraph): Boolean {
-    return DtoModifier.INPUT in modifiers &&
+    return polymorphism == null &&
+        DtoModifier.INPUT in modifiers &&
         basePropsInDeclarationOrder(graph).any { prop -> prop.inputModifier == DtoModifier.DYNAMIC }
+}
+
+/** 判断输入 DTO 是否需要生成 Builder。 */
+fun DtoType.requiresInputBuilder(graph: DtoGraph): Boolean {
+    if (polymorphism != null || DtoModifier.INPUT !in modifiers) {
+        return false
+    }
+    return basePropsInDeclarationOrder(graph).any { prop ->
+        prop.inputModifier == DtoModifier.FIXED || prop.inputModifier == DtoModifier.DYNAMIC
+    }
 }
 
 /** 返回动态输入属性对应的加载状态访问器名称。 */
@@ -34,6 +53,11 @@ fun DtoBaseProp.loadedAccessorName(): String {
         "DTO loaded accessor requires a dynamic input property: ${id.value}"
     }
     return dtoIdentifier("is", name, "Loaded")
+}
+
+/** 返回 Serializer 的加载状态访问器；非动态属性返回空。 */
+fun DtoBaseProp.serializerLoadedAccessorNameOrNull(): String? {
+    return if (inputModifier == DtoModifier.DYNAMIC) loadedAccessorName() else null
 }
 
 /** 返回目标语言的输入 DTO Serializer 访问属性值时使用的成员名称。 */
