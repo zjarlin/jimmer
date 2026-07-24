@@ -517,7 +517,10 @@ public class DtoGenerator {
                 selectedPolymorphicInputDiscriminatorProp(dtoType);
         String property = discriminatorProp != null ?
                 discriminatorProp.getName() :
-                rootDiscriminatorPropName();
+                DtoAccessorExtensionsKt.polymorphicRootDiscriminatorPropNameOrNull(
+                        lsiDtoType,
+                        immutableSchema
+                );
         if (property == null) {
             return;
         }
@@ -625,16 +628,6 @@ public class DtoGenerator {
             }
         }
         return result;
-    }
-
-    @Nullable
-    private String rootDiscriminatorPropName() {
-        for (ImmutableProp prop : polymorphicRootType().getProps().values()) {
-            if (prop.isDiscriminator()) {
-                return prop.getName();
-            }
-        }
-        return null;
     }
 
     public String getSimpleName() {

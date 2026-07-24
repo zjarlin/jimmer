@@ -19,6 +19,8 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableView
+import site.addzero.lsi.jimmer.InheritanceStrategy
+import site.addzero.lsi.jimmer.JoinedTableDissociateAction
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
@@ -253,6 +255,80 @@ class DtoAccessorExtensionsTest {
         }
         assertFailsWith<IllegalArgumentException> {
             polymorphicInput.isPolymorphicInputRoot(ImmutableSchema(emptyList()))
+        }
+    }
+
+    @Test
+    fun `resolves polymorphic discriminator name from the frozen inheritance root`() {
+        val rootTypeId = LsiSymbolId.type("demo.Publication")
+        val rootIdProp = immutableProp(
+            name = "id",
+            type = STRING_TYPE,
+            ownerTypeId = rootTypeId,
+            primaryMapping = PrimaryMapping.ID,
+        )
+        val rootDiscriminator = immutableProp(
+            name = "kind",
+            type = STRING_TYPE,
+            ownerTypeId = rootTypeId,
+            primaryMapping = PrimaryMapping.DISCRIMINATOR,
+        )
+        val rootType = immutableType(
+            id = rootTypeId,
+            props = listOf(rootIdProp, rootDiscriminator),
+            kind = ImmutableTypeKind.ENTITY,
+            idPropId = rootIdProp.id,
+            inheritanceRootTypeId = rootTypeId,
+            inheritanceStrategy = InheritanceStrategy.SINGLE_TABLE,
+            joinedTableDissociateAction = JoinedTableDissociateAction.DELETE,
+            discriminatorPropId = rootDiscriminator.id,
+        )
+        val inheritedIdProp = rootIdProp.copy(
+            id = LsiSymbolId.property(BASE_TYPE_ID, rootIdProp.name),
+            ownerTypeId = BASE_TYPE_ID,
+            declaringTypeId = rootTypeId,
+            overrideChain = listOf(rootIdProp.id),
+            inherited = true,
+        )
+        val inheritedDiscriminator = rootDiscriminator.copy(
+            id = LsiSymbolId.property(BASE_TYPE_ID, rootDiscriminator.name),
+            ownerTypeId = BASE_TYPE_ID,
+            declaringTypeId = rootTypeId,
+            overrideChain = listOf(rootDiscriminator.id),
+            inherited = true,
+        )
+        val derivedType = immutableType(
+            id = BASE_TYPE_ID,
+            props = listOf(inheritedIdProp, inheritedDiscriminator),
+            kind = ImmutableTypeKind.ENTITY,
+            idPropId = inheritedIdProp.id,
+            superTypeIds = listOf(rootTypeId),
+            primarySuperTypeId = rootTypeId,
+            inheritanceRootTypeId = rootTypeId,
+            discriminatorValue = "BOOK",
+            discriminatorPropId = inheritedDiscriminator.id,
+        )
+        val dtoType = graph(visibleDynamic = false).types.single()
+        val schema = ImmutableSchema(listOf(rootType, derivedType))
+
+        assertEquals("kind", dtoType.polymorphicRootDiscriminatorPropNameOrNull(schema))
+        assertEquals(
+            "kind",
+            dtoType
+                .copy(baseTypeId = rootTypeId)
+                .polymorphicRootDiscriminatorPropNameOrNull(schema),
+        )
+        assertEquals(
+            null,
+            dtoType.polymorphicRootDiscriminatorPropNameOrNull(
+                ImmutableSchema(listOf(immutableType(BASE_TYPE_ID, emptyList()))),
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.polymorphicRootDiscriminatorPropNameOrNull(ImmutableSchema(emptyList()))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            rootType.copy(discriminatorPropId = rootIdProp.id)
         }
     }
 
@@ -687,6 +763,13 @@ class DtoAccessorExtensionsTest {
         props: List<ImmutableProp>,
         kind: ImmutableTypeKind = ImmutableTypeKind.IMMUTABLE,
         idPropId: LsiSymbolId? = null,
+        superTypeIds: List<LsiSymbolId> = emptyList(),
+        primarySuperTypeId: LsiSymbolId? = null,
+        inheritanceRootTypeId: LsiSymbolId? = null,
+        inheritanceStrategy: InheritanceStrategy? = null,
+        joinedTableDissociateAction: JoinedTableDissociateAction? = null,
+        discriminatorValue: String? = null,
+        discriminatorPropId: LsiSymbolId? = null,
     ): ImmutableType {
         return ImmutableType(
             id = id,
@@ -695,15 +778,15 @@ class DtoAccessorExtensionsTest {
             documentation = null,
             annotations = emptyList(),
             typeParameterIds = emptyList(),
-            superTypeIds = emptyList(),
+            superTypeIds = superTypeIds,
             props = props,
-            primarySuperTypeId = null,
-            inheritanceRootTypeId = null,
-            inheritanceStrategy = null,
-            joinedTableDissociateAction = null,
+            primarySuperTypeId = primarySuperTypeId,
+            inheritanceRootTypeId = inheritanceRootTypeId,
+            inheritanceStrategy = inheritanceStrategy,
+            joinedTableDissociateAction = joinedTableDissociateAction,
             instantiable = kind == ImmutableTypeKind.ENTITY,
-            discriminatorValue = null,
-            discriminatorPropId = null,
+            discriminatorValue = discriminatorValue,
+            discriminatorPropId = discriminatorPropId,
             idPropId = idPropId,
             versionPropId = null,
             logicalDeletedPropId = null,

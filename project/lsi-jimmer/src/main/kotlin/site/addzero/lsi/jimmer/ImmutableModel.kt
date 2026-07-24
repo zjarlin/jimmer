@@ -367,6 +367,13 @@ data class ImmutableType(
             "Immutable discriminator property must belong to its type: ${id.value}"
         }
         require(
+            kind != ImmutableTypeKind.ENTITY ||
+                props.filter { prop -> prop.primaryMapping == PrimaryMapping.DISCRIMINATOR }
+                    .map(ImmutableProp::id) == listOfNotNull(discriminatorPropId)
+        ) {
+            "Immutable discriminator property metadata must match its effective property: ${id.value}"
+        }
+        require(
             props.filter { prop -> prop.primaryMapping == PrimaryMapping.ID }
                 .map(ImmutableProp::id) == listOfNotNull(idPropId)
         ) {

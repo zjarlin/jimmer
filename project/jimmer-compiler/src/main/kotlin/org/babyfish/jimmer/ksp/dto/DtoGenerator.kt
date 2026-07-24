@@ -48,6 +48,7 @@ import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
 import site.addzero.lsi.jimmer.dto.isPolymorphicInputRoot
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
+import site.addzero.lsi.jimmer.dto.polymorphicRootDiscriminatorPropNameOrNull
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
@@ -419,7 +420,9 @@ internal class DtoGenerator private constructor(
         polymorphism: DtoPolymorphism<ImmutableType, ImmutableProp>
     ) {
         val discriminatorProp = selectedPolymorphicInputDiscriminatorProp(dtoType)
-        val property = discriminatorProp?.name ?: rootDiscriminatorPropName ?: return
+        val property = discriminatorProp?.name
+            ?: lsiDtoType.polymorphicRootDiscriminatorPropNameOrNull(immutableSchema)
+            ?: return
         addAnnotation(
             AnnotationSpec
                 .builder(ctx.jacksonTypes.jsonTypeInfo)
@@ -524,9 +527,6 @@ internal class DtoGenerator private constructor(
         }
         return result
     }
-
-    private val rootDiscriminatorPropName: String?
-        get() = polymorphicRootType.properties.values.firstOrNull { it.isDiscriminator }?.name
 
     private fun addDoc() {
         typeDocumentation()?.let {

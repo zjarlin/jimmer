@@ -89,6 +89,28 @@ fun DtoType.isPolymorphicInputRoot(
     return baseType.kind == ImmutableTypeKind.ENTITY
 }
 
+/** 返回 DTO 基础实体所在继承根的判别属性名；实体没有继承时返回空。 */
+fun DtoType.polymorphicRootDiscriminatorPropNameOrNull(
+    immutableSchema: ImmutableSchema,
+): String? {
+    val baseTypeId = requireNotNull(baseTypeId) {
+        "DTO discriminator resolution requires a base immutable type: ${id.value}"
+    }
+    val baseType = requireNotNull(immutableSchema.typesById[baseTypeId]) {
+        "No immutable base type '${baseTypeId.value}' for DTO type: ${id.value}"
+    }
+    val rootTypeId = baseType.inheritanceRootTypeId ?: return null
+    val rootType = requireNotNull(immutableSchema.typesById[rootTypeId]) {
+        "No immutable inheritance root '${rootTypeId.value}' for DTO type: ${id.value}"
+    }
+    val discriminatorPropId = requireNotNull(rootType.discriminatorPropId) {
+        "Immutable inheritance root has no discriminator property: ${rootType.id.value}"
+    }
+    return requireNotNull(immutableSchema.propsById[discriminatorPropId]) {
+        "No immutable discriminator property '${discriminatorPropId.value}' for DTO type: ${id.value}"
+    }.name
+}
+
 /** 返回动态输入属性对应的加载状态访问器名称。 */
 fun DtoBaseProp.loadedAccessorName(): String {
     require(inputModifier == DtoModifier.DYNAMIC && nullable) {
