@@ -30,6 +30,7 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
@@ -1585,7 +1586,7 @@ internal class DtoGenerator private constructor(
     }
 
     private fun FunSpec.Builder.addDefaultPolymorphicInputToEntityBody(
-        discriminatorProp: DtoProp<ImmutableType, ImmutableProp>,
+        discriminatorProp: DtoBaseProp,
         extraStatement: String?,
     ) {
         for (concreteType in knownConcreteTypes(dtoType.baseType)) {
@@ -1675,7 +1676,7 @@ internal class DtoGenerator private constructor(
     }
 
     private fun FunSpec.Builder.addTypedPolymorphicInputDiscriminatorValidation(
-        discriminatorProp: DtoProp<ImmutableType, ImmutableProp>
+        discriminatorProp: DtoBaseProp
     ) {
         val value = dtoType.baseType.discriminatorValue ?: return
         beginControlFlow(
@@ -1717,18 +1718,14 @@ internal class DtoGenerator private constructor(
         }
     }
 
-    private fun polymorphicInputDiscriminatorProp(): DtoProp<ImmutableType, ImmutableProp>? {
-        if (!dtoType.modifiers.contains(DtoModifier.INPUT) ||
-            !polymorphicBranch ||
-            !dtoType.baseType.isEntity ||
-            dtoType.baseType.inheritanceRoot == null
-        ) {
+    private fun polymorphicInputDiscriminatorProp(): DtoBaseProp? {
+        if (!polymorphicBranch) {
             return null
         }
-        return dtoType.props
-            .asSequence()
-            .filterIsInstance<DtoProp<ImmutableType, ImmutableProp>>()
-            .firstOrNull { it.nextProp == null && it.baseProp.isDiscriminator }
+        return lsiDtoType.selectedPolymorphicInputDiscriminatorPropOrNull(
+            lsiGraph,
+            immutableSchema,
+        )
     }
 
     private val isDefaultPolymorphicInputBranch: Boolean

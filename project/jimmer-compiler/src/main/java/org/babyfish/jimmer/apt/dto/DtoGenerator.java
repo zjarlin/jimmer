@@ -1843,7 +1843,7 @@ public class DtoGenerator {
         if (withId && !idOverridable) {
             return;
         }
-        DtoProp<ImmutableType, ImmutableProp> discriminatorProp = polymorphicInputDiscriminatorProp();
+        DtoBaseProp discriminatorProp = polymorphicInputDiscriminatorProp();
         ImmutableProp baseIdProp = withId ? dtoType.getBaseType().getIdProp() : null;
         MethodSpec.Builder builder = MethodSpec
                 .methodBuilder(dtoType.getBaseType().isEntity() ?
@@ -1888,9 +1888,14 @@ public class DtoGenerator {
     private void addDefaultPolymorphicInputToEntityBody(
             MethodSpec.Builder builder,
             @Nullable ImmutableProp baseIdProp,
-            DtoProp<ImmutableType, ImmutableProp> discriminatorProp
+            DtoBaseProp discriminatorProp
     ) {
-        String discriminatorGetter = "this." + getterName(discriminatorProp) + "()";
+        String discriminatorGetter = "this." + DtoAccessorExtensionsKt.serializerValueAccessorName(
+                discriminatorProp,
+                LsiLanguage.JAVA,
+                lsiGraph,
+                immutableSchema
+        ) + "()";
         List<ImmutableType> concreteTypes = knownConcreteTypes(dtoType.getBaseType());
         for (ImmutableType concreteType : concreteTypes) {
             String value = concreteType.getDiscriminatorValue();
@@ -1930,13 +1935,18 @@ public class DtoGenerator {
 
     private void addTypedPolymorphicInputDiscriminatorValidation(
             MethodSpec.Builder builder,
-            DtoProp<ImmutableType, ImmutableProp> discriminatorProp
+            DtoBaseProp discriminatorProp
     ) {
         String value = dtoType.getBaseType().getDiscriminatorValue();
         if (value == null) {
             return;
         }
-        String discriminatorGetter = "this." + getterName(discriminatorProp) + "()";
+        String discriminatorGetter = "this." + DtoAccessorExtensionsKt.serializerValueAccessorName(
+                discriminatorProp,
+                LsiLanguage.JAVA,
+                lsiGraph,
+                immutableSchema
+        ) + "()";
         builder.beginControlFlow(
                 "if (!$T.equals($L, $T.get($T.class).getInheritanceInfo().discriminatorValue($S)))",
                 Constants.OBJECTS_CLASS_NAME,
@@ -1960,22 +1970,15 @@ public class DtoGenerator {
     }
 
     @Nullable
-    private DtoProp<ImmutableType, ImmutableProp> polymorphicInputDiscriminatorProp() {
-        if (!dtoType.getModifiers().contains(DtoModifier.INPUT) ||
-                !polymorphicBranch ||
-                !dtoType.getBaseType().isEntity() ||
-                dtoType.getBaseType().getInheritanceRoot() == null) {
+    private DtoBaseProp polymorphicInputDiscriminatorProp() {
+        if (!polymorphicBranch) {
             return null;
         }
-        for (AbstractProp abstractProp : dtoType.getProps()) {
-            if (abstractProp instanceof DtoProp<?, ?>) {
-                DtoProp<ImmutableType, ImmutableProp> prop = asDtoProp(abstractProp);
-                if (prop.getNextProp() == null && prop.getBaseProp().isDiscriminator()) {
-                    return prop;
-                }
-            }
-        }
-        return null;
+        return DtoAccessorExtensionsKt.selectedPolymorphicInputDiscriminatorPropOrNull(
+                lsiDtoType,
+                lsiGraph,
+                immutableSchema
+        );
     }
 
     private boolean isDefaultPolymorphicInputBranch() {
