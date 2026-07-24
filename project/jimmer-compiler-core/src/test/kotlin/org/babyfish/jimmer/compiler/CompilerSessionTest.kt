@@ -10,6 +10,9 @@ import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.codegen.GeneratedArtifactConflictException
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiSource
+import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
@@ -264,6 +267,50 @@ class CompilerSessionTest {
     }
 
     @Test
+    fun `稳定源码忽略轮次来源投影后在第二轮写出`() {
+        val first = generatedSource("stable", ArtifactEmissionMode.STABLE).withSourceProjection(
+            path = "src/main/java/example/Book.java",
+            kind = LsiSourceKind.SOURCE,
+        )
+        val second = first.withSourceProjection(
+            path = "build/generated/example/Book.java",
+            kind = LsiSourceKind.GENERATED,
+        )
+        val session = CompilerSession(
+            "stable-source-projection",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    listOf(if (round == 0) first else second)
+                }
+            ),
+        )
+
+        assertTrue(session.execute(emptyRound(0)).newArtifacts.isEmpty())
+        assertEquals(listOf(second), session.execute(emptyRound(1)).newArtifacts)
+        assertEquals(listOf(second), session.artifacts())
+    }
+
+    @Test
+    fun `稳定源码的符号依赖变化后继续等待`() {
+        val subtypeId = LsiSymbolId.type("example.SpecialBook")
+        val first = generatedSource("stable", ArtifactEmissionMode.STABLE)
+        val second = first.copy(dependencySymbols = first.dependencySymbols + subtypeId)
+        val session = CompilerSession(
+            "stable-source-symbol-dependency",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    listOf(if (round == 0) first else second)
+                }
+            ),
+        )
+
+        assertTrue(session.execute(emptyRound(0)).newArtifacts.isEmpty())
+        assertTrue(session.execute(emptyRound(1)).newArtifacts.isEmpty())
+        assertEquals(listOf(second), session.execute(emptyRound(2)).newArtifacts)
+        assertEquals(listOf(second), session.artifacts())
+    }
+
+    @Test
     fun `稳定源码候选暴露下一轮需重冻的来源符号`() {
         val firstTypeId = LsiSymbolId.type("example.Book")
         val secondTypeId = LsiSymbolId.type("example.SpecialBook")
@@ -317,6 +364,68 @@ class CompilerSessionTest {
         val changed = source.copy(content = "changed")
         val session = CompilerSession(
             "emitted-stable-source-conflict",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    listOf(if (round < 2) source else changed)
+                }
+            ),
+        )
+
+        session.execute(emptyRound(0))
+        session.execute(emptyRound(1))
+        val exception = assertFailsWith<GeneratedArtifactConflictException> {
+            session.execute(emptyRound(2))
+        }
+
+        assertEquals(source, exception.existing)
+        assertEquals(changed, exception.incoming)
+        assertEquals(2, session.snapshot().rounds.size)
+        assertEquals(listOf(source), session.artifacts())
+    }
+
+    @Test
+    fun `稳定源码写出后允许来源投影变化`() {
+        val first = generatedSource("stable", ArtifactEmissionMode.STABLE).withSourceProjection(
+            path = "src/main/java/example/Book.java",
+            kind = LsiSourceKind.SOURCE,
+        )
+        val second = first.withSourceProjection(
+            path = "build/generated/example/Book.java",
+            kind = LsiSourceKind.GENERATED,
+        )
+        val third = second.withSourceProjection(
+            path = "build/generated/round-2/example/Book.java",
+            kind = LsiSourceKind.GENERATED,
+        )
+        val session = CompilerSession(
+            "emitted-stable-source-projection",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    listOf(
+                        when (round) {
+                            0 -> first
+                            1 -> second
+                            else -> third
+                        }
+                    )
+                }
+            ),
+        )
+
+        session.execute(emptyRound(0))
+        assertEquals(listOf(second), session.execute(emptyRound(1)).newArtifacts)
+        assertTrue(session.execute(emptyRound(2)).newArtifacts.isEmpty())
+        assertEquals(listOf(second), session.artifacts())
+    }
+
+    @Test
+    fun `稳定源码写出后符号依赖变化直接冲突`() {
+        val source = generatedSource("stable", ArtifactEmissionMode.STABLE)
+        val changed = source.copy(
+            dependencySymbols = source.dependencySymbols + LsiSymbolId.type("example.SpecialBook"),
+        )
+        val session = CompilerSession(
+            "emitted-stable-source-symbol-conflict",
             listOf(
                 roundResultFeature("immutable") { round ->
                     listOf(if (round < 2) source else changed)
@@ -560,6 +669,17 @@ class CompilerSessionTest {
             aggregationMode = ArtifactAggregationMode.AGGREGATING,
             emissionMode = emissionMode,
             originatingSymbols = setOf(LsiSymbolId.type("example.Book")),
+        )
+    }
+
+    private fun GeneratedArtifact.withSourceProjection(
+        path: String,
+        kind: LsiSourceKind,
+    ): GeneratedArtifact {
+        val source = LsiSource.of(path, LsiLanguage.JAVA, kind)
+        return copy(
+            originatingSources = setOf(source),
+            dependencySources = setOf(source),
         )
     }
 

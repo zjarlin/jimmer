@@ -261,7 +261,7 @@ class CompilerSession(
                     currentStableKeys += artifact.key
                     val emitted = stagedArtifactSet[artifact.key]
                     if (emitted != null) {
-                        if (emitted != artifact) {
+                        if (emitted.stableEmissionFingerprint() != artifact.stableEmissionFingerprint()) {
                             throw GeneratedArtifactConflictException(emitted, artifact)
                         }
                         stagedStableCandidates.remove(artifact.key)
@@ -271,7 +271,7 @@ class CompilerSession(
                     if (
                         candidate != null &&
                         candidate.roundNumber == round.number - 1 &&
-                        candidate.artifact == artifact
+                        candidate.artifact.stableEmissionFingerprint() == artifact.stableEmissionFingerprint()
                     ) {
                         stagedArtifactSet.register(artifact)
                         stagedStableCandidates.remove(artifact.key)
@@ -440,4 +440,27 @@ class CompilerSession(
         val artifact: GeneratedArtifact,
         val roundNumber: Int,
     )
+
+    /**
+     * 稳定源码只按实际发射语义收敛，忽略前端在不同轮次观察到的来源投影。
+     */
+    private data class StableArtifactEmissionFingerprint(
+        val key: GeneratedArtifactKey,
+        val content: String,
+        val aggregationMode: ArtifactAggregationMode,
+        val emissionMode: ArtifactEmissionMode,
+        val originatingSymbols: Set<LsiSymbolId>,
+        val dependencySymbols: Set<LsiSymbolId>,
+    )
+
+    private fun GeneratedArtifact.stableEmissionFingerprint(): StableArtifactEmissionFingerprint {
+        return StableArtifactEmissionFingerprint(
+            key = key,
+            content = content,
+            aggregationMode = aggregationMode,
+            emissionMode = emissionMode,
+            originatingSymbols = originatingSymbols,
+            dependencySymbols = dependencySymbols,
+        )
+    }
 }
