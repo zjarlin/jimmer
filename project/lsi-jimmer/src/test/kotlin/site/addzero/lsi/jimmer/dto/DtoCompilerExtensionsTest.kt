@@ -38,6 +38,19 @@ import site.addzero.lsi.model.LsiWorkspace
 class DtoCompilerExtensionsTest {
 
     @Test
+    fun `non inherited DTO compiler preserves immutable property order`() {
+        val nameProp = prop(BOOK_TYPE_ID, "name", STRING_TYPE)
+        val idProp = idProp(BOOK_TYPE_ID)
+        val registry = ImmutableSchema(
+            listOf(immutableEntity(BOOK_TYPE_ID, listOf(nameProp, idProp)))
+        ).toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
+
+        val props = registry.props(requireNotNull(registry[BOOK_TYPE_ID]))
+
+        assertEquals(listOf("name", "id"), props.keys.toList())
+    }
+
+    @Test
     fun `resolves inherited generic input for Java target`() {
         val bridgeTypeId = typeId("contract.BaseInput")
         val bridgeParameterId = LsiSymbolId.typeParameter(bridgeTypeId, "T")
@@ -335,6 +348,97 @@ class DtoCompilerExtensionsTest {
         assertEquals("Immutable title documentation\n", title.documentation)
         assertNull(title.dtoDocumentation)
         assertTrue(props.all { dtoProp -> dtoProp.aliasLocation.source == source })
+    }
+
+    @Test
+    fun `inherited DTO compiler order places id before other scalar properties`() {
+        val baseTypeId = typeId("demo.BaseRecord")
+        val administratorTypeId = typeId("demo.Administrator")
+        val baseName = prop(
+            ownerTypeId = baseTypeId,
+            name = "name",
+            type = STRING_TYPE,
+        )
+        val inheritedName = baseName.copy(
+            id = LsiSymbolId.property(administratorTypeId, "name"),
+            ownerTypeId = administratorTypeId,
+            declarationId = baseName.id,
+            declaringTypeId = baseTypeId,
+            overrideChain = listOf(baseName.id),
+            inherited = true,
+        )
+        val administratorId = idProp(administratorTypeId)
+        val baseType = ImmutableType(
+            id = baseTypeId,
+            qualifiedName = baseTypeId.requireTypeQualifiedName(),
+            kind = ImmutableTypeKind.MAPPED_SUPERCLASS,
+            documentation = null,
+            annotations = emptyList(),
+            typeParameterIds = emptyList(),
+            superTypeIds = emptyList(),
+            props = listOf(baseName),
+            primarySuperTypeId = null,
+            inheritanceRootTypeId = null,
+            inheritanceStrategy = null,
+            joinedTableDissociateAction = null,
+            instantiable = false,
+            discriminatorValue = null,
+            discriminatorPropId = null,
+            idPropId = null,
+            versionPropId = null,
+            logicalDeletedPropId = null,
+            acrossMicroServices = false,
+            microServiceName = "",
+        )
+        val administratorType = ImmutableType(
+            id = administratorTypeId,
+            qualifiedName = administratorTypeId.requireTypeQualifiedName(),
+            kind = ImmutableTypeKind.ENTITY,
+            documentation = null,
+            annotations = emptyList(),
+            typeParameterIds = emptyList(),
+            superTypeIds = listOf(baseTypeId),
+            props = listOf(inheritedName, administratorId),
+            primarySuperTypeId = baseTypeId,
+            inheritanceRootTypeId = null,
+            inheritanceStrategy = null,
+            joinedTableDissociateAction = null,
+            instantiable = true,
+            discriminatorValue = null,
+            discriminatorPropId = null,
+            idPropId = administratorId.id,
+            versionPropId = null,
+            logicalDeletedPropId = null,
+            acrossMicroServices = false,
+            microServiceName = "",
+        )
+        val source = LsiSource.of(
+            path = "src/main/dto/demo/Administrator.dto",
+            language = LsiLanguage.KOTLIN,
+        )
+        val registry = ImmutableSchema(listOf(baseType, administratorType))
+            .toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
+        val dtoFile = DtoFile(
+            source.path,
+            "demo/Administrator.dto",
+            """
+                input AdministratorInput {
+                    #allScalars
+                }
+            """.trimIndent(),
+        )
+        val compiledTypes = dtoFile.toLsiDtoCompiler(
+            registry = registry,
+            defaultNullableInputModifier = AstDtoModifier.STATIC,
+        ).compile(requireNotNull(registry[administratorTypeId]))
+
+        val graph = compiledTypes.toLsiDtoGraph(source)
+        val rootType = graph.typesById.getValue(graph.rootTypeIds.single())
+
+        assertEquals(
+            listOf("id", "name"),
+            rootType.propIds.map { propId -> graph.propsById.getValue(propId).name },
+        )
     }
 
     private fun registry(

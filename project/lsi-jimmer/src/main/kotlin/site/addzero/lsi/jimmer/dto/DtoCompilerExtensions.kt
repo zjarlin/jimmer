@@ -83,7 +83,7 @@ class LsiDtoTypeRegistry internal constructor(
     }
 
     internal fun props(type: LsiDtoBaseType): Map<String, LsiDtoBaseProp> {
-        return type.immutableType.props.associate { immutableProp ->
+        return type.immutableType.dtoCompilerPropsInOrder().associateTo(linkedMapOf()) { immutableProp ->
             immutableProp.name to LsiDtoBaseProp(type, immutableProp, this)
         }
     }
@@ -109,6 +109,19 @@ class LsiDtoTypeRegistry internal constructor(
         typeId: LsiSymbolId,
         superTypeId: LsiSymbolId,
     ): LsiDeclaredType? = typeSystem.resolveSuperType(typeId, superTypeId)
+}
+
+/**
+ * 继承类型的 DTO 属性沿用 Jimmer 的 ID 前置规则，其余属性保持结构声明顺序。
+ */
+private fun ImmutableType.dtoCompilerPropsInOrder(): List<ImmutableProp> {
+    if (superTypeIds.isEmpty()) {
+        return props
+    }
+    val (idProps, remainingProps) = props.partition { prop ->
+        prop.primaryMapping == PrimaryMapping.ID
+    }
+    return idProps + remainingProps
 }
 
 /** DTO compiler SPI 使用的不可变类型投影。 */
