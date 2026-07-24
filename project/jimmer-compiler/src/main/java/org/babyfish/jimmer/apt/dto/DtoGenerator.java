@@ -2866,16 +2866,7 @@ public class DtoGenerator {
     }
 
     private boolean isBuildRequired() {
-        if (!dtoType.getModifiers().contains(DtoModifier.INPUT)) {
-            return false;
-        }
-        for (DtoProp<?, ?> prop : dtoType.getDtoProps()) {
-            DtoModifier inputModifier = prop.getInputModifier();
-            if (inputModifier == DtoModifier.FIXED || inputModifier == DtoModifier.DYNAMIC) {
-                return true;
-            }
-        }
-        return false;
+        return DtoAccessorExtensionsKt.requiresInputBuilder(lsiDtoType, lsiGraph);
     }
 
     private boolean isHibernateValidatorEnhancementRequired() {

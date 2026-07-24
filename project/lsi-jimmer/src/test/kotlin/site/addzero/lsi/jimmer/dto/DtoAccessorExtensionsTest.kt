@@ -80,6 +80,55 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `requires builders for merged branches but not polymorphic roots`() {
+        val baseGraph = graph(visibleDynamic = true)
+        val root = baseGraph.types.single()
+        val dynamicProp = baseGraph.props
+            .filterIsInstance<DtoBaseProp>()
+            .single { prop -> prop.name == "dynamicValue" }
+        val branchPropId = DtoPropId("dto#branch-dynamic")
+        val branchProp = dynamicProp.copy(
+            id = branchPropId,
+            ownerTypeId = MERGED_TYPE_ID,
+            tailPropId = branchPropId,
+        )
+        val branch = DtoPolymorphicBranch(
+            kind = DtoPolymorphicBranchKind.DEFAULT,
+            targetBaseTypeId = null,
+            declaredClassName = null,
+            className = "DefaultBookInput",
+            bodyTypeId = BODY_TYPE_ID,
+            mergedTypeId = MERGED_TYPE_ID,
+            implicit = false,
+            location = LOCATION,
+        )
+        val polymorphicRoot = root.copy(
+            polymorphism = DtoPolymorphism(exhaustive = true, branches = listOf(branch)),
+        )
+        val body = root.copy(
+            id = BODY_TYPE_ID,
+            name = null,
+            propIds = emptyList(),
+            hiddenFlatPropIds = emptyList(),
+        )
+        val merged = root.copy(
+            id = MERGED_TYPE_ID,
+            name = null,
+            propIds = listOf(branchPropId),
+            hiddenFlatPropIds = emptyList(),
+        )
+        val graph = DtoGraph(
+            source = baseGraph.source,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(polymorphicRoot, body, merged).sortedBy(DtoType::id),
+            props = (baseGraph.props + branchProp).sortedBy(DtoProp::id),
+        )
+
+        assertFalse(polymorphicRoot.requiresInputBuilder(graph))
+        assertTrue(merged.requiresInputBuilder(graph))
+    }
+
+    @Test
     fun `derives Java accessors from final DTO value semantics`() {
         assertEquals("isActive", valueAccessorName("active"))
         assertEquals("isEnabled", valueAccessorName("isEnabled"))
@@ -631,6 +680,8 @@ class DtoAccessorExtensionsTest {
     }
 
     private companion object {
+        val BODY_TYPE_ID = DtoTypeId("dto#branch-body")
+        val MERGED_TYPE_ID = DtoTypeId("dto#branch-merged")
         val SOURCE = LsiSource.of("demo/src/main/dto/Book.dto")
         val LOCATION = LsiLocation(SOURCE, LsiPosition(1, 1))
         val TYPE_ID = DtoTypeId("dto#book-input")

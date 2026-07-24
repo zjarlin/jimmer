@@ -48,6 +48,7 @@ import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
+import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.tailProp
 import site.addzero.lsi.jimmer.dto.userProp
@@ -2774,10 +2775,7 @@ internal class DtoGenerator private constructor(
     }
 
     private val isBuilderRequired: Boolean by lazy {
-        dtoType.modifiers.contains(DtoModifier.INPUT) &&
-                dtoType.dtoProps.any { prop ->
-                    prop.inputModifier.let { it == DtoModifier.FIXED || it == DtoModifier.DYNAMIC }
-                }
+        lsiDtoType.requiresInputBuilder(lsiGraph)
     }
 
     private val isHibernateValidatorEnhancementRequired: Boolean by lazy {
