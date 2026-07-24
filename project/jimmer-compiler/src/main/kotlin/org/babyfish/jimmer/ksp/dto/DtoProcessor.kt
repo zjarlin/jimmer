@@ -9,7 +9,6 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.KspDtoCompiler
-import org.babyfish.jimmer.ksp.client.DocMetadata
 import org.babyfish.jimmer.ksp.immutable.generator.K_SPECIFICATION_CLASS_NAME
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
@@ -128,7 +127,6 @@ internal class DtoProcessor(
         dtoTypes: List<DtoType<ImmutableType, ImmutableProp>>
     ) {
         val allFiles = ctx.resolver.getAllFiles().toList()
-        val docMetadata = DocMetadata(ctx)
         for (dtoType in dtoTypes) {
             val graph = graphBySourcePath[dtoType.dtoFile.sourcePath]
                 ?: throw DtoException("No frozen DTO graph for \"${dtoType.dtoFile.sourcePath}\"")
@@ -147,7 +145,6 @@ internal class DtoProcessor(
                 )
             DtoGenerator(
                 ctx = ctx,
-                docMetadata = docMetadata,
                 mutable = mutable,
                 dtoType = dtoType,
                 codeGenerator = ctx.environment.codeGenerator,

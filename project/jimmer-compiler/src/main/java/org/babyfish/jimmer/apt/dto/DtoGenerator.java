@@ -3,14 +3,12 @@ package org.babyfish.jimmer.apt.dto;
 import com.squareup.javapoet.*;
 import org.babyfish.jimmer.apt.Context;
 import org.babyfish.jimmer.apt.GeneratorException;
-import org.babyfish.jimmer.apt.client.DocMetadata;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.apt.util.ConverterMetadata;
 import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
-import org.babyfish.jimmer.client.meta.Doc;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
@@ -50,8 +48,6 @@ public class DtoGenerator {
 
     public final Context ctx;
 
-    private final DocMetadata docMetadata;
-
     final DtoType<ImmutableType, ImmutableProp> dtoType;
 
     private final DtoGraph lsiGraph;
@@ -69,8 +65,6 @@ public class DtoGenerator {
     private final Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames;
 
     private final JimmerDtoJacksonVersion jacksonVersion;
-
-    private final Document document;
 
     private final DtoGenerator parent;
 
@@ -97,7 +91,6 @@ public class DtoGenerator {
 
     public DtoGenerator(
             Context ctx,
-            DocMetadata docMetadata,
             DtoType<ImmutableType, ImmutableProp> dtoType,
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
@@ -110,7 +103,6 @@ public class DtoGenerator {
     ) {
         this(
                 ctx,
-                docMetadata,
                 dtoType,
                 lsiGraph,
                 lsiDtoType,
@@ -131,7 +123,6 @@ public class DtoGenerator {
 
     private DtoGenerator(
             Context ctx,
-            DocMetadata docMetadata,
             DtoType<ImmutableType, ImmutableProp> dtoType,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoGenerator parent,
@@ -139,7 +130,6 @@ public class DtoGenerator {
     ) {
         this(
                 ctx,
-                docMetadata,
                 dtoType,
                 parent.lsiGraph,
                 lsiDtoType,
@@ -160,7 +150,6 @@ public class DtoGenerator {
 
     private DtoGenerator(
             Context ctx,
-            DocMetadata docMetadata,
             DtoType<ImmutableType, ImmutableProp> dtoType,
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
@@ -181,7 +170,6 @@ public class DtoGenerator {
             throw new IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same");
         }
         this.ctx = ctx;
-        this.docMetadata = docMetadata;
         this.dtoType = dtoType;
         this.lsiGraph = lsiGraph;
         this.lsiDtoType = lsiDtoType;
@@ -202,7 +190,6 @@ public class DtoGenerator {
         );
         this.readOnlyGeneratedDtoTypeNames = Collections.unmodifiableMap(generatedDtoTypeNames);
         this.jacksonVersion = parent != null ? parent.jacksonVersion : jacksonVersion;
-        this.document = new Document(ctx, dtoType);
         this.polymorphicSuperInterfaceName = polymorphicSuperInterfaceName;
         this.polymorphicBranch = polymorphicBranch;
         this.polymorphicBranchKind = polymorphicBranchKind;
@@ -297,10 +284,7 @@ public class DtoGenerator {
                             .build()
             );
         }
-        String doc = document.get();
-        if (doc == null) {
-            doc = baseDocComment();
-        }
+        String doc = typeDocumentation();
         if (doc != null && !doc.isEmpty()) {
             typeBuilder.addAnnotation(
                     AnnotationSpec
@@ -383,10 +367,7 @@ public class DtoGenerator {
             typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation());
             typeBuilder.addModifiers(Modifier.STATIC);
         }
-        String doc = document.get();
-        if (doc == null) {
-            doc = baseDocComment();
-        }
+        String doc = typeDocumentation();
         if (doc != null && !doc.isEmpty()) {
             typeBuilder.addAnnotation(
                     AnnotationSpec
@@ -457,7 +438,6 @@ public class DtoGenerator {
     ) {
         new DtoGenerator(
                 ctx,
-                docMetadata,
                 dtoType.mergedWith(branch.getDtoType()),
                 lsiGraph,
                 lsiMergedPolymorphicType(branch),
@@ -842,7 +822,6 @@ public class DtoGenerator {
                 registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
                 new DtoGenerator(
                         ctx,
-                        docMetadata,
                         targetType,
                         lsiTargetType,
                         this,
@@ -864,7 +843,6 @@ public class DtoGenerator {
             registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
             new DtoGenerator(
                     ctx,
-                    docMetadata,
                     prop.getTargetType(),
                     lsiTargetType,
                     this,
@@ -1724,13 +1702,7 @@ public class DtoGenerator {
     }
 
     private String doc(AbstractProp prop, boolean contentOnly) {
-        String doc = document.get(prop);
-        if (doc == null & prop instanceof DtoProp<?, ?>) {
-            DtoProp<ImmutableType, ImmutableProp> dtoProp = asDtoProp(prop);
-            if (dtoProp.getBasePropMap().isEmpty() && dtoProp.getFuncName() == null) {
-                doc = baseDocComment(dtoProp.toTailProp().getBaseProp());
-            }
-        }
+        String doc = propDocumentation(prop);
         if (doc == null) {
             return null;
         }
@@ -3055,82 +3027,20 @@ public class DtoGenerator {
         return originalIndex;
     }
 
-    private class Document {
+    private String typeDocumentation() {
+        return escapedDocumentation(lsiDtoType.getDocumentation());
+    }
 
-        private final Context ctx;
+    private String propDocumentation(AbstractProp prop) {
+        return escapedDocumentation(
+                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()).getDocumentation()
+        );
+    }
 
-        private final Doc dtoTypeDoc;
-
-        private final Doc baseTypeDoc;
-
-        private String result;
-
-        public Document(Context ctx, DtoType<ImmutableType, ImmutableProp> dtoType) {
-            this.ctx = ctx;
-            dtoTypeDoc = Doc.parse(dtoType.getDoc());
-            baseTypeDoc = Doc.parse(baseDocComment());
-        }
-
-        public String get() {
-            String ret = result;
-            if (ret == null) {
-                if (dtoTypeDoc != null) {
-                    ret = dtoTypeDoc.toString();
-                } else if (baseTypeDoc != null) {
-                    ret = baseTypeDoc.toString();
-                } else {
-                    ret = "";
-                }
-                ret = ret.replace("$", "$$");
-                this.result = ret;
-            }
-            return ret.isEmpty() ? null : ret;
-        }
-
-        public String get(AbstractProp prop) {
-            String value = getImpl(prop);
-            if (value == null) {
-                return null;
-            }
-            return value.replace("$", "$$");
-        }
-
-        @SuppressWarnings("unchecked")
-        private String getImpl(AbstractProp prop) {
-            ImmutableProp baseProp;
-            if (prop instanceof DtoProp<?, ?>) {
-                baseProp = ((DtoProp<?, ImmutableProp>) prop).toTailProp().getBaseProp();
-            } else {
-                baseProp = null;
-            }
-            if (prop.getDoc() != null) {
-                Doc doc = Doc.parse(prop.getDoc());
-                if (doc != null) {
-                    return doc.toString();
-                }
-            }
-            if (dtoTypeDoc != null) {
-                String name = prop.getAlias();
-                if (name == null) {
-                    assert baseProp != null;
-                    name = baseProp.getName();
-                }
-                String doc = dtoTypeDoc.getParameterValueMap().get(name);
-                if (doc != null) {
-                    return doc;
-                }
-            }
-            if (baseProp != null) {
-                Doc doc = Doc.parse(baseDocComment(baseProp));
-                if (doc != null) {
-                    return doc.toString();
-                }
-            }
-            if (baseTypeDoc != null && baseProp != null) {
-                return baseTypeDoc.getParameterValueMap().get(baseProp.getName());
-            }
-            return null;
-        }
+    private static String escapedDocumentation(@Nullable String documentation) {
+        return documentation != null && !documentation.isEmpty() ?
+                documentation.replace("$", "$$") :
+                null;
     }
 
     private boolean isImpl() {
@@ -3195,11 +3105,4 @@ public class DtoGenerator {
                 );
     }
 
-    private String baseDocComment() {
-        return docMetadata.getString(dtoType.getBaseType().getTypeElement());
-    }
-
-    private String baseDocComment(ImmutableProp prop) {
-        return docMetadata.getString(prop.toElement());
-    }
 }

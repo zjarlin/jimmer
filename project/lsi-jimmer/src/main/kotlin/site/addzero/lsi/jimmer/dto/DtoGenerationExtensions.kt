@@ -43,6 +43,12 @@ fun DtoType.hiddenFlatPropsInDeclarationOrder(graph: DtoGraph): List<DtoBaseProp
     }
 }
 
+/** 按属性名返回冻结属性。 */
+fun DtoType.prop(graph: DtoGraph, name: String): DtoProp {
+    return propsInDeclarationOrder(graph).singleOrNull { prop -> prop.name == name }
+        ?: throw IllegalArgumentException("DTO type '${id.value}' has no property '$name'")
+}
+
 /** 按属性名返回基础属性。 */
 fun DtoType.baseProp(graph: DtoGraph, name: String): DtoBaseProp {
     return basePropsInDeclarationOrder(graph).singleOrNull { prop -> prop.name == name }

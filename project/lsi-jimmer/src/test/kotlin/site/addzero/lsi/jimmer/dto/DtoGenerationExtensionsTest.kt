@@ -31,6 +31,7 @@ class DtoGenerationExtensionsTest {
             listOf("nested", "recursive", "focused", "sourceReference", "binaryReference", "scalar"),
             baseProps.map(DtoBaseProp::name),
         )
+        assertEquals(NESTED_PROP_ID, root.prop(graph, "nested").id)
         assertEquals(NESTED_PROP_ID, root.baseProp(graph, "nested").id)
         assertEquals(FOLD_PROP_ID, root.foldProp(graph, "folded").id)
         assertEquals(HIDDEN_PROP_ID, baseProps[0].nextProp(graph)?.id)
@@ -80,6 +81,9 @@ class DtoGenerationExtensionsTest {
 
         assertFailsWith<IllegalArgumentException> {
             foreignProp.generatedTargetType(graph)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            root.prop(graph, "missing")
         }
     }
 

@@ -3,7 +3,6 @@ package org.babyfish.jimmer.apt.dto;
 import org.babyfish.jimmer.Input;
 import org.babyfish.jimmer.View;
 import org.babyfish.jimmer.apt.Context;
-import org.babyfish.jimmer.apt.client.DocMetadata;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
@@ -177,7 +176,6 @@ public class DtoProcessor {
 
     private boolean generateDtoTypes(List<DtoType<ImmutableType, ImmutableProp>> dtoTypes) {
         boolean result = false;
-        DocMetadata docMetadata = new DocMetadata(context);
         for (DtoType<ImmutableType, ImmutableProp> dtoType : dtoTypes) {
             DtoGraph graph = graphBySourcePath.get(dtoType.getDtoFile().getSourcePath());
             if (graph == null) {
@@ -204,7 +202,6 @@ public class DtoProcessor {
             }
             new DtoGenerator(
                     context,
-                    docMetadata,
                     dtoType,
                     graph,
                     DtoGenerationExtensionsKt.rootType(graph, qualifiedName),

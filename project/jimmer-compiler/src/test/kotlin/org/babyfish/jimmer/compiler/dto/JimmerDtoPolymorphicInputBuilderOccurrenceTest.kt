@@ -30,6 +30,9 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         val personBody = source.classBody("final class Person implements ClientInput")
         val organizationBody = source.classBody("final class Organization implements ClientInput")
 
+        assertContains(source, "@Description(\"Client base documentation.\\n\")")
+        assertContains(source, "@Description(\"Address reference documentation.\\n\")")
+        assertContains(source, "@Description(\"Address embeddable documentation.\\n\")")
         assertEquals(1, source.countOccurrences("class TargetOf_address implements EmbeddableDto<Address>"))
         assertContains(source, "TargetOf_address getAddress();")
         assertFalse("class TargetOf_address" in personBody)
@@ -47,6 +50,9 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         val personBody = source.classBody("public class Person(")
         val organizationBody = source.classBody("public class Organization(")
 
+        assertContains(source, "@Description(value = \"Client base documentation.\\n\")")
+        assertContains(source, "@Description(value = \"Address reference documentation.\\n\")")
+        assertContains(source, "@Description(value = \"Address embeddable documentation.\\n\")")
         assertEquals(1, source.countOccurrences("public open class TargetOf_address("))
         assertContains(source, "public val address: TargetOf_address")
         assertFalse("class TargetOf_address" in personBody)
@@ -248,8 +254,12 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
                 import org.babyfish.jimmer.sql.Embeddable;
 
+                /**
+                 * Address embeddable documentation.
+                 */
                 @Embeddable
                 public interface Address {
+                    /** City documentation. */
                     String city();
                 }
             """.trimIndent(),
@@ -262,6 +272,9 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 import org.babyfish.jimmer.sql.Inheritance;
                 import org.babyfish.jimmer.sql.InheritanceType;
 
+                /**
+                 * Client base documentation.
+                 */
                 @Entity
                 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
                 public interface Client {
@@ -271,6 +284,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     @Discriminator
                     String type();
 
+                    /** Address reference documentation. */
                     Address address();
                 }
             """.trimIndent(),
@@ -304,8 +318,12 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
                 import org.babyfish.jimmer.sql.Embeddable
 
+                /**
+                 * Address embeddable documentation.
+                 */
                 @Embeddable
                 interface Address {
+                    /** City documentation. */
                     val city: String
                 }
             """.trimIndent(),
@@ -318,6 +336,9 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 import org.babyfish.jimmer.sql.Inheritance
                 import org.babyfish.jimmer.sql.InheritanceType
 
+                /**
+                 * Client base documentation.
+                 */
                 @Entity
                 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
                 interface Client {
@@ -327,6 +348,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     @Discriminator
                     val type: String
 
+                    /** Address reference documentation. */
                     val address: Address
                 }
             """.trimIndent(),

@@ -11,7 +11,6 @@ import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.ksp.toAnnotationSpec
 import org.babyfish.jimmer.client.ApiIgnore
-import org.babyfish.jimmer.client.meta.Doc
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
@@ -25,7 +24,6 @@ import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.impl.util.StringUtil.SnakeCase
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.annotation
-import org.babyfish.jimmer.ksp.client.DocMetadata
 import org.babyfish.jimmer.ksp.fullName
 import org.babyfish.jimmer.ksp.get
 import org.babyfish.jimmer.ksp.immutable.generator.*
@@ -46,6 +44,7 @@ import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.mergedType
+import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.model.LsiWorkspace
@@ -56,7 +55,6 @@ import kotlin.math.min
 
 internal class DtoGenerator private constructor(
     val ctx: Context,
-    private val docMetadata: DocMetadata,
     private val mutable: Boolean,
     val dtoType: DtoType<ImmutableType, ImmutableProp>,
     private val codeGenerator: CodeGenerator?,
@@ -81,8 +79,6 @@ internal class DtoGenerator private constructor(
 
     private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiPoetTypeName> =
         (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
-
-    private val document: Document = Document()
 
     private val useSiteTargetMap = mutableMapOf<String, Set<AnnotationSpec.UseSiteTarget>>()
 
@@ -119,7 +115,6 @@ internal class DtoGenerator private constructor(
 
     constructor(
         ctx: Context,
-        docMetadata: DocMetadata,
         mutable: Boolean,
         dtoType: DtoType<ImmutableType, ImmutableProp>,
         codeGenerator: CodeGenerator?,
@@ -133,7 +128,6 @@ internal class DtoGenerator private constructor(
         rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     ) : this(
         ctx,
-        docMetadata,
         mutable,
         dtoType,
         codeGenerator,
@@ -153,7 +147,6 @@ internal class DtoGenerator private constructor(
 
     private constructor(
         ctx: Context,
-        docMetadata: DocMetadata,
         mutable: Boolean,
         dtoType: DtoType<ImmutableType, ImmutableProp>,
         lsiDtoType: LsiDtoType,
@@ -165,7 +158,6 @@ internal class DtoGenerator private constructor(
         polymorphicBranchOrder: Int = -1,
     ) : this(
         ctx = ctx,
-        docMetadata = docMetadata,
         mutable = mutable,
         dtoType = dtoType,
         codeGenerator = null,
@@ -534,7 +526,7 @@ internal class DtoGenerator private constructor(
         get() = polymorphicRootType.properties.values.firstOrNull { it.isDiscriminator }?.name
 
     private fun addDoc() {
-        (document.value ?: baseDocString)?.let {
+        typeDocumentation()?.let {
             typeBuilder.addAnnotation(
                 AnnotationSpec
                     .builder(DESCRIPTION_CLASS_NAME)
@@ -695,7 +687,6 @@ internal class DtoGenerator private constructor(
                 registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
                 DtoGenerator(
                     ctx = ctx,
-                    docMetadata = docMetadata,
                     mutable = mutable,
                     dtoType = targetType,
                     lsiDtoType = lsiTargetType,
@@ -715,7 +706,6 @@ internal class DtoGenerator private constructor(
             registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
             DtoGenerator(
                 ctx = ctx,
-                docMetadata = docMetadata,
                 mutable = mutable,
                 dtoType = foldProp.targetType,
                 lsiDtoType = lsiTargetType,
@@ -781,7 +771,6 @@ internal class DtoGenerator private constructor(
     ) {
         DtoGenerator(
             ctx = ctx,
-            docMetadata = docMetadata,
             mutable = mutable,
             dtoType = dtoType.mergedWith(branch.dtoType),
             lsiDtoType = lsiMergedPolymorphicType(branch),
@@ -1252,9 +1241,7 @@ internal class DtoGenerator private constructor(
                     if (interfacePropNames.contains(prop.name)) {
                         addModifiers(KModifier.OVERRIDE)
                     }
-                    val doc = document[prop]
-                        ?: prop.takeIf { it !is DtoProp<*, *> || it.nextProp === null }
-                            ?.doc
+                    val doc = propDocumentation(prop)
                     doc?.let {
                         addAnnotation(
                             AnnotationSpec
@@ -1341,9 +1328,7 @@ internal class DtoGenerator private constructor(
                     if (interfacePropNames.contains(prop.name)) {
                         addModifiers(KModifier.OVERRIDE)
                     }
-                    val doc = document[prop]
-                        ?: prop.takeIf { it !is DtoProp<*, *> || it.nextProp === null }
-                            ?.doc
+                    val doc = propDocumentation(prop)
                     doc?.let {
                         addAnnotation(
                             AnnotationSpec
@@ -2807,59 +2792,17 @@ internal class DtoGenerator private constructor(
                 ?: name
         }
 
-    private inner class Document {
+    private fun typeDocumentation(): String? =
+        lsiDtoType.documentation
+            ?.takeIf(String::isNotEmpty)
+            ?.replace("%", "%%")
 
-        private val dtoTypeDoc: Doc? by lazy {
-            Doc.parse(dtoType.doc)
-        }
-
-        private val baseTypeDoc: Doc? by lazy {
-            Doc.parse(baseDocString)
-        }
-
-        val value: String? by lazy {
-            (dtoTypeDoc?.toString() ?: baseTypeDoc?.toString())?.replace("%", "%%")
-        }
-
-        operator fun get(prop: AbstractProp): String? {
-            return getImpl(prop)?.let {
-                it.replace("%", "%%")
-            }
-        }
-
-        @Suppress("UNCHECKED_CAST")
-        private fun getImpl(prop: AbstractProp): String? {
-            val baseProp = (prop as? DtoProp<*, ImmutableProp?>)?.toTailProp()?.getBaseProp()
-            if (prop.doc !== null) {
-                val doc = Doc.parse(prop.doc)
-                if (doc != null) {
-                    return doc.toString()
-                }
-            }
-            val dtoTypeDoc = this.dtoTypeDoc
-            if (dtoTypeDoc != null) {
-                val name = prop.getAlias() ?: baseProp!!.name
-                val doc = dtoTypeDoc.parameterValueMap[name]
-                if (doc != null) {
-                    return doc
-                }
-            }
-            if (baseProp != null) {
-                val doc = Doc.parse(baseDocString(baseProp))
-                if (doc != null) {
-                    return doc.toString()
-                }
-            }
-            val baseTypeDoc = this.baseTypeDoc
-            if (baseTypeDoc != null && baseProp != null) {
-                val doc = baseTypeDoc.parameterValueMap[baseProp.name]
-                if (doc != null) {
-                    return doc
-                }
-            }
-            return null
-        }
-    }
+    private fun propDocumentation(prop: AbstractProp): String? =
+        lsiDtoType
+            .prop(lsiGraph, prop.name)
+            .documentation
+            ?.takeIf(String::isNotEmpty)
+            ?.replace("%", "%%")
 
     private val isImpl: Boolean
         get() = dtoType.baseType.isEntity || !dtoType.modifiers.contains(DtoModifier.SPECIFICATION)
@@ -2890,12 +2833,6 @@ internal class DtoGenerator private constructor(
         ctx.isHibernateValidatorEnhancement &&
                 dtoType.dtoProps.any { it.inputModifier == DtoModifier.DYNAMIC }
     }
-
-    private val baseDocString: String?
-        get() = docMetadata.getString(dtoType.baseType.classDeclaration)
-
-    private fun baseDocString(prop: ImmutableProp): String? =
-        docMetadata.getString(prop.propDeclaration)
 
     companion object {
 
