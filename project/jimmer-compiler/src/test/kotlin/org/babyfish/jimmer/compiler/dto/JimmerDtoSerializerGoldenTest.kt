@@ -214,6 +214,7 @@ class JimmerDtoSerializerGoldenTest {
             "Book.java" to """
                 package demo;
 
+                import com.fasterxml.jackson.annotation.JsonAlias;
                 import java.math.BigDecimal;
                 import org.babyfish.jimmer.sql.Entity;
                 import org.babyfish.jimmer.sql.Id;
@@ -226,9 +227,11 @@ class JimmerDtoSerializerGoldenTest {
 
                     boolean active();
 
+                    @JsonAlias("base-name")
                     String name();
 
                     @Nullable
+                    @JsonAlias("base-edition")
                     Integer edition();
 
                     BigDecimal price();
@@ -254,6 +257,7 @@ class JimmerDtoSerializerGoldenTest {
             "Book.kt" to """
                 package demo
 
+                import com.fasterxml.jackson.annotation.JsonAlias
                 import java.math.BigDecimal
                 import org.babyfish.jimmer.sql.Entity
                 import org.babyfish.jimmer.sql.Id
@@ -265,8 +269,10 @@ class JimmerDtoSerializerGoldenTest {
 
                     val active: Boolean
 
+                    @get:JsonAlias("base-name")
                     val name: String
 
+                    @get:JsonAlias("base-edition")
                     val edition: Int?
 
                     val price: BigDecimal
@@ -279,9 +285,16 @@ class JimmerDtoSerializerGoldenTest {
         val DTO_SOURCE = """
             package demo.dto
 
+            @com.fasterxml.jackson.databind.annotation.JsonNaming(
+                value = com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy::class
+            )
+            @tools.jackson.databind.annotation.JsonNaming(
+                value = tools.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy::class
+            )
             dynamic input BookInput {
                 fixed id?
                 active as isEnabled
+                @com.fasterxml.jackson.annotation.JsonAlias(value = ["dto-name"])
                 static name?
                 dynamic edition
                 fuzzy price?

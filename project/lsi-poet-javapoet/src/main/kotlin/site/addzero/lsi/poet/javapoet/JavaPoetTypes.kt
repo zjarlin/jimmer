@@ -187,7 +187,7 @@ internal fun LsiPoetAnnotation.toJavaSourceAnnotationSpec(
     typeNames: List<LsiPoetTypeName>,
 ): AnnotationSpec {
     require(argumentLayout == LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT) {
-        "JavaPoet renderer cannot honor a forced single-line annotation layout: $type"
+        "JavaPoet renderer cannot honor a forced annotation layout: $type"
     }
     val positionalArguments = arguments.filterIsInstance<LsiPoetAnnotationArgument.Positional>()
     require(positionalArguments.size <= 1) {
@@ -299,11 +299,8 @@ private fun LsiPoetAnnotationValue.toJavaSourceAnnotationValue(
             "\$L",
             annotation.toJavaSourceAnnotationSpec(typeNames),
         )
-        is LsiPoetAnnotationValue.ArrayValue -> {
-            require(sourceStyle == LsiPoetAnnotationArrayStyle.LITERAL) {
-                "JavaPoet renderer cannot emit an annotation array factory call"
-            }
-            CodeBlock.builder()
+        is LsiPoetAnnotationValue.ArrayValue -> when (sourceStyle) {
+            LsiPoetAnnotationArrayStyle.LITERAL -> CodeBlock.builder()
                 .add("{")
                 .apply {
                     elements.forEachIndexed { index, element ->
@@ -315,6 +312,21 @@ private fun LsiPoetAnnotationValue.toJavaSourceAnnotationValue(
                 }
                 .add("}")
                 .build()
+            LsiPoetAnnotationArrayStyle.MULTI_LINE_LITERAL -> CodeBlock.builder()
+                .add("{\n\$>")
+                .apply {
+                    elements.forEachIndexed { index, element ->
+                        if (index != 0) {
+                            add(", \n")
+                        }
+                        add("\$L", element.toJavaSourceAnnotationValue(typeNames))
+                    }
+                }
+                .add("\$<\n}")
+                .build()
+            LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF -> throw IllegalArgumentException(
+                "JavaPoet renderer cannot emit an annotation array factory call"
+            )
         }
     }
 }

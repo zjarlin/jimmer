@@ -8,11 +8,16 @@ import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.apt.util.GenericParser;
+import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.dto.compiler.*;
+import site.addzero.lsi.core.LsiSource;
 import site.addzero.lsi.jimmer.ImmutableSchema;
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
+import site.addzero.lsi.model.LsiWorkspace;
+import site.addzero.lsi.poet.LsiPoetTypeName;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
@@ -20,6 +25,7 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +43,13 @@ public class DtoProcessor {
 
     private final Map<String, DtoGraph> graphBySourcePath;
 
+    private final Map<LsiSource, DtoAnnotationContract> annotationContractsBySource;
+
     private final ImmutableSchema immutableSchema;
+
+    private final LsiWorkspace lsiWorkspace;
+
+    private final Map<site.addzero.lsi.jimmer.dto.DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames;
 
     private final JimmerDtoJacksonVersion jacksonVersion;
 
@@ -47,7 +59,9 @@ public class DtoProcessor {
             Collection<DtoFile> dtoFiles,
             DtoModifier defaultNullableInputModifier,
             Collection<DtoGraph> graphs,
+            Map<LsiSource, DtoAnnotationContract> annotationContractsBySource,
             ImmutableSchema immutableSchema,
+            LsiWorkspace lsiWorkspace,
             JimmerDtoJacksonVersion jacksonVersion
     ) {
         this.context = context;
@@ -63,7 +77,12 @@ public class DtoProcessor {
                 );
             }
         }
+        this.annotationContractsBySource = Collections.unmodifiableMap(
+                new LinkedHashMap<>(annotationContractsBySource)
+        );
         this.immutableSchema = immutableSchema;
+        this.lsiWorkspace = lsiWorkspace;
+        this.batchRootDtoTypeNames = JimmerDtoPoetTypeNames.roots(graphs);
         this.jacksonVersion = jacksonVersion;
     }
 
@@ -163,13 +182,22 @@ public class DtoProcessor {
             if (qualifiedName == null) {
                 throw new DtoException("Root DTO type must have a qualified name");
             }
+            DtoAnnotationContract annotationContract = annotationContractsBySource.get(graph.getSource());
+            if (annotationContract == null) {
+                throw new DtoException(
+                        "No frozen DTO annotation contract for \"" + graph.getSource().getPath() + "\""
+                );
+            }
             new DtoGenerator(
                     context,
                     docMetadata,
                     dtoType,
                     graph,
                     DtoGenerationExtensionsKt.rootType(graph, qualifiedName),
+                    annotationContract,
                     immutableSchema,
+                    lsiWorkspace,
+                    batchRootDtoTypeNames,
                     jacksonVersion
             ).generate();
             result = true;

@@ -115,9 +115,13 @@ data class LsiAnnotationMember(
     val type: LsiTypeRef,
     val vararg: Boolean = false,
     val hasDefault: Boolean = false,
+    val declarationIndex: Int? = null,
 ) {
     init {
         require(name.isNotBlank()) { "LSI annotation member name cannot be blank" }
+        require(declarationIndex == null || declarationIndex >= 0) {
+            "LSI annotation member declaration index cannot be negative: $name"
+        }
         require(type == type.toAnnotationMemberType()) {
             "LSI annotation member type must use canonical non-null semantics: $name"
         }

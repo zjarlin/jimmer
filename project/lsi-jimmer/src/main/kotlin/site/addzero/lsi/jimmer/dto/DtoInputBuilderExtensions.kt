@@ -146,16 +146,16 @@ fun DtoProp.inputBuilderBackingType(
     return parameterType.toNullableInputBuilderStorage(language)
 }
 
-/** 返回已冻结且适用于 InputBuilder setter 的 Jackson 注解。 */
-fun DtoProp.inputBuilderSetterJacksonAnnotations(
+/** 返回已冻结且适用于 InputBuilder setter 的 Jackson 注解应用。 */
+fun DtoProp.inputBuilderSetterJacksonAnnotationApplications(
     graph: DtoGraph,
     annotationContract: DtoAnnotationContract,
-): List<LsiAnnotation> {
+): List<DtoBuilderSetterAnnotationApplication> {
     requireInputBuilderOwner(graph)
     val propPlan = requireNotNull(annotationContract.propPlansByPropId[id]) {
         "DTO annotation contract has no property plan: ${id.value}"
     }
-    return propPlan.builderSetterApplications.map { application -> application.annotation }
+    return propPlan.builderSetterApplications
 }
 
 /**
@@ -414,19 +414,24 @@ private fun LsiTypeRef.toInputBuilderTargetType(targetLanguage: LsiLanguage): Ls
             arguments = arguments.map { argument ->
                 argument.copy(type = argument.type?.toInputBuilderTargetType(targetLanguage)?.toTypeArgument(targetLanguage))
             },
+            annotations = emptyList(),
         )
         is LsiPrimitiveType -> copy(
+            annotations = emptyList(),
             boxed = targetLanguage == LsiLanguage.JAVA && (boxed || nullability == LsiNullability.NULLABLE),
         )
-        is LsiArrayType -> copy(elementType = elementType.toInputBuilderTargetType(targetLanguage))
+        is LsiArrayType -> copy(
+            elementType = elementType.toInputBuilderTargetType(targetLanguage),
+            annotations = emptyList(),
+        )
         is LsiFunctionType -> copy(
             returnType = returnType.toInputBuilderTargetType(targetLanguage),
             receiverType = receiverType?.toInputBuilderTargetType(targetLanguage),
             parameterTypes = parameterTypes.map { type -> type.toInputBuilderTargetType(targetLanguage) },
+            annotations = emptyList(),
         )
-        is LsiTypeParameterRef,
-        is LsiUnresolvedType,
-        -> this
+        is LsiTypeParameterRef -> copy(annotations = emptyList())
+        is LsiUnresolvedType -> copy(annotations = emptyList())
     }
 }
 

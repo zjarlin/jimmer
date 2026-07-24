@@ -235,7 +235,8 @@ class DtoInputBuilderExtensionsTest {
         assertEquals(
             listOf(jsonAlias),
             fixture.graph.propsById.getValue(DYNAMIC_PROP_ID)
-                .inputBuilderSetterJacksonAnnotations(fixture.graph, contract),
+                .inputBuilderSetterJacksonAnnotationApplications(fixture.graph, contract)
+                .map(DtoBuilderSetterAnnotationApplication::annotation),
         )
         assertSame(
             naming,

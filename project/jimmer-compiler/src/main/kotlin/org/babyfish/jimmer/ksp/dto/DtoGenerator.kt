@@ -13,6 +13,8 @@ import com.squareup.kotlinpoet.ksp.toAnnotationSpec
 import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.client.meta.Doc
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
+import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
 import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.dto.compiler.Anno.*
@@ -34,13 +36,17 @@ import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
+import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
+import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.LsiPoetTypeName
 import java.io.OutputStreamWriter
 import java.util.*
 import kotlin.math.min
@@ -55,6 +61,11 @@ internal class DtoGenerator private constructor(
     private val lsiDtoType: LsiDtoType,
     private val immutableSchema: ImmutableSchema,
     private val jacksonVersion: JimmerDtoJacksonVersion,
+    private val workspace: LsiWorkspace,
+    private val annotationContract: DtoAnnotationContract,
+    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
+    private val generatedDtoPackageName: String,
+    private val generatedDtoSimpleNames: List<String>,
     private val parent: DtoGenerator?,
     private val innerClassName: String?,
     private val polymorphicSuperInterfaceName: TypeName? = null,
@@ -63,6 +74,9 @@ internal class DtoGenerator private constructor(
     private val polymorphicBranchOrder: Int = -1,
 ) {
     private val root: DtoGenerator = parent?.root ?: this
+
+    private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiPoetTypeName> =
+        (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
 
     private val document: Document = Document()
 
@@ -83,6 +97,15 @@ internal class DtoGenerator private constructor(
         if ((parent === null) != (innerClassName === null)) {
             throw IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same")
         }
+        val currentTypeName = JimmerDtoPoetTypeNames.create(
+            generatedDtoPackageName,
+            generatedDtoSimpleNames,
+        )
+        val oldTypeName = generatedDtoTypeNamesByTypeId.putIfAbsent(lsiDtoType.id, currentTypeName)
+        require(oldTypeName == null || oldTypeName == currentTypeName) {
+            "Frozen DTO type '${lsiDtoType.id.value}' has conflicting generated names: " +
+                "${oldTypeName?.canonicalName} and ${currentTypeName.canonicalName}"
+        }
     }
 
     private var _typeBuilder: TypeSpec.Builder? = null
@@ -97,6 +120,9 @@ internal class DtoGenerator private constructor(
         lsiDtoType: LsiDtoType,
         immutableSchema: ImmutableSchema,
         jacksonVersion: JimmerDtoJacksonVersion,
+        workspace: LsiWorkspace,
+        annotationContract: DtoAnnotationContract,
+        rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     ) : this(
         ctx,
         docMetadata,
@@ -107,8 +133,48 @@ internal class DtoGenerator private constructor(
         lsiDtoType,
         immutableSchema,
         jacksonVersion,
+        workspace,
+        annotationContract,
+        rootDtoTypeNamesByTypeId,
+        rootDtoTypeNamesByTypeId.getValue(lsiDtoType.id).packageName,
+        rootDtoTypeNamesByTypeId.getValue(lsiDtoType.id).simpleNames,
         null,
         null,
+    )
+
+    private constructor(
+        ctx: Context,
+        docMetadata: DocMetadata,
+        mutable: Boolean,
+        dtoType: DtoType<ImmutableType, ImmutableProp>,
+        lsiDtoType: LsiDtoType,
+        parent: DtoGenerator,
+        innerClassName: String,
+        polymorphicSuperInterfaceName: TypeName? = null,
+        polymorphicBranch: Boolean = false,
+        polymorphicBranchKind: DtoPolymorphicBranch.Kind? = null,
+        polymorphicBranchOrder: Int = -1,
+    ) : this(
+        ctx = ctx,
+        docMetadata = docMetadata,
+        mutable = mutable,
+        dtoType = dtoType,
+        codeGenerator = null,
+        lsiGraph = parent.lsiGraph,
+        lsiDtoType = lsiDtoType,
+        immutableSchema = parent.immutableSchema,
+        jacksonVersion = parent.jacksonVersion,
+        workspace = parent.workspace,
+        annotationContract = parent.annotationContract,
+        rootDtoTypeNamesByTypeId = parent.rootDtoTypeNamesByTypeId,
+        generatedDtoPackageName = parent.generatedDtoPackageName,
+        generatedDtoSimpleNames = parent.generatedDtoSimpleNames + innerClassName,
+        parent = parent,
+        innerClassName = innerClassName,
+        polymorphicSuperInterfaceName = polymorphicSuperInterfaceName,
+        polymorphicBranch = polymorphicBranch,
+        polymorphicBranchKind = polymorphicBranchKind,
+        polymorphicBranchOrder = polymorphicBranchOrder,
     )
 
     val typeBuilder: TypeSpec.Builder
@@ -567,48 +633,7 @@ internal class DtoGenerator private constructor(
             )
         }
 
-        for (prop in dtoType.dtoProps) {
-            val targetType = prop.targetType ?: continue
-            if (!prop.isRecursive || targetType.isFocusedRecursion) {
-                val lsiTargetType = lsiDtoType
-                    .baseProp(lsiGraph, prop.name)
-                    .generatedTargetType(lsiGraph)
-                    ?: throw DtoException(
-                        "Frozen DTO property \"${prop.name}\" has no generated target"
-                    )
-                DtoGenerator(
-                    ctx,
-                    docMetadata,
-                    mutable,
-                    targetType,
-                    null,
-                    lsiGraph,
-                    lsiTargetType,
-                    immutableSchema,
-                    jacksonVersion,
-                    this,
-                    targetSimpleName(prop)
-                ).generate(emptyList())
-            }
-        }
-        for (foldProp in dtoType.foldProps) {
-            val lsiTargetType = lsiDtoType
-                .foldProp(lsiGraph, foldProp.name)
-                .generatedTargetType(lsiGraph)
-            DtoGenerator(
-                ctx,
-                docMetadata,
-                mutable,
-                foldProp.targetType,
-                null,
-                lsiGraph,
-                lsiTargetType,
-                immutableSchema,
-                jacksonVersion,
-                this,
-                targetSimpleName(foldProp)
-            ).generate(emptyList())
-        }
+        generateNestedDtoTypes()
 
         if (isHibernateValidatorEnhancementRequired) {
             typeBuilder.addHibernateValidatorEnhancement(false)
@@ -621,14 +646,85 @@ internal class DtoGenerator private constructor(
                     graph = lsiGraph,
                     immutableSchema = immutableSchema,
                     jacksonVersion = jacksonVersion,
-                    generatedDtoPackageName = getDtoClassName().packageName,
-                    generatedDtoSimpleNames = getDtoClassName().simpleNames,
+                    generatedDtoPackageName = generatedDtoPackageName,
+                    generatedDtoSimpleNames = generatedDtoSimpleNames,
                 )
             )
         }
         if (isBuilderRequired) {
-            InputBuilderGenerator(this).generate()
+            typeBuilder.addType(
+                KspDtoInputBuilderRenderer.render(
+                    dtoType = lsiDtoType,
+                    graph = lsiGraph,
+                    immutableSchema = immutableSchema,
+                    annotationContract = annotationContract,
+                    workspace = workspace,
+                    jacksonVersion = jacksonVersion,
+                    generatedDtoPackageName = generatedDtoPackageName,
+                    generatedDtoSimpleNames = generatedDtoSimpleNames,
+                    generatedDtoTypeNamesByTypeId = generatedDtoTypeNamesByTypeId,
+                )
+            )
         }
+    }
+
+    private fun generateNestedDtoTypes() {
+        for (prop in dtoType.dtoProps) {
+            if (polymorphicRootPropOrNull(prop) != null) {
+                continue
+            }
+            val targetType = prop.targetType ?: continue
+            if (!prop.isRecursive || targetType.isFocusedRecursion) {
+                val lsiTargetType = lsiDtoType
+                    .baseProp(lsiGraph, prop.name)
+                    .generatedTargetType(lsiGraph)
+                    ?: throw DtoException(
+                        "Frozen DTO property \"${prop.name}\" has no generated target"
+                    )
+                val childSimpleName = targetSimpleName(prop)
+                registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
+                DtoGenerator(
+                    ctx = ctx,
+                    docMetadata = docMetadata,
+                    mutable = mutable,
+                    dtoType = targetType,
+                    lsiDtoType = lsiTargetType,
+                    parent = this,
+                    innerClassName = childSimpleName,
+                ).generate(emptyList())
+            }
+        }
+        for (foldProp in dtoType.foldProps) {
+            if (polymorphicRootFoldPropOrNull(foldProp) != null) {
+                continue
+            }
+            val lsiTargetType = lsiDtoType
+                .foldProp(lsiGraph, foldProp.name)
+                .generatedTargetType(lsiGraph)
+            val childSimpleName = targetSimpleName(foldProp)
+            registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
+            DtoGenerator(
+                ctx = ctx,
+                docMetadata = docMetadata,
+                mutable = mutable,
+                dtoType = foldProp.targetType,
+                lsiDtoType = lsiTargetType,
+                parent = this,
+                innerClassName = childSimpleName,
+            ).generate(emptyList())
+        }
+    }
+
+    private fun registerGeneratedDtoTypeName(
+        type: LsiDtoType,
+        simpleNames: List<String>,
+    ) {
+        JimmerDtoPoetTypeNames.register(
+            graph = lsiGraph,
+            type = type,
+            typeNamesByTypeId = generatedDtoTypeNamesByTypeId,
+            typeName = JimmerDtoPoetTypeNames.create(generatedDtoPackageName, simpleNames),
+        )
     }
 
     private fun addPolymorphicMembers() {
@@ -648,6 +744,7 @@ internal class DtoGenerator private constructor(
         for (prop in dtoType.props) {
             typeBuilder.addAccessorDeclaration(prop)
         }
+        generateNestedDtoTypes()
         val polymorphism = dtoType.polymorphism ?: error("Internal bug: no DTO polymorphism")
         typeBuilder.addType(
             TypeSpec
@@ -673,21 +770,17 @@ internal class DtoGenerator private constructor(
         branchOrder: Int,
     ) {
         DtoGenerator(
-            ctx,
-            docMetadata,
-            mutable,
-            dtoType.mergedWith(branch.dtoType),
-            null,
-            lsiGraph,
-            lsiMergedPolymorphicType(branch),
-            immutableSchema,
-            jacksonVersion,
-            this,
-            branch.className,
-            superInterfaceName,
-            true,
-            branch.kind,
-            branchOrder,
+            ctx = ctx,
+            docMetadata = docMetadata,
+            mutable = mutable,
+            dtoType = dtoType.mergedWith(branch.dtoType),
+            lsiDtoType = lsiMergedPolymorphicType(branch),
+            parent = this,
+            innerClassName = branch.className,
+            polymorphicSuperInterfaceName = superInterfaceName,
+            polymorphicBranch = true,
+            polymorphicBranchKind = branch.kind,
+            polymorphicBranchOrder = branchOrder,
         ).generate(emptyList())
     }
 
@@ -2203,8 +2296,16 @@ internal class DtoGenerator private constructor(
     private fun AbstractProp.asFoldProp(): FoldProp<ImmutableType, ImmutableProp> =
         this as FoldProp<ImmutableType, ImmutableProp>
 
-    private fun propTypeName(prop: FoldProp<ImmutableType, ImmutableProp>): TypeName =
-        getDtoClassName(targetSimpleName(prop)).copy(nullable = isGeneratedNullable(prop))
+    private fun propTypeName(prop: FoldProp<ImmutableType, ImmutableProp>): TypeName {
+        val polymorphicRootProp = polymorphicRootFoldPropOrNull(prop)
+        val typeName = if (polymorphicRootProp != null) {
+            val polymorphicOwner = requireNotNull(parent)
+            polymorphicOwner.getDtoClassName(polymorphicOwner.targetSimpleName(polymorphicRootProp))
+        } else {
+            getDtoClassName(targetSimpleName(prop))
+        }
+        return typeName.copy(nullable = isGeneratedNullable(prop))
+    }
 
     private fun isGeneratedNullable(prop: AbstractProp): Boolean =
         prop.isNullable ||
@@ -2254,6 +2355,12 @@ internal class DtoGenerator private constructor(
     }
 
     private fun propElementName(prop: DtoProp<ImmutableType, ImmutableProp>): TypeName {
+        polymorphicRootPropOrNull(prop)?.let { polymorphicRootProp ->
+            val polymorphicOwner = requireNotNull(parent)
+            return polymorphicOwner.getDtoClassName(
+                polymorphicOwner.targetSimpleName(polymorphicRootProp)
+            )
+        }
         val tailProp = prop.toTailProp()
         tailProp.targetTypeRef?.let {
             return ClassName.bestGuess(it.qualifiedName)
@@ -2309,6 +2416,29 @@ internal class DtoGenerator private constructor(
 
     private fun targetSimpleName(prop: FoldProp<ImmutableType, ImmutableProp>): String =
         standardTargetSimpleName("TargetOf_${prop.name}")
+
+    private fun polymorphicRootPropOrNull(
+        prop: DtoProp<ImmutableType, ImmutableProp>,
+    ): DtoProp<ImmutableType, ImmutableProp>? {
+        if (!polymorphicBranch) {
+            return null
+        }
+        return parent?.dtoType?.dtoProps?.singleOrNull { rootProp ->
+            val targetType = rootProp.targetType
+            rootProp.name == prop.name &&
+                targetType != null &&
+                (!rootProp.isRecursive || targetType.isFocusedRecursion)
+        }
+    }
+
+    private fun polymorphicRootFoldPropOrNull(
+        prop: FoldProp<ImmutableType, ImmutableProp>,
+    ): FoldProp<ImmutableType, ImmutableProp>? {
+        if (!polymorphicBranch) {
+            return null
+        }
+        return parent?.dtoType?.foldProps?.singleOrNull { rootProp -> rootProp.name == prop.name }
+    }
 
     private fun accessorFieldName(propName: String): String =
         StringUtil.snake("${propName}Accessor", SnakeCase.UPPER)

@@ -26,66 +26,85 @@ class LsiPoetReferencesTest {
                 )
             ),
         )
+        val generatedType = LsiPoetType(
+            name = "Generated",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.TypeMarker"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "nested",
+                            value = LsiPoetAnnotationValue.NestedAnnotationValue(nestedAnnotation),
+                        )
+                    ),
+                )
+            ),
+            typeParameters = listOf(
+                LsiTypeParameter(
+                    id = parameterId,
+                    name = "T",
+                    upperBounds = listOf(LsiDeclaredType(LsiSymbolId.type("demo.Bound"))),
+                )
+            ),
+            superInterfaces = listOf(LsiDeclaredType(LsiSymbolId.type("demo.Contract"))),
+            members = listOf(
+                LsiPoetProperty(
+                    name = "value",
+                    type = LsiTypeParameterRef(parameterId),
+                    mutable = true,
+                    setter = LsiPoetAccessor(
+                        parameterAnnotations = listOf(
+                            LsiPoetAnnotation(LsiSymbolId.type("demo.ParameterMarker"))
+                        ),
+                        body = LsiPoetCodeBlock.build {
+                            statement { type(LsiDeclaredType(LsiSymbolId.type("demo.SetterRuntime"))) }
+                        },
+                    ),
+                ),
+                LsiPoetFunction(
+                    name = "render",
+                    receiverType = LsiDeclaredType(LsiSymbolId.type("demo.Receiver")),
+                    returnType = LsiDeclaredType(LsiSymbolId.type("demo.Result")),
+                    body = LsiPoetCodeBlock.build {
+                        returnBracedExpression(
+                            prefix = { type(LsiDeclaredType(LsiSymbolId.type("demo.Factory"))) },
+                            body = {
+                                statement {
+                                    type(LsiDeclaredType(LsiSymbolId.type("demo.Runtime")))
+                                }
+                            },
+                        )
+                    },
+                ),
+            ),
+        )
         val file = LsiPoetFile(
             language = LsiLanguage.KOTLIN,
             packageName = "demo",
             fileName = "Generated",
             annotations = listOf(LsiPoetAnnotation(LsiSymbolId.type("demo.FileMarker"))),
-            members = listOf(
-                LsiPoetType(
-                    name = "Generated",
-                    kind = LsiPoetTypeKind.CLASS,
-                    annotations = listOf(
-                        LsiPoetAnnotation(
-                            type = LsiSymbolId.type("demo.TypeMarker"),
-                            arguments = listOf(
-                                LsiPoetAnnotationArgument.Named(
-                                    name = "nested",
-                                    value = LsiPoetAnnotationValue.NestedAnnotationValue(nestedAnnotation),
-                                )
-                            ),
-                        )
-                    ),
-                    typeParameters = listOf(
-                        LsiTypeParameter(
-                            id = parameterId,
-                            name = "T",
-                            upperBounds = listOf(LsiDeclaredType(LsiSymbolId.type("demo.Bound"))),
-                        )
-                    ),
-                    superInterfaces = listOf(LsiDeclaredType(LsiSymbolId.type("demo.Contract"))),
-                    members = listOf(
-                        LsiPoetProperty(
-                            name = "value",
-                            type = LsiTypeParameterRef(parameterId),
-                            mutable = true,
-                            setter = LsiPoetAccessor(
-                                parameterAnnotations = listOf(
-                                    LsiPoetAnnotation(LsiSymbolId.type("demo.ParameterMarker"))
-                                ),
-                                body = LsiPoetCodeBlock.build {
-                                    statement { type(LsiDeclaredType(LsiSymbolId.type("demo.SetterRuntime"))) }
-                                },
-                            ),
-                        ),
-                        LsiPoetFunction(
-                            name = "render",
-                            receiverType = LsiDeclaredType(LsiSymbolId.type("demo.Receiver")),
-                            returnType = LsiDeclaredType(LsiSymbolId.type("demo.Result")),
-                            body = LsiPoetCodeBlock.build {
-                                returnBracedExpression(
-                                    prefix = { type(LsiDeclaredType(LsiSymbolId.type("demo.Factory"))) },
-                                    body = {
-                                        statement {
-                                            type(LsiDeclaredType(LsiSymbolId.type("demo.Runtime")))
-                                        }
-                                    },
-                                )
-                            },
-                        ),
-                    ),
-                )
-            ),
+            members = listOf(generatedType),
+        )
+
+        val memberSymbolIds = sortedSetOf(
+            parameterId,
+            LsiSymbolId.type("demo.TypeMarker"),
+            LsiSymbolId.type("demo.Nested"),
+            LsiSymbolId.type("demo.Kind"),
+            LsiSymbolId.type("demo.Bound"),
+            LsiSymbolId.type("demo.Contract"),
+            LsiSymbolId.type("demo.ParameterMarker"),
+            LsiSymbolId.type("demo.SetterRuntime"),
+            LsiSymbolId.type("demo.Receiver"),
+            LsiSymbolId.type("demo.Result"),
+            LsiSymbolId.type("demo.Factory"),
+            LsiSymbolId.type("demo.Runtime"),
+        )
+        assertEquals(memberSymbolIds, generatedType.referencedSymbolIds())
+        assertEquals(
+            memberSymbolIds.filterTo(sortedSetOf(), LsiSymbolId::isTypeId),
+            generatedType.referencedTypeIds,
         )
 
         assertEquals(

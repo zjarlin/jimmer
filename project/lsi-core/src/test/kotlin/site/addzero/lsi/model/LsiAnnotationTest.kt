@@ -4,6 +4,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -87,5 +88,32 @@ class LsiAnnotationTest {
             first.stableSignature(),
             first.copy(useSiteTarget = LsiAnnotationUseSiteTarget.FIELD).stableSignature(),
         )
+    }
+
+    @Test
+    fun `显式参数源码顺序不改变语义签名`() {
+        val annotation = LsiAnnotation(
+            type = LsiSymbolId.type("example.Ordered"),
+            arguments = mapOf(
+                "alpha" to LsiAnnotationArgument(
+                    LsiAnnotationValue.StringValue("a"),
+                    LsiAnnotationArgumentOrigin.EXPLICIT,
+                ),
+                "zeta" to LsiAnnotationArgument(
+                    LsiAnnotationValue.StringValue("z"),
+                    LsiAnnotationArgumentOrigin.EXPLICIT,
+                ),
+            ),
+            explicitArgumentNamesInSourceOrder = listOf("zeta", "alpha"),
+        )
+        val reordered = annotation.copy(
+            explicitArgumentNamesInSourceOrder = listOf("alpha", "zeta"),
+        )
+
+        assertNotEquals(annotation, reordered)
+        assertEquals(annotation.stableSignature(), reordered.stableSignature())
+        assertFailsWith<IllegalArgumentException> {
+            annotation.copy(explicitArgumentNamesInSourceOrder = listOf("zeta"))
+        }
     }
 }

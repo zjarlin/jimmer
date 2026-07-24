@@ -385,13 +385,15 @@ class AptLsiWorkspaceBuilder(
         return enclosedElements
             .filterIsInstance<ExecutableElement>()
             .filter { member -> member.kind == ElementKind.METHOD }
-            .map { member ->
+            .mapIndexed { sourceIndex, member ->
                 val type = context.toLsiType(member.returnType, typeParameterIds)
+                val name = member.simpleName.toString()
                 LsiAnnotationMember(
-                    name = member.simpleName.toString(),
+                    name = name,
                     type = type.toAnnotationMemberType(),
-                    vararg = member.simpleName.toString() in kotlinMetadata?.varargNames.orEmpty(),
+                    vararg = name in kotlinMetadata?.varargNames.orEmpty(),
                     hasDefault = member.defaultValue != null,
+                    declarationIndex = kotlinMetadata?.declarationIndicesByName?.get(name) ?: sourceIndex,
                 )
             }
             .sortedBy(LsiAnnotationMember::name)
@@ -401,11 +403,17 @@ class AptLsiWorkspaceBuilder(
         val metadata = getAnnotation(Metadata::class.java) ?: return null
         val classMetadata = KotlinClassMetadata.readLenient(metadata) as? KotlinClassMetadata.Class
             ?: return null
-        val varargNames = classMetadata.kmClass.constructors
-            .flatMap { constructor -> constructor.valueParameters }
+        val parameters = classMetadata.kmClass.constructors
+            .maxByOrNull { constructor -> constructor.valueParameters.size }
+            ?.valueParameters
+            .orEmpty()
+        val varargNames = parameters
             .filter { parameter -> parameter.varargElementType != null }
             .mapTo(linkedSetOf()) { parameter -> parameter.name }
-        return KotlinAnnotationMetadata(varargNames)
+        val declarationIndicesByName = parameters
+            .mapIndexed { index, parameter -> parameter.name to index }
+            .toMap()
+        return KotlinAnnotationMetadata(varargNames, declarationIndicesByName)
     }
 
     private fun ExecutableElement.toLsiCallable(owner: TypeElement): LsiDeclaration {
@@ -661,6 +669,7 @@ private fun TypeElement.topLevelEnclosingTypeName(): String {
 
 private data class KotlinAnnotationMetadata(
     val varargNames: Set<String>,
+    val declarationIndicesByName: Map<String, Int>,
 )
 
 private fun LsiTypeDeclaration.requiresFullExternalDeclaration(): Boolean {

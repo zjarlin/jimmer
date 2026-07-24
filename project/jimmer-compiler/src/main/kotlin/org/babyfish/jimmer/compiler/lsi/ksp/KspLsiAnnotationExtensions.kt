@@ -52,7 +52,10 @@ internal class KspLsiAnnotationContext(
                 "location=${annotation.location}"
         }
         val defaultArguments = annotation.defaultArguments.associateBy(KSValueArgument::argumentName)
-        val explicitArguments = annotation.arguments.associateBy(KSValueArgument::argumentName)
+        val explicitArgumentsInSourceOrder = annotation.arguments.filter { argument ->
+            defaultArguments[argument.argumentName()] !== argument
+        }
+        val explicitArguments = explicitArgumentsInSourceOrder.associateBy(KSValueArgument::argumentName)
         val arguments = linkedMapOf<String, KSValueArgument>()
         arguments.putAll(defaultArguments)
         arguments.putAll(explicitArguments)
@@ -69,8 +72,11 @@ internal class KspLsiAnnotationContext(
                             LsiAnnotationArgumentOrigin.EXPLICIT
                         },
                     )
-                },
+            },
             useSiteTarget = annotation.useSiteTarget?.toLsiUseSiteTarget() ?: useSiteTarget,
+            explicitArgumentNamesInSourceOrder = explicitArgumentsInSourceOrder.map(
+                KSValueArgument::argumentName,
+            ),
         )
     }
 

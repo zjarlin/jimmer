@@ -1,6 +1,9 @@
 package demo.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import demo.Book;
 import demo.BookDraft;
 import demo.BookFetcher;
@@ -42,6 +45,8 @@ import tools.jackson.databind.annotation.JsonSerialize;
 @JsonDeserialize(
         builder = BookInput.Builder.class
 )
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@tools.jackson.databind.annotation.JsonNaming(tools.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class BookInput implements Input<Book> {
     public static final DtoMetadata<Book, BookInput> METADATA = 
         new DtoMetadata<Book, BookInput>(
@@ -83,6 +88,9 @@ public class BookInput implements Input<Book> {
     @FixedInputField
     private Boolean isEnabled;
 
+    @JsonAlias({
+                "dto-name"
+            })
     private String name;
 
     private Integer edition;
@@ -128,6 +136,9 @@ public class BookInput implements Input<Book> {
     }
 
     @Nullable
+    @JsonAlias({
+                "dto-name"
+            })
     public String getName() {
         return name;
     }
@@ -137,6 +148,7 @@ public class BookInput implements Input<Book> {
     }
 
     @Nullable
+    @JsonAlias("base-edition")
     public Integer getEdition() {
         if (!_isEditionLoaded) {
             throw new IllegalStateException("The property \"edition\" is not specified");
@@ -518,6 +530,7 @@ public class BookInput implements Input<Book> {
     @JsonPOJOBuilder(
             withPrefix = ""
     )
+    @tools.jackson.databind.annotation.JsonNaming(tools.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy.class)
     public static class Builder {
         private Long id;
 
@@ -548,11 +561,15 @@ public class BookInput implements Input<Book> {
             return this;
         }
 
+        @JsonAlias({
+                    "dto-name"
+                })
         public Builder name(String name) {
             this.name = name;
             return this;
         }
 
+        @JsonAlias("base-edition")
         public Builder edition(Integer edition) {
             this.edition = edition;
             this._isEditionLoaded = true;

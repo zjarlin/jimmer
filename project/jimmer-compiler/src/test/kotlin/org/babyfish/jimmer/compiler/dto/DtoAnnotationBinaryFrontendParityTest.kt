@@ -72,7 +72,15 @@ class DtoAnnotationBinaryFrontendParityTest {
         assertEquals(LsiOriginKind.BINARY, kspDeclaration.origin.kind)
         assertEquals(LsiLanguage.KOTLIN, kspDeclaration.origin.language)
         assertEquals(aptDeclaration.annotationMembers, kspDeclaration.annotationMembers)
-        assertTrue(aptDeclaration.annotationMembers.single().vararg)
+        assertEquals(
+            listOf("alpha", "value", "zebra"),
+            aptDeclaration.annotationMembers.map { member -> member.name },
+        )
+        assertEquals(
+            mapOf("alpha" to 1, "value" to 2, "zebra" to 0),
+            aptDeclaration.annotationMembers.associate { member -> member.name to member.declarationIndex },
+        )
+        assertTrue(aptDeclaration.annotationMembers.single { member -> member.name == "value" }.vararg)
 
         val aptContract = freezeContract(aptWorkspace, JAVA_USE_ID)
         val kspContract = freezeContract(kspWorkspace, KOTLIN_USE_ID)
@@ -97,7 +105,15 @@ class DtoAnnotationBinaryFrontendParityTest {
             aptTag.arguments.getValue("value").value,
         )
         assertEquals(DtoAnnotationDeclarationKind.KOTLIN, aptTagDeclaration.kind)
-        assertEquals(listOf("value"), aptTagDeclaration.argumentNames)
+        assertEquals(listOf("alpha", "value", "zebra"), aptTagDeclaration.argumentNames)
+        assertEquals(
+            listOf("zebra", "alpha", "value"),
+            aptTagDeclaration.argumentNamesInDeclarationOrder,
+        )
+        assertEquals(
+            aptTagDeclaration.argumentNamesInDeclarationOrder,
+            kspTagDeclaration.argumentNamesInDeclarationOrder,
+        )
         assertTrue(aptTagDeclaration.kotlinValueVararg)
     }
 
@@ -166,7 +182,11 @@ class DtoAnnotationBinaryFrontendParityTest {
                 """
                     package demo
 
-                    annotation class Tags(vararg val value: String)
+                    annotation class Tags(
+                        val zebra: String = "",
+                        val alpha: Int = 0,
+                        vararg val value: String,
+                    )
                 """.trimIndent()
             )
         }
@@ -343,7 +363,7 @@ class DtoAnnotationBinaryFrontendParityTest {
                 """
                     package demo
 
-                    @Tags("first", "second")
+                    @Tags(value = ["first", "second"])
                     interface KotlinUse
                 """.trimIndent()
             )

@@ -61,18 +61,20 @@ class JimmerProcessorProvider : SymbolProcessorProvider {
                             "DTO generation requires the frozen immutable compiler state"
                         }
                         val generatedDto = DtoProcessor(
-                            context,
-                            lsiRoundResult.round.inputDocumentSnapshots
+                            ctx = context,
+                            dtoFiles = lsiRoundResult.round.inputDocumentSnapshots
                                 .asSequence()
                                 .map { snapshot -> snapshot.document }
                                 .filter { document -> document.kind == CompilerInputDocumentKind.DTO }
                                 .map { document -> document.toDtoFile() }
                                 .toList(),
-                            dtoState.defaultNullableInputModifier,
-                            dtoState.graphs,
-                            immutableState.schema,
-                            dtoState.rendererOptions.jacksonVersion,
-                            dtoState.effectiveKspMutableByRootTypeId,
+                            defaultNullableInputModifier = dtoState.defaultNullableInputModifier,
+                            graphs = dtoState.graphs,
+                            immutableSchema = immutableState.schema,
+                            jacksonVersion = dtoState.rendererOptions.jacksonVersion,
+                            effectiveMutableByRootTypeId = dtoState.effectiveKspMutableByRootTypeId,
+                            workspace = lsiRoundResult.round.workspace,
+                            annotationContractsBySource = dtoState.annotationContractsBySource,
                         ).process()
                         generated = generated || generatedDto
                     }

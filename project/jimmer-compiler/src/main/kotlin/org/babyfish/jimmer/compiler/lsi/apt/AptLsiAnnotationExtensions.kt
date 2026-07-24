@@ -57,6 +57,9 @@ internal fun AptLsiContext.toLsiAnnotation(
         type = LsiSymbolId.type(annotationElement.qualifiedName.toString()),
         arguments = arguments,
         useSiteTarget = useSiteTarget,
+        explicitArgumentNamesInSourceOrder = annotation.elementValues.keys.map { method ->
+            method.simpleName.toString()
+        },
     )
 }
 

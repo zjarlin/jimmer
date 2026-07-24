@@ -10,6 +10,7 @@ import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
+import site.addzero.lsi.model.LsiAnnotationMember
 import site.addzero.lsi.model.LsiAnnotationTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
@@ -94,6 +95,7 @@ data class DtoAnnotationDeclaration(
     val allowedPlacements: List<DtoAnnotationPlacement>,
     val argumentTypes: Map<String, LsiTypeRef>,
     val kotlinValueVararg: Boolean,
+    val argumentNamesInDeclarationOrder: List<String> = argumentTypes.keys.toList(),
 ) {
     val argumentNames: List<String> = argumentTypes.keys.toList()
 
@@ -107,6 +109,12 @@ data class DtoAnnotationDeclaration(
         }
         require(argumentNames == argumentNames.sorted()) {
             "DTO annotation declaration argument names must be distinct and sorted: ${typeId.value}"
+        }
+        require(argumentNamesInDeclarationOrder.toSet() == argumentNames.toSet()) {
+            "DTO annotation declaration order must contain every argument exactly once: ${typeId.value}"
+        }
+        require(argumentNamesInDeclarationOrder.distinct().size == argumentNamesInDeclarationOrder.size) {
+            "DTO annotation declaration order cannot contain duplicate arguments: ${typeId.value}"
         }
         require(argumentTypes.values.all { type -> type == type.toDtoAnnotationMemberType() }) {
             "DTO annotation declaration argument types must use canonical annotation member semantics: ${typeId.value}"
@@ -492,6 +500,14 @@ private class DtoAnnotationContractResolver(
                 member.name to member.type.toDtoAnnotationMemberType()
             }.toSortedMap(),
             kotlinValueVararg = kotlinValueVararg,
+            argumentNamesInDeclarationOrder = declaration.annotationMembers
+                .sortedWith(
+                    compareBy<LsiAnnotationMember>(
+                        { member -> member.declarationIndex ?: Int.MAX_VALUE },
+                        LsiAnnotationMember::name,
+                    ),
+                )
+                .map(LsiAnnotationMember::name),
         )
     }
 
@@ -612,7 +628,15 @@ private class DtoAnnotationContractResolver(
                 arguments[name] = LsiAnnotationArgument(value, LsiAnnotationArgumentOrigin.EXPLICIT)
             }
         }
-        return if (valid) LsiAnnotation(annotation.type, arguments) else null
+        return if (valid) {
+            LsiAnnotation(
+                type = annotation.type,
+                arguments = arguments,
+                explicitArgumentNamesInSourceOrder = annotation.explicitArgumentNamesInSourceOrder,
+            )
+        } else {
+            null
+        }
     }
 
     private fun freezeDtoAnnotation(
@@ -646,7 +670,15 @@ private class DtoAnnotationContractResolver(
                 arguments[argument.name] = LsiAnnotationArgument(value, LsiAnnotationArgumentOrigin.EXPLICIT)
             }
         }
-        return if (valid) LsiAnnotation(annotation.typeId, arguments) else null
+        return if (valid) {
+            LsiAnnotation(
+                type = annotation.typeId,
+                arguments = arguments,
+                explicitArgumentNamesInSourceOrder = annotation.arguments.map(DtoAnnotationArgument::name),
+            )
+        } else {
+            null
+        }
     }
 
     private fun freezeLsiAnnotationValue(
@@ -858,6 +890,7 @@ fun DtoAnnotationContract.normalizedSnapshot(): String {
                         )
                     },
                     declaration.kotlinValueVararg.toString(),
+                    declaration.argumentNamesInDeclarationOrder.joinToString(","),
                 )
             )
         }

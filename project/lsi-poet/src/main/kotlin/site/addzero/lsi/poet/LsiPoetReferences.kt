@@ -5,21 +5,32 @@ import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.collectTypeRefDependencies
 
 /**
- * 收集源码 IR 中以结构化形式出现的全部稳定符号引用。
+ * 收集源码成员中以结构化形式出现的全部稳定符号引用。
  *
  * 纯文本和名称片段不承载符号身份，因此调用方必须用 [LsiPoetCodePart.Type]
  * 表达会影响增量依赖的类型引用。
  */
-fun LsiPoetFile.referencedSymbolIds(): Set<LsiSymbolId> {
+fun LsiPoetMember.referencedSymbolIds(): Set<LsiSymbolId> {
     return sortedSetOf<LsiSymbolId>().apply {
-        annotations.forEach(::collectPoetAnnotationDependencies)
-        members.forEach(::collectPoetMemberDependencies)
+        collectPoetMemberDependencies(this@referencedSymbolIds)
     }
 }
 
 /**
- * 收集渲染源码所需的直接类型身份，不包含类型参数和成员身份。
+ * 收集渲染源码成员所需的直接类型身份，不包含类型参数和成员身份。
  */
+val LsiPoetMember.referencedTypeIds: Set<LsiSymbolId>
+    get() = referencedSymbolIds().filterTo(sortedSetOf(), LsiSymbolId::isTypeId)
+
+/** 收集源码文件中以结构化形式出现的全部稳定符号引用。 */
+fun LsiPoetFile.referencedSymbolIds(): Set<LsiSymbolId> {
+    return sortedSetOf<LsiSymbolId>().apply {
+        annotations.forEach(::collectPoetAnnotationDependencies)
+        members.forEach { member -> addAll(member.referencedSymbolIds()) }
+    }
+}
+
+/** 收集渲染源码文件所需的直接类型身份，不包含类型参数和成员身份。 */
 val LsiPoetFile.referencedTypeIds: Set<LsiSymbolId>
     get() = referencedSymbolIds().filterTo(sortedSetOf(), LsiSymbolId::isTypeId)
 

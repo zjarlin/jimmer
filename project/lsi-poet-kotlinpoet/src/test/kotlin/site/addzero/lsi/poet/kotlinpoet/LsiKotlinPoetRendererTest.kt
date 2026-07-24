@@ -12,7 +12,10 @@ import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -600,6 +603,100 @@ class LsiKotlinPoetRendererTest {
             aggregationMode = ArtifactAggregationMode.ISOLATING,
             originatingSymbols = setOf(LsiSymbolId.type("demo.Source")),
         )
+    }
+
+    @Test
+    fun `renders typed values in multiline annotation arrays`() {
+        val type = LsiPoetType(
+            name = "MultilineAnnotation",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Container"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "value",
+                            value = LsiPoetAnnotationValue.ArrayValue(
+                                elements = listOf(
+                                    LsiPoetAnnotationValue.StringValue("dto-name")
+                                ),
+                                sourceStyle = LsiPoetAnnotationArrayStyle.MULTI_LINE_LITERAL,
+                            ),
+                        )
+                    ),
+                    argumentLayout = LsiPoetAnnotationArgumentLayout.MULTI_LINE,
+                )
+            ),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact(type, "MultilineAnnotation")).content
+
+        assertContains(
+            content,
+            """
+                @Container(
+                    `value` = [
+                        "dto-name"
+                    ]
+                )
+            """.trimIndent(),
+        )
+    }
+
+    @Test
+    fun `escapes keyword annotation argument names at every annotation boundary`() {
+        val keywordArgument = LsiAnnotationArgument(
+            value = LsiAnnotationValue.StringValue("core"),
+            origin = LsiAnnotationArgumentOrigin.EXPLICIT,
+        )
+        val nested = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.annotation.Nested"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Named(
+                    name = "when",
+                    value = LsiPoetAnnotationValue.StringValue("nested"),
+                )
+            ),
+        )
+        val type = LsiPoetType(
+            name = "KeywordAnnotation",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Container"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "when",
+                            value = LsiPoetAnnotationValue.StringValue("source"),
+                        ),
+                        LsiPoetAnnotationArgument.Named(
+                            name = "nested",
+                            value = LsiPoetAnnotationValue.NestedAnnotationValue(nested),
+                        ),
+                    ),
+                )
+            ),
+            members = listOf(
+                LsiPoetProperty(
+                    name = "value",
+                    type = stringType.copy(
+                        annotations = listOf(
+                            LsiAnnotation(
+                                type = LsiSymbolId.type("demo.annotation.Container"),
+                                arguments = mapOf("when" to keywordArgument),
+                            )
+                        ),
+                    ),
+                    mutable = false,
+                )
+            ),
+        )
+
+        val content = LsiKotlinPoetRenderer().render(artifact(type, "KeywordAnnotation")).content
+
+        assertContains(content, "`when` = \"source\"")
+        assertContains(content, "Nested(`when` = \"nested\")")
+        assertContains(content, "Container(`when` = \"core\") String")
     }
 
     private fun assertPublicApiDoesNotExposeOtherPoet(type: Class<*>) {

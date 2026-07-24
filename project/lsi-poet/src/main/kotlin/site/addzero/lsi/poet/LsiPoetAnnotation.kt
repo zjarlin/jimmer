@@ -32,12 +32,11 @@ data class LsiPoetAnnotation(
     }
 }
 
-/**
- * 控制同一注解的参数是否作为一个不可换行的源码单元输出。
- */
+/** 请求注解参数采用平台默认、单行或多行布局；不支持的渲染边界必须失败。 */
 enum class LsiPoetAnnotationArgumentLayout {
     PLATFORM_DEFAULT,
     SINGLE_LINE,
+    MULTI_LINE,
 }
 
 /**
@@ -53,11 +52,19 @@ sealed interface LsiPoetAnnotationArgument {
     data class Named(
         val name: String,
         override val value: LsiPoetAnnotationValue,
+        val nameStyle: LsiPoetAnnotationArgumentNameStyle =
+            LsiPoetAnnotationArgumentNameStyle.POET_IDENTIFIER,
     ) : LsiPoetAnnotationArgument {
         init {
             require(name.isNotBlank()) { "LSI Poet annotation argument name cannot be blank" }
         }
     }
+}
+
+/** 控制命名注解参数由 Poet 按标识符转义，或按已验证源码原样写出。 */
+enum class LsiPoetAnnotationArgumentNameStyle {
+    POET_IDENTIFIER,
+    VERBATIM,
 }
 
 /**
@@ -110,6 +117,7 @@ sealed interface LsiPoetAnnotationValue {
  */
 enum class LsiPoetAnnotationArrayStyle {
     LITERAL,
+    MULTI_LINE_LITERAL,
     KOTLIN_ARRAY_OF,
 }
 

@@ -76,11 +76,23 @@ sealed interface LsiAnnotationValue {
 data class LsiAnnotation(
     val type: LsiSymbolId,
     val arguments: Map<String, LsiAnnotationArgument> = emptyMap(),
-    val useSiteTarget: LsiAnnotationUseSiteTarget? = null
+    val useSiteTarget: LsiAnnotationUseSiteTarget? = null,
+    val explicitArgumentNamesInSourceOrder: List<String> = emptyList(),
 ) {
 
     init {
         require(arguments.keys.none(String::isBlank)) { "LSI annotation argument name cannot be blank" }
+        require(explicitArgumentNamesInSourceOrder.distinct().size == explicitArgumentNamesInSourceOrder.size) {
+            "LSI annotation explicit argument order cannot contain duplicate names: ${type.value}"
+        }
+        require(
+            explicitArgumentNamesInSourceOrder.isEmpty() ||
+                explicitArgumentNamesInSourceOrder.toSet() == arguments
+                    .filterValues(LsiAnnotationArgument::isExplicit)
+                    .keys
+        ) {
+            "LSI annotation explicit argument order must contain every explicit argument: ${type.value}"
+        }
     }
 
     operator fun get(name: String): LsiAnnotationArgument? = arguments[name]

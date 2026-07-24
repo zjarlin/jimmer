@@ -509,6 +509,41 @@ class LsiJavaPoetRendererTest {
     }
 
     @Test
+    fun `renders typed values in multiline annotation arrays`() {
+        val type = LsiPoetType(
+            name = "MultilineAnnotation",
+            kind = LsiPoetTypeKind.CLASS,
+            annotations = listOf(
+                LsiPoetAnnotation(
+                    type = LsiSymbolId.type("demo.annotation.Container"),
+                    arguments = listOf(
+                        LsiPoetAnnotationArgument.Named(
+                            name = "value",
+                            value = LsiPoetAnnotationValue.ArrayValue(
+                                elements = listOf(
+                                    LsiPoetAnnotationValue.StringValue("dto-name")
+                                ),
+                                sourceStyle = LsiPoetAnnotationArrayStyle.MULTI_LINE_LITERAL,
+                            ),
+                        )
+                    ),
+                )
+            ),
+        )
+
+        val content = LsiJavaPoetRenderer().render(artifact(type, "MultilineAnnotation")).content
+
+        assertContains(
+            content,
+            """
+                @Container({
+                            "dto-name"
+                        })
+            """.trimIndent(),
+        )
+    }
+
+    @Test
     fun `rejects reified type parameters`() {
         val parameterId = LsiSymbolId.typeParameter(
             LsiSymbolId.type("demo.generated.Reified"),
@@ -700,7 +735,7 @@ class LsiJavaPoetRendererTest {
         val annotationException = assertFailsWith<IllegalArgumentException> {
             LsiJavaPoetRenderer().render(artifact(annotationType, "Annotated"))
         }
-        assertContains(annotationException.message.orEmpty(), "single-line annotation layout")
+        assertContains(annotationException.message.orEmpty(), "forced annotation layout")
 
         val explicitlyIndentedFunction = LsiPoetFunction(
             name = "create",

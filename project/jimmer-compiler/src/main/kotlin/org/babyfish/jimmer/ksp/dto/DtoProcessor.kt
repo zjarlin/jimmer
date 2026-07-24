@@ -5,6 +5,7 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import org.babyfish.jimmer.Input
 import org.babyfish.jimmer.View
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
+import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.KspDtoCompiler
@@ -14,10 +15,14 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.fastResolve
+import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.rootType
+import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.LsiPoetTypeName
 
 internal class DtoProcessor(
     private val ctx: Context,
@@ -27,10 +32,15 @@ internal class DtoProcessor(
     private val immutableSchema: ImmutableSchema,
     private val jacksonVersion: JimmerDtoJacksonVersion,
     private val effectiveMutableByRootTypeId: Map<DtoTypeId, Boolean>,
+    private val workspace: LsiWorkspace,
+    private val annotationContractsBySource: Map<LsiSource, DtoAnnotationContract>,
 ) {
     private val graphBySourcePath = graphs.associateBy { graph -> graph.source.path }.also { graphMap ->
         require(graphMap.size == graphs.size) { "Frozen DTO graph source paths must be unique" }
     }
+
+    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName> =
+        JimmerDtoPoetTypeNames.roots(graphs)
 
     fun process(): Boolean {
         val dtoTypes = findDtoTypes()
@@ -125,6 +135,10 @@ internal class DtoProcessor(
             }
             val lsiDtoType = graph.rootType(qualifiedName)
             val mutable = effectiveMutableByRootTypeId.getValue(lsiDtoType.id)
+            val annotationContract = annotationContractsBySource[graph.source]
+                ?: throw DtoException(
+                    "No frozen DTO annotation contract for \"${graph.source.path}\""
+                )
             DtoGenerator(
                 ctx = ctx,
                 docMetadata = docMetadata,
@@ -135,6 +149,9 @@ internal class DtoProcessor(
                 lsiDtoType = lsiDtoType,
                 immutableSchema = immutableSchema,
                 jacksonVersion = jacksonVersion,
+                workspace = workspace,
+                annotationContract = annotationContract,
+                rootDtoTypeNamesByTypeId = rootDtoTypeNamesByTypeId,
             ).generate(allFiles)
         }
     }

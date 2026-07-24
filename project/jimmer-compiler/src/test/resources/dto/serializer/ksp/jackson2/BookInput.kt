@@ -1,5 +1,6 @@
 package demo.dto
 
+import com.fasterxml.jackson.`annotation`.JsonAlias
 import com.fasterxml.jackson.`annotation`.JsonIgnore
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.databind.JsonSerializer
@@ -32,8 +33,18 @@ import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.kt.new
 import org.babyfish.jimmer.sql.fetcher.DtoMetadata
 import org.babyfish.jimmer.sql.kt.fetcher.newFetcher
+import com.fasterxml.jackson.databind.PropertyNamingStrategies as FasterxmlJacksonDatabindPropertyNamingStrategies
+import com.fasterxml.jackson.databind.`annotation`.JsonNaming as FasterxmlJacksonDatabindAnnotationJsonNaming
+import tools.jackson.databind.PropertyNamingStrategies as ToolsJacksonDatabindPropertyNamingStrategies
+import tools.jackson.databind.`annotation`.JsonNaming as ToolsJacksonDatabindAnnotationJsonNaming
 
 @GeneratedBy(file = "fixture/src/main/dto/demo/Book.dto", prompt = "The current DTO type is mutable. If you need to make it immutable, please remove the ksp argument `jimmer.dto.mutable`")
+@FasterxmlJacksonDatabindAnnotationJsonNaming(
+    `value` = FasterxmlJacksonDatabindPropertyNamingStrategies.SnakeCaseStrategy::class
+)
+@ToolsJacksonDatabindAnnotationJsonNaming(
+    `value` = ToolsJacksonDatabindPropertyNamingStrategies.SnakeCaseStrategy::class
+)
 @JsonSerialize(using = BookInput.Serializer::class)
 @JsonDeserialize(builder = BookInput.Builder::class)
 public open class BookInput(
@@ -41,6 +52,11 @@ public open class BookInput(
     public var id: Long? = null,
     @FixedInputField
     public var isEnabled: Boolean = false,
+    @get:JsonAlias(
+        `value` = [
+            "dto-name"
+        ]
+    )
     public var name: String? = null,
     edition: Int? = null,
     @ApiIgnore
@@ -52,6 +68,7 @@ public open class BookInput(
     @get:JsonIgnore
     public var isLocationLoaded: Boolean = location !== null,
 ) : Input<Book> {
+    @field:JsonAlias(value = "base-edition")
     public var edition: Int? = edition
         set(edition) {
             field = edition
@@ -403,6 +420,7 @@ public open class BookInput(
 
     @GeneratedBy
     @JsonPOJOBuilder(withPrefix = "")
+    @FasterxmlJacksonDatabindAnnotationJsonNaming(value = FasterxmlJacksonDatabindPropertyNamingStrategies.SnakeCaseStrategy::class)
     public class Builder {
         private var id: Long? = null
 
@@ -433,11 +451,17 @@ public open class BookInput(
             return this
         }
 
+        @JsonAlias(
+            `value` = [
+                "dto-name"
+            ]
+        )
         public fun name(name: String?): Builder {
             this.name = name
             return this
         }
 
+        @JsonAlias("base-edition")
         public fun edition(edition: Int?): Builder {
             this.edition = edition
             this.isEditionLoaded = true

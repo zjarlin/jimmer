@@ -430,7 +430,7 @@ internal class KspLsiWorkspaceBuilder(
         if (origin == Origin.KOTLIN || origin == Origin.KOTLIN_LIB) {
             val parameters = constructor?.parameters.orEmpty()
             if (parameters.isNotEmpty()) {
-                return parameters.map { parameter ->
+                return parameters.mapIndexed { index, parameter ->
                     val parameterType = typeContext.toLsiType(parameter.type, typeParameterIds)
                     LsiAnnotationMember(
                         name = parameter.name?.asString()?.takeIf(String::isNotBlank)
@@ -442,6 +442,7 @@ internal class KspLsiWorkspaceBuilder(
                         },
                         vararg = parameter.isVararg,
                         hasDefault = parameter.hasDefault,
+                        declarationIndex = index,
                     )
                 }.sortedBy(LsiAnnotationMember::name)
             }
@@ -449,10 +450,11 @@ internal class KspLsiWorkspaceBuilder(
         val propertyMembers = declarations
             .filterIsInstance<KSPropertyDeclaration>()
             .filter { member -> member.getter != null }
-            .map { member ->
+            .mapIndexed { index, member ->
                 LsiAnnotationMember(
                     name = member.simpleName.asString(),
                     type = typeContext.toLsiType(member.type, typeParameterIds).toAnnotationMemberType(),
+                    declarationIndex = index,
                 )
             }
             .toList()
@@ -463,12 +465,13 @@ internal class KspLsiWorkspaceBuilder(
             .filterNot(KSFunctionDeclaration::isConstructor)
             .mapNotNull { member ->
                 val returnType = member.returnType ?: return@mapNotNull null
-                LsiAnnotationMember(
+                member to LsiAnnotationMember(
                     name = member.simpleName.asString(),
                     type = typeContext.toLsiType(returnType, typeParameterIds).toAnnotationMemberType(),
                 )
             }
             .toList()
+            .mapIndexed { index, (_, member) -> member.copy(declarationIndex = index) }
             .sortedBy(LsiAnnotationMember::name)
     }
 

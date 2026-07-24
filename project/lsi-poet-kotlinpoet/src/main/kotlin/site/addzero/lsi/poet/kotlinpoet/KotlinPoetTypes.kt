@@ -42,6 +42,7 @@ import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.poet.LsiPoetAnnotation
 import site.addzero.lsi.poet.LsiPoetAnnotationArgument
 import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
+import site.addzero.lsi.poet.LsiPoetAnnotationArgumentNameStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
 import site.addzero.lsi.poet.LsiPoetAnnotationValue
 import site.addzero.lsi.poet.LsiPoetTypeName
@@ -127,7 +128,7 @@ internal fun LsiAnnotation.toKotlinCoreAnnotationSpec(
             arguments.toSortedMap().forEach { (name, argument) ->
                 if (argument.isExplicit) {
                     addMember(
-                        "%L = %L",
+                        "%N = %L",
                         name,
                         argument.value.toKotlinCoreAnnotationValue(typeNames),
                     )
@@ -148,7 +149,7 @@ internal fun LsiPoetAnnotation.toKotlinSourceAnnotationSpec(
                     when (argument) {
                         is LsiPoetAnnotationArgument.Named -> addMember(
                             "%L = %L",
-                            argument.name,
+                            argument.toKotlinAnnotationArgumentName(),
                             argument.value.toKotlinSourceAnnotationValue(typeNames),
                         )
                         is LsiPoetAnnotationArgument.Positional -> addMember(
@@ -159,6 +160,9 @@ internal fun LsiPoetAnnotation.toKotlinSourceAnnotationSpec(
                 }
                 LsiPoetAnnotationArgumentLayout.SINGLE_LINE -> if (arguments.isNotEmpty()) {
                     addMember(arguments.toKotlinSingleLineSourceAnnotationArguments(typeNames))
+                }
+                LsiPoetAnnotationArgumentLayout.MULTI_LINE -> if (arguments.isNotEmpty()) {
+                    addMember(arguments.toKotlinMultiLineSourceAnnotationArguments(typeNames))
                 }
             }
         }
@@ -177,7 +181,7 @@ private fun List<LsiPoetAnnotationArgument>.toKotlinSingleLineSourceAnnotationAr
                 when (argument) {
                     is LsiPoetAnnotationArgument.Named -> add(
                         "%L = %L",
-                        argument.name,
+                        argument.toKotlinAnnotationArgumentName(),
                         argument.value.toKotlinSourceAnnotationValue(typeNames),
                     )
                     is LsiPoetAnnotationArgument.Positional -> add(
@@ -187,6 +191,35 @@ private fun List<LsiPoetAnnotationArgument>.toKotlinSingleLineSourceAnnotationAr
                 }
             }
         }
+        .build()
+}
+
+private fun List<LsiPoetAnnotationArgument>.toKotlinMultiLineSourceAnnotationArguments(
+    typeNames: List<LsiPoetTypeName>,
+): CodeBlock {
+    return CodeBlock.builder()
+        .add("\n")
+        .indent()
+        .apply {
+            forEachIndexed { index, argument ->
+                if (index != 0) {
+                    add(", \n")
+                }
+                when (argument) {
+                    is LsiPoetAnnotationArgument.Named -> add(
+                        "%L = %L",
+                        argument.toKotlinAnnotationArgumentName(),
+                        argument.value.toKotlinSourceAnnotationValue(typeNames),
+                    )
+                    is LsiPoetAnnotationArgument.Positional -> add(
+                        "%L",
+                        argument.value.toKotlinSourceAnnotationValue(typeNames),
+                    )
+                }
+            }
+        }
+        .unindent()
+        .add("\n")
         .build()
 }
 
@@ -322,29 +355,52 @@ private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(
         )
         is LsiPoetAnnotationValue.ClassValue -> type.toKotlinClassLiteral(typeNames)
         is LsiPoetAnnotationValue.NestedAnnotationValue -> annotation.toKotlinNestedSourceAnnotationValue(typeNames)
-        is LsiPoetAnnotationValue.ArrayValue -> CodeBlock.builder()
-            .add(
-                when (sourceStyle) {
-                    LsiPoetAnnotationArrayStyle.LITERAL -> "["
-                    LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF -> "arrayOf("
-                }
+        is LsiPoetAnnotationValue.ArrayValue -> when (sourceStyle) {
+            LsiPoetAnnotationArrayStyle.LITERAL -> toKotlinInlineSourceAnnotationArray(
+                typeNames,
+                opening = "[",
+                closing = "]",
             )
-            .apply {
-                elements.forEachIndexed { index, element ->
-                    if (index != 0) {
-                        add(", ")
+            LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF -> toKotlinInlineSourceAnnotationArray(
+                typeNames,
+                opening = "arrayOf(",
+                closing = ")",
+            )
+            LsiPoetAnnotationArrayStyle.MULTI_LINE_LITERAL -> CodeBlock.builder()
+                .add("[\n")
+                .indent()
+                .apply {
+                    elements.forEachIndexed { index, element ->
+                        if (index != 0) {
+                            add(", \n")
+                        }
+                        add("%L", element.toKotlinSourceAnnotationValue(typeNames))
                     }
-                    add("%L", element.toKotlinSourceAnnotationValue(typeNames))
                 }
-            }
-            .add(
-                when (sourceStyle) {
-                    LsiPoetAnnotationArrayStyle.LITERAL -> "]"
-                    LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF -> ")"
-                }
-            )
-            .build()
+                .unindent()
+                .add("\n]")
+                .build()
+        }
     }
+}
+
+private fun LsiPoetAnnotationValue.ArrayValue.toKotlinInlineSourceAnnotationArray(
+    typeNames: List<LsiPoetTypeName>,
+    opening: String,
+    closing: String,
+): CodeBlock {
+    return CodeBlock.builder()
+        .add(opening)
+        .apply {
+            elements.forEachIndexed { index, element ->
+                if (index != 0) {
+                    add(", ")
+                }
+                add("%L", element.toKotlinSourceAnnotationValue(typeNames))
+            }
+        }
+        .add(closing)
+        .build()
 }
 
 private fun LsiAnnotation.toKotlinNestedCoreAnnotationValue(
@@ -364,7 +420,11 @@ private fun LsiAnnotation.toKotlinNestedCoreAnnotationValue(
                     if (index != 0) {
                         add(", ")
                     }
-                    add("%L = %L", name, argument.value.toKotlinCoreAnnotationValue(typeNames))
+                    add(
+                        "%N = %L",
+                        name,
+                        argument.value.toKotlinCoreAnnotationValue(typeNames),
+                    )
                 }
         }
         .add(")")
@@ -380,25 +440,46 @@ private fun LsiPoetAnnotation.toKotlinNestedSourceAnnotationValue(
     return CodeBlock.builder()
         .add("%T(", typeNames.requireKotlinClassName(type))
         .apply {
-            arguments.forEachIndexed { index, argument ->
-                if (index != 0) {
-                    add(", ")
+            when (argumentLayout) {
+                LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT -> {
+                    arguments.forEachIndexed { index, argument ->
+                        if (index != 0) {
+                            add(", ")
+                        }
+                        when (argument) {
+                            is LsiPoetAnnotationArgument.Named -> add(
+                                "%L = %L",
+                                argument.toKotlinAnnotationArgumentName(),
+                                argument.value.toKotlinSourceAnnotationValue(typeNames),
+                            )
+                            is LsiPoetAnnotationArgument.Positional -> add(
+                                "%L",
+                                argument.value.toKotlinSourceAnnotationValue(typeNames),
+                            )
+                        }
+                    }
                 }
-                when (argument) {
-                    is LsiPoetAnnotationArgument.Named -> add(
-                        "%L = %L",
-                        argument.name,
-                        argument.value.toKotlinSourceAnnotationValue(typeNames),
-                    )
-                    is LsiPoetAnnotationArgument.Positional -> add(
-                        "%L",
-                        argument.value.toKotlinSourceAnnotationValue(typeNames),
-                    )
+                LsiPoetAnnotationArgumentLayout.SINGLE_LINE -> {
+                    if (arguments.isNotEmpty()) {
+                        add(arguments.toKotlinSingleLineSourceAnnotationArguments(typeNames))
+                    }
+                }
+                LsiPoetAnnotationArgumentLayout.MULTI_LINE -> {
+                    if (arguments.isNotEmpty()) {
+                        add(arguments.toKotlinMultiLineSourceAnnotationArguments(typeNames))
+                    }
                 }
             }
         }
         .add(")")
         .build()
+}
+
+private fun LsiPoetAnnotationArgument.Named.toKotlinAnnotationArgumentName(): CodeBlock {
+    return when (nameStyle) {
+        LsiPoetAnnotationArgumentNameStyle.POET_IDENTIFIER -> CodeBlock.of("%N", name)
+        LsiPoetAnnotationArgumentNameStyle.VERBATIM -> CodeBlock.of("%L", name)
+    }
 }
 
 private fun LsiTypeRef.toKotlinClassLiteral(typeNames: List<LsiPoetTypeName>): CodeBlock {
