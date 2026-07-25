@@ -27,7 +27,8 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
     @Test
     fun `apt shares promoted inline input builder type between polymorphic branches`() {
-        val source = compileApt()
+        val sources = compileApt()
+        val source = sources.clientInput
         val personBody = source.classBody("final class Person implements ClientInput")
         val organizationBody = source.classBody("final class Organization implements ClientInput")
         val addressBody = source.classBody("class TargetOf_address implements EmbeddableDto<Address>")
@@ -41,6 +42,8 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             annotation = "@Description(\"City documentation.\\n\")",
         )
         source.assertRepeatedTypeAnnotations()
+        source.assertAptPolymorphicJacksonAnnotations()
+        sources.assertNestedPolymorphicAnnotationOwnership()
         assertEquals(1, source.countOccurrences("@JsonTypeInfo("))
         assertEquals(1, source.countOccurrences("@JsonSubTypes("))
         assertContains(source, "property = \"type\"")
@@ -83,7 +86,8 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
     @Test
     fun `ksp shares promoted inline input builder type between polymorphic branches`() {
-        val source = compileKsp()
+        val sources = compileKsp()
+        val source = sources.clientInput
         val personBody = source.classBody("public class Person(")
         val personHeader = source.classHeader("public class Person(")
         val organizationBody = source.classBody("public class Organization(")
@@ -111,6 +115,8 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             annotation = "@Description(value = \"City documentation.\\n\")",
         )
         source.assertRepeatedTypeAnnotations()
+        source.assertKspPolymorphicJacksonAnnotations()
+        sources.assertNestedPolymorphicAnnotationOwnership()
         assertEquals(1, source.countOccurrences("@JsonTypeInfo("))
         assertEquals(1, source.countOccurrences("@JsonSubTypes("))
         assertContains(source, "property = \"type\"")
@@ -147,8 +153,22 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(organizationBody, "\$\$_hibernateValidator_getGetterValue")
     }
 
-    private fun compileApt(): String {
-        val projectDir = fixtureProject("jimmer-dto-polymorphic-builder-apt")
+    @Test
+    fun `apt emits and compiles identical polymorphic annotations for jackson 2`() {
+        val sources = compileApt(jackson3 = false)
+        sources.clientInput.assertAptPolymorphicJacksonAnnotations()
+        sources.assertNestedPolymorphicAnnotationOwnership()
+    }
+
+    @Test
+    fun `ksp emits and compiles identical polymorphic annotations for jackson 2`() {
+        val sources = compileKsp(jackson3 = false)
+        sources.clientInput.assertKspPolymorphicJacksonAnnotations()
+        sources.assertNestedPolymorphicAnnotationOwnership()
+    }
+
+    private fun compileApt(jackson3: Boolean = true): CompiledDtoSources {
+        val projectDir = fixtureProject("jimmer-dto-polymorphic-builder-apt-jackson${if (jackson3) 3 else 2}")
         val sourceFiles = writeSources(projectDir, "src/main/java/demo", JAVA_SOURCES)
         writeDtoSource(projectDir)
         val classesDir = projectDir.resolve("build/classes").apply(File::mkdirs)
@@ -168,6 +188,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     "-classpath",
                     System.getProperty("java.class.path"),
                     "-Ajimmer.dto.hibernateValidatorEnhancement=true",
+                    "-Ajimmer.jackson3=$jackson3",
                 ),
                 null,
                 fileManager.getJavaFileObjectsFromFiles(sourceFiles),
@@ -196,11 +217,11 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             )
             assertEquals(true, task.call(), compileDiagnostics.toErrorMessage())
         }
-        return generatedDir.resolve("demo/dto/ClientInput.java").readText()
+        return generatedDir.resolve("demo/dto").readCompiledDtoSources("java")
     }
 
-    private fun compileKsp(): String {
-        val projectDir = fixtureProject("jimmer-dto-polymorphic-builder-ksp")
+    private fun compileKsp(jackson3: Boolean = true): CompiledDtoSources {
+        val projectDir = fixtureProject("jimmer-dto-polymorphic-builder-ksp-jackson${if (jackson3) 3 else 2}")
         val sourceFiles = writeSources(projectDir, "src/main/kotlin/demo", KOTLIN_SOURCES)
         writeDtoSource(projectDir)
         val outputDir = projectDir.resolve("build/ksp").apply(File::mkdirs)
@@ -220,6 +241,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             processorOptions = mapOf(
                 "jimmer.dto.mutable" to "true",
                 "jimmer.dto.hibernateValidatorEnhancement" to "true",
+                "jimmer.jackson3" to jackson3.toString(),
             )
             languageVersion = "2.1"
             apiVersion = "2.1"
@@ -239,7 +261,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 .filter { file -> file.isFile && file.extension == "kt" }
                 .toList(),
         )
-        return kotlinOutputDir.resolve("demo/dto/ClientInput.kt").readText()
+        return kotlinOutputDir.resolve("demo/dto").readCompiledDtoSources("kt")
     }
 
     private fun compileWithK2(
@@ -300,6 +322,14 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             .map(::File)
     }
 
+    private fun File.readCompiledDtoSources(extension: String): CompiledDtoSources {
+        return CompiledDtoSources(
+            clientInput = resolve("ClientInput.$extension").readText(),
+            topLevelOwnsJsonSubTypes = resolve("TopLevelOwnsJsonSubTypesInput.$extension").readText(),
+            nestedRootOwnsJsonSubTypes = resolve("NestedRootOwnsJsonSubTypesInput.$extension").readText(),
+        )
+    }
+
     private fun String.classBody(declaration: String): String {
         val declarationStart = indexOf(declaration)
         check(declarationStart >= 0) { "Missing generated declaration: $declaration" }
@@ -356,6 +386,54 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertTrue(secondOrder < secondValue)
     }
 
+    private fun String.assertAptPolymorphicJacksonAnnotations() {
+        assertContains(
+            this,
+            """
+                @JsonTypeInfo(
+                        use = JsonTypeInfo.Id.NAME,
+                        include = JsonTypeInfo.As.PROPERTY,
+                        property = "type"
+                )
+                @JsonSubTypes({
+                            @JsonSubTypes.Type(ClientInput.Organization.class),
+                            @JsonSubTypes.Type(ClientInput.Person.class)
+                        })
+            """.trimIndent(),
+        )
+        assertContains(this, "@JsonTypeName(\"ORG\")")
+        assertContains(this, "@JsonTypeName(\"Person\")")
+    }
+
+    private fun String.assertKspPolymorphicJacksonAnnotations() {
+        assertContains(
+            this,
+            """
+                @JsonTypeInfo(
+                    use = JsonTypeInfo.Id.NAME,
+                    include = JsonTypeInfo.As.PROPERTY,
+                    property = "type",
+                )
+                @JsonSubTypes(value = [JsonSubTypes.Type(value = ClientInput.Organization::class),
+                JsonSubTypes.Type(value = ClientInput.Person::class)])
+            """.trimIndent(),
+        )
+        assertContains(this, "@JsonTypeName(\"ORG\")")
+        assertContains(this, "@JsonTypeName(\"Person\")")
+    }
+
+    private fun CompiledDtoSources.assertNestedPolymorphicAnnotationOwnership() {
+        assertEquals(1, topLevelOwnsJsonSubTypes.countOccurrences("@JsonTypeInfo("))
+        assertEquals(2, topLevelOwnsJsonSubTypes.countOccurrences("@JsonSubTypes("))
+        assertEquals(2, topLevelOwnsJsonSubTypes.countOccurrences("@JsonTypeName("))
+        assertContains(topLevelOwnsJsonSubTypes, "@JsonTypeName(\"ORG\")")
+        assertContains(topLevelOwnsJsonSubTypes, "@JsonTypeName(\"Person\")")
+
+        assertEquals(1, nestedRootOwnsJsonSubTypes.countOccurrences("@JsonTypeInfo("))
+        assertEquals(1, nestedRootOwnsJsonSubTypes.countOccurrences("@JsonSubTypes("))
+        assertEquals(0, nestedRootOwnsJsonSubTypes.countOccurrences("@JsonTypeName("))
+    }
+
     private fun String.firstIndexOf(vararg candidates: String): Int {
         return candidates.map(::indexOf).filter { index -> index >= 0 }.minOrNull() ?: -1
     }
@@ -392,6 +470,12 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
         fun text(): String = messages.joinToString("\n")
     }
+
+    private data class CompiledDtoSources(
+        val clientInput: String,
+        val topLevelOwnsJsonSubTypes: String,
+        val nestedRootOwnsJsonSubTypes: String,
+    )
 
     private companion object {
         val KOTLIN_ESCAPED_DOLLAR = "\$" + "{'\$'}"
@@ -470,6 +554,25 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     Address location();
 
                     String name();
+                }
+            """.trimIndent(),
+            "ClientContainer.java" to """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.ManyToOne;
+
+                @Entity
+                public interface ClientContainer {
+                    @Id
+                    long id();
+
+                    @ManyToOne
+                    Client topLevelOwned();
+
+                    @ManyToOne
+                    Client nestedRootOwned();
                 }
             """.trimIndent(),
             "Person.java" to """
@@ -552,6 +655,25 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     val name: String
                 }
             """.trimIndent(),
+            "ClientContainer.kt" to """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.ManyToOne
+
+                @Entity
+                interface ClientContainer {
+                    @Id
+                    val id: Long
+
+                    @ManyToOne
+                    val topLevelOwned: Client
+
+                    @ManyToOne
+                    val nestedRootOwned: Client
+                }
+            """.trimIndent(),
             "Person.kt" to """
                 package demo
 
@@ -579,6 +701,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         val DTO_SOURCE = """
             package demo.dto
 
+            import com.fasterxml.jackson.annotation.JsonSubTypes
             import demo.Marker
 
             @Marker(order = 1, value = "first")
@@ -601,6 +724,41 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     }
                     Organization {
                         taxCode
+                    }
+                }
+            }
+
+            @JsonSubTypes(value = [JsonSubTypes.Type(value = String.class)])
+            input TopLevelOwnsJsonSubTypesInput for demo.ClientContainer {
+                id
+                topLevelOwned {
+                    id
+                    #types {
+                        #exhaustive
+                        Person {
+                            firstName
+                        }
+                        Organization {
+                            taxCode
+                        }
+                    }
+                }
+            }
+
+            input NestedRootOwnsJsonSubTypesInput for demo.ClientContainer {
+                id
+                nestedRootOwned
+                @JsonSubTypes(value = [JsonSubTypes.Type(value = String.class)])
+                {
+                    id
+                    #types {
+                        #exhaustive
+                        Person {
+                            firstName
+                        }
+                        Organization {
+                            taxCode
+                        }
                     }
                 }
             }

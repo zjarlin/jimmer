@@ -5,9 +5,6 @@ import com.squareup.kotlinpoet.ClassName
 class JacksonTypes(
     val jsonIgnore: ClassName,
     val jsonValue: ClassName,
-    val jsonTypeInfo: ClassName,
-    val jsonSubTypes: ClassName,
-    val jsonTypeName: ClassName,
     val jsonFormat: ClassName,
     val jsonProperty: ClassName,
     val jsonPropertyOrder: ClassName,

@@ -8,12 +8,6 @@ public class JacksonTypes {
 
     public final ClassName jsonValue;
 
-    public final ClassName jsonTypeInfo;
-
-    public final ClassName jsonSubTypes;
-
-    public final ClassName jsonTypeName;
-
     public final ClassName jsonPropertyOrder;
 
     public final ClassName jsonFormat;
@@ -35,9 +29,6 @@ public class JacksonTypes {
     public JacksonTypes(
             ClassName jsonIgnore,
             ClassName jsonValue,
-            ClassName jsonTypeInfo,
-            ClassName jsonSubTypes,
-            ClassName jsonTypeName,
             ClassName jsonPropertyOrder,
             ClassName jsonFormat,
             ClassName jsonSerializer,
@@ -50,9 +41,6 @@ public class JacksonTypes {
     ) {
         this.jsonIgnore = jsonIgnore;
         this.jsonValue = jsonValue;
-        this.jsonTypeInfo = jsonTypeInfo;
-        this.jsonSubTypes = jsonSubTypes;
-        this.jsonTypeName = jsonTypeName;
         this.jsonPropertyOrder = jsonPropertyOrder;
         this.jsonFormat = jsonFormat;
         this.jsonSerializer = jsonSerializer;

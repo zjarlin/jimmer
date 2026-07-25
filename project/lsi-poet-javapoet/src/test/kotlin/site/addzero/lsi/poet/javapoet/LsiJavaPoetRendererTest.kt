@@ -544,6 +544,59 @@ class LsiJavaPoetRendererTest {
     }
 
     @Test
+    fun `renders line separated annotation array elements without moving braces`() {
+        val annotation = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.annotation.Container"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(
+                    LsiPoetAnnotationValue.ArrayValue(
+                        elements = listOf(
+                            LsiPoetAnnotationValue.StringValue("first"),
+                            LsiPoetAnnotationValue.StringValue("second"),
+                        ),
+                        sourceStyle = LsiPoetAnnotationArrayStyle.LINE_SEPARATED_LITERAL,
+                    )
+                )
+            ),
+        )
+
+        val rendered = LsiJavaPoetRenderer().renderAnnotation(
+            annotation,
+            listOf(LsiPoetTypeName(annotation.type, "demo.annotation", listOf("Container"))),
+        )
+
+        assertEquals("@demo.annotation.Container({\"first\",\n    \"second\"})", rendered.toString())
+    }
+
+    @Test
+    fun `renders compact multiline annotation array elements inside braces`() {
+        val annotation = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.annotation.Container"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(
+                    LsiPoetAnnotationValue.ArrayValue(
+                        elements = listOf(
+                            LsiPoetAnnotationValue.StringValue("first"),
+                            LsiPoetAnnotationValue.StringValue("second"),
+                        ),
+                        sourceStyle = LsiPoetAnnotationArrayStyle.COMPACT_MULTI_LINE_LITERAL,
+                    )
+                )
+            ),
+        )
+
+        val rendered = LsiJavaPoetRenderer().renderAnnotation(
+            annotation,
+            listOf(LsiPoetTypeName(annotation.type, "demo.annotation", listOf("Container"))),
+        )
+
+        assertEquals(
+            "@demo.annotation.Container({\n      \"first\",\n      \"second\"\n    })",
+            rendered.toString(),
+        )
+    }
+
+    @Test
     fun `rejects reified type parameters`() {
         val parameterId = LsiSymbolId.typeParameter(
             LsiSymbolId.type("demo.generated.Reified"),

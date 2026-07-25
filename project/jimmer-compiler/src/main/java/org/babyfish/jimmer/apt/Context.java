@@ -145,9 +145,6 @@ public class Context {
             jacksonTypes = new JacksonTypes(
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonIgnore"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonValue"),
-                    ClassName.get("com.fasterxml.jackson.annotation", "JsonTypeInfo"),
-                    ClassName.get("com.fasterxml.jackson.annotation", "JsonSubTypes"),
-                    ClassName.get("com.fasterxml.jackson.annotation", "JsonTypeName"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonFormat"),
                     ClassName.get("tools.jackson.databind", "ValueSerializer"),
@@ -162,9 +159,6 @@ public class Context {
             jacksonTypes = new JacksonTypes(
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonIgnore"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonValue"),
-                    ClassName.get("com.fasterxml.jackson.annotation", "JsonTypeInfo"),
-                    ClassName.get("com.fasterxml.jackson.annotation", "JsonSubTypes"),
-                    ClassName.get("com.fasterxml.jackson.annotation", "JsonTypeName"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonFormat"),
                     ClassName.get("com.fasterxml.jackson.databind", "JsonSerializer"),

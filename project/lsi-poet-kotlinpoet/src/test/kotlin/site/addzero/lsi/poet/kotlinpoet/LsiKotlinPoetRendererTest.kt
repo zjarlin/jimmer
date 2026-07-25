@@ -644,6 +644,59 @@ class LsiKotlinPoetRendererTest {
     }
 
     @Test
+    fun `renders line separated annotation array elements without moving brackets`() {
+        val annotation = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.annotation.Container"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(
+                    LsiPoetAnnotationValue.ArrayValue(
+                        elements = listOf(
+                            LsiPoetAnnotationValue.StringValue("first"),
+                            LsiPoetAnnotationValue.StringValue("second"),
+                        ),
+                        sourceStyle = LsiPoetAnnotationArrayStyle.LINE_SEPARATED_LITERAL,
+                    )
+                )
+            ),
+        )
+
+        val rendered = LsiKotlinPoetRenderer().renderAnnotation(
+            annotation,
+            listOf(LsiPoetTypeName(annotation.type, "demo.annotation", listOf("Container"))),
+        )
+
+        assertEquals("@demo.`annotation`.Container([\"first\",\n\"second\"])", rendered.toString())
+    }
+
+    @Test
+    fun `renders compact multiline annotation array elements inside brackets`() {
+        val annotation = LsiPoetAnnotation(
+            type = LsiSymbolId.type("demo.annotation.Container"),
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(
+                    LsiPoetAnnotationValue.ArrayValue(
+                        elements = listOf(
+                            LsiPoetAnnotationValue.StringValue("first"),
+                            LsiPoetAnnotationValue.StringValue("second"),
+                        ),
+                        sourceStyle = LsiPoetAnnotationArrayStyle.COMPACT_MULTI_LINE_LITERAL,
+                    )
+                )
+            ),
+        )
+
+        val rendered = LsiKotlinPoetRenderer().renderAnnotation(
+            annotation,
+            listOf(LsiPoetTypeName(annotation.type, "demo.annotation", listOf("Container"))),
+        )
+
+        assertEquals(
+            "@demo.`annotation`.Container([\n  \"first\",\n  \"second\"\n])",
+            rendered.toString(),
+        )
+    }
+
+    @Test
     fun `escapes keyword annotation argument names at every annotation boundary`() {
         val keywordArgument = LsiAnnotationArgument(
             value = LsiAnnotationValue.StringValue("core"),

@@ -12,6 +12,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSpecificationRenderer
@@ -32,7 +33,6 @@ import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoToStringRenderer
 import site.addzero.lsi.core.LsiLanguage
-import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
@@ -55,12 +55,9 @@ import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedTargetTypeOrNull
-import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
-import site.addzero.lsi.jimmer.dto.isPolymorphicInputRoot
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
-import site.addzero.lsi.jimmer.dto.polymorphicRootDiscriminatorPropNameOrNull
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
@@ -364,7 +361,16 @@ internal class DtoGenerator private constructor(
                 }
             )
         builder.addTypeAnnotations()
-        builder.addJacksonPolymorphicInputRootAnnotationsIfNecessary()
+        builder.addAnnotations(
+            KspDtoJacksonPolymorphismRenderer.renderRootAnnotations(
+                dtoType = lsiDtoType,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                annotationContract = annotationContract,
+                generatedPackageName = generatedDtoPackageName,
+                generatedSimpleNames = generatedDtoSimpleNames,
+            )
+        )
         _typeBuilder = builder
         try {
             addDoc()
@@ -422,104 +428,20 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    private fun TypeSpec.Builder.addJacksonPolymorphicInputRootAnnotationsIfNecessary() {
-        val polymorphism = dtoType.polymorphism ?: return
-        if (!lsiDtoType.isPolymorphicInputRoot(immutableSchema)) {
-            return
-        }
-        if (!hasTypeAnnotation(lsiDtoType, ctx.jacksonTypes.jsonTypeInfo)) {
-            addJacksonTypeInfo(polymorphism)
-        }
-        if (!hasTypeAnnotation(lsiDtoType, ctx.jacksonTypes.jsonSubTypes)) {
-            addJacksonSubTypes(polymorphism)
-        }
-    }
-
-    private fun TypeSpec.Builder.addJacksonTypeInfo(
-        polymorphism: DtoPolymorphism<ImmutableType, ImmutableProp>
-    ) {
-        val discriminatorProp = lsiDtoType.selectedPolymorphicInputDiscriminatorPropOrNull(
-            lsiGraph,
-            immutableSchema,
-        )
-        val property = discriminatorProp?.name
-            ?: lsiDtoType.polymorphicRootDiscriminatorPropNameOrNull(immutableSchema)
-            ?: return
-        addAnnotation(
-            AnnotationSpec
-                .builder(ctx.jacksonTypes.jsonTypeInfo)
-                .addMember("use = %T.Id.NAME", ctx.jacksonTypes.jsonTypeInfo)
-                .addMember(
-                    "include = %T.As.%L",
-                    ctx.jacksonTypes.jsonTypeInfo,
-                    if (discriminatorProp !== null) "EXISTING_PROPERTY" else "PROPERTY"
-                )
-                .addMember("property = %S", property)
-                .apply {
-                    if (discriminatorProp !== null) {
-                        addMember("visible = true")
-                    }
-                    polymorphism.defaultBranch?.let {
-                        addMember("defaultImpl = %T::class", getDtoClassName(it.className))
-                    }
-                }
-                .build()
-        )
-    }
-
-    private fun TypeSpec.Builder.addJacksonSubTypes(
-        polymorphism: DtoPolymorphism<ImmutableType, ImmutableProp>
-    ) {
-        if (polymorphism.typeBranches.isEmpty()) {
-            return
-        }
-        val typeAnnotationName = ctx.jacksonTypes.jsonSubTypes.nestedClass("Type")
-        val block = CodeBlock.builder()
-        for ((index, branch) in polymorphism.typeBranches.withIndex()) {
-            if (index != 0) {
-                block.add(",\n")
-            }
-            val typeAnnotation = AnnotationSpec
-                .builder(typeAnnotationName)
-                .addMember("value = %T::class", getDtoClassName(branch.className))
-                .build()
-            block.add("%L", typeAnnotation)
-        }
-        addAnnotation(
-            AnnotationSpec
-                .builder(ctx.jacksonTypes.jsonSubTypes)
-                .addMember("value = [%L]", block.build())
-                .build()
-        )
-    }
-
     private fun TypeSpec.Builder.addJacksonPolymorphicTypeNameIfNecessary() {
-        if (!polymorphicBranch ||
-            !dtoType.modifiers.contains(DtoModifier.INPUT) ||
-            !isTypedPolymorphicInputBranch ||
-            hasTypeAnnotation(root.lsiDtoType, ctx.jacksonTypes.jsonSubTypes) ||
-            hasTypeAnnotation(lsiDtoType, ctx.jacksonTypes.jsonTypeName)
-        ) {
-            return
+        val branch = currentLsiPolymorphicBranchOrNull ?: return
+        val polymorphicRootGenerator = requireNotNull(parent) {
+            "Generated polymorphic branch has no parent generator"
         }
-        dtoType.baseType.discriminatorValue?.let {
-            addAnnotation(
-                AnnotationSpec
-                    .builder(ctx.jacksonTypes.jsonTypeName)
-                    .addMember("%S", it)
-                    .build()
-            )
-        }
-    }
-
-    private fun hasTypeAnnotation(
-        dtoType: LsiDtoType,
-        annotationType: ClassName
-    ): Boolean {
-        return dtoType.hasTypeAnnotation(
+        KspDtoJacksonPolymorphismRenderer.renderBranchTypeName(
+            rootType = polymorphicRootGenerator.lsiDtoType,
+            branch = branch,
+            graph = lsiGraph,
+            immutableSchema = immutableSchema,
             annotationContract = annotationContract,
-            annotationTypeId = LsiSymbolId.type(annotationType.reflectionName()),
-        )
+            generatedPackageName = generatedDtoPackageName,
+            generatedRootSimpleNames = polymorphicRootGenerator.generatedDtoSimpleNames,
+        )?.let(::addAnnotation)
     }
 
     private fun addDoc() {
@@ -1723,6 +1645,26 @@ internal class DtoGenerator private constructor(
 
     private val isTypedPolymorphicInputBranch: Boolean
         get() = polymorphicBranchKind == DtoPolymorphicBranchKind.TYPE
+
+    private val currentLsiPolymorphicBranchOrNull: site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch?
+        get() {
+            if (!polymorphicBranch) {
+                return null
+            }
+            val polymorphicRootGenerator = requireNotNull(parent) {
+                "Generated polymorphic branch has no parent generator"
+            }
+            val branches = polymorphicRootGenerator.lsiDtoType.polymorphism?.branches
+                ?: throw DtoException("Frozen DTO root is not polymorphic")
+            val branch = branches.getOrNull(polymorphicBranchOrder)
+                ?: throw DtoException(
+                    "Frozen DTO polymorphism has no generated branch at order $polymorphicBranchOrder"
+                )
+            if (branch.kind != polymorphicBranchKind || branch.mergedTypeId != lsiDtoType.id) {
+                throw DtoException("Frozen DTO polymorphic branch order does not match generated branch")
+            }
+            return branch
+        }
 
     private val polymorphicRootType: ImmutableType
         get() = dtoType.baseType.inheritanceRoot ?: dtoType.baseType

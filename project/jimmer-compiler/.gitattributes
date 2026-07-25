@@ -1,1 +1,2 @@
 src/test/resources/dto/serializer/** -whitespace
+src/test/resources/dto/polymorphism/** -whitespace

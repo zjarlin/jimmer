@@ -126,7 +126,9 @@ enum class LsiPoetClassLiteralStyle {
  */
 enum class LsiPoetAnnotationArrayStyle {
     LITERAL,
+    LINE_SEPARATED_LITERAL,
     MULTI_LINE_LITERAL,
+    COMPACT_MULTI_LINE_LITERAL,
     KOTLIN_ARRAY_OF,
 }
 

@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSpecificationRenderer;
@@ -299,7 +300,23 @@ public class DtoGenerator {
         typeBuilder.addAnnotations(
                 AptDtoTypeAnnotationRenderer.render(lsiDtoType, annotationContract, lsiWorkspace)
         );
-        addJacksonPolymorphicTypeNameIfNecessary();
+        site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch lsiPolymorphicBranch =
+                currentLsiPolymorphicBranchOrNull();
+        if (lsiPolymorphicBranch != null) {
+            assert parent != null;
+            AnnotationSpec polymorphicTypeName = AptDtoJacksonPolymorphismRenderer.renderBranchTypeName(
+                    parent.lsiDtoType,
+                    lsiPolymorphicBranch,
+                    lsiGraph,
+                    immutableSchema,
+                    annotationContract,
+                    getGeneratedDtoPackageName(),
+                    parent.getGeneratedDtoSimpleNames()
+            );
+            if (polymorphicTypeName != null) {
+                typeBuilder.addAnnotation(polymorphicTypeName);
+            }
+        }
         if (innerClassName != null) {
             typeBuilder.addModifiers(Modifier.STATIC);
             addMembers();
@@ -374,7 +391,16 @@ public class DtoGenerator {
         );
         DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism = dtoType.getPolymorphism();
         assert polymorphism != null;
-        addJacksonPolymorphicInputRootAnnotationsIfNecessary(polymorphism);
+        typeBuilder.addAnnotations(
+                AptDtoJacksonPolymorphismRenderer.renderRootAnnotations(
+                        lsiDtoType,
+                        lsiGraph,
+                        immutableSchema,
+                        annotationContract,
+                        getGeneratedDtoPackageName(),
+                        getGeneratedDtoSimpleNames()
+                )
+        );
         for (AbstractProp prop : dtoType.getProps()) {
             addAccessorDeclaration(prop);
         }
@@ -507,111 +533,24 @@ public class DtoGenerator {
         return matchedBranch;
     }
 
-    private void addJacksonPolymorphicInputRootAnnotationsIfNecessary(
-            DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism
-    ) {
-        if (!DtoAccessorExtensionsKt.isPolymorphicInputRoot(lsiDtoType, immutableSchema)) {
-            return;
+    private site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch currentLsiPolymorphicBranchOrNull() {
+        if (!polymorphicBranch) {
+            return null;
         }
-        if (!hasTypeAnnotation(lsiDtoType, ctx.getJacksonTypes().jsonTypeInfo)) {
-            addJacksonTypeInfo(polymorphism);
+        assert parent != null;
+        site.addzero.lsi.jimmer.dto.DtoPolymorphism polymorphism = parent.lsiDtoType.getPolymorphism();
+        if (polymorphism == null ||
+                polymorphicBranchOrder < 0 ||
+                polymorphicBranchOrder >= polymorphism.getBranches().size()) {
+            throw new DtoException("Frozen DTO polymorphism has no generated branch at order " + polymorphicBranchOrder);
         }
-        if (!hasTypeAnnotation(lsiDtoType, ctx.getJacksonTypes().jsonSubTypes)) {
-            addJacksonSubTypes(polymorphism);
+        site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch branch =
+                polymorphism.getBranches().get(polymorphicBranchOrder);
+        if (branch.getKind() != polymorphicBranchKind ||
+                !DtoGenerationExtensionsKt.mergedType(branch, lsiGraph).equals(lsiDtoType)) {
+            throw new DtoException("Frozen DTO polymorphic branch order does not match generated branch");
         }
-    }
-
-    private void addJacksonTypeInfo(DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism) {
-        DtoBaseProp discriminatorProp =
-                DtoAccessorExtensionsKt.selectedPolymorphicInputDiscriminatorPropOrNull(
-                        lsiDtoType,
-                        lsiGraph,
-                        immutableSchema
-                );
-        String property = discriminatorProp != null ?
-                discriminatorProp.getName() :
-                DtoAccessorExtensionsKt.polymorphicRootDiscriminatorPropNameOrNull(
-                        lsiDtoType,
-                        immutableSchema
-                );
-        if (property == null) {
-            return;
-        }
-        AnnotationSpec.Builder builder = AnnotationSpec
-                .builder(ctx.getJacksonTypes().jsonTypeInfo)
-                .addMember("use", "$T.Id.NAME", ctx.getJacksonTypes().jsonTypeInfo)
-                .addMember(
-                        "include",
-                        "$T.As.$L",
-                        ctx.getJacksonTypes().jsonTypeInfo,
-                        discriminatorProp != null ? "EXISTING_PROPERTY" : "PROPERTY"
-                )
-                .addMember("property", "$S", property);
-        if (discriminatorProp != null) {
-            builder.addMember("visible", "true");
-        }
-        DtoPolymorphicBranch<ImmutableType, ImmutableProp> defaultBranch = polymorphism.getDefaultBranch();
-        if (defaultBranch != null) {
-            builder.addMember("defaultImpl", "$T.class", getDtoClassName(defaultBranch.getClassName()));
-        }
-        typeBuilder.addAnnotation(builder.build());
-    }
-
-    private void addJacksonSubTypes(DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism) {
-        if (polymorphism.getTypeBranches().isEmpty()) {
-            return;
-        }
-        ClassName typeAnnotationName = ctx.getJacksonTypes().jsonSubTypes.nestedClass("Type");
-        CodeBlock.Builder blockBuilder = CodeBlock.builder().add("{\n$>");
-        boolean addSeparator = false;
-        for (DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch : polymorphism.getTypeBranches()) {
-            if (addSeparator) {
-                blockBuilder.add(",\n");
-            } else {
-                addSeparator = true;
-            }
-            AnnotationSpec.Builder typeBuilder = AnnotationSpec
-                    .builder(typeAnnotationName)
-                    .addMember("value", "$T.class", getDtoClassName(branch.getClassName()));
-            blockBuilder.add("$L", typeBuilder.build());
-        }
-        blockBuilder.add("$<\n}");
-        typeBuilder.addAnnotation(
-                AnnotationSpec
-                        .builder(ctx.getJacksonTypes().jsonSubTypes)
-                        .addMember("value", "$L", blockBuilder.build())
-                        .build()
-        );
-    }
-
-    private void addJacksonPolymorphicTypeNameIfNecessary() {
-        if (!polymorphicBranch ||
-                !dtoType.getModifiers().contains(DtoModifier.INPUT) ||
-                !isTypedPolymorphicInputBranch() ||
-                hasTypeAnnotation(root.lsiDtoType, ctx.getJacksonTypes().jsonSubTypes) ||
-                hasTypeAnnotation(lsiDtoType, ctx.getJacksonTypes().jsonTypeName)) {
-            return;
-        }
-        String value = dtoType.getBaseType().getDiscriminatorValue();
-        if (value != null) {
-            typeBuilder.addAnnotation(
-                    AnnotationSpec
-                            .builder(ctx.getJacksonTypes().jsonTypeName)
-                            .addMember("value", "$S", value)
-                            .build()
-            );
-        }
-    }
-
-    private boolean hasTypeAnnotation(
-            site.addzero.lsi.jimmer.dto.DtoType dtoType,
-            ClassName annotationType
-    ) {
-        return AptDtoTypeAnnotationRenderer.hasTypeAnnotation(
-                dtoType,
-                annotationContract,
-                annotationType.reflectionName()
-        );
+        return branch;
     }
 
     public String getSimpleName() {

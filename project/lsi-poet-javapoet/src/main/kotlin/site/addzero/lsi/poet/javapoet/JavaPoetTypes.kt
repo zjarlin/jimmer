@@ -319,12 +319,36 @@ private fun LsiPoetAnnotationValue.toJavaSourceAnnotationValue(
                 }
                 .add("}")
                 .build()
+            LsiPoetAnnotationArrayStyle.LINE_SEPARATED_LITERAL -> CodeBlock.builder()
+                .add("{")
+                .apply {
+                    elements.forEachIndexed { index, element ->
+                        if (index != 0) {
+                            add(",\n")
+                        }
+                        add("\$L", element.toJavaSourceAnnotationValue(typeNames))
+                    }
+                }
+                .add("}")
+                .build()
             LsiPoetAnnotationArrayStyle.MULTI_LINE_LITERAL -> CodeBlock.builder()
                 .add("{\n\$>")
                 .apply {
                     elements.forEachIndexed { index, element ->
                         if (index != 0) {
                             add(", \n")
+                        }
+                        add("\$L", element.toJavaSourceAnnotationValue(typeNames))
+                    }
+                }
+                .add("\$<\n}")
+                .build()
+            LsiPoetAnnotationArrayStyle.COMPACT_MULTI_LINE_LITERAL -> CodeBlock.builder()
+                .add("{\n\$>")
+                .apply {
+                    elements.forEachIndexed { index, element ->
+                        if (index != 0) {
+                            add(",\n")
                         }
                         add("\$L", element.toJavaSourceAnnotationValue(typeNames))
                     }

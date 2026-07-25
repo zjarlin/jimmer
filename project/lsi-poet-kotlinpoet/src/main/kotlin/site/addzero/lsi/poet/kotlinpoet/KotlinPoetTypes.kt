@@ -362,6 +362,18 @@ private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(
                 opening = "[",
                 closing = "]",
             )
+            LsiPoetAnnotationArrayStyle.LINE_SEPARATED_LITERAL -> CodeBlock.builder()
+                .add("[")
+                .apply {
+                    elements.forEachIndexed { index, element ->
+                        if (index != 0) {
+                            add(",\n")
+                        }
+                        add("%L", element.toKotlinSourceAnnotationValue(typeNames))
+                    }
+                }
+                .add("]")
+                .build()
             LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF -> toKotlinInlineSourceAnnotationArray(
                 typeNames,
                 opening = "arrayOf(",
@@ -374,6 +386,20 @@ private fun LsiPoetAnnotationValue.toKotlinSourceAnnotationValue(
                     elements.forEachIndexed { index, element ->
                         if (index != 0) {
                             add(", \n")
+                        }
+                        add("%L", element.toKotlinSourceAnnotationValue(typeNames))
+                    }
+                }
+                .unindent()
+                .add("\n]")
+                .build()
+            LsiPoetAnnotationArrayStyle.COMPACT_MULTI_LINE_LITERAL -> CodeBlock.builder()
+                .add("[\n")
+                .indent()
+                .apply {
+                    elements.forEachIndexed { index, element ->
+                        if (index != 0) {
+                            add(",\n")
                         }
                         add("%L", element.toKotlinSourceAnnotationValue(typeNames))
                     }

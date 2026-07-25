@@ -44,9 +44,6 @@ class Context(
             JacksonTypes(
                 jsonIgnore = ClassName("com.fasterxml.jackson.annotation", "JsonIgnore"),
                 jsonValue = ClassName("com.fasterxml.jackson.annotation", "JsonValue"),
-                jsonTypeInfo = ClassName("com.fasterxml.jackson.annotation", "JsonTypeInfo"),
-                jsonSubTypes = ClassName("com.fasterxml.jackson.annotation", "JsonSubTypes"),
-                jsonTypeName = ClassName("com.fasterxml.jackson.annotation", "JsonTypeName"),
                 jsonFormat = ClassName("com.fasterxml.jackson.annotation", "JsonFormat"),
                 jsonProperty = ClassName("com.fasterxml.jackson.annotation", "JsonProperty"),
                 jsonPropertyOrder = ClassName("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
@@ -63,9 +60,6 @@ class Context(
             JacksonTypes(
                 jsonIgnore = ClassName("com.fasterxml.jackson.annotation", "JsonIgnore"),
                 jsonValue = ClassName("com.fasterxml.jackson.annotation", "JsonValue"),
-                jsonTypeInfo = ClassName("com.fasterxml.jackson.annotation", "JsonTypeInfo"),
-                jsonSubTypes = ClassName("com.fasterxml.jackson.annotation", "JsonSubTypes"),
-                jsonTypeName = ClassName("com.fasterxml.jackson.annotation", "JsonTypeName"),
                 jsonFormat = ClassName("com.fasterxml.jackson.annotation", "JsonFormat"),
                 jsonProperty = ClassName("com.fasterxml.jackson.annotation", "JsonProperty"),
                 jsonPropertyOrder = ClassName("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
