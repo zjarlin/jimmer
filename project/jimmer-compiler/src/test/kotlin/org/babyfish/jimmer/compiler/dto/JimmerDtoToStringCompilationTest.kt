@@ -22,6 +22,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
 import org.babyfish.jimmer.compiler.ksp.JimmerProcessorProvider
+import org.babyfish.jimmer.runtime.ImmutableSpi
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 
@@ -34,6 +35,7 @@ class JimmerDtoToStringCompilationTest {
         assertEquals(EXPECTED_SNAPSHOTS, runtimeSnapshots(classesDir))
         assertEqualityAndHashContracts(classesDir)
         assertHibernateValidatorContracts(classesDir, kotlin = false)
+        assertFuzzyDraftWriteContracts(classesDir)
     }
 
     @Test
@@ -43,6 +45,7 @@ class JimmerDtoToStringCompilationTest {
         assertEquals(EXPECTED_SNAPSHOTS, runtimeSnapshots(classesDir))
         assertEqualityAndHashContracts(classesDir)
         assertHibernateValidatorContracts(classesDir, kotlin = true)
+        assertFuzzyDraftWriteContracts(classesDir)
     }
 
     private fun compileApt(): File {
@@ -316,6 +319,24 @@ class JimmerDtoToStringCompilationTest {
             }
             assertEqualWithHash(collisionLeft, collisionRight)
             assertTrue(collisionLeft == collisionLeft)
+        }
+    }
+
+    private fun assertFuzzyDraftWriteContracts(classesDir: File) {
+        val urls = arrayOf(classesDir.toURI().toURL())
+        URLClassLoader(urls, javaClass.classLoader).use { classLoader ->
+            val emptyInput = newDto(classLoader, "FuzzyShadowInput")
+            val emptyEntity = emptyInput.javaClass
+                .getMethod("toEntity")
+                .invoke(emptyInput) as ImmutableSpi
+            assertFalse(emptyEntity.__isLoaded("nullableText"))
+
+            val input = newDto(classLoader, "FuzzyShadowInput").apply {
+                setProperty("nullableText", "specified")
+            }
+            val specifiedEntity = input.javaClass.getMethod("toEntity").invoke(input) as ImmutableSpi
+            assertTrue(specifiedEntity.__isLoaded("nullableText"))
+            assertEquals("specified", specifiedEntity.__get("nullableText"))
         }
     }
 
@@ -617,6 +638,7 @@ class JimmerDtoToStringCompilationTest {
 
             import org.babyfish.jimmer.sql.Entity;
             import org.babyfish.jimmer.sql.Id;
+            import org.jspecify.annotations.Nullable;
 
             @Entity
             public interface Sample {
@@ -656,6 +678,9 @@ class JimmerDtoToStringCompilationTest {
                 boolean flag1();
 
                 String displayName();
+
+                @Nullable
+                String nullableText();
             }
         """.trimIndent()
 
@@ -703,6 +728,8 @@ class JimmerDtoToStringCompilationTest {
                 val flag1: Boolean
 
                 val displayName: String
+
+                val nullableText: String?
             }
         """.trimIndent()
 
@@ -745,6 +772,7 @@ class JimmerDtoToStringCompilationTest {
                 javaClassValue? as javaClass
                 chars?
                 numbers?
+                nullableText
             }
 
             input FloatingInput {

@@ -1048,6 +1048,20 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `derives non-null draft write guards from frozen input semantics`() {
+        val graph = graph(visibleDynamic = true)
+        val type = graph.types.single()
+
+        assertFalse(type.baseProp(graph, "dynamicValue").requiresNonNullDraftWriteGuard(graph))
+        assertFalse(type.baseProp(graph, "staticValue").requiresNonNullDraftWriteGuard(graph))
+        assertTrue(type.baseProp(graph, "fuzzyValue").requiresNonNullDraftWriteGuard(graph))
+        assertFailsWith<IllegalArgumentException> {
+            (graph.propsById.getValue(DtoPropId("dto#h-hidden")) as DtoBaseProp)
+                .requiresNonNullDraftWriteGuard(graph)
+        }
+    }
+
+    @Test
     fun `derives toString inclusion from the frozen DTO graph`() {
         val graph = graph(visibleDynamic = true)
         val type = graph.types.single()

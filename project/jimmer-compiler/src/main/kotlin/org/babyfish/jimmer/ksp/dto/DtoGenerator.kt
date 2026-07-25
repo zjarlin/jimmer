@@ -65,6 +65,7 @@ import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
+import site.addzero.lsi.jimmer.dto.requiresNonNullDraftWriteGuard
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
 import site.addzero.lsi.jimmer.dto.tailProp
@@ -1439,15 +1440,18 @@ internal class DtoGenerator private constructor(
                                 if (dtoProp.nextProp == null && dtoProp.baseProp.isDiscriminator) {
                                     continue
                                 }
-                                val statePropName = lsiDtoType
-                                    .prop(lsiGraph, dtoProp.name)
+                                val lsiProp = lsiDtoType.baseProp(lsiGraph, dtoProp.name)
+                                val statePropName = lsiProp
                                     .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
-                                if (statePropName !== null) {
+                                val nonNullGuard = lsiProp.requiresNonNullDraftWriteGuard(lsiGraph)
+                                if (statePropName != null) {
                                     beginControlFlow("if (%N)", statePropName)
-                                    addDraftAssignment(dtoProp, dtoProp.name)
+                                } else if (nonNullGuard) {
+                                    beginControlFlow("if (%N != null)", dtoProp.name)
+                                }
+                                addDraftAssignment(dtoProp, dtoProp.name)
+                                if (statePropName != null || nonNullGuard) {
                                     endControlFlow()
-                                } else {
-                                    addDraftAssignment(dtoProp, dtoProp.name)
                                 }
                             }
                         }

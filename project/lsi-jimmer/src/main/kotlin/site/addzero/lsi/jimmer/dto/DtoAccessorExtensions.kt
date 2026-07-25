@@ -250,6 +250,12 @@ fun DtoProp.requiresDtoLoadedStateStorage(graph: DtoGraph): Boolean {
         (this as? DtoBaseProp)?.inputModifier == DtoModifier.DYNAMIC
 }
 
+/** 判断 fuzzy 输入属性写回 Draft 时是否需要忽略 null 值。 */
+fun DtoBaseProp.requiresNonNullDraftWriteGuard(graph: DtoGraph): Boolean {
+    requireVisibleProp(graph)
+    return inputModifier == DtoModifier.FUZZY
+}
+
 /** 返回 Serializer 的加载状态访问器；非动态属性返回空。 */
 fun DtoBaseProp.serializerLoadedAccessorNameOrNull(): String? {
     return if (inputModifier == DtoModifier.DYNAMIC) loadedAccessorName() else null

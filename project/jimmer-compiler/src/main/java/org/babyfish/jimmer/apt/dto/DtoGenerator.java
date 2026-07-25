@@ -1584,12 +1584,17 @@ public class DtoGenerator {
             if (prop.getNextProp() == null && prop.getBaseProp().isDiscriminator()) {
                 continue;
             }
+            DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
+                    lsiDtoType,
+                    lsiGraph,
+                    prop.getName()
+            );
             String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
-                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                    lsiProp,
                     lsiGraph,
                     LsiLanguage.JAVA
             );
-            boolean fuzzy = prop.getInputModifier() == DtoModifier.FUZZY && prop.isNullable();
+            boolean fuzzy = DtoAccessorExtensionsKt.requiresNonNullDraftWriteGuard(lsiProp, lsiGraph);
             if (stateFieldName != null) {
                 builder.beginControlFlow("if (this.$L)", stateFieldName);
             } else if (fuzzy) {

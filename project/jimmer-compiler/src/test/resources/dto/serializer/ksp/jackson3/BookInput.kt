@@ -107,7 +107,9 @@ public open class BookInput(
         if (isEditionLoaded) {
             _draft.edition = edition
         }
-        PRICE_ACCESSOR.set(_draft, price)
+        if (price != null) {
+            PRICE_ACCESSOR.set(_draft, price)
+        }
         if (isLocationLoaded) {
             LOCATION_ACCESSOR.set(_draft, location)
         }
