@@ -7,6 +7,7 @@ import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.isEntityAssociation
 import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -254,6 +255,35 @@ fun DtoProp.requiresDtoLoadedStateStorage(graph: DtoGraph): Boolean {
 fun DtoBaseProp.requiresNonNullDraftWriteGuard(graph: DtoGraph): Boolean {
     requireVisibleProp(graph)
     return inputModifier == DtoModifier.FUZZY
+}
+
+/** 判断 DTO 属性写回 Draft 的目标是否为实体关联列表。 */
+fun DtoBaseProp.hasEntityAssociationListDraftTarget(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): Boolean {
+    requireVisibleProp(graph)
+    val decisions = tailProp(graph).baseProps.map { binding ->
+        val immutableProp = requireNotNull(immutableSchema.propsById[binding.propId]) {
+            "No immutable base property '${binding.propId.value}' for DTO property '${id.value}'"
+        }
+        immutableProp.list && immutableSchema.isEntityAssociation(immutableProp)
+    }.distinct()
+    require(decisions.size == 1) {
+        "DTO property '${id.value}' has inconsistent entity association list bindings"
+    }
+    return decisions.single()
+}
+
+/** 判断 dynamic DTO 属性写回 Draft 时是否需要用空列表表达 loaded-null。 */
+fun DtoBaseProp.requiresEmptyAssociationListDraftFallback(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): Boolean {
+    val entityAssociationListTarget = hasEntityAssociationListDraftTarget(graph, immutableSchema)
+    return nullable &&
+        inputModifier == DtoModifier.DYNAMIC &&
+        entityAssociationListTarget
 }
 
 /** 返回 Serializer 的加载状态访问器；非动态属性返回空。 */

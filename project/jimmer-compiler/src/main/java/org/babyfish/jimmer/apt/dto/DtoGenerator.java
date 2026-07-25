@@ -13,6 +13,7 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoConfigRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEnumRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
@@ -1631,22 +1632,17 @@ public class DtoGenerator {
             if (isSimpleProp(prop)) {
                 builder.addStatement("__draft.$L(this.$L)", prop.getBaseProp().getSetterName(), prop.getName());
             } else {
-                ImmutableProp tailBaseProp = prop.toTailProp().getBaseProp();
-                if (tailBaseProp.isList() && tailBaseProp.isAssociation(true)) {
-                    builder.addStatement(
-                            "$L.set(__draft, this.$L != null ? this.$L : $T.emptyList())",
-                            accessorFieldName(prop.getName()),
-                            prop.getName(),
-                            prop.getName(),
-                            org.babyfish.jimmer.apt.immutable.generator.Constants.COLLECTIONS_CLASS_NAME
-                    );
-                } else {
-                    builder.addStatement(
-                            "$L.set(__draft, this.$L)",
-                            accessorFieldName(prop.getName()),
-                            prop.getName()
-                    );
-                }
+                builder.addCode(
+                        AptDtoDraftWriteRenderer.render(
+                                lsiProp,
+                                lsiGraph,
+                                immutableSchema,
+                                lsiWorkspace,
+                                accessorFieldName(prop.getName()),
+                                "__draft",
+                                prop.getName()
+                        )
+                );
             }
             if (stateFieldName != null || fuzzy) {
                 builder.endControlFlow();

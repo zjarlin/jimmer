@@ -10,6 +10,7 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoConfigRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEnumRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
@@ -1444,7 +1445,7 @@ internal class DtoGenerator private constructor(
                                 } else if (nonNullGuard) {
                                     beginControlFlow("if (%N != null)", dtoProp.name)
                                 }
-                                addDraftAssignment(dtoProp, dtoProp.name)
+                                addDraftAssignment(dtoProp, lsiProp, dtoProp.name)
                                 if (statePropName != null || nonNullGuard) {
                                     endControlFlow()
                                 }
@@ -1478,24 +1479,26 @@ internal class DtoGenerator private constructor(
         endControlFlow()
     }
 
-    private fun FunSpec.Builder.addDraftAssignment(prop: DtoProp<ImmutableType, ImmutableProp>, valueExpr: String) {
+    private fun FunSpec.Builder.addDraftAssignment(
+        prop: DtoProp<ImmutableType, ImmutableProp>,
+        lsiProp: DtoBaseProp,
+        valueName: String,
+    ) {
         val baseProp = prop.toTailProp().baseProp
         if (isSimpleProp(prop)) {
-            addStatement("_draft.%N = %N", baseProp.name, valueExpr)
+            addStatement("_draft.%N = %N", baseProp.name, valueName)
         } else {
-            if (prop.isNullable && baseProp.let { it.isList && it.isAssociation(true) }) {
-                addStatement(
-                    "%N.set(_draft, %N)",
-                    accessorFieldName(prop.name),
-                    valueExpr
-                )
-            } else {
-                addStatement(
-                    "%N.set(_draft, %N)",
-                    accessorFieldName(prop.name),
-                    valueExpr
-                )
-            }
+            addCode(
+                KspDtoDraftWriteRenderer.render(
+                    prop = lsiProp,
+                    graph = lsiGraph,
+                    immutableSchema = immutableSchema,
+                    workspace = workspace,
+                    accessorName = accessorFieldName(prop.name),
+                    draftName = "_draft",
+                    valueName = valueName,
+                ),
+            )
         }
     }
 

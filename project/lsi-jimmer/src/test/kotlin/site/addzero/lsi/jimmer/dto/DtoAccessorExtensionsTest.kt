@@ -1062,6 +1062,120 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `derives empty association list draft fallback from frozen semantics`() {
+        val toManyProp = baseProp(
+            name = "childIds",
+            modifier = DtoModifier.DYNAMIC,
+            nullable = true,
+            baseName = "children",
+        )
+        val toManyGraph = singlePropGraph(toManyProp)
+        val children = immutableProp(
+            name = "children",
+            type = STRING_TYPE,
+            list = true,
+            primaryMapping = PrimaryMapping.ASSOCIATION,
+            associationKind = AssociationKind.ONE_TO_MANY,
+            genericTarget = true,
+        )
+        val toManySchema = immutableSchema(children)
+
+        assertTrue(toManyProp.hasEntityAssociationListDraftTarget(toManyGraph, toManySchema))
+        assertTrue(
+            toManyProp.requiresEmptyAssociationListDraftFallback(toManyGraph, toManySchema),
+        )
+
+        val nonNullableProp = baseProp(
+            name = "childIds",
+            modifier = DtoModifier.STATIC,
+            nullable = false,
+            baseName = "children",
+        )
+        val nonNullableGraph = singlePropGraph(nonNullableProp)
+        assertTrue(
+            nonNullableProp.hasEntityAssociationListDraftTarget(nonNullableGraph, toManySchema),
+        )
+        assertFalse(
+            nonNullableProp.requiresEmptyAssociationListDraftFallback(
+                nonNullableGraph,
+                toManySchema,
+            ),
+        )
+
+        listOf(DtoModifier.STATIC, DtoModifier.FUZZY).forEach { modifier ->
+            val optionalProp = baseProp(
+                name = "childIds",
+                modifier = modifier,
+                nullable = true,
+                baseName = "children",
+            )
+            val optionalGraph = singlePropGraph(optionalProp)
+            assertFalse(
+                optionalProp.requiresEmptyAssociationListDraftFallback(
+                    optionalGraph,
+                    toManySchema,
+                ),
+            )
+        }
+
+        val toOneProp = baseProp(
+            name = "parentId",
+            modifier = DtoModifier.DYNAMIC,
+            nullable = true,
+            baseName = "parent",
+        )
+        val toOneGraph = singlePropGraph(toOneProp)
+        val parent = immutableProp(
+            name = "parent",
+            type = STRING_TYPE,
+            primaryMapping = PrimaryMapping.ASSOCIATION,
+            associationKind = AssociationKind.MANY_TO_ONE,
+            genericTarget = true,
+        )
+        assertFalse(
+            toOneProp.hasEntityAssociationListDraftTarget(
+                toOneGraph,
+                immutableSchema(parent),
+            ),
+        )
+
+        val scalarListProp = baseProp(
+            name = "labels",
+            modifier = DtoModifier.DYNAMIC,
+            nullable = true,
+        )
+        val scalarListGraph = singlePropGraph(scalarListProp)
+        val labels = immutableProp(name = "labels", type = STRING_TYPE, list = true)
+        assertFalse(
+            scalarListProp.hasEntityAssociationListDraftTarget(
+                scalarListGraph,
+                immutableSchema(labels),
+            ),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            toManyProp.requiresEmptyAssociationListDraftFallback(
+                toManyGraph,
+                immutableSchema(),
+            )
+        }
+
+        val mixedProp = toManyProp.copy(
+            baseProps = listOf(
+                DtoBasePropBinding("children", children.id),
+                DtoBasePropBinding("labels", labels.id),
+            ),
+        )
+        val mixedGraph = singlePropGraph(mixedProp)
+        assertFailsWith<IllegalArgumentException> {
+            mixedProp.requiresEmptyAssociationListDraftFallback(
+                mixedGraph,
+                immutableSchema(children, labels),
+            )
+        }
+    }
+
+    @Test
     fun `derives toString inclusion from the frozen DTO graph`() {
         val graph = graph(visibleDynamic = true)
         val type = graph.types.single()
@@ -1360,6 +1474,7 @@ class DtoAccessorExtensionsTest {
         targetTypeId: LsiSymbolId? = null,
         view: ImmutableView? = null,
         converter: ImmutableConverter? = null,
+        genericTarget: Boolean = false,
     ): ImmutableProp {
         val id = LsiSymbolId.property(ownerTypeId, name)
         return ImmutableProp(
@@ -1393,7 +1508,7 @@ class DtoAccessorExtensionsTest {
             },
             transientResolver = null,
             view = view,
-            genericTarget = false,
+            genericTarget = genericTarget,
             remote = false,
             recursive = false,
             validations = emptyList(),

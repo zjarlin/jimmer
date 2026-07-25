@@ -38,6 +38,7 @@ class JimmerDtoToStringCompilationTest {
         assertHibernateValidatorContracts(classesDir, kotlin = false)
         assertFuzzyDraftWriteContracts(classesDir)
         assertDynamicConstructorLoadedStateContracts(classesDir)
+        assertDynamicAssociationListDraftWriteContracts(classesDir)
     }
 
     @Test
@@ -49,6 +50,7 @@ class JimmerDtoToStringCompilationTest {
         assertHibernateValidatorContracts(classesDir, kotlin = true)
         assertFuzzyDraftWriteContracts(classesDir)
         assertDynamicConstructorLoadedStateContracts(classesDir)
+        assertDynamicAssociationListDraftWriteContracts(classesDir)
     }
 
     private fun compileApt(): File {
@@ -350,12 +352,6 @@ class JimmerDtoToStringCompilationTest {
             val entityType = classLoader.loadClass("demo.Sample")
             val converterConstructor = dtoType.getConstructor(entityType)
 
-            fun Any.toEntity(): ImmutableSpi =
-                javaClass.getMethod("toEntity").invoke(this) as ImmutableSpi
-
-            fun Any.isDtoPropLoaded(name: String): Boolean =
-                javaClass.getMethod("is${name.replaceFirstChar(Char::titlecase)}Loaded").invoke(this) as Boolean
-
             val unloadedBase = newDto(classLoader, "DynamicShadowInput").toEntity()
             assertFalse(unloadedBase.__isLoaded("nullableText"))
             assertFalse(unloadedBase.__isLoaded("numbers"))
@@ -391,6 +387,52 @@ class JimmerDtoToStringCompilationTest {
             val loadedNumbersRoundTrip = loadedNumbersCopy.toEntity()
             assertTrue(loadedNumbersRoundTrip.__isLoaded("numbers"))
             assertContentEquals(expectedNumbers, loadedNumbersRoundTrip.__get("numbers") as IntArray)
+        }
+    }
+
+    private fun assertDynamicAssociationListDraftWriteContracts(classesDir: File) {
+        val urls = arrayOf(classesDir.toURI().toURL())
+        URLClassLoader(urls, javaClass.classLoader).use { classLoader ->
+            val dtoType = classLoader.loadClass("demo.dto.DynamicShadowInput")
+            val entityType = classLoader.loadClass("demo.Sample")
+            val converterConstructor = dtoType.getConstructor(entityType)
+
+            val unloadedBase = newDto(classLoader, "DynamicShadowInput").toEntity()
+            assertFalse(unloadedBase.__isLoaded("children"))
+            val unloadedCopy = converterConstructor.newInstance(unloadedBase)
+            assertFalse(unloadedCopy.isDtoPropLoaded("childIds"))
+            assertFalse(unloadedCopy.toEntity().__isLoaded("children"))
+
+            val loadedNullBase = newDto(classLoader, "DynamicShadowInput").apply {
+                setProperty("childIds", null)
+                setProperty("parentId", null)
+            }.toEntity()
+            assertTrue(loadedNullBase.__isLoaded("children"))
+            assertTrue((loadedNullBase.__get("children") as List<*>).isEmpty())
+            assertTrue(loadedNullBase.__isLoaded("parent"))
+            assertEquals(null, loadedNullBase.__get("parent"))
+            val loadedNullCopy = converterConstructor.newInstance(loadedNullBase)
+            assertTrue(loadedNullCopy.isDtoPropLoaded("childIds"))
+            assertTrue(loadedNullCopy.isDtoPropLoaded("parentId"))
+            assertTrue((loadedNullCopy.javaClass.getMethod("getChildIds").invoke(loadedNullCopy) as List<*>).isEmpty())
+            assertEquals(null, loadedNullCopy.javaClass.getMethod("getParentId").invoke(loadedNullCopy))
+
+            val expectedChildIds = listOf(1L, 2L)
+            val loadedChildrenBase = newDto(classLoader, "DynamicShadowInput").apply {
+                setProperty("childIds", expectedChildIds)
+            }.toEntity()
+            assertTrue(loadedChildrenBase.__isLoaded("children"))
+            assertEquals(
+                expectedChildIds,
+                (loadedChildrenBase.__get("children") as List<*>)
+                    .map { child -> (child as ImmutableSpi).__get("id") },
+            )
+            val loadedChildrenCopy = converterConstructor.newInstance(loadedChildrenBase)
+            assertTrue(loadedChildrenCopy.isDtoPropLoaded("childIds"))
+            assertEquals(
+                expectedChildIds,
+                loadedChildrenCopy.javaClass.getMethod("getChildIds").invoke(loadedChildrenCopy),
+            )
         }
     }
 
@@ -522,6 +564,12 @@ class JimmerDtoToStringCompilationTest {
             .getConstructor()
             .newInstance()
     }
+
+    private fun Any.toEntity(): ImmutableSpi =
+        javaClass.getMethod("toEntity").invoke(this) as ImmutableSpi
+
+    private fun Any.isDtoPropLoaded(name: String): Boolean =
+        javaClass.getMethod("is${name.replaceFirstChar(Char::titlecase)}Loaded").invoke(this) as Boolean
 
     private fun Any.setMixedValues() {
         setProperty("separator", "separator-value")
@@ -692,7 +740,11 @@ class JimmerDtoToStringCompilationTest {
 
             import org.babyfish.jimmer.sql.Entity;
             import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.ManyToOne;
+            import org.babyfish.jimmer.sql.OneToMany;
             import org.jspecify.annotations.Nullable;
+
+            import java.util.List;
 
             @Entity
             public interface Sample {
@@ -735,6 +787,13 @@ class JimmerDtoToStringCompilationTest {
 
                 @Nullable
                 String nullableText();
+
+                @OneToMany(mappedBy = "parent")
+                List<Sample> children();
+
+                @ManyToOne
+                @Nullable
+                Sample parent();
             }
         """.trimIndent()
 
@@ -743,6 +802,8 @@ class JimmerDtoToStringCompilationTest {
 
             import org.babyfish.jimmer.sql.Entity
             import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.ManyToOne
+            import org.babyfish.jimmer.sql.OneToMany
 
             @Entity
             interface Sample {
@@ -784,6 +845,12 @@ class JimmerDtoToStringCompilationTest {
                 val displayName: String
 
                 val nullableText: String?
+
+                @OneToMany(mappedBy = "parent")
+                val children: List<Sample>
+
+                @ManyToOne
+                val parent: Sample?
             }
         """.trimIndent()
 
@@ -812,6 +879,8 @@ class JimmerDtoToStringCompilationTest {
                 chars?
                 numbers?
                 nullableText
+                id(children)? as childIds
+                id(parent) as parentId
             }
 
             fuzzy input FuzzyShadowInput {
