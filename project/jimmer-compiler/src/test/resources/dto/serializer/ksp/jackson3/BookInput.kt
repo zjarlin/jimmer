@@ -9,6 +9,7 @@ import demo.Point
 import demo.PointDraft
 import demo.`by`
 import java.math.BigDecimal
+import java.util.Objects
 import kotlin.Any
 import kotlin.Boolean
 import kotlin.Int
@@ -131,29 +132,47 @@ public open class BookInput(
     ): BookInput = BookInput(id, isEnabled, name, edition, isEditionLoaded, price, location, isLocationLoaded)
 
     public override fun hashCode(): Int {
-        var _hash = (id?.hashCode() ?: 0)
-        _hash = 31 * _hash + isEnabled.hashCode()
-        _hash = 31 * _hash + (name?.hashCode() ?: 0)
-        _hash = 31 * _hash + (edition?.hashCode() ?: 0)
-        _hash = _hash * 31 + isEditionLoaded.hashCode()
-        _hash = 31 * _hash + (price?.hashCode() ?: 0)
-        _hash = 31 * _hash + (location?.hashCode() ?: 0)
-        _hash = _hash * 31 + isLocationLoaded.hashCode()
+        var _hash = Objects.hashCode(this.id)
+        _hash = _hash * 31 + Objects.hashCode(this.isEnabled)
+        _hash = _hash * 31 + Objects.hashCode(this.name)
+        _hash = _hash * 31 + (if (this.isEditionLoaded) Objects.hashCode(this.edition) else 0)
+        _hash = _hash * 31 + Objects.hashCode(this.isEditionLoaded)
+        _hash = _hash * 31 + Objects.hashCode(this.price)
+        _hash = _hash * 31 + (if (this.isLocationLoaded) Objects.hashCode(this.location) else 0)
+        _hash = _hash * 31 + Objects.hashCode(this.isLocationLoaded)
         return _hash
     }
 
     public override fun equals(other: Any?): Boolean {
-        val _other = other as? BookInput ?: return false
-        return id == _other.id &&
-        isEnabled == _other.isEnabled &&
-        name == _other.name &&
-        isEditionLoaded == _other.isEditionLoaded && (
-            !isEditionLoaded || edition == _other.edition
-        ) &&
-        price == _other.price &&
-        isLocationLoaded == _other.isLocationLoaded && (
-            !isLocationLoaded || location == _other.location
-        )
+        if (other == null || this::class != other::class) {
+            return false
+        }
+        val _other = other as BookInput
+        if (!Objects.equals(this.id, _other.id)) {
+            return false
+        }
+        if (!Objects.equals(this.isEnabled, _other.isEnabled)) {
+            return false
+        }
+        if (!Objects.equals(this.name, _other.name)) {
+            return false
+        }
+        if (this.isEditionLoaded != _other.isEditionLoaded) {
+            return false
+        }
+        if (this.isEditionLoaded && !Objects.equals(this.edition, _other.edition)) {
+            return false
+        }
+        if (!Objects.equals(this.price, _other.price)) {
+            return false
+        }
+        if (this.isLocationLoaded != _other.isLocationLoaded) {
+            return false
+        }
+        if (this.isLocationLoaded && !Objects.equals(this.location, _other.location)) {
+            return false
+        }
+        return true
     }
 
     public override fun toString(): String {
@@ -289,21 +308,32 @@ public open class BookInput(
         ): TargetOf_location = TargetOf_location(x, isXLoaded, y, isYLoaded)
 
         public override fun hashCode(): Int {
-            var _hash = (x?.hashCode() ?: 0)
-            _hash = _hash * 31 + isXLoaded.hashCode()
-            _hash = 31 * _hash + (y?.hashCode() ?: 0)
-            _hash = _hash * 31 + isYLoaded.hashCode()
+            var _hash = 0
+            _hash = _hash * 31 + (if (this.isXLoaded) Objects.hashCode(this.x) else 0)
+            _hash = _hash * 31 + Objects.hashCode(this.isXLoaded)
+            _hash = _hash * 31 + (if (this.isYLoaded) Objects.hashCode(this.y) else 0)
+            _hash = _hash * 31 + Objects.hashCode(this.isYLoaded)
             return _hash
         }
 
         public override fun equals(other: Any?): Boolean {
-            val _other = other as? TargetOf_location ?: return false
-            return isXLoaded == _other.isXLoaded && (
-                !isXLoaded || x == _other.x
-            ) &&
-            isYLoaded == _other.isYLoaded && (
-                !isYLoaded || y == _other.y
-            )
+            if (other == null || this::class != other::class) {
+                return false
+            }
+            val _other = other as TargetOf_location
+            if (this.isXLoaded != _other.isXLoaded) {
+                return false
+            }
+            if (this.isXLoaded && !Objects.equals(this.x, _other.x)) {
+                return false
+            }
+            if (this.isYLoaded != _other.isYLoaded) {
+                return false
+            }
+            if (this.isYLoaded && !Objects.equals(this.y, _other.y)) {
+                return false
+            }
+            return true
         }
 
         public override fun toString(): String {

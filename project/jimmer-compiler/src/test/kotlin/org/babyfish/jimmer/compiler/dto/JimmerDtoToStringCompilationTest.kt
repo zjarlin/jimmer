@@ -16,6 +16,7 @@ import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
 import org.babyfish.jimmer.compiler.ksp.JimmerProcessorProvider
@@ -25,17 +26,19 @@ import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 class JimmerDtoToStringCompilationTest {
 
     @Test
-    fun `apt generated dto toString compiles and matches runtime contract`() {
+    fun `apt generated dto object methods compile and match runtime contracts`() {
         val classesDir = compileApt()
 
         assertEquals(EXPECTED_SNAPSHOTS, runtimeSnapshots(classesDir))
+        assertEqualityAndHashContracts(classesDir)
     }
 
     @Test
-    fun `ksp generated dto toString compiles and matches runtime contract`() {
+    fun `ksp generated dto object methods compile and match runtime contracts`() {
         val classesDir = compileKsp()
 
         assertEquals(EXPECTED_SNAPSHOTS, runtimeSnapshots(classesDir))
+        assertEqualityAndHashContracts(classesDir)
     }
 
     private fun compileApt(): File {
@@ -74,7 +77,11 @@ class JimmerDtoToStringCompilationTest {
             .sortedBy(File::getAbsolutePath)
             .toList()
         assertGeneratedDtoFiles(generatedFiles, "java", "APT")
-        return compileWithJavac(projectDir, sourceFiles + generatedFiles)
+        val derivedSource = writeSources(
+            projectDir.resolve("src/runtime/java"),
+            mapOf("demo/dto/DerivedEmptyInput.java" to JAVA_DERIVED_SOURCE),
+        )
+        return compileWithJavac(projectDir, sourceFiles + generatedFiles + derivedSource)
     }
 
     private fun compileKsp(): File {
@@ -115,7 +122,11 @@ class JimmerDtoToStringCompilationTest {
             .sortedBy(File::getAbsolutePath)
             .toList()
         assertGeneratedDtoFiles(generatedFiles, "kt", "KSP")
-        return compileWithK2(projectDir, sourceFiles + generatedFiles)
+        val derivedSource = writeSources(
+            projectDir.resolve("src/runtime/kotlin"),
+            mapOf("demo/dto/DerivedEmptyInput.kt" to KOTLIN_DERIVED_SOURCE),
+        )
+        return compileWithK2(projectDir, sourceFiles + generatedFiles + derivedSource)
     }
 
     private fun compileWithJavac(
@@ -172,7 +183,14 @@ class JimmerDtoToStringCompilationTest {
     private fun runtimeSnapshots(classesDir: File): List<String> {
         val urls = arrayOf(classesDir.toURI().toURL())
         return URLClassLoader(urls, javaClass.classLoader).use { classLoader ->
-            val plain = newPlainArrayInput(classLoader)
+            val plain = newPlainArrayInput(
+                classLoader = classLoader,
+                chars = charArrayOf('A', 'Z'),
+                numbers = intArrayOf(1, 2),
+                labels = arrayOf("one", "two"),
+                stars = arrayOf<Any>("star", 1),
+                keyword = "keyword",
+            )
             val dynamicEmpty = newDto(classLoader, "DynamicShadowInput")
             val dynamicLoadedNull = newDto(classLoader, "DynamicShadowInput").apply {
                 setProperty("builder", null)
@@ -199,22 +217,139 @@ class JimmerDtoToStringCompilationTest {
         }
     }
 
-    private fun newPlainArrayInput(classLoader: ClassLoader): Any {
+    private fun assertEqualityAndHashContracts(classesDir: File) {
+        val urls = arrayOf(classesDir.toURI().toURL())
+        URLClassLoader(urls, javaClass.classLoader).use { classLoader ->
+            val arrays = List(3) {
+                newPlainArrayInput(
+                    classLoader = classLoader,
+                    chars = charArrayOf('A', 'Z'),
+                    numbers = intArrayOf(1, 2),
+                    labels = arrayOf("one", "two"),
+                    stars = arrayOf<Any>("star", 1),
+                    keyword = "keyword",
+                )
+            }
+            assertEqualWithHash(arrays[0], arrays[1])
+            assertEqualWithHash(arrays[1], arrays[2])
+            assertEqualWithHash(arrays[0], arrays[2])
+            assertNotEqualBothWays(
+                arrays[0],
+                newPlainArrayInput(
+                    classLoader = classLoader,
+                    chars = charArrayOf('A', 'Z'),
+                    numbers = intArrayOf(1, 3),
+                    labels = arrayOf("one", "two"),
+                    stars = arrayOf<Any>("star", 1),
+                    keyword = "keyword",
+                ),
+            )
+
+            val hiddenLeft = newDto(classLoader, "DynamicShadowInput").apply {
+                setBackingField("numbers", intArrayOf(1, 2))
+            }
+            val hiddenRight = newDto(classLoader, "DynamicShadowInput").apply {
+                setBackingField("numbers", intArrayOf(3, 4))
+            }
+            assertEqualWithHash(hiddenLeft, hiddenRight)
+            assertNotEqualBothWays(
+                newDto(classLoader, "DynamicShadowInput"),
+                newDto(classLoader, "DynamicShadowInput").apply {
+                    setProperty("builder", null)
+                },
+            )
+
+            val loadedArraysLeft = newDto(classLoader, "DynamicShadowInput").apply {
+                setProperty("numbers", intArrayOf(1, 2))
+            }
+            val loadedArraysRight = newDto(classLoader, "DynamicShadowInput").apply {
+                setProperty("numbers", intArrayOf(1, 2))
+            }
+            assertEqualWithHash(loadedArraysLeft, loadedArraysRight)
+            assertNotEqualBothWays(
+                loadedArraysLeft,
+                newDto(classLoader, "DynamicShadowInput").apply {
+                    setProperty("numbers", intArrayOf(2, 1))
+                },
+            )
+
+            val floatingNaNLeft = floatingInput(classLoader, Float.NaN, Double.NaN)
+            val floatingNaNRight = floatingInput(classLoader, Float.NaN, Double.NaN)
+            assertEqualWithHash(floatingNaNLeft, floatingNaNRight)
+            assertNotEqualBothWays(
+                floatingInput(classLoader, 0.0f, 0.0),
+                floatingInput(classLoader, -0.0f, -0.0),
+            )
+
+            val emptyLeft = newDto(classLoader, "EmptyInput")
+            val emptyRight = newDto(classLoader, "EmptyInput")
+            assertEqualWithHash(emptyLeft, emptyRight)
+            val derived = classLoader
+                .loadClass("demo.dto.DerivedEmptyInput")
+                .getConstructor()
+                .newInstance()
+            assertNotEqualBothWays(emptyLeft, derived)
+
+            val collisionLeft = newDto(classLoader, "DynamicShadowInput").apply {
+                setMixedValues()
+            }
+            val collisionRight = newDto(classLoader, "DynamicShadowInput").apply {
+                setMixedValues()
+            }
+            assertEqualWithHash(collisionLeft, collisionRight)
+            assertTrue(collisionLeft == collisionLeft)
+        }
+    }
+
+    private fun newPlainArrayInput(
+        classLoader: ClassLoader,
+        chars: CharArray,
+        numbers: IntArray,
+        labels: Array<String>,
+        stars: Array<*>,
+        keyword: String,
+    ): Any {
         val type = classLoader.loadClass("demo.dto.PlainArrayInput")
-        val chars = charArrayOf('A', 'Z')
-        val numbers = intArrayOf(1, 2)
         val primaryConstructor = type.constructors.singleOrNull { constructor ->
             constructor.parameterTypes.contentEquals(
-                arrayOf(CharArray::class.java, IntArray::class.java, String::class.java),
+                arrayOf(
+                    CharArray::class.java,
+                    IntArray::class.java,
+                    String::class.java,
+                    arrayOf<String>()::class.java,
+                    arrayOf<Any>()::class.java,
+                ),
             )
         }
         if (primaryConstructor != null) {
-            return primaryConstructor.newInstance(chars, numbers, "keyword")
+            return primaryConstructor.newInstance(chars, numbers, keyword, labels, stars)
         }
         return type.getConstructor().newInstance().apply {
             setProperty("chars", chars)
             setProperty("numbers", numbers)
-            setProperty("when", "keyword")
+            setProperty("labels", labels)
+            setProperty("stars", stars)
+            setProperty("when", keyword)
+        }
+    }
+
+    private fun floatingInput(
+        classLoader: ClassLoader,
+        floatValue: Float,
+        doubleValue: Double,
+    ): Any {
+        val type = classLoader.loadClass("demo.dto.FloatingInput")
+        val primaryConstructor = type.constructors.singleOrNull { constructor ->
+            constructor.parameterTypes.contentEquals(
+                arrayOf(Float::class.javaPrimitiveType, Double::class.javaPrimitiveType),
+            )
+        }
+        if (primaryConstructor != null) {
+            return primaryConstructor.newInstance(floatValue, doubleValue)
+        }
+        return type.getConstructor().newInstance().apply {
+            setProperty("floatValue", floatValue)
+            setProperty("doubleValue", doubleValue)
         }
     }
 
@@ -229,8 +364,34 @@ class JimmerDtoToStringCompilationTest {
         setProperty("separator", "separator-value")
         setProperty("_sp", "sp-value")
         setProperty("when", "keyword")
+        setProperty("hash", "hash-value")
+        setProperty("_hash", "underscore-hash-value")
+        setProperty("o", "o-value")
+        setProperty("other", "other-value")
+        setProperty("_other", "underscore-other-value")
+        setProperty("javaClass", "java-class-value")
         setProperty("chars", charArrayOf('A', 'Z'))
         setProperty("numbers", intArrayOf(1, 2))
+    }
+
+    private fun Any.setBackingField(name: String, value: Any?) {
+        val field = generateSequence(javaClass as Class<*>?) { type -> type.superclass }
+            .mapNotNull { type -> type.declaredFields.singleOrNull { field -> field.name == name } }
+            .firstOrNull()
+            ?: error("There is no backing field '$name' on ${javaClass.name}")
+        field.isAccessible = true
+        field.set(this, value)
+    }
+
+    private fun assertEqualWithHash(left: Any, right: Any) {
+        assertTrue(left == right, "$left must equal $right")
+        assertTrue(right == left, "$right must equal $left")
+        assertEquals(left.hashCode(), right.hashCode(), "Equal DTOs must have equal hashes")
+    }
+
+    private fun assertNotEqualBothWays(left: Any, right: Any) {
+        assertFalse(left == right, "$left must not equal $right")
+        assertFalse(right == left, "$right must not equal $left")
     }
 
     private fun Any.setProperty(name: String, value: Any?) {
@@ -288,6 +449,8 @@ class JimmerDtoToStringCompilationTest {
 
     private fun String.normalizeArrayIdentities(): String {
         return replace(INT_ARRAY_IDENTITY_PATTERN, "<int-array>")
+            .replace(STRING_ARRAY_IDENTITY_PATTERN, "<string-array>")
+            .replace(OBJECT_ARRAY_IDENTITY_PATTERN, "<object-array>")
     }
 
     private fun DiagnosticCollector<JavaFileObject>.toErrorMessage(): String {
@@ -328,19 +491,30 @@ class JimmerDtoToStringCompilationTest {
             "PlainArrayInput",
             "DynamicShadowInput",
             "FuzzyShadowInput",
+            "FloatingInput",
+            "EmptyInput",
         )
 
         val EXPECTED_SNAPSHOTS = listOf(
-            "PlainArrayInput(chars=AZ, numbers=<int-array>, when=keyword)",
+            "PlainArrayInput(chars=AZ, numbers=<int-array>, when=keyword, " +
+                "labels=<string-array>, stars=<object-array>)",
             "DynamicShadowInput()",
             "DynamicShadowInput(builder=null)",
-            "DynamicShadowInput(separator=separator-value, _sp=sp-value, when=keyword, chars=AZ, numbers=<int-array>)",
+            "DynamicShadowInput(separator=separator-value, _sp=sp-value, when=keyword, " +
+                "hash=hash-value, _hash=underscore-hash-value, o=o-value, other=other-value, " +
+                "_other=underscore-other-value, javaClass=java-class-value, " +
+                "chars=AZ, numbers=<int-array>)",
             "FuzzyShadowInput()",
             "FuzzyShadowInput(builder=builder-value)",
-            "FuzzyShadowInput(separator=separator-value, _sp=sp-value, when=keyword, chars=AZ, numbers=<int-array>)",
+            "FuzzyShadowInput(separator=separator-value, _sp=sp-value, when=keyword, " +
+                "hash=hash-value, _hash=underscore-hash-value, o=o-value, other=other-value, " +
+                "_other=underscore-other-value, javaClass=java-class-value, " +
+                "chars=AZ, numbers=<int-array>)",
         )
 
         val INT_ARRAY_IDENTITY_PATTERN = Regex("""\[I@[0-9a-fA-F]+""")
+        val STRING_ARRAY_IDENTITY_PATTERN = Regex("""\[Ljava\.lang\.String;@[0-9a-fA-F]+""")
+        val OBJECT_ARRAY_IDENTITY_PATTERN = Regex("""\[Ljava\.lang\.Object;@[0-9a-fA-F]+""")
 
         val JAVA_SOURCE = """
             package demo;
@@ -360,6 +534,18 @@ class JimmerDtoToStringCompilationTest {
                 String note();
 
                 String marker();
+
+                String hashValue();
+
+                String underscoreHashValue();
+
+                String oValue();
+
+                String otherValue();
+
+                String underscoreOtherValue();
+
+                String javaClassValue();
 
                 char[] chars();
 
@@ -386,6 +572,18 @@ class JimmerDtoToStringCompilationTest {
 
                 val marker: String
 
+                val hashValue: String
+
+                val underscoreHashValue: String
+
+                val oValue: String
+
+                val otherValue: String
+
+                val underscoreOtherValue: String
+
+                val javaClassValue: String
+
                 val chars: CharArray
 
                 val numbers: IntArray
@@ -398,6 +596,8 @@ class JimmerDtoToStringCompilationTest {
             input PlainArrayInput {
                 chars
                 numbers
+                labels: Array<String>
+                stars: Array<*>
                 marker as when
             }
 
@@ -406,6 +606,12 @@ class JimmerDtoToStringCompilationTest {
                 description? as separator
                 note? as _sp
                 marker? as when
+                hashValue? as hash
+                underscoreHashValue? as _hash
+                oValue? as o
+                otherValue? as other
+                underscoreOtherValue? as _other
+                javaClassValue? as javaClass
                 chars?
                 numbers?
             }
@@ -415,9 +621,36 @@ class JimmerDtoToStringCompilationTest {
                 description? as separator
                 note? as _sp
                 marker? as when
+                hashValue? as hash
+                underscoreHashValue? as _hash
+                oValue? as o
+                otherValue? as other
+                underscoreOtherValue? as _other
+                javaClassValue? as javaClass
                 chars?
                 numbers?
             }
+
+            input FloatingInput {
+                floatValue: Float
+                doubleValue: Double
+            }
+
+            input EmptyInput {
+            }
+        """.trimIndent()
+
+        val JAVA_DERIVED_SOURCE = """
+            package demo.dto;
+
+            public class DerivedEmptyInput extends EmptyInput {
+            }
+        """.trimIndent()
+
+        val KOTLIN_DERIVED_SOURCE = """
+            package demo.dto
+
+            public class DerivedEmptyInput : EmptyInput()
         """.trimIndent()
 
         fun runtimeClasspath(): List<File> {

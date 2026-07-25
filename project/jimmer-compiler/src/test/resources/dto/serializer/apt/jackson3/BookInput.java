@@ -235,14 +235,14 @@ public class BookInput implements Input<Book> {
 
     @Override
     public int hashCode() {
-        int hash = Objects.hashCode(id);
-        hash = hash * 31 + Boolean.hashCode(isEnabled);
-        hash = hash * 31 + Objects.hashCode(name);
-        hash = hash * 31 + Objects.hashCode(edition);
-        hash = hash * 31 + Boolean.hashCode(_isEditionLoaded);
-        hash = hash * 31 + Objects.hashCode(price);
-        hash = hash * 31 + Objects.hashCode(location);
-        hash = hash * 31 + Boolean.hashCode(_isLocationLoaded);
+        int hash = Objects.hashCode(this.id);
+        hash = hash * 31 + Objects.hashCode(this.isEnabled);
+        hash = hash * 31 + Objects.hashCode(this.name);
+        hash = hash * 31 + (this._isEditionLoaded ? Objects.hashCode(this.edition) : 0);
+        hash = hash * 31 + Objects.hashCode(this._isEditionLoaded);
+        hash = hash * 31 + Objects.hashCode(this.price);
+        hash = hash * 31 + (this._isLocationLoaded ? Objects.hashCode(this.location) : 0);
+        hash = hash * 31 + Objects.hashCode(this._isLocationLoaded);
         return hash;
     }
 
@@ -252,28 +252,28 @@ public class BookInput implements Input<Book> {
             return false;
         }
         BookInput other = (BookInput) o;
-        if (!Objects.equals(id, other.id)) {
+        if (!Objects.equals(this.id, other.id)) {
             return false;
         }
-        if (!Objects.equals(isEnabled, other.isEnabled)) {
+        if (!Objects.equals(this.isEnabled, other.isEnabled)) {
             return false;
         }
-        if (!Objects.equals(name, other.name)) {
+        if (!Objects.equals(this.name, other.name)) {
             return false;
         }
-        if (_isEditionLoaded != other._isEditionLoaded) {
+        if (this._isEditionLoaded != other._isEditionLoaded) {
             return false;
         }
-        if (_isEditionLoaded && !Objects.equals(edition, other.edition)) {
+        if (this._isEditionLoaded && !Objects.equals(this.edition, other.edition)) {
             return false;
         }
-        if (!Objects.equals(price, other.price)) {
+        if (!Objects.equals(this.price, other.price)) {
             return false;
         }
-        if (_isLocationLoaded != other._isLocationLoaded) {
+        if (this._isLocationLoaded != other._isLocationLoaded) {
             return false;
         }
-        if (_isLocationLoaded && !Objects.equals(location, other.location)) {
+        if (this._isLocationLoaded && !Objects.equals(this.location, other.location)) {
             return false;
         }
         return true;
@@ -413,10 +413,11 @@ public class BookInput implements Input<Book> {
 
         @Override
         public int hashCode() {
-            int hash = Objects.hashCode(x);
-            hash = hash * 31 + Boolean.hashCode(_isXLoaded);
-            hash = hash * 31 + Objects.hashCode(y);
-            hash = hash * 31 + Boolean.hashCode(_isYLoaded);
+            int hash = 0;
+            hash = hash * 31 + (this._isXLoaded ? Objects.hashCode(this.x) : 0);
+            hash = hash * 31 + Objects.hashCode(this._isXLoaded);
+            hash = hash * 31 + (this._isYLoaded ? Objects.hashCode(this.y) : 0);
+            hash = hash * 31 + Objects.hashCode(this._isYLoaded);
             return hash;
         }
 
@@ -426,16 +427,16 @@ public class BookInput implements Input<Book> {
                 return false;
             }
             TargetOf_location other = (TargetOf_location) o;
-            if (_isXLoaded != other._isXLoaded) {
+            if (this._isXLoaded != other._isXLoaded) {
                 return false;
             }
-            if (_isXLoaded && !Objects.equals(x, other.x)) {
+            if (this._isXLoaded && !Objects.equals(this.x, other.x)) {
                 return false;
             }
-            if (_isYLoaded != other._isYLoaded) {
+            if (this._isYLoaded != other._isYLoaded) {
                 return false;
             }
-            if (_isYLoaded && !Objects.equals(y, other.y)) {
+            if (this._isYLoaded && !Objects.equals(this.y, other.y)) {
                 return false;
             }
             return true;

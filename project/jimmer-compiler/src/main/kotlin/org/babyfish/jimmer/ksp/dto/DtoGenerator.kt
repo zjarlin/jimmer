@@ -8,6 +8,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
@@ -2564,88 +2565,23 @@ internal class DtoGenerator private constructor(
 
     private fun TypeSpec.Builder.addHashCode() {
         addFunction(
-            FunSpec
-                .builder("hashCode")
-                .addModifiers(KModifier.PUBLIC, KModifier.OVERRIDE)
-                .returns(INT)
-                .addCode(
-                    CodeBlock
-                        .builder()
-                        .apply {
-                            dtoType.props.forEachIndexed { index, prop ->
-                                val hashCodeFunName = if (propTypeName(prop).isArray()) {
-                                    "contentHashCode"
-                                } else {
-                                    "hashCode"
-                                }
-                                val expression = CodeBlock.builder().apply {
-                                    if (prop.isNullable) {
-                                        add("(%N?.%N() ?: 0)", prop.alias, hashCodeFunName)
-                                    } else {
-                                        add("%N.%N()", prop.alias, hashCodeFunName)
-                                    }
-                                }.build()
-                                addStatement(
-                                    "%L %L",
-                                    if (index == 0) "var _hash =" else "_hash = 31 * _hash +",
-                                    expression,
-                                )
-                                lsiDtoType
-                                    .prop(lsiGraph, prop.name)
-                                    .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
-                                    ?.let {
-                                    addStatement("_hash = _hash * 31 + %N.hashCode()", it)
-                                }
-                            }
-                            addStatement("return _hash")
-                        }
-                        .build()
-                )
-                .build()
+            KspDtoEqualityRenderer.renderHashCode(
+                dtoType = lsiDtoType,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+            ),
         )
     }
 
     private fun TypeSpec.Builder.addEquals() {
         addFunction(
-            FunSpec
-                .builder("equals")
-                .addModifiers(KModifier.PUBLIC, KModifier.OVERRIDE)
-                .addParameter("other", ANY.copy(nullable = true))
-                .returns(BOOLEAN)
-                .addCode(
-                    CodeBlock.builder()
-                        .apply {
-                            addStatement("val _other = other as? %T ?: return false", getDtoClassName())
-                            dtoType.props.forEachIndexed { index, prop ->
-                                if (index == 0) {
-                                    add("return ")
-                                }
-                                val statePropName = lsiDtoType
-                                    .prop(lsiGraph, prop.name)
-                                    .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
-                                if (statePropName !== null) {
-                                    add("%N == _other.%N && (\n", statePropName, statePropName)
-                                    indent()
-                                    add("!%N || ", statePropName)
-                                }
-                                if (propTypeName(prop).isArray()) {
-                                    add("%N.contentEquals(_other.%N)", prop.alias, prop.alias)
-                                } else {
-                                    add("%N == _other.%N", prop.alias, prop.alias)
-                                }
-                                if (statePropName !== null) {
-                                    unindent()
-                                    add("\n)")
-                                }
-                                if (index + 1 < dtoType.props.size) {
-                                    add(" &&")
-                                }
-                                add("\n")
-                            }
-                        }
-                        .build()
-                )
-                .build()
+            KspDtoEqualityRenderer.renderEquals(
+                dtoType = lsiDtoType,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                generatedDtoPackageName = generatedDtoPackageName,
+                generatedDtoSimpleNames = generatedDtoSimpleNames,
+            ),
         )
     }
 

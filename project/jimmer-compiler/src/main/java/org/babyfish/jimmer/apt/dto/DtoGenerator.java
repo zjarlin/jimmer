@@ -11,6 +11,7 @@ import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
@@ -2416,102 +2417,21 @@ public class DtoGenerator {
     }
 
     private void addHashCode() {
-        MethodSpec.Builder builder = MethodSpec
-                .methodBuilder("hashCode")
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(Override.class)
-                .returns(TypeName.INT);
-        boolean first = true;
-        for (AbstractProp prop : dtoType.getProps()) {
-            CodeBlock.Builder cb = CodeBlock.builder();
-            if (first) {
-                cb.add("int hash = ");
-                first = false;
-            } else {
-                cb.add("hash = hash * 31 + ");
-            }
-            TypeName typeName = getPropTypeName(prop);
-            if (typeName.isPrimitive()) {
-                cb.add(
-                        "$T.hashCode($L)",
-                        typeName.box(),
-                        prop.getName().equals("hash") ? "this." + prop.getName() : prop.getName()
-                );
-            } else if (typeName instanceof ArrayTypeName) {
-                cb.add("$T.hashCode($L)", Arrays.class, prop.getName());
-            } else {
-                cb.add("$T.hashCode($L)", Objects.class, prop.getName());
-            }
-            builder.addStatement(cb.build());
-            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
-                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
-                    lsiGraph,
-                    LsiLanguage.JAVA
-            );
-            if (stateFieldName != null) {
-                builder.addStatement("hash = hash * 31 + Boolean.hashCode($L)", stateFieldName);
-            }
-        }
-        builder.addStatement(first ? "return 0" : "return hash");
-        typeBuilder.addMethod(builder.build());
+        typeBuilder.addMethod(
+                AptDtoEqualityRenderer.renderHashCode(lsiDtoType, lsiGraph, immutableSchema)
+        );
     }
 
     private void addEquals() {
-        MethodSpec.Builder builder = MethodSpec
-                .methodBuilder("equals")
-                .addModifiers(Modifier.PUBLIC)
-                .addParameter(TypeName.OBJECT, "o")
-                .addAnnotation(Override.class)
-                .returns(TypeName.BOOLEAN);
-        builder.beginControlFlow("if (o == null || this.getClass() != o.getClass())")
-                .addStatement("return false")
-                .endControlFlow();
-        builder.addStatement("$L other = ($L) o", getSimpleName(), getSimpleName());
-        for (AbstractProp prop : dtoType.getProps()) {
-            String propName = prop.getName();
-            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
-                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
-                    lsiGraph,
-                    LsiLanguage.JAVA
-            );
-            if (stateFieldName != null) {
-                builder.beginControlFlow("if ($L != other.$L)", stateFieldName, stateFieldName);
-                builder.addStatement("return false");
-                builder.endControlFlow();
-            }
-            String thisProp = propName.equals("o") || propName.equals("other") ? "this" + propName : propName;
-            TypeName typeName = getPropTypeName(prop);
-            if (stateFieldName != null) {
-                if (typeName.isPrimitive() && !isFieldNullable(prop)) {
-                    builder.beginControlFlow(
-                            "if ($L && $L != other.$L)",
-                            stateFieldName,
-                            thisProp,
-                            propName
-                    );
-                } else {
-                    builder.beginControlFlow(
-                            "if ($L && !$T.equals($L, other.$L))",
-                            stateFieldName,
-                            Objects.class,
-                            thisProp,
-                            propName
-                    );
-                }
-            } else {
-                if (typeName.isPrimitive() && !isFieldNullable(prop)) {
-                    builder.beginControlFlow("if ($L != other.$L)", thisProp, propName);
-                } else if (typeName instanceof ArrayTypeName) {
-                    builder.beginControlFlow("if (!$T.equals($L, other.$L))", Arrays.class, thisProp, propName);
-                } else {
-                    builder.beginControlFlow("if (!$T.equals($L, other.$L))", Objects.class, thisProp, propName);
-                }
-            }
-            builder.addStatement("return false");
-            builder.endControlFlow();
-        }
-        builder.addStatement("return true");
-        typeBuilder.addMethod(builder.build());
+        typeBuilder.addMethod(
+                AptDtoEqualityRenderer.renderEquals(
+                        lsiDtoType,
+                        lsiGraph,
+                        immutableSchema,
+                        getGeneratedDtoPackageName(),
+                        getGeneratedDtoSimpleNames()
+                )
+        );
     }
 
     private void addToString() {
