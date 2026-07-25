@@ -8,6 +8,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
@@ -522,14 +523,7 @@ internal class DtoGenerator private constructor(
     }
 
     private fun addDoc() {
-        typeDocumentation()?.let {
-            typeBuilder.addAnnotation(
-                AnnotationSpec
-                    .builder(DESCRIPTION_CLASS_NAME)
-                    .addMember("value = %S", it)
-                    .build()
-            )
-        }
+        KspDtoDescriptionRenderer.render(lsiDtoType)?.let(typeBuilder::addAnnotation)
     }
 
     private fun addMembers() {
@@ -1247,14 +1241,8 @@ internal class DtoGenerator private constructor(
                     if (interfacePropNames.contains(prop.name)) {
                         addModifiers(KModifier.OVERRIDE)
                     }
-                    val doc = propDocumentation(prop)
-                    doc?.let {
-                        addAnnotation(
-                            AnnotationSpec
-                                .builder(DESCRIPTION_CLASS_NAME)
-                                .addMember("value = %S", it)
-                                .build()
-                        )
+                    KspDtoDescriptionRenderer.render(lsiProp, lsiGraph)?.let { annotation ->
+                        addAnnotation(annotation)
                     }
                     if (
                         !isBuilderRequired &&
@@ -1326,14 +1314,8 @@ internal class DtoGenerator private constructor(
                     if (interfacePropNames.contains(prop.name)) {
                         addModifiers(KModifier.OVERRIDE)
                     }
-                    val doc = propDocumentation(prop)
-                    doc?.let {
-                        addAnnotation(
-                            AnnotationSpec
-                                .builder(DESCRIPTION_CLASS_NAME)
-                                .addMember("value = %S", it)
-                                .build()
-                        )
+                    KspDtoDescriptionRenderer.render(lsiProp, lsiGraph)?.let { annotation ->
+                        addAnnotation(annotation)
                     }
                     addAnnotations(
                         KspDtoPropAnnotationRenderer.renderAbstractAccessor(
@@ -2559,18 +2541,6 @@ internal class DtoGenerator private constructor(
                 ?.let { "${it.simpleNamePart()}.$name" }
                 ?: name
         }
-
-    private fun typeDocumentation(): String? =
-        lsiDtoType.documentation
-            ?.takeIf(String::isNotEmpty)
-            ?.replace("%", "%%")
-
-    private fun propDocumentation(prop: AbstractProp): String? =
-        lsiDtoType
-            .prop(lsiGraph, prop.name)
-            .documentation
-            ?.takeIf(String::isNotEmpty)
-            ?.replace("%", "%%")
 
     private val isNestedSpecificationFragment: Boolean
         get() = lsiDtoType.isNestedSpecificationFragment(immutableSchema)

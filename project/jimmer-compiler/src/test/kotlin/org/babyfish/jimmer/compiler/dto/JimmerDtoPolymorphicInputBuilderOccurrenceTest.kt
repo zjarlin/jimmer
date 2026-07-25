@@ -33,9 +33,13 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         val addressBody = source.classBody("class TargetOf_address implements EmbeddableDto<Address>")
         val summaryBody = source.classBody("class TargetOf_summary implements Input<Client>")
 
-        assertContains(source, "@Description(\"Client base documentation.\\n\")")
-        assertContains(source, "@Description(\"Address reference documentation.\\n\")")
-        assertContains(source, "@Description(\"Address embeddable documentation.\\n\")")
+        assertContains(source, "@Description(\"Client base documentation costs \$5 at 100%.\\n\")")
+        assertContains(source, "@Description(\"Address reference documentation is 100%.\\n\")")
+        assertContains(source, "@Description(\"Address embeddable documentation costs \$5 at 100%.\\n\")")
+        source.assertDescriptionNear(
+            declaration = "String getLocationCity();",
+            annotation = "@Description(\"City documentation.\\n\")",
+        )
         source.assertRepeatedTypeAnnotations()
         assertEquals(1, source.countOccurrences("@JsonTypeInfo("))
         assertEquals(1, source.countOccurrences("@JsonSubTypes("))
@@ -63,6 +67,10 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(personBody, "\$\$_hibernateValidator_getFieldValue")
         assertContains(personBody, "\$\$_hibernateValidator_getGetterValue")
         assertContains(personBody, "case \"address\": return this.address;")
+        personBody.assertDescriptionNear(
+            declaration = "String getLocationCity()",
+            annotation = "@Description(\"City documentation.\\n\")",
+        )
 
         assertFalse("class TargetOf_address" in organizationBody)
         assertFalse("class TargetOf_summary" in organizationBody)
@@ -77,13 +85,31 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
     fun `ksp shares promoted inline input builder type between polymorphic branches`() {
         val source = compileKsp()
         val personBody = source.classBody("public class Person(")
+        val personHeader = source.classHeader("public class Person(")
         val organizationBody = source.classBody("public class Organization(")
         val addressBody = source.classBody("public open class TargetOf_address(")
         val summaryHeader = source.classHeader("public open class TargetOf_summary(")
 
-        assertContains(source, "@Description(value = \"Client base documentation.\\n\")")
-        assertContains(source, "@Description(value = \"Address reference documentation.\\n\")")
-        assertContains(source, "@Description(value = \"Address embeddable documentation.\\n\")")
+        assertContains(
+            source,
+            "@Description(value = \"Client base documentation costs ${KOTLIN_ESCAPED_DOLLAR}5 at 100%.\\n\")",
+        )
+        assertContains(
+            source,
+            "@Description(value = \"Address reference documentation is 100%.\\n\")",
+        )
+        assertContains(
+            source,
+            "@Description(value = \"Address embeddable documentation costs ${KOTLIN_ESCAPED_DOLLAR}5 at 100%.\\n\")",
+        )
+        source.assertDescriptionNear(
+            declaration = "public val locationCity: String",
+            annotation = "@Description(value = \"City documentation.\\n\")",
+        )
+        personHeader.assertDescriptionNear(
+            declaration = "override var locationCity: String",
+            annotation = "@Description(value = \"City documentation.\\n\")",
+        )
         source.assertRepeatedTypeAnnotations()
         assertEquals(1, source.countOccurrences("@JsonTypeInfo("))
         assertEquals(1, source.countOccurrences("@JsonSubTypes("))
@@ -148,6 +174,27 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             )
             task.setProcessors(listOf(JimmerProcessor()))
             assertEquals(true, task.call(), diagnostics.toErrorMessage())
+        }
+        val generatedSources = generatedDir
+            .walkTopDown()
+            .filter { file -> file.isFile && file.extension == "java" }
+            .toList()
+        val compileDiagnostics = DiagnosticCollector<JavaFileObject>()
+        compiler.getStandardFileManager(compileDiagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
+            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, listOf(classesDir))
+            val task = compiler.getTask(
+                null,
+                fileManager,
+                compileDiagnostics,
+                listOf(
+                    "-proc:none",
+                    "-classpath",
+                    System.getProperty("java.class.path"),
+                ),
+                null,
+                fileManager.getJavaFileObjectsFromFiles(sourceFiles + generatedSources),
+            )
+            assertEquals(true, task.call(), compileDiagnostics.toErrorMessage())
         }
         return generatedDir.resolve("demo/dto/ClientInput.java").readText()
     }
@@ -283,6 +330,13 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
 
     private fun String.countOccurrences(value: String): Int = split(value).size - 1
 
+    private fun String.assertDescriptionNear(declaration: String, annotation: String) {
+        val declarationOffset = indexOf(declaration)
+        assertTrue(declarationOffset >= 0, "Missing generated declaration: $declaration")
+        val annotationWindow = substring((declarationOffset - 400).coerceAtLeast(0), declarationOffset)
+        assertContains(annotationWindow, annotation)
+    }
+
     private fun String.assertRepeatedTypeAnnotations() {
         val interfaceStart = firstIndexOf(
             "public interface ClientInput extends",
@@ -340,6 +394,8 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
     }
 
     private companion object {
+        val KOTLIN_ESCAPED_DOLLAR = "\$" + "{'\$'}"
+
         val JAVA_SOURCES = linkedMapOf(
             "Marker.java" to """
                 package demo;
@@ -378,7 +434,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 import org.babyfish.jimmer.sql.Embeddable;
 
                 /**
-                 * Address embeddable documentation.
+                 * Address embeddable documentation costs ${'$'}5 at 100%.
                  */
                 @Embeddable
                 public interface Address {
@@ -396,7 +452,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 import org.babyfish.jimmer.sql.InheritanceType;
 
                 /**
-                 * Client base documentation.
+                 * Client base documentation costs ${'$'}5 at 100%.
                  */
                 @Entity
                 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
@@ -408,8 +464,10 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     @Discriminator
                     String type();
 
-                    /** Address reference documentation. */
+                    /** Address reference documentation is 100%. */
                     Address address();
+
+                    Address location();
 
                     String name();
                 }
@@ -456,7 +514,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 import org.babyfish.jimmer.sql.Embeddable
 
                 /**
-                 * Address embeddable documentation.
+                 * Address embeddable documentation costs ${'$'}5 at 100%.
                  */
                 @Embeddable
                 interface Address {
@@ -474,7 +532,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 import org.babyfish.jimmer.sql.InheritanceType
 
                 /**
-                 * Client base documentation.
+                 * Client base documentation costs ${'$'}5 at 100%.
                  */
                 @Entity
                 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
@@ -486,8 +544,10 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                     @Discriminator
                     val type: String
 
-                    /** Address reference documentation. */
+                    /** Address reference documentation is 100%. */
                     val address: Address
+
+                    val location: Address
 
                     val name: String
                 }
@@ -530,6 +590,9 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
                 }
                 fold(summary) {
                     name
+                }
+                flat(location) {
+                    city as locationCity
                 }
                 #types {
                     #exhaustive

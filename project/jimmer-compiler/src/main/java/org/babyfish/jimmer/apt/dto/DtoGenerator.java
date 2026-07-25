@@ -11,6 +11,7 @@ import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
@@ -291,14 +292,9 @@ public class DtoGenerator {
                             .build()
             );
         }
-        String doc = typeDocumentation();
-        if (doc != null && !doc.isEmpty()) {
-            typeBuilder.addAnnotation(
-                    AnnotationSpec
-                            .builder(org.babyfish.jimmer.apt.immutable.generator.Constants.DESCRIPTION_CLASS_NAME)
-                            .addMember("value", "$S", doc)
-                            .build()
-            );
+        AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiDtoType);
+        if (description != null) {
+            typeBuilder.addAnnotation(description);
         }
         typeBuilder.addAnnotations(
                 AptDtoTypeAnnotationRenderer.render(lsiDtoType, annotationContract, lsiWorkspace)
@@ -369,14 +365,9 @@ public class DtoGenerator {
             typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation());
             typeBuilder.addModifiers(Modifier.STATIC);
         }
-        String doc = typeDocumentation();
-        if (doc != null && !doc.isEmpty()) {
-            typeBuilder.addAnnotation(
-                    AnnotationSpec
-                            .builder(org.babyfish.jimmer.apt.immutable.generator.Constants.DESCRIPTION_CLASS_NAME)
-                            .addMember("value", "$S", doc)
-                            .build()
-            );
+        AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiDtoType);
+        if (description != null) {
+            typeBuilder.addAnnotation(description);
         }
         typeBuilder.addAnnotations(
                 AptDtoTypeAnnotationRenderer.render(lsiDtoType, annotationContract, lsiWorkspace)
@@ -1525,21 +1516,15 @@ public class DtoGenerator {
 
     private void addAccessorDeclaration(AbstractProp prop) {
         TypeName typeName = getPropTypeName(prop);
+        site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
+                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
         MethodSpec.Builder getterBuilder = MethodSpec
                 .methodBuilder(getterName(prop))
                 .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
                 .returns(typeName);
-        if (!(prop instanceof DtoProp<?, ?>) || ((DtoProp<?, ?>) prop).getNextProp() == null) {
-            String doc = doc(prop, false);
-            if (doc != null && !doc.isEmpty()) {
-                getterBuilder.addAnnotation(
-                        AnnotationSpec.builder(
-                                org.babyfish.jimmer.apt.immutable.generator.Constants.DESCRIPTION_CLASS_NAME
-                        ).addMember(
-                                "value", "$S", doc
-                        ).build()
-                );
-            }
+        AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiProp, lsiGraph);
+        if (description != null) {
+            getterBuilder.addAnnotation(description);
         }
         if (!typeName.isPrimitive()) {
             if (prop.isNullable()) {
@@ -1550,7 +1535,7 @@ public class DtoGenerator {
         }
         getterBuilder.addAnnotations(
                 AptDtoPropAnnotationRenderer.renderGetter(
-                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        lsiProp,
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
@@ -1562,6 +1547,8 @@ public class DtoGenerator {
 
     private void addAccessors(AbstractProp prop) {
         TypeName typeName = getPropTypeName(prop);
+        site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
+                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
         String getterName = getterName(prop);
         String setterName = setterName(prop);
         String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
@@ -1577,17 +1564,9 @@ public class DtoGenerator {
         if (interfaceMethodNames.contains(getterName)) {
             getterBuilder.addAnnotation(Override.class);
         }
-        if (!(prop instanceof DtoProp<?, ?>) || ((DtoProp<?, ?>) prop).getNextProp() == null) {
-            String doc = doc(prop, false);
-            if (doc != null && !doc.isEmpty()) {
-                getterBuilder.addAnnotation(
-                        AnnotationSpec.builder(
-                                org.babyfish.jimmer.apt.immutable.generator.Constants.DESCRIPTION_CLASS_NAME
-                        ).addMember(
-                                "value", "$S", doc
-                        ).build()
-                );
-            }
+        AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiProp, lsiGraph);
+        if (description != null) {
+            getterBuilder.addAnnotation(description);
         }
         if (!typeName.isPrimitive()) {
             if (prop.isNullable()) {
@@ -1599,7 +1578,7 @@ public class DtoGenerator {
         boolean isBuilderRequired = isBuildRequired();
         getterBuilder.addAnnotations(
                 AptDtoPropAnnotationRenderer.renderGetter(
-                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        lsiProp,
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
@@ -2650,10 +2629,6 @@ public class DtoGenerator {
             return index;
         }
         return originalIndex;
-    }
-
-    private String typeDocumentation() {
-        return escapedDocumentation(lsiDtoType.getDocumentation());
     }
 
     private String propDocumentation(AbstractProp prop) {

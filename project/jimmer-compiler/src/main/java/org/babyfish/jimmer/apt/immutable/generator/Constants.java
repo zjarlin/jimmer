@@ -3,7 +3,6 @@ package org.babyfish.jimmer.apt.immutable.generator;
 import com.squareup.javapoet.ClassName;
 import org.babyfish.jimmer.*;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
-import org.babyfish.jimmer.client.Description;
 import org.babyfish.jimmer.client.TNullable;
 import org.babyfish.jimmer.impl.util.DtoPropAccessor;
 import org.babyfish.jimmer.ClientException;
@@ -40,9 +39,6 @@ public class Constants {
 
     public static final ClassName OBJECTS_CLASS_NAME =
             ClassName.get(Objects.class);
-
-    public static final ClassName DESCRIPTION_CLASS_NAME =
-            ClassName.get(Description.class);
 
     public static final ClassName STRING_CLASS_NAME =
             ClassName.get(String.class);
