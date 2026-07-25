@@ -224,6 +224,33 @@ class DtoCompilerExtensionsTest {
     }
 
     @Test
+    fun `rejects reusable DTO declarations with type parameters`() {
+        val reusableTypeId = typeId("contract.GenericBookInput")
+        val parameterId = LsiSymbolId.typeParameter(reusableTypeId, "T")
+        val registry = registry(
+            declarations = listOf(
+                declaration(
+                    id = reusableTypeId,
+                    typeParameters = listOf(LsiTypeParameter(parameterId, "T")),
+                    superTypes = listOf(declared(INPUT_TYPE_ID, LsiDeclaredType(BOOK_TYPE_ID))),
+                ),
+            ),
+        )
+
+        val exception = assertFailsWith<IllegalArgumentException> {
+            registry.resolveDtoTypeInfo(
+                reusableTypeId.requireTypeQualifiedName(),
+                LsiLanguage.JAVA,
+            )
+        }
+
+        assertEquals(
+            "Reusable DTO type \"contract.GenericBookInput\" cannot declare type parameters",
+            exception.message,
+        )
+    }
+
+    @Test
     fun `rejects unknown target language`() {
         val registry = registry(emptyList())
 

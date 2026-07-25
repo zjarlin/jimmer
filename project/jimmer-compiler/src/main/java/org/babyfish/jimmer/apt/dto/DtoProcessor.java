@@ -1,29 +1,28 @@
 package org.babyfish.jimmer.apt.dto;
 
-import org.babyfish.jimmer.Input;
-import org.babyfish.jimmer.View;
 import org.babyfish.jimmer.apt.Context;
-import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
-import org.babyfish.jimmer.apt.util.GenericParser;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.dto.compiler.*;
+import site.addzero.lsi.core.LsiLanguage;
 import site.addzero.lsi.core.LsiSource;
 import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
+import site.addzero.lsi.jimmer.dto.DtoCompilerExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
+import site.addzero.lsi.jimmer.dto.DtoTypeInfoExtensionsKt;
+import site.addzero.lsi.jimmer.dto.LsiDtoBaseType;
+import site.addzero.lsi.jimmer.dto.LsiDtoTypeRegistry;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,6 +52,8 @@ public class DtoProcessor {
     private final ImmutableSchema immutableSchema;
 
     private final LsiWorkspace lsiWorkspace;
+
+    private final LsiDtoTypeRegistry dtoTypeRegistry;
 
     private final Map<site.addzero.lsi.jimmer.dto.DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames;
 
@@ -98,6 +99,7 @@ public class DtoProcessor {
         );
         this.immutableSchema = immutableSchema;
         this.lsiWorkspace = lsiWorkspace;
+        this.dtoTypeRegistry = DtoCompilerExtensionsKt.toLsiDtoTypeRegistry(immutableSchema, lsiWorkspace);
         this.batchRootDtoTypeNames = JimmerDtoPoetTypeNames.roots(graphs);
         this.jacksonVersion = jacksonVersion;
         this.hibernateValidatorEnhancement = hibernateValidatorEnhancement;
@@ -150,37 +152,17 @@ public class DtoProcessor {
     }
 
     private DtoTypeInfo<ImmutableType> resolveDtoType(String qualifiedName) {
-        TypeElement typeElement = elements.getTypeElement(qualifiedName);
-        if (typeElement == null) {
+        DtoTypeInfo<LsiDtoBaseType> frozenTypeInfo = DtoTypeInfoExtensionsKt.resolveDtoTypeInfo(
+                dtoTypeRegistry,
+                qualifiedName,
+                LsiLanguage.JAVA
+        );
+        if (frozenTypeInfo == null) {
             return null;
         }
-        Types types = context.getTypes();
-        TypeMirror type = types.erasure(typeElement.asType());
-        DtoTypeKind kind;
-        String superName;
-        if (types.isSubtype(type, types.erasure(elements.getTypeElement(Input.class.getName()).asType()))) {
-            kind = DtoTypeKind.INPUT;
-            superName = Input.class.getName();
-        } else if (types.isSubtype(type, types.erasure(elements.getTypeElement(View.class.getName()).asType()))) {
-            kind = DtoTypeKind.VIEW;
-            superName = View.class.getName();
-        } else if (types.isSubtype(
-                type,
-                types.erasure(
-                        elements.getTypeElement(Constants.JSPECIFICATION_CLASS_NAME.canonicalName()).asType()
-                )
-        )) {
-            kind = DtoTypeKind.SPECIFICATION;
-            superName = Constants.JSPECIFICATION_CLASS_NAME.canonicalName();
-        } else {
-            return null;
-        }
-        TypeMirror baseTypeMirror = new GenericParser(
-                "reusable DTO",
-                typeElement,
-                superName
-        ).parse().arguments.get(0);
-        ImmutableType baseType = context.getImmutableType(baseTypeMirror);
+        String baseTypeQualifiedName = frozenTypeInfo.getBaseType().getQualifiedName();
+        TypeElement baseTypeElement = elements.getTypeElement(baseTypeQualifiedName);
+        ImmutableType baseType = baseTypeElement != null ? context.getImmutableType(baseTypeElement) : null;
         if (baseType == null) {
             throw new DtoException(
                     "The entity type argument of reusable DTO type \"" +
@@ -188,7 +170,7 @@ public class DtoProcessor {
                             "\" is not an immutable type"
             );
         }
-        return new DtoTypeInfo<>(baseType, kind);
+        return new DtoTypeInfo<>(baseType, frozenTypeInfo.getKind());
     }
 
     private boolean generateDtoTypes(List<DtoType<ImmutableType, ImmutableProp>> dtoTypes) {

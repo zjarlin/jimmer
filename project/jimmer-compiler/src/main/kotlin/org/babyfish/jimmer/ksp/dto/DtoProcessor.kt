@@ -1,19 +1,13 @@
 package org.babyfish.jimmer.ksp.dto
 
-import com.google.devtools.ksp.getClassDeclarationByName
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import org.babyfish.jimmer.Input
-import org.babyfish.jimmer.View
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.KspDtoCompiler
-import org.babyfish.jimmer.ksp.immutable.generator.K_SPECIFICATION_CLASS_NAME
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
-import org.babyfish.jimmer.ksp.util.GenericParser
-import org.babyfish.jimmer.ksp.util.fastResolve
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
@@ -21,7 +15,9 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.resolveDtoTypeInfo
 import site.addzero.lsi.jimmer.dto.rootType
+import site.addzero.lsi.jimmer.dto.toLsiDtoTypeRegistry
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 
@@ -45,6 +41,8 @@ internal class DtoProcessor(
 
     private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName> =
         JimmerDtoPoetTypeNames.roots(graphs)
+
+    private val dtoTypeRegistry = immutableSchema.toLsiDtoTypeRegistry(workspace)
 
     fun process(): Boolean {
         val dtoTypes = findDtoTypes()
@@ -83,47 +81,16 @@ internal class DtoProcessor(
     }
 
     private fun resolveDtoType(qualifiedName: String): DtoTypeInfo<ImmutableType>? {
-        val declaration = ctx.resolver.getClassDeclarationByName(qualifiedName) ?: return null
-        val inputType = ctx.resolver
-            .getClassDeclarationByName(Input::class.qualifiedName!!)!!
-            .asStarProjectedType()
-        val viewType = ctx.resolver
-            .getClassDeclarationByName(View::class.qualifiedName!!)!!
-            .asStarProjectedType()
-        val specificationType = ctx.resolver
-            .getClassDeclarationByName(K_SPECIFICATION_CLASS_NAME.canonicalName)!!
-            .asStarProjectedType()
-        val kind: DtoTypeKind
-        val superName: String
-        val type = declaration.asStarProjectedType()
-        if (inputType.isAssignableFrom(type)) {
-            kind = DtoTypeKind.INPUT
-            superName = Input::class.qualifiedName!!
-        } else if (viewType.isAssignableFrom(type)) {
-            kind = DtoTypeKind.VIEW
-            superName = View::class.qualifiedName!!
-        } else if (specificationType.isAssignableFrom(type)) {
-            kind = DtoTypeKind.SPECIFICATION
-            superName = K_SPECIFICATION_CLASS_NAME.canonicalName
-        } else {
-            return null
-        }
-        val baseDeclaration = GenericParser(
-            "reusable DTO",
-            declaration,
-            superName
-        ).parse().arguments[0].type!!.fastResolve().declaration as? KSClassDeclaration
-            ?: throw DtoException(
-                "The entity type argument of reusable DTO type \"$qualifiedName\" " +
-                        "is not an immutable type"
-            )
-        if (ctx.typeAnnotationOf(baseDeclaration) == null) {
+        val frozenTypeInfo = dtoTypeRegistry.resolveDtoTypeInfo(qualifiedName, LsiLanguage.KOTLIN)
+            ?: return null
+        val baseType = ctx.immutableTypeOf(frozenTypeInfo.baseType.qualifiedName)
+        if (baseType == null) {
             throw DtoException(
                 "The entity type argument of reusable DTO type \"$qualifiedName\" " +
                         "is not an immutable type"
             )
         }
-        return DtoTypeInfo(ctx.typeOf(baseDeclaration), kind)
+        return DtoTypeInfo(baseType, frozenTypeInfo.kind)
     }
 
     private fun generateDtoTypes(
