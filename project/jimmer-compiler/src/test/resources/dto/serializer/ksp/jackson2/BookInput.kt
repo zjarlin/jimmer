@@ -10,7 +10,6 @@ import com.fasterxml.jackson.databind.`annotation`.JsonPOJOBuilder
 import com.fasterxml.jackson.databind.`annotation`.JsonSerialize
 import demo.Book
 import demo.BookDraft
-import demo.BookProps
 import demo.Point
 import demo.PointDraft
 import demo.`by`
@@ -86,8 +85,8 @@ public open class BookInput(
         ID_ACCESSOR.get<Long?>(base), 
         base.active, 
         NAME_ACCESSOR.get<String?>(base), 
-        base.edition,
-        BookProps.EDITION.isLoaded(base), 
+        EDITION_ACCESSOR.get<Int?>(base),
+        EDITION_ACCESSOR.isLoaded(base), 
         PRICE_ACCESSOR.get<BigDecimal?>(base), 
         LOCATION_ACCESSOR.get<TargetOf_location?>(base),
         LOCATION_ACCESSOR.isLoaded(base)
@@ -227,6 +226,11 @@ public open class BookInput(
         private val NAME_ACCESSOR: DtoPropAccessor = DtoPropAccessor(
                     false,
                     intArrayOf(BookDraft.`$`.SLOT_NAME)
+                )
+
+        private val EDITION_ACCESSOR: DtoPropAccessor = DtoPropAccessor(
+                    true,
+                    intArrayOf(BookDraft.`$`.SLOT_EDITION)
                 )
 
         private val PRICE_ACCESSOR: DtoPropAccessor = DtoPropAccessor(

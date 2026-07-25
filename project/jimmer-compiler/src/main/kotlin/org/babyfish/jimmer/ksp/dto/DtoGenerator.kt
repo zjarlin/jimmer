@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoLoadedStateRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicBranchRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
@@ -1211,7 +1212,15 @@ internal class DtoGenerator private constructor(
                                 }
                             } else if (prop is DtoProp<*, *>) {
                                 val dtoProp = prop.asDtoProp()
-                                if (isSimpleProp(dtoProp)) {
+                                val lsiProp = lsiDtoType.baseProp(lsiGraph, dtoProp.name)
+                                val stateInitializer = KspDtoLoadedStateRenderer.renderBaseInitializer(
+                                    prop = lsiProp,
+                                    graph = lsiGraph,
+                                    accessorName = accessorFieldName(dtoProp.name),
+                                    baseParameterName = "base",
+                                )
+                                val simple = isSimpleProp(dtoProp)
+                                if (simple && stateInitializer == null) {
                                     add("base.%N", dtoProp.baseProp.name)
                                 } else if (!dtoProp.isNullable && dtoProp.isBaseNullable) {
                                     add(
@@ -1236,22 +1245,8 @@ internal class DtoGenerator private constructor(
                                         propTypeName(dtoProp)
                                     )
                                 }
-                                lsiDtoType
-                                    .prop(lsiGraph, dtoProp.name)
-                                    .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
-                                    ?.let {
-                                    if (isSimpleProp(dtoProp)) {
-                                        add(
-                                            ",\n%T.%N.isLoaded(base)",
-                                            dtoType.baseType.propsClassName,
-                                            StringUtil.snake(dtoProp.baseProp.name, SnakeCase.UPPER)
-                                        )
-                                    } else {
-                                        add(
-                                            ",\n%N.isLoaded(base)\n",
-                                            accessorFieldName(dtoProp.name)
-                                        )
-                                    }
+                                stateInitializer?.let { initializer ->
+                                    add(if (simple) ",\n%L" else ",\n%L\n", initializer)
                                 }
                             } else {
                                 val userProp = prop as UserProp
@@ -1747,11 +1742,11 @@ internal class DtoGenerator private constructor(
     }
 
     private fun hasAccessorFields(): Boolean =
-        dtoType.dtoProps.any { !isSimpleProp(it) } ||
+        dtoType.dtoProps.any(::requiresAccessorField) ||
                 dtoType.foldProps.any { it.nullGuardProp !== null }
 
     private fun TypeSpec.Builder.addAccessorField(prop: DtoProp<ImmutableType, ImmutableProp>) {
-        if (isSimpleProp(prop)) {
+        if (!requiresAccessorField(prop)) {
             return
         }
         val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
@@ -1762,6 +1757,15 @@ internal class DtoGenerator private constructor(
             true,
             lsiProp,
         )
+    }
+
+    private fun requiresAccessorField(prop: DtoProp<ImmutableType, ImmutableProp>): Boolean {
+        if (!isSimpleProp(prop)) {
+            return true
+        }
+        return lsiDtoType
+            .baseProp(lsiGraph, prop.name)
+            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN) != null
     }
 
     private fun TypeSpec.Builder.addFoldNullGuardAccessorField(prop: FoldProp<ImmutableType, ImmutableProp>) {

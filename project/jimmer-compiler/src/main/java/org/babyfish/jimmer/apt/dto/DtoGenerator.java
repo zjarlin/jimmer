@@ -18,6 +18,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoLoadedStateRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicBranchRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
@@ -988,14 +989,18 @@ public class DtoGenerator {
     }
 
     private void addAccessorField(DtoProp<ImmutableType, ImmutableProp> prop) {
-        if (isSimpleProp(prop)) {
-            return;
-        }
         DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
                 lsiDtoType,
                 lsiGraph,
                 prop.getName()
         );
+        if (isSimpleProp(prop) && DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                lsiProp,
+                lsiGraph,
+                LsiLanguage.JAVA
+        ) == null) {
+            return;
+        }
         addAccessorField(
                 prop,
                 accessorFieldName(prop.getName()),
@@ -1508,7 +1513,18 @@ public class DtoGenerator {
                 continue;
             }
             DtoProp<ImmutableType, ImmutableProp> prop = asDtoProp(abstractProp);
-            if (isSimpleProp(prop)) {
+            DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
+                    lsiDtoType,
+                    lsiGraph,
+                    prop.getName()
+            );
+            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                    lsiProp,
+                    lsiGraph,
+                    LsiLanguage.JAVA
+            );
+            boolean simple = isSimpleProp(prop);
+            if (simple && stateFieldName == null) {
                 if (prop.isNullable()) {
                     builder.addStatement(
                             "this.$L = (($T)base).__isLoaded($T.byIndex($T.$L)) ? base.$L() : null",
@@ -1552,6 +1568,18 @@ public class DtoGenerator {
                             accessorFieldName(prop.getName())
                     );
                 }
+            }
+            if (stateFieldName != null) {
+                CodeBlock stateInitializer = Objects.requireNonNull(
+                        AptDtoLoadedStateRenderer.renderBaseInitializer(
+                                lsiProp,
+                                lsiGraph,
+                                accessorFieldName(prop.getName()),
+                                "base"
+                        ),
+                        "Dynamic DTO property must have a base loaded-state initializer"
+                );
+                builder.addStatement("this.$L = $L", stateFieldName, stateInitializer);
             }
         }
         typeBuilder.addMethod(builder.build());

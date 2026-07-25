@@ -16,6 +16,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -36,6 +37,7 @@ class JimmerDtoToStringCompilationTest {
         assertEqualityAndHashContracts(classesDir)
         assertHibernateValidatorContracts(classesDir, kotlin = false)
         assertFuzzyDraftWriteContracts(classesDir)
+        assertDynamicConstructorLoadedStateContracts(classesDir)
     }
 
     @Test
@@ -46,6 +48,7 @@ class JimmerDtoToStringCompilationTest {
         assertEqualityAndHashContracts(classesDir)
         assertHibernateValidatorContracts(classesDir, kotlin = true)
         assertFuzzyDraftWriteContracts(classesDir)
+        assertDynamicConstructorLoadedStateContracts(classesDir)
     }
 
     private fun compileApt(): File {
@@ -337,6 +340,57 @@ class JimmerDtoToStringCompilationTest {
             val specifiedEntity = input.javaClass.getMethod("toEntity").invoke(input) as ImmutableSpi
             assertTrue(specifiedEntity.__isLoaded("nullableText"))
             assertEquals("specified", specifiedEntity.__get("nullableText"))
+        }
+    }
+
+    private fun assertDynamicConstructorLoadedStateContracts(classesDir: File) {
+        val urls = arrayOf(classesDir.toURI().toURL())
+        URLClassLoader(urls, javaClass.classLoader).use { classLoader ->
+            val dtoType = classLoader.loadClass("demo.dto.DynamicShadowInput")
+            val entityType = classLoader.loadClass("demo.Sample")
+            val converterConstructor = dtoType.getConstructor(entityType)
+
+            fun Any.toEntity(): ImmutableSpi =
+                javaClass.getMethod("toEntity").invoke(this) as ImmutableSpi
+
+            fun Any.isDtoPropLoaded(name: String): Boolean =
+                javaClass.getMethod("is${name.replaceFirstChar(Char::titlecase)}Loaded").invoke(this) as Boolean
+
+            val unloadedBase = newDto(classLoader, "DynamicShadowInput").toEntity()
+            assertFalse(unloadedBase.__isLoaded("nullableText"))
+            assertFalse(unloadedBase.__isLoaded("numbers"))
+            val unloadedCopy = converterConstructor.newInstance(unloadedBase)
+            assertFalse(unloadedCopy.isDtoPropLoaded("nullableText"))
+            assertFalse(unloadedCopy.isDtoPropLoaded("numbers"))
+            val unloadedRoundTrip = unloadedCopy.toEntity()
+            assertFalse(unloadedRoundTrip.__isLoaded("nullableText"))
+            assertFalse(unloadedRoundTrip.__isLoaded("numbers"))
+
+            val loadedNullBase = newDto(classLoader, "DynamicShadowInput").apply {
+                setProperty("nullableText", null)
+            }.toEntity()
+            assertTrue(loadedNullBase.__isLoaded("nullableText"))
+            assertEquals(null, loadedNullBase.__get("nullableText"))
+            val loadedNullCopy = converterConstructor.newInstance(loadedNullBase)
+            assertTrue(loadedNullCopy.isDtoPropLoaded("nullableText"))
+            assertEquals(null, loadedNullCopy.javaClass.getMethod("getNullableText").invoke(loadedNullCopy))
+            val loadedNullRoundTrip = loadedNullCopy.toEntity()
+            assertTrue(loadedNullRoundTrip.__isLoaded("nullableText"))
+            assertEquals(null, loadedNullRoundTrip.__get("nullableText"))
+
+            val expectedNumbers = intArrayOf(1, 2)
+            val loadedNumbersBase = newDto(classLoader, "DynamicShadowInput").apply {
+                setProperty("numbers", expectedNumbers)
+            }.toEntity()
+            val loadedNumbersCopy = converterConstructor.newInstance(loadedNumbersBase)
+            assertTrue(loadedNumbersCopy.isDtoPropLoaded("numbers"))
+            assertContentEquals(
+                expectedNumbers,
+                loadedNumbersCopy.javaClass.getMethod("getNumbers").invoke(loadedNumbersCopy) as IntArray,
+            )
+            val loadedNumbersRoundTrip = loadedNumbersCopy.toEntity()
+            assertTrue(loadedNumbersRoundTrip.__isLoaded("numbers"))
+            assertContentEquals(expectedNumbers, loadedNumbersRoundTrip.__get("numbers") as IntArray)
         }
     }
 
@@ -757,6 +811,7 @@ class JimmerDtoToStringCompilationTest {
                 javaClassValue? as javaClass
                 chars?
                 numbers?
+                nullableText
             }
 
             fuzzy input FuzzyShadowInput {

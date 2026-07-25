@@ -24,8 +24,6 @@ import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.impl.util.DtoPropAccessor;
 import org.babyfish.jimmer.internal.FixedInputField;
 import org.babyfish.jimmer.internal.GeneratedBy;
-import org.babyfish.jimmer.meta.PropId;
-import org.babyfish.jimmer.runtime.ImmutableSpi;
 import org.babyfish.jimmer.sql.fetcher.DtoMetadata;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -70,6 +68,11 @@ public class BookInput implements Input<Book> {
         new int[] { BookDraft.Producer.SLOT_NAME }
     );
 
+    private static final DtoPropAccessor EDITION_ACCESSOR = new DtoPropAccessor(
+        true,
+        new int[] { BookDraft.Producer.SLOT_EDITION }
+    );
+
     private static final DtoPropAccessor PRICE_ACCESSOR = new DtoPropAccessor(
         false,
         new int[] { BookDraft.Producer.SLOT_PRICE }
@@ -111,9 +114,11 @@ public class BookInput implements Input<Book> {
         this.id = ID_ACCESSOR.get(base);
         this.isEnabled = base.active();
         this.name = NAME_ACCESSOR.get(base);
-        this.edition = ((ImmutableSpi)base).__isLoaded(PropId.byIndex(BookDraft.Producer.SLOT_EDITION)) ? base.edition() : null;
+        this.edition = EDITION_ACCESSOR.get(base);
+        this._isEditionLoaded = EDITION_ACCESSOR.isLoaded(base);
         this.price = PRICE_ACCESSOR.get(base);
         this.location = LOCATION_ACCESSOR.get(base);
+        this._isLocationLoaded = LOCATION_ACCESSOR.isLoaded(base);
     }
 
     @Nullable
@@ -346,7 +351,9 @@ public class BookInput implements Input<Book> {
 
         public TargetOf_location(@NonNull Point base) {
             this.x = X_ACCESSOR.get(base);
+            this._isXLoaded = X_ACCESSOR.isLoaded(base);
             this.y = Y_ACCESSOR.get(base);
+            this._isYLoaded = Y_ACCESSOR.isLoaded(base);
         }
 
         @Nullable
