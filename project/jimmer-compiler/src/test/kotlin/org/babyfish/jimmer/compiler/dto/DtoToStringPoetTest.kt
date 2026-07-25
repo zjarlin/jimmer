@@ -62,7 +62,7 @@ class DtoToStringPoetTest {
     }
 
     @Test
-    fun `preserves Kotlin expression function for unconditional properties`() {
+    fun `renders Kotlin builder function for unconditional properties`() {
         val graph = graph(baseProp("when"), baseProp("value"))
         val source = LsiKotlinPoetRenderer().renderFunction(
             graph.types.single().toDtoToStringPoetFunction(
@@ -73,9 +73,11 @@ class DtoToStringPoetTest {
             DTO_TO_STRING_POET_TYPE_NAMES,
         ).toString()
 
-        assertContains(source, "public override fun toString(): kotlin.String = \"PlainView(\" +")
-        assertContains(source, "\"when=\" + `when` +")
-        assertContains(source, "\", value=\" + `value` +")
+        assertContains(source, "public override fun toString(): kotlin.String {")
+        assertContains(source, "val builder = StringBuilder()")
+        assertContains(source, ".append(\"when=\").append(`when`)")
+        assertContains(source, ".append(\", \").append(\"value=\").append(`value`)")
+        assertContains(source, "return builder.toString()")
     }
 
     @Test

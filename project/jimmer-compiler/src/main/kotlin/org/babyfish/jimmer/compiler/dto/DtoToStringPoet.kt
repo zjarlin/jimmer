@@ -41,25 +41,20 @@ internal fun DtoType.toDtoToStringPoetFunction(
     val hasConditionalProps = inclusions.values.any { inclusion ->
         inclusion != DtoToStringInclusion.ALWAYS
     }
-    val useBuilder = targetLanguage == LsiLanguage.JAVA || hasConditionalProps
-    val body = if (useBuilder) {
-        builderBody(
-            props = props,
-            inclusions = inclusions,
-            loadedStateNameByProp = loadedStateNameByProp,
-            targetLanguage = targetLanguage,
-            generatedSimpleNamePath = generatedSimpleNamePath,
-            hasConditionalProps = hasConditionalProps,
-        )
-    } else {
-        kotlinConcatenationBody(props, generatedSimpleNamePath)
-    }
+    val body = builderBody(
+        props = props,
+        inclusions = inclusions,
+        loadedStateNameByProp = loadedStateNameByProp,
+        targetLanguage = targetLanguage,
+        generatedSimpleNamePath = generatedSimpleNamePath,
+        hasConditionalProps = hasConditionalProps,
+    )
     return LsiPoetFunction(
         name = "toString",
         modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
         returnType = STRING_TYPE,
         body = body,
-        bodyStyle = if (useBuilder) LsiPoetBodyStyle.BLOCK else LsiPoetBodyStyle.EXPRESSION,
+        bodyStyle = LsiPoetBodyStyle.BLOCK,
     )
 }
 
@@ -135,27 +130,6 @@ private fun builderBody(
             name(builderName)
             text(".toString()")
         }
-    }
-}
-
-private fun kotlinConcatenationBody(
-    props: List<DtoProp>,
-    generatedSimpleNamePath: String,
-): LsiPoetCodeBlock = LsiPoetCodeBlock.build {
-    preserveExplicitIndentation()
-    string("$generatedSimpleNamePath(")
-    text(" +")
-    line()
-    indent {
-        props.forEachIndexed { index, prop ->
-            string("${if (index == 0) "" else ", "}${prop.name}=")
-            text(" + ")
-            name(prop.name)
-            text(" + ")
-            line()
-        }
-        string(")")
-        line()
     }
 }
 
