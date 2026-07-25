@@ -13,6 +13,7 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoConfigRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoEnumRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
@@ -990,14 +991,17 @@ public class DtoGenerator {
         if (isSimpleProp(prop)) {
             return;
         }
+        DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
+                lsiDtoType,
+                lsiGraph,
+                prop.getName()
+        );
         addAccessorField(
                 prop,
                 accessorFieldName(prop.getName()),
-                DtoAccessorExtensionsKt.acceptsNullInAccessor(
-                        DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, prop.getName()),
-                        lsiGraph
-                ),
-                true
+                DtoAccessorExtensionsKt.acceptsNullInAccessor(lsiProp, lsiGraph),
+                true,
+                lsiProp
         );
     }
 
@@ -1008,7 +1012,8 @@ public class DtoGenerator {
                     nullGuardProp,
                     foldNullGuardAccessorFieldName(prop),
                     true,
-                    false
+                    false,
+                    null
             );
         }
     }
@@ -1017,7 +1022,8 @@ public class DtoGenerator {
             DtoProp<ImmutableType, ImmutableProp> prop,
             String fieldName,
             boolean acceptNull,
-            boolean withConverters
+            boolean withConverters,
+            @Nullable DtoBaseProp lsiProp
     ) {
         FieldSpec.Builder builder = FieldSpec.builder(
                 org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
@@ -1031,6 +1037,9 @@ public class DtoGenerator {
         cb.indent();
 
         DtoProp<ImmutableType, ImmutableProp> tailProp = prop.toTailProp();
+        if (withConverters) {
+            Objects.requireNonNull(lsiProp, "Frozen DTO property is required for converter accessors");
+        }
         cb.add("\n$L", acceptNull);
 
         if (prop.getNextProp() == null) {
@@ -1107,37 +1116,29 @@ public class DtoGenerator {
                                 tailProp.getTargetType().getBaseType().isEntity() ? "toEntity" : "toImmutable"
                 );
             }
-        } else if (withConverters && prop.getEnumType() != null) {
-            EnumType enumType = prop.getEnumType();
-            TypeName enumTypeName = tailProp.getBaseProp().getTypeName();
+        } else if (withConverters && lsiProp.getEnumType() != null) {
             if (dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
                 cb.add(",\nnull");
             } else {
-                cb.add(",\narg -> {\n");
-                cb.indent();
-                cb.beginControlFlow("switch (($T)arg)", enumTypeName);
-                for (Map.Entry<String, String> e : enumType.getValueMap().entrySet()) {
-                    cb.add("case $L:\n", e.getKey());
-                    cb.indent();
-                    cb.addStatement("return $L", e.getValue());
-                    cb.unindent();
-                }
-                cb.add("default:\n");
-                cb.indent();
-                cb.addStatement(
-                        "throw new AssertionError($S)",
-                        "Internal bug"
+                cb.add(
+                        ",\n$L",
+                        AptDtoEnumRenderer.renderEnumToScalarLambda(
+                                lsiProp,
+                                lsiGraph,
+                                immutableSchema,
+                                lsiWorkspace
+                        )
                 );
-                cb.unindent();
-                cb.endControlFlow();
-                cb.unindent();
-                cb.add("}");
             }
-            cb.add(",\narg -> {\n");
-            cb.indent();
-            addValueToEnum(cb, prop, "arg");
-            cb.unindent();
-            cb.add("}");
+            cb.add(
+                    ",\n$L",
+                    AptDtoEnumRenderer.renderScalarToEnumLambda(
+                            lsiProp,
+                            lsiGraph,
+                            immutableSchema,
+                            lsiWorkspace
+                    )
+            );
         } else if (withConverters && converterMetadataOf(prop) != null) {
             cb.add(",\narg -> ");
             addConverterLoading(cb, prop, true);
@@ -1151,28 +1152,6 @@ public class DtoGenerator {
         cb.add("\n)");
         builder.initializer(cb.build());
         typeBuilder.addField(builder.build());
-    }
-
-    private void addValueToEnum(CodeBlock.Builder cb, DtoProp<ImmutableType, ImmutableProp> prop, String variableName) {
-        EnumType enumType = prop.getEnumType();
-        TypeName enumTypeName = prop.toTailProp().getBaseProp().getTypeName();
-        cb.beginControlFlow("switch (($T)$L)", enumType.isNumeric() ? TypeName.INT : org.babyfish.jimmer.apt.immutable.generator.Constants.STRING_CLASS_NAME, variableName);
-        for (Map.Entry<String, String> e : enumType.getConstantMap().entrySet()) {
-            cb.add("case $L:\n", e.getKey());
-            cb.indent();
-            cb.addStatement("return $T.$L", enumTypeName, e.getValue());
-            cb.unindent();
-        }
-        cb.add("default:\n");
-        cb.indent();
-        cb.addStatement(
-                "throw new IllegalArgumentException($S + $L + $S)",
-                "Illegal value `\"",
-                variableName,
-                "\"`for enum type: \"" + enumTypeName + "\""
-        );
-        cb.unindent();
-        cb.endControlFlow();
     }
 
     private void addConverterLoading(CodeBlock.Builder cb, DtoProp<ImmutableType, ImmutableProp> prop, boolean forList) {
@@ -1984,7 +1963,7 @@ public class DtoGenerator {
                     StringUtil.snake(tailProp.getBaseProp().getName(), StringUtil.SnakeCase.UPPER)
             );
         }
-        if (isSpecificationConverterRequired(tailProp)) {
+        if (isSpecificationConverterRequired(prop)) {
             cb.add(
                     "$L(this.$L())",
                     StringUtil.identifier("__convert", propName),
@@ -2060,8 +2039,18 @@ public class DtoGenerator {
         cb.beginControlFlow("if ($L == null)", prop.getName());
         cb.addStatement("return null");
         cb.endControlFlow();
-        if (prop.getEnumType() != null) {
-            addValueToEnum(cb, prop, "value");
+        DtoBaseProp lsiEnumProp = lsiEnumPropOrNull(prop);
+        if (lsiEnumProp != null) {
+            cb.add(
+                    "$L",
+                    AptDtoEnumRenderer.renderScalarToEnumConversion(
+                            lsiEnumProp,
+                            lsiGraph,
+                            immutableSchema,
+                            lsiWorkspace,
+                            "value"
+                    )
+            );
         } else {
             cb.addStatement(
                     "return $T.$L.unwrap().<$T, $T>$L.input(value)",
@@ -2111,12 +2100,9 @@ public class DtoGenerator {
 
         ImmutableProp baseProp = prop.toTailProp().getBaseProp();
 
-        EnumType enumType = prop.getEnumType();
-        if (enumType != null) {
-            if (enumType.isNumeric()) {
-                return prop.isNullable() ? TypeName.INT.box() : TypeName.INT;
-            }
-            return org.babyfish.jimmer.apt.immutable.generator.Constants.STRING_CLASS_NAME;
+        DtoBaseProp lsiEnumProp = lsiEnumPropOrNull(prop);
+        if (lsiEnumProp != null) {
+            return AptDtoEnumRenderer.renderScalarType(lsiEnumProp, lsiWorkspace);
         }
         ConverterMetadata metadata = converterMetadataOf(prop);
         final TypeName propElementName = getPropElementName(prop);
@@ -2255,9 +2241,19 @@ public class DtoGenerator {
         return typeName;
     }
 
+    private DtoBaseProp lsiProp(DtoProp<ImmutableType, ImmutableProp> prop) {
+        return (DtoBaseProp) DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
+    }
+
+    @Nullable
+    private DtoBaseProp lsiEnumPropOrNull(DtoProp<ImmutableType, ImmutableProp> prop) {
+        DtoBaseProp lsiProp = lsiProp(prop);
+        return lsiProp.getEnumType() != null ? lsiProp : null;
+    }
+
     private DtoBaseProp lsiTailProp(DtoProp<ImmutableType, ImmutableProp> prop) {
         return DtoGenerationExtensionsKt.tailProp(
-                (DtoBaseProp) DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                lsiProp(prop),
                 lsiGraph
         );
     }
@@ -2359,7 +2355,7 @@ public class DtoGenerator {
         if (!dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
             return false;
         }
-        return prop.getEnumType() != null || converterMetadataOf(prop) != null;
+        return lsiEnumPropOrNull(prop) != null || converterMetadataOf(prop) != null;
     }
 
     private ConverterMetadata converterMetadataOf(DtoProp<ImmutableType, ImmutableProp> prop) {

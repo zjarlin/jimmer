@@ -1,6 +1,8 @@
 package site.addzero.lsi.poet.kotlinpoet
 
+import com.squareup.kotlinpoet.ANY
 import com.squareup.kotlinpoet.CodeBlock
+import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -92,6 +94,65 @@ class LsiKotlinPoetRendererTest {
                 .returnType,
         )
         assertEquals("consume(kotlin.String, \"value\")\n", rendered.toString())
+    }
+
+    @Test
+    fun `appends control flow into an existing initializer state`() {
+        val enumType = LsiDeclaredType(LsiSymbolId.type("demo.Order"))
+        val codeBlock = LsiPoetCodeBlock.build {
+            text("{")
+            indent {
+                line()
+                beginControlFlow {
+                    text("when (it as ")
+                    type(enumType)
+                    text(")")
+                }
+                statement {
+                    type(enumType)
+                    text(".FIRST -> 1")
+                }
+                statement {
+                    type(enumType)
+                    text(".SECOND -> 2")
+                }
+                endControlFlow()
+            }
+            text("}")
+        }
+        val initializer = CodeBlock.builder().apply {
+            add("Wrapper(")
+            indent()
+            add("\n")
+            LsiKotlinPoetRenderer().appendCodeBlock(this, codeBlock, typeNames)
+            unindent()
+            add("\n)")
+        }.build()
+        val rendered = TypeSpec.classBuilder("Container")
+            .addProperty(
+                PropertySpec.builder("mapping", ANY)
+                    .initializer(initializer)
+                    .build()
+            )
+            .build()
+            .toString()
+
+        assertEquals(
+            """
+                public class Container {
+                  public val mapping: kotlin.Any = Wrapper(
+                    {
+                      when (it as demo.Order) {
+                        demo.Order.FIRST -> 1
+                        demo.Order.SECOND -> 2
+                      }
+                    }
+                  )
+                }
+
+            """.trimIndent(),
+            rendered,
+        )
     }
 
     @Test

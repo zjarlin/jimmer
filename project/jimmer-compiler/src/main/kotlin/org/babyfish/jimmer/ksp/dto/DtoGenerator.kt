@@ -10,6 +10,7 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoConfigRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoEnumRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
@@ -1700,7 +1701,7 @@ internal class DtoGenerator private constructor(
                             StringUtil.snake(tailProp.baseProp.name, SnakeCase.UPPER)
                         )
                     }
-                    if (isSpecificationConverterRequired(tailProp)) {
+                    if (isSpecificationConverterRequired(prop)) {
                         add(
                             ", %N(this.%N)",
                             StringUtil.identifier("_convert", propName),
@@ -1749,11 +1750,13 @@ internal class DtoGenerator private constructor(
         if (isSimpleProp(prop)) {
             return
         }
+        val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
         addAccessorField(
             prop,
             accessorFieldName(prop.name),
-            lsiDtoType.baseProp(lsiGraph, prop.name).acceptsNullInAccessor(lsiGraph),
-            true
+            lsiProp.acceptsNullInAccessor(lsiGraph),
+            true,
+            lsiProp,
         )
     }
 
@@ -1763,7 +1766,8 @@ internal class DtoGenerator private constructor(
             nullGuardProp,
             foldNullGuardAccessorFieldName(prop),
             true,
-            false
+            false,
+            null,
         )
     }
 
@@ -1772,6 +1776,7 @@ internal class DtoGenerator private constructor(
         fieldName: String,
         acceptNull: Boolean,
         withConverters: Boolean,
+        lsiProp: DtoBaseProp?,
     ) {
         val builder = PropertySpec.builder(
             fieldName,
@@ -1812,6 +1817,13 @@ internal class DtoGenerator private constructor(
                     }
 
                     val tailProp = prop.toTailProp()
+                    val converterLsiProp = if (withConverters) {
+                        requireNotNull(lsiProp) {
+                            "Frozen DTO property is required for converter accessors"
+                        }
+                    } else {
+                        null
+                    }
                     val tailBaseProp = tailProp.baseProp
                     if (withConverters && prop.isIdOnly) {
                         if (dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
@@ -1883,27 +1895,27 @@ internal class DtoGenerator private constructor(
                             unindent()
                             add("\n}")
                         }
-                    } else if (withConverters && prop.enumType !== null) {
-                        val enumType = prop.enumType!!
-                        val enumTypeName = tailBaseProp.targetTypeName(overrideNullable = false)
+                    } else if (converterLsiProp?.enumType != null) {
                         if (dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
                             add(",\nnull")
                         } else {
-                            add(",\n{\n")
-                            indent()
-                            beginControlFlow("when (it as %T)", enumTypeName)
-                            for ((en, v) in enumType.valueMap) {
-                                addStatement("%T.%N -> %L", enumTypeName, en, v)
-                            }
-                            endControlFlow()
-                            unindent()
-                            add("}")
+                            add(",\n")
+                            KspDtoEnumRenderer.appendEnumToScalarLambda(
+                                this,
+                                converterLsiProp,
+                                lsiGraph,
+                                immutableSchema,
+                                workspace,
+                            )
                         }
-                        add(",\n{\n")
-                        indent()
-                        addValueToEnum(prop)
-                        unindent()
-                        add("}")
+                        add(",\n")
+                        KspDtoEnumRenderer.appendScalarToEnumLambda(
+                            this,
+                            converterLsiProp,
+                            lsiGraph,
+                            immutableSchema,
+                            workspace,
+                        )
                     } else if (withConverters && prop.dtoConverterMetadata != null) {
                         add(",\n{ ")
                         addConverterLoading(prop, true)
@@ -1962,9 +1974,17 @@ internal class DtoGenerator private constructor(
                             addStatement("return null")
                             endControlFlow()
                         }
-                        if (prop.enumType !== null) {
+                        val lsiEnumProp = lsiEnumPropOrNull(prop)
+                        if (lsiEnumProp != null) {
                             add("return ")
-                            addValueToEnum(prop, "value")
+                            KspDtoEnumRenderer.appendScalarToEnumConversion(
+                                this,
+                                lsiEnumProp,
+                                lsiGraph,
+                                immutableSchema,
+                                workspace,
+                                "value",
+                            )
                         } else {
                             add(
                                 "return %T.%N.unwrap().%N<%T, %T>(%L).input(value)",
@@ -2023,9 +2043,9 @@ internal class DtoGenerator private constructor(
     private fun propTypeName(prop: DtoProp<ImmutableType, ImmutableProp>): TypeName {
 
         val baseProp = prop.toTailProp().baseProp
-        val enumType = prop.enumType
-        if (enumType !== null) {
-            return (if (enumType.isNumeric) INT else STRING).copy(nullable = prop.isNullable)
+        val lsiEnumProp = lsiEnumPropOrNull(prop)
+        if (lsiEnumProp != null) {
+            return KspDtoEnumRenderer.renderScalarType(lsiEnumProp, workspace)
         }
 
         val metadata = prop.dtoConverterMetadata
@@ -2108,9 +2128,17 @@ internal class DtoGenerator private constructor(
         }.copy(nullable = false)
     }
 
+    private fun lsiProp(prop: DtoProp<ImmutableType, ImmutableProp>) =
+        lsiDtoType.prop(lsiGraph, prop.name) as site.addzero.lsi.jimmer.dto.DtoBaseProp
+
+    private fun lsiEnumPropOrNull(
+        prop: DtoProp<ImmutableType, ImmutableProp>,
+    ): site.addzero.lsi.jimmer.dto.DtoBaseProp? {
+        return lsiProp(prop).takeIf { lsiProp -> lsiProp.enumType != null }
+    }
+
     private fun lsiTailProp(prop: DtoProp<ImmutableType, ImmutableProp>) =
-        (lsiDtoType.prop(lsiGraph, prop.name) as site.addzero.lsi.jimmer.dto.DtoBaseProp)
-            .tailProp(lsiGraph)
+        lsiProp(prop).tailProp(lsiGraph)
 
     private fun collectNames(list: MutableList<String>) {
         if (parent == null) {
@@ -2192,26 +2220,6 @@ internal class DtoGenerator private constructor(
         throw AssertionError("Dto is too deep")
     }
 
-    private fun CodeBlock.Builder.addValueToEnum(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
-        variableName: String = "it"
-    ) {
-        beginControlFlow(
-            "when ($variableName as %T)",
-            if (propTypeName(prop).copy(nullable = false) == INT) INT else STRING
-        )
-        val enumTypeName = prop.toTailProp().baseProp.typeName(overrideNullable = false)
-        for ((v, en) in prop.enumType!!.constantMap) {
-            addStatement("%L -> %T.%N", v, enumTypeName, en)
-        }
-        addStatement("else -> throw IllegalArgumentException(")
-        indent()
-        addStatement("%S + $variableName + %S", "Illegal value \"", "\" for the enum type \"$enumTypeName\"")
-        unindent()
-        add(")\n")
-        endControlFlow()
-    }
-
     private fun CodeBlock.Builder.addConverterLoading(
         prop: DtoProp<ImmutableType, ImmutableProp>,
         forList: Boolean,
@@ -2235,7 +2243,7 @@ internal class DtoGenerator private constructor(
         return if (!dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
             false
         } else {
-            prop.getEnumType() != null || prop.dtoConverterMetadata != null
+            lsiEnumPropOrNull(prop) != null || prop.dtoConverterMetadata != null
         }
     }
 

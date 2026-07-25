@@ -58,6 +58,15 @@ class LsiKotlinPoetRenderer : LsiPoetRenderer {
         return codeBlock.toKotlinCodeBlock(typeNames)
     }
 
+    /** 将 LSI 代码块直接追加到现有 KotlinPoet builder，保留外围语句和缩进状态。 */
+    fun appendCodeBlock(
+        builder: CodeBlock.Builder,
+        codeBlock: LsiPoetCodeBlock,
+        typeNames: List<LsiPoetTypeName>,
+    ) {
+        codeBlock.appendToKotlinCodeBlock(builder, typeNames)
+    }
+
     /** 将单个 LSI 类型渲染为可嵌入现有 KotlinPoet 声明的结构。 */
     fun renderType(
         type: LsiPoetType,
@@ -319,6 +328,14 @@ private fun LsiPoetAccessor.toKotlinSetter(
 
 private fun LsiPoetCodeBlock.toKotlinCodeBlock(typeNames: List<LsiPoetTypeName>): CodeBlock {
     val builder = CodeBlock.builder()
+    appendToKotlinCodeBlock(builder, typeNames)
+    return builder.build()
+}
+
+private fun LsiPoetCodeBlock.appendToKotlinCodeBlock(
+    builder: CodeBlock.Builder,
+    typeNames: List<LsiPoetTypeName>,
+) {
     if (indentation == LsiPoetCodeBlockIndentation.EXPLICIT) {
         // 空语句标记只抑制外围声明的双倍续行缩进，不产生任何源码字符。
         builder.add("«»")
@@ -363,7 +380,6 @@ private fun LsiPoetCodeBlock.toKotlinCodeBlock(typeNames: List<LsiPoetTypeName>)
             LsiPoetCodePart.Unindent -> builder.unindent()
         }
     }
-    return builder.build()
 }
 
 private fun CodeBlock.Builder.addKotlinBracedExpression(
