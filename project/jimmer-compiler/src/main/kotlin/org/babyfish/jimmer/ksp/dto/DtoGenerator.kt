@@ -974,19 +974,19 @@ internal class DtoGenerator private constructor(
         if (!prop.baseProp.isId) {
             if (prop.target !== null) {
                 if (prop.isRecursive) {
-                    add("`%L*`", prop.baseProp.name)
+                    add("%N", "${prop.baseProp.name}*")
                     if (prop.config == null) {
                         add("()")
                     }
                 } else {
                     add(
-                        "%L(%T.METADATA.fetcher)",
+                        "%N(%T.METADATA.fetcher)",
                         prop.baseProp.name,
                         propElementName(prop)
                     )
                 }
             } else {
-                add("%L", prop.baseProp.name)
+                add("%N", prop.baseProp.name)
                 if (prop.config == null) {
                     add("()")
                 }
@@ -1185,7 +1185,7 @@ internal class DtoGenerator private constructor(
             return
         }
         val targetDtoType = prop.getTargetType()!!
-        add("%L {\n", prop.baseProp.name)
+        add("%N {\n", prop.baseProp.name)
         indent()
         for (childProp in targetDtoType.dtoProps) {
             addHiddenFetcherField(childProp)
@@ -1218,7 +1218,7 @@ internal class DtoGenerator private constructor(
                             .build()
                     )
                     .mutable(mutable)
-                    .initializer(it)
+                    .initializer("%N", it)
                     .build()
             )
         }
@@ -1283,7 +1283,7 @@ internal class DtoGenerator private constructor(
                             },
                         )
                     )
-                    initializer(prop.name)
+                    initializer("%N", prop.name)
                     if (mutable) {
                         lsiProp
                             .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
@@ -1293,8 +1293,8 @@ internal class DtoGenerator private constructor(
                                 FunSpec
                                     .setterBuilder()
                                     .addParameter(name, typeName)
-                                    .addStatement("field = %L", name)
-                                    .addStatement("%L = true", stateProp)
+                                    .addStatement("field = %N", name)
+                                    .addStatement("%N = true", stateProp)
                                     .build()
                             )
                         }
@@ -1366,7 +1366,7 @@ internal class DtoGenerator private constructor(
                                         .builder(statePropName, BOOLEAN)
                                         .apply {
                                             if (prop.isNullable) {
-                                                defaultValue("%L !== null", prop.name)
+                                                defaultValue("%N !== null", prop.name)
                                             } else {
                                                 defaultValue("true")
                                             }
@@ -1415,7 +1415,7 @@ internal class DtoGenerator private constructor(
                                 val foldProp = prop.asFoldProp()
                                 if (foldProp.nullGuardProp != null) {
                                     add(
-                                        "%L.get<%T>(base)?.let { %T(base) }",
+                                        "%N.get<%T>(base)?.let { %T(base) }",
                                         foldNullGuardAccessorFieldName(foldProp),
                                         ANY.copy(nullable = true),
                                         propTypeName(foldProp).copy(nullable = false)
@@ -1426,10 +1426,10 @@ internal class DtoGenerator private constructor(
                             } else if (prop is DtoProp<*, *>) {
                                 val dtoProp = prop.asDtoProp()
                                 if (isSimpleProp(dtoProp)) {
-                                    add("base.%L", dtoProp.baseProp.name)
+                                    add("base.%N", dtoProp.baseProp.name)
                                 } else if (!dtoProp.isNullable && dtoProp.isBaseNullable) {
                                     add(
-                                        "%L.get<%T>(\n",
+                                        "%N.get<%T>(\n",
                                         accessorFieldName(dtoProp.name),
                                         propTypeName(dtoProp)
                                     )
@@ -1445,7 +1445,7 @@ internal class DtoGenerator private constructor(
                                     add(")")
                                 } else {
                                     add(
-                                        "%L.get<%T>(base)",
+                                        "%N.get<%T>(base)",
                                         accessorFieldName(dtoProp.name),
                                         propTypeName(dtoProp)
                                     )
@@ -1456,13 +1456,13 @@ internal class DtoGenerator private constructor(
                                     ?.let {
                                     if (isSimpleProp(dtoProp)) {
                                         add(
-                                            ",\n%T.%L.isLoaded(base)",
+                                            ",\n%T.%N.isLoaded(base)",
                                             dtoType.baseType.propsClassName,
                                             StringUtil.snake(dtoProp.baseProp.name, SnakeCase.UPPER)
                                         )
                                     } else {
                                         add(
-                                            ",\n%L.isLoaded(base)\n",
+                                            ",\n%N.isLoaded(base)\n",
                                             accessorFieldName(dtoProp.name)
                                         )
                                     }
@@ -1589,7 +1589,7 @@ internal class DtoGenerator private constructor(
         for (concreteType in knownConcreteTypes(dtoType.baseType)) {
             val value = concreteType.discriminatorValue ?: continue
             beginControlFlow(
-                "if (%L == %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
+                "if (%N == %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
                 discriminatorProp.name,
                 IMMUTABLE_TYPE_CLASS_NAME,
                 polymorphicRootType.className,
@@ -1604,7 +1604,7 @@ internal class DtoGenerator private constructor(
             endControlFlow()
         }
         addStatement(
-            "throw %T(%S + %L + %S)",
+            "throw %T(%S + %N + %S)",
             IllegalArgumentException::class,
             "Illegal discriminator value \"",
             discriminatorProp.name,
@@ -1639,9 +1639,9 @@ internal class DtoGenerator private constructor(
                         when (prop) {
                             is FoldProp<*, *> -> {
                                 if (prop.isNullable) {
-                                    addStatement("this.%L?.__applyTo(_draft)", prop.name)
+                                    addStatement("this.%N?.__applyTo(_draft)", prop.name)
                                 } else {
-                                    addStatement("this.%L.__applyTo(_draft)", prop.name)
+                                    addStatement("this.%N.__applyTo(_draft)", prop.name)
                                 }
                             }
 
@@ -1658,7 +1658,7 @@ internal class DtoGenerator private constructor(
                                     .prop(lsiGraph, dtoProp.name)
                                     .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                                 if (statePropName !== null) {
-                                    beginControlFlow("if (%L)", statePropName)
+                                    beginControlFlow("if (%N)", statePropName)
                                     addDraftAssignment(dtoProp, dtoProp.name)
                                     endControlFlow()
                                 } else {
@@ -1677,14 +1677,14 @@ internal class DtoGenerator private constructor(
     ) {
         val value = dtoType.baseType.discriminatorValue ?: return
         beginControlFlow(
-            "if (%L != %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
+            "if (%N != %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
             discriminatorProp.name,
             IMMUTABLE_TYPE_CLASS_NAME,
             polymorphicRootType.className,
             value
         )
         addStatement(
-            "throw %T(%S + %L + %S)",
+            "throw %T(%S + %N + %S)",
             IllegalArgumentException::class,
             "Discriminator value \"",
             discriminatorProp.name,
@@ -1697,17 +1697,17 @@ internal class DtoGenerator private constructor(
     private fun FunSpec.Builder.addDraftAssignment(prop: DtoProp<ImmutableType, ImmutableProp>, valueExpr: String) {
         val baseProp = prop.toTailProp().baseProp
         if (isSimpleProp(prop)) {
-            addStatement("_draft.%L = %L", baseProp.name, valueExpr)
+            addStatement("_draft.%N = %N", baseProp.name, valueExpr)
         } else {
             if (prop.isNullable && baseProp.let { it.isList && it.isAssociation(true) }) {
                 addStatement(
-                    "%L.set(_draft, %L)",
+                    "%N.set(_draft, %N)",
                     accessorFieldName(prop.name),
                     valueExpr
                 )
             } else {
                 addStatement(
-                    "%L.set(_draft, %L)",
+                    "%N.set(_draft, %N)",
                     accessorFieldName(prop.name),
                     valueExpr
                 )
@@ -1806,15 +1806,15 @@ internal class DtoGenerator private constructor(
                                 stack = addStackOperations(stack, emptyList())
                                 if (isGeneratedNullable(prop)) {
                                     if (dtoType.baseType.isEntity) {
-                                        addStatement("this.%L?.applyTo(args)", prop.name)
+                                        addStatement("this.%N?.applyTo(args)", prop.name)
                                     } else {
-                                        addStatement("this.%L?.applyTo(_applier)", prop.name)
+                                        addStatement("this.%N?.applyTo(_applier)", prop.name)
                                     }
                                 } else {
                                     if (dtoType.baseType.isEntity) {
-                                        addStatement("this.%L.applyTo(args)", prop.name)
+                                        addStatement("this.%N.applyTo(args)", prop.name)
                                     } else {
-                                        addStatement("this.%L.applyTo(_applier)", prop.name)
+                                        addStatement("this.%N.applyTo(_applier)", prop.name)
                                     }
                                 }
                             }
@@ -1858,7 +1858,7 @@ internal class DtoGenerator private constructor(
         }
         for (prop in newStack.subList(sameCount, newStack.size)) {
             addStatement(
-                "_applier.push(%T.%L.unwrap())",
+                "_applier.push(%T.%N.unwrap())",
                 prop.declaringType.propsClassName,
                 StringUtil.snake(prop.name, SnakeCase.UPPER)
             )
@@ -1871,9 +1871,9 @@ internal class DtoGenerator private constructor(
         val tailProp = prop.toTailProp()
         if (tailProp.target != null) {
             if (tailProp.baseProp.isAssociation(true)) {
-                addStatement("this.%L?.let { it.applyTo(args.child()) }", propName)
+                addStatement("this.%N?.let { it.applyTo(args.child()) }", propName)
             } else {
-                addStatement("this.%L?.let { it.applyTo(args.applier) }", propName)
+                addStatement("this.%N?.let { it.applyTo(args.applier) }", propName)
             }
             return
         }
@@ -1892,7 +1892,7 @@ internal class DtoGenerator private constructor(
         addCode(
             CodeBlock.builder()
                 .apply {
-                    add("_applier.%L(", ktFunName)
+                    add("_applier.%N(", ktFunName)
                     if (Constants.MULTI_ARGS_FUNC_NAMES.contains(funcName)) {
                         add("arrayOf(")
                         tailProp.basePropMap.values.forEachIndexed { index, baseProp ->
@@ -1900,7 +1900,7 @@ internal class DtoGenerator private constructor(
                                 add(", ")
                             }
                             add(
-                                "%T.%L.unwrap()",
+                                "%T.%N.unwrap()",
                                 baseProp.declaringType.propsClassName,
                                 StringUtil.snake(baseProp.name, SnakeCase.UPPER)
                             )
@@ -1908,19 +1908,19 @@ internal class DtoGenerator private constructor(
                         add(")")
                     } else {
                         add(
-                            "%T.%L.unwrap()",
+                            "%T.%N.unwrap()",
                             tailProp.baseProp.declaringType.propsClassName,
                             StringUtil.snake(tailProp.baseProp.name, SnakeCase.UPPER)
                         )
                     }
                     if (isSpecificationConverterRequired(tailProp)) {
                         add(
-                            ", %L(this.%L)",
+                            ", %N(this.%N)",
                             StringUtil.identifier("_convert", propName),
                             propName
                         )
                     } else {
-                        add(", this.%L", propName)
+                        add(", this.%N", propName)
                     }
                     if (funcName == "like") {
                         add(", ")
@@ -2001,7 +2001,7 @@ internal class DtoGenerator private constructor(
 
                     if (prop.nextProp === null) {
                         add(
-                            ",\nintArrayOf(%T.%L)",
+                            ",\nintArrayOf(%T.%N)",
                             dtoType.baseType.draftClassName("$"),
                             prop.baseProp.slotName
                         )
@@ -2014,7 +2014,7 @@ internal class DtoGenerator private constructor(
                                 add(",")
                             }
                             add(
-                                "\n%T.%L",
+                                "\n%T.%N",
                                 p.baseProp.declaringType.draftClassName("$"),
                                 p.baseProp.slotName
                             )
@@ -2031,7 +2031,7 @@ internal class DtoGenerator private constructor(
                             add(",\nnull")
                         } else {
                             add(
-                                ",\n%T.%L(%T::class.java, ",
+                                ",\n%T.%N(%T::class.java, ",
                                 DTO_PROP_ACCESSOR,
                                 if (tailBaseProp.isList) "idListGetter" else "idReferenceGetter",
                                 tailBaseProp.targetTypeName(overrideNullable = false)
@@ -2039,7 +2039,7 @@ internal class DtoGenerator private constructor(
                             addConverterLoading(prop, false)
                             add(")")
                             add(
-                                ",\n%T.%L(%T::class.java, ",
+                                ",\n%T.%N(%T::class.java, ",
                                 DTO_PROP_ACCESSOR,
                                 if (tailBaseProp.isList) "idListSetter" else "idReferenceSetter",
                                 tailBaseProp.targetTypeName(overrideNullable = false)
@@ -2054,7 +2054,7 @@ internal class DtoGenerator private constructor(
                             val reusableTargetType = lsiTailProp(prop).targetTypeReference != null
                             if (reusableTargetType || tailProp.targetType!!.polymorphism !== null) {
                                 add(
-                                    ",\n%T.%L<%T, %L>(%T.METADATA.converter)",
+                                    ",\n%T.%N<%T, %L>(%T.METADATA.converter)",
                                     DTO_PROP_ACCESSOR,
                                     if (tailBaseProp.isList) "objectListGetter" else "objectReferenceGetter",
                                     tailBaseProp.targetTypeName(overrideNullable = false),
@@ -2063,7 +2063,7 @@ internal class DtoGenerator private constructor(
                                 )
                             } else {
                                 add(
-                                    ",\n%T.%L<%T, %L> {",
+                                    ",\n%T.%N<%T, %L> {",
                                     DTO_PROP_ACCESSOR,
                                     if (tailBaseProp.isList) "objectListGetter" else "objectReferenceGetter",
                                     tailBaseProp.targetTypeName(overrideNullable = false),
@@ -2076,7 +2076,7 @@ internal class DtoGenerator private constructor(
                             }
 
                             add(
-                                ",\n%T.%L<%T, %L> {",
+                                ",\n%T.%N<%T, %L> {",
                                 DTO_PROP_ACCESSOR,
                                 if (tailBaseProp.isList) "objectListSetter" else "objectReferenceSetter",
                                 tailBaseProp.targetTypeName(overrideNullable = false),
@@ -2084,7 +2084,7 @@ internal class DtoGenerator private constructor(
                             )
                             indent()
                             add(
-                                "\nit.%L()",
+                                "\nit.%N()",
                                 if (reusableTargetType) {
                                     "toImmutable"
                                 } else if (tailBaseProp.targetType!!.isEntity) {
@@ -2106,7 +2106,7 @@ internal class DtoGenerator private constructor(
                             indent()
                             beginControlFlow("when (it as %T)", enumTypeName)
                             for ((en, v) in enumType.valueMap) {
-                                addStatement("%T.%L -> %L", enumTypeName, en, v)
+                                addStatement("%T.%N -> %L", enumTypeName, en, v)
                             }
                             endControlFlow()
                             unindent()
@@ -2180,7 +2180,7 @@ internal class DtoGenerator private constructor(
                             addValueToEnum(prop, "value")
                         } else {
                             add(
-                                "return %T.%L.unwrap().%L<%T, %T>(%L).input(value)",
+                                "return %T.%N.unwrap().%N<%T, %T>(%L).input(value)",
                                 baseProp.declaringType.propsClassName,
                                 StringUtil.snake(baseProp.name, SnakeCase.UPPER),
                                 if (baseProp.isAssociation(true)) "getAssociatedIdConverter" else "getConverter",
@@ -2214,7 +2214,7 @@ internal class DtoGenerator private constructor(
                 .apply {
                     for (prop in dtoType.props) {
                         addStatement(
-                            "%S -> %L",
+                            "%S -> %N",
                             if (getter) {
                                 StringUtil.identifier(
                                     if (propTypeName(prop) == BOOLEAN) "is" else "get",
@@ -2452,7 +2452,7 @@ internal class DtoGenerator private constructor(
         )
         val enumTypeName = prop.toTailProp().baseProp.typeName(overrideNullable = false)
         for ((v, en) in prop.enumType!!.constantMap) {
-            addStatement("%L -> %T.%L", v, enumTypeName, en)
+            addStatement("%L -> %T.%N", v, enumTypeName, en)
         }
         addStatement("else -> throw IllegalArgumentException(")
         indent()
@@ -2468,7 +2468,7 @@ internal class DtoGenerator private constructor(
     ) {
         val baseProp: ImmutableProp = prop.toTailProp().getBaseProp()
         add(
-            "%T.%L.unwrap().%L",
+            "%T.%N.unwrap().%L",
             baseProp.declaringType.propsClassName,
             StringUtil.snake(baseProp.name, SnakeCase.UPPER),
             if (prop.toTailProp().getBaseProp()
@@ -2532,7 +2532,7 @@ internal class DtoGenerator private constructor(
                     for (prop in dtoType.props) {
                         addParameter(
                             ParameterSpec.builder(prop.name, propTypeName(prop))
-                                .defaultValue("this.${prop.name}")
+                                .defaultValue("this.%N", prop.name)
                                 .build()
                         )
                         args += prop.name
@@ -2542,13 +2542,21 @@ internal class DtoGenerator private constructor(
                             ?.let {
                             addParameter(
                                 ParameterSpec.builder(it, BOOLEAN)
-                                    .defaultValue("this.$it")
+                                    .defaultValue("this.%N", it)
                                     .build()
                             )
                             args += it
                         }
                     }
-                    addStatement("return %T(%L)", getDtoClassName(), args.joinToString())
+                    val argumentBlock = CodeBlock.builder().apply {
+                        args.forEachIndexed { index, name ->
+                            if (index != 0) {
+                                add(", ")
+                            }
+                            add("%N", name)
+                        }
+                    }.build()
+                    addStatement("return %T(%L)", getDtoClassName(), argumentBlock)
                 }
                 .build()
         )
@@ -2570,20 +2578,23 @@ internal class DtoGenerator private constructor(
                                 } else {
                                     "hashCode"
                                 }
+                                val expression = CodeBlock.builder().apply {
+                                    if (prop.isNullable) {
+                                        add("(%N?.%N() ?: 0)", prop.alias, hashCodeFunName)
+                                    } else {
+                                        add("%N.%N()", prop.alias, hashCodeFunName)
+                                    }
+                                }.build()
                                 addStatement(
                                     "%L %L",
                                     if (index == 0) "var _hash =" else "_hash = 31 * _hash +",
-                                    if (prop.isNullable) {
-                                        "(${prop.alias}?.$hashCodeFunName() ?: 0)"
-                                    } else {
-                                        "${prop.alias}.$hashCodeFunName()"
-                                    }
+                                    expression,
                                 )
                                 lsiDtoType
                                     .prop(lsiGraph, prop.name)
                                     .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                                     ?.let {
-                                    addStatement("_hash = _hash * 31 + %L.hashCode()", it)
+                                    addStatement("_hash = _hash * 31 + %N.hashCode()", it)
                                 }
                             }
                             addStatement("return _hash")
@@ -2613,14 +2624,14 @@ internal class DtoGenerator private constructor(
                                     .prop(lsiGraph, prop.name)
                                     .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                                 if (statePropName !== null) {
-                                    add("%L == _other.%L && (\n", statePropName, statePropName)
+                                    add("%N == _other.%N && (\n", statePropName, statePropName)
                                     indent()
-                                    add("!%L || ", statePropName)
+                                    add("!%N || ", statePropName)
                                 }
                                 if (propTypeName(prop).isArray()) {
-                                    add("%L.contentEquals(_other.%L)", prop.alias, prop.alias)
+                                    add("%N.contentEquals(_other.%N)", prop.alias, prop.alias)
                                 } else {
-                                    add("%L == _other.%L", prop.alias, prop.alias)
+                                    add("%N == _other.%N", prop.alias, prop.alias)
                                 }
                                 if (statePropName !== null) {
                                     unindent()

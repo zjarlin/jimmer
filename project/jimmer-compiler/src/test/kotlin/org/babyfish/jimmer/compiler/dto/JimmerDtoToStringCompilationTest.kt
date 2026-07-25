@@ -214,7 +214,7 @@ class JimmerDtoToStringCompilationTest {
         return type.getConstructor().newInstance().apply {
             setProperty("chars", chars)
             setProperty("numbers", numbers)
-            setProperty("value", "keyword")
+            setProperty("when", "keyword")
         }
     }
 
@@ -228,7 +228,7 @@ class JimmerDtoToStringCompilationTest {
     private fun Any.setMixedValues() {
         setProperty("separator", "separator-value")
         setProperty("_sp", "sp-value")
-        setProperty("value", "keyword")
+        setProperty("when", "keyword")
         setProperty("chars", charArrayOf('A', 'Z'))
         setProperty("numbers", intArrayOf(1, 2))
     }
@@ -331,13 +331,13 @@ class JimmerDtoToStringCompilationTest {
         )
 
         val EXPECTED_SNAPSHOTS = listOf(
-            "PlainArrayInput(chars=AZ, numbers=<int-array>, value=keyword)",
+            "PlainArrayInput(chars=AZ, numbers=<int-array>, when=keyword)",
             "DynamicShadowInput()",
             "DynamicShadowInput(builder=null)",
-            "DynamicShadowInput(separator=separator-value, _sp=sp-value, value=keyword, chars=AZ, numbers=<int-array>)",
+            "DynamicShadowInput(separator=separator-value, _sp=sp-value, when=keyword, chars=AZ, numbers=<int-array>)",
             "FuzzyShadowInput()",
             "FuzzyShadowInput(builder=builder-value)",
-            "FuzzyShadowInput(separator=separator-value, _sp=sp-value, value=keyword, chars=AZ, numbers=<int-array>)",
+            "FuzzyShadowInput(separator=separator-value, _sp=sp-value, when=keyword, chars=AZ, numbers=<int-array>)",
         )
 
         val INT_ARRAY_IDENTITY_PATTERN = Regex("""\[I@[0-9a-fA-F]+""")
@@ -398,14 +398,14 @@ class JimmerDtoToStringCompilationTest {
             input PlainArrayInput {
                 chars
                 numbers
-                marker as value
+                marker as when
             }
 
             dynamic input DynamicShadowInput {
                 name? as builder
                 description? as separator
                 note? as _sp
-                marker? as value
+                marker? as when
                 chars?
                 numbers?
             }
@@ -414,7 +414,7 @@ class JimmerDtoToStringCompilationTest {
                 name? as builder
                 description? as separator
                 note? as _sp
-                marker? as value
+                marker? as when
                 chars?
                 numbers?
             }
