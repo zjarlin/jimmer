@@ -2,11 +2,7 @@ package site.addzero.lsi.jimmer.dto
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
-import site.addzero.lsi.jimmer.ImmutableView
-import site.addzero.lsi.jimmer.elementTypeOrSelf
-import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiArrayType
@@ -237,7 +233,7 @@ private fun DtoBaseProp.inputBuilderBaseValueType(
         }
     }
     val tailProp = tailProp(graph)
-    val immutableProp = tailProp.immutableProp(immutableSchema)
+    val immutableProp = tailProp.boundImmutableProp(graph, immutableSchema)
     if (tailProp.functionName !in NON_NULL_BACKING_FUNCTIONS) {
         immutableProp.converter?.targetType?.let { targetType -> return targetType }
     }
@@ -258,10 +254,10 @@ private fun DtoBaseProp.inputBuilderBaseValueType(
             val targetIdProp = requireNotNull(immutableSchema.targetIdPropOf(immutableProp)) {
                 "DTO id function must reference an immutable association: ${tailProp.id.value}"
             }
-            targetIdProp.inputBuilderClientElementType(immutableSchema)
+            targetIdProp.dtoClientType(immutableSchema)
         }
         tailProp.functionName in NON_NULL_BACKING_FUNCTIONS -> LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN)
-        else -> immutableProp.inputBuilderClientElementType(immutableSchema)
+        else -> immutableProp.dtoClientType(immutableSchema)
     }
     if (!immutableProp.list || elementType.isListType()) {
         return elementType
@@ -270,29 +266,6 @@ private fun DtoBaseProp.inputBuilderBaseValueType(
         declarationId = targetLanguage.listTypeId(),
         arguments = listOf(LsiTypeArgument.invariant(elementType.boxedForTypeArgument(targetLanguage))),
     )
-}
-
-private fun DtoBaseProp.immutableProp(immutableSchema: ImmutableSchema): ImmutableProp {
-    val immutablePropIds = baseProps.map(DtoBasePropBinding::propId).distinct()
-    val immutableProps = immutablePropIds.map { propId ->
-        requireNotNull(immutableSchema.propsById[propId]) {
-            "DTO base property references a missing immutable property: ${propId.value}"
-        }
-    }
-    val clientTypeSignatures = immutableProps.map { prop ->
-        (prop.converter?.targetType ?: prop.type).jimmerTypeSignature(ignoreRootNullability = true)
-    }.distinct()
-    require(clientTypeSignatures.size == 1) {
-        "DTO base property bindings must expose one value type: ${id.value}"
-    }
-    return immutableProps.first()
-}
-
-private fun ImmutableProp.inputBuilderClientElementType(immutableSchema: ImmutableSchema): LsiTypeRef {
-    converter?.targetType?.let { targetType -> return targetType }
-    val idView = view as? ImmutableView.Id
-    val targetIdProp = idView?.targetIdPropId?.let(immutableSchema.propsById::get)
-    return targetIdProp?.converter?.targetType ?: targetIdProp?.elementTypeOrSelf() ?: elementTypeOrSelf()
 }
 
 private fun DtoProp.requireInputBuilderOwner(graph: DtoGraph): DtoType {

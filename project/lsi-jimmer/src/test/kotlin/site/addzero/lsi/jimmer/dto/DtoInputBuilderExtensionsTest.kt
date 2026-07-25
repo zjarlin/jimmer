@@ -330,6 +330,65 @@ class DtoInputBuilderExtensionsTest {
         assertFalse(REFERENCE_SOURCE_TYPE_ID in resolvedTypeIds)
     }
 
+    @Test
+    fun `resolves frozen dto converter targets without platform metadata`() {
+        val fixture = complexFixture()
+        val props = fixture.type.inputBuilderPropsInDeclarationOrder(fixture.graph)
+            .filterIsInstance<DtoBaseProp>()
+            .associateBy(DtoBaseProp::name)
+
+        val convertedValues = props.getValue("convertedValues")
+            .dtoConverterTargetTypeOrNull(fixture.graph, fixture.schema) as LsiDeclaredType
+        assertEquals(LsiSymbolId.type("java.util.Set"), convertedValues.declarationId)
+        assertEquals(
+            LsiSymbolId.type("java.lang.String"),
+            (convertedValues.arguments.single().type as LsiDeclaredType).declarationId,
+        )
+        assertJavaStringList(
+            requireNotNull(
+                props.getValue("targetIds").dtoConverterTargetTypeOrNull(fixture.graph, fixture.schema),
+            ),
+        )
+        assertJavaStringList(
+            requireNotNull(
+                props.getValue("targetIdViews").dtoConverterTargetTypeOrNull(fixture.graph, fixture.schema),
+            ),
+        )
+        assertEquals(
+            LsiSymbolId.type("java.lang.String"),
+            (props.getValue("targetIds").dtoClientType(fixture.graph, fixture.schema) as LsiDeclaredType)
+                .declarationId,
+        )
+
+        val targetIds = props.getValue("targetIds")
+        listOf("associatedIdEq", "associatedIdNe").forEach { functionName ->
+            val associatedProp = targetIds.copy(functionName = functionName)
+            val associatedGraph = fixture.graph.replacingComplexRootProp(
+                fixture.type,
+                associatedProp,
+                DtoModifier.SPECIFICATION,
+            )
+            assertEquals(
+                LsiSymbolId.type("java.lang.String"),
+                (associatedProp.dtoConverterTargetTypeOrNull(associatedGraph, fixture.schema) as LsiDeclaredType)
+                    .declarationId,
+            )
+        }
+        listOf("associatedIdIn", "associatedIdNotIn").forEach { functionName ->
+            val associatedProp = targetIds.copy(functionName = functionName)
+            val associatedGraph = fixture.graph.replacingComplexRootProp(
+                fixture.type,
+                associatedProp,
+                DtoModifier.SPECIFICATION,
+            )
+            assertJavaStringList(
+                requireNotNull(
+                    associatedProp.dtoConverterTargetTypeOrNull(associatedGraph, fixture.schema),
+                ),
+            )
+        }
+    }
+
     private fun fixture(): Fixture {
         val dynamic = baseProp(DYNAMIC_PROP_ID, "dynamicName", DtoModifier.DYNAMIC, nullable = true)
         val enabled = DtoUserProp(
@@ -767,6 +826,24 @@ class DtoInputBuilderExtensionsTest {
         assertEquals(LsiSymbolId.type("java.util.List"), listType.declarationId)
         val elementType = listType.arguments.single().type as LsiDeclaredType
         assertEquals(LsiSymbolId.type("java.lang.String"), elementType.declarationId)
+    }
+
+    private fun DtoGraph.replacingComplexRootProp(
+        rootType: DtoType,
+        newProp: DtoBaseProp,
+        modifier: DtoModifier,
+    ): DtoGraph {
+        val newRootType = rootType.copy(
+            modifiers = setOf(modifier),
+            propIds = listOf(newProp.id),
+            hiddenFlatPropIds = emptyList(),
+        )
+        return DtoGraph(
+            source = source,
+            rootTypeIds = rootTypeIds,
+            types = listOf(newRootType),
+            props = listOf(newProp),
+        )
     }
 
     private fun baseProp(

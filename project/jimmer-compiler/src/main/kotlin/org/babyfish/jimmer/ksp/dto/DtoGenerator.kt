@@ -30,7 +30,6 @@ import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.immutable.generator.*
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
-import org.babyfish.jimmer.ksp.util.ConverterMetadata
 import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoToStringRenderer
@@ -51,7 +50,11 @@ import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
 import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.bodyType
+import site.addzero.lsi.jimmer.dto.boundImmutableProp
 import site.addzero.lsi.jimmer.dto.contractFor
+import site.addzero.lsi.jimmer.dto.dtoAssociatedIdClientType
+import site.addzero.lsi.jimmer.dto.dtoClientType
+import site.addzero.lsi.jimmer.dto.dtoConverterTargetTypeOrNull
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
@@ -1730,7 +1733,7 @@ internal class DtoGenerator private constructor(
             return false
         }
         return if ((prop.isNullable() && (!prop.getBaseProp().isNullable || dtoType.modifiers.contains(DtoModifier.SPECIFICATION))) ||
-            (prop.baseProp.converterMetadata !== null &&
+            (lsiProp(prop).boundImmutableProp(lsiGraph, immutableSchema).converter != null &&
                     !dtoType.modifiers.contains(DtoModifier.INPUT) &&
                     !dtoType.modifiers.contains(DtoModifier.SPECIFICATION))
         ) {
@@ -1923,7 +1926,10 @@ internal class DtoGenerator private constructor(
                             immutableSchema,
                             workspace,
                         )
-                    } else if (withConverters && prop.dtoConverterMetadata != null) {
+                    } else if (
+                        withConverters &&
+                        lsiProp(prop).dtoConverterTargetTypeOrNull(lsiGraph, immutableSchema) != null
+                    ) {
                         add(",\n{ ")
                         addConverterLoading(prop, true)
                         add(".output(it) }")
@@ -2055,7 +2061,10 @@ internal class DtoGenerator private constructor(
             return KspDtoEnumRenderer.renderScalarType(lsiEnumProp, workspace)
         }
 
-        val metadata = prop.dtoConverterMetadata
+        val converterTargetType = lsiProp(prop).dtoConverterTargetTypeOrNull(lsiGraph, immutableSchema)
+        val converterTargetTypeName = converterTargetType?.let { type ->
+            KspDtoTypeRefRenderer.render(type, workspace)
+        }
         val propElementName = propElementName(prop)
         if (dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
             val funcName = prop.toTailProp().getFuncName()
@@ -2066,14 +2075,22 @@ internal class DtoGenerator private constructor(
 
                     "valueIn", "valueNotIn" ->
                         return COLLECTION.parameterizedBy(
-                            metadata?.targetTypeName ?: propElementName.toList(baseProp.isList)
+                            converterTargetTypeName ?: propElementName.toList(baseProp.isList)
                         ).copy(nullable = prop.isNullable)
 
                     "id", "associatedIdEq", "associatedIdNe" ->
-                        return baseProp.targetType!!.idProp!!.clientClassName.copy(nullable = prop.isNullable)
+                        return KspDtoTypeRefRenderer.render(
+                            lsiProp(prop).dtoAssociatedIdClientType(lsiGraph, immutableSchema),
+                            workspace,
+                        ).copy(nullable = prop.isNullable)
 
                     "associatedIdIn", "associatedIdNotIn" ->
-                        return COLLECTION.parameterizedBy(baseProp.targetType!!.idProp!!.clientClassName)
+                        return COLLECTION.parameterizedBy(
+                            KspDtoTypeRefRenderer.render(
+                                lsiProp(prop).dtoAssociatedIdClientType(lsiGraph, immutableSchema),
+                                workspace,
+                            )
+                        )
                             .copy(nullable = prop.isNullable)
                 }
             }
@@ -2081,8 +2098,8 @@ internal class DtoGenerator private constructor(
                 return propElementName.copy(nullable = prop.isNullable)
             }
         }
-        if (metadata != null) {
-            return metadata.targetTypeName.copy(nullable = prop.isNullable)
+        if (converterTargetTypeName != null) {
+            return converterTargetTypeName.copy(nullable = prop.isNullable)
         }
 
         return propElementName
@@ -2125,14 +2142,10 @@ internal class DtoGenerator private constructor(
                 targetType.name!!
             )
         }
-        val baseProp = tailProp.baseProp
-        return if (tailProp.isIdOnly) {
-            baseProp.targetType!!.idProp!!.clientClassName
-        } else if (baseProp.idViewBaseProp !== null) {
-            baseProp.idViewBaseProp!!.targetType!!.idProp!!.clientClassName
-        } else {
-            tailProp.baseProp.clientClassName
-        }.copy(nullable = false)
+        return KspDtoTypeRefRenderer.render(
+            lsiProp(prop).dtoClientType(lsiGraph, immutableSchema),
+            workspace,
+        ).copy(nullable = false)
     }
 
     private fun lsiProp(prop: DtoProp<ImmutableType, ImmutableProp>) =
@@ -2250,42 +2263,10 @@ internal class DtoGenerator private constructor(
         return if (!dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
             false
         } else {
-            lsiEnumPropOrNull(prop) != null || prop.dtoConverterMetadata != null
+            lsiEnumPropOrNull(prop) != null ||
+                lsiProp(prop).dtoConverterTargetTypeOrNull(lsiGraph, immutableSchema) != null
         }
     }
-
-    private val DtoProp<ImmutableType, ImmutableProp>.dtoConverterMetadata: ConverterMetadata?
-        get() {
-            val funcName = getFuncName()
-            if ("null" == funcName || "notNull" == funcName) {
-                return null
-            }
-            val baseProp = toTailProp().getBaseProp()
-            val resolver = baseProp.ctx.resolver
-            val metadata = baseProp.converterMetadata
-            if (metadata != null) {
-                return metadata
-            }
-            if ("id" == funcName) {
-                val metadata = baseProp.targetType!!.idProp!!.converterMetadata
-                if (metadata != null && baseProp.isList && !dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
-                    return metadata.toListMetadata(resolver)
-                }
-                return metadata
-            }
-            if ("associatedInEq" == funcName || "associatedInNe" == funcName) {
-                return baseProp.targetType!!.idProp!!.converterMetadata
-            }
-            if ("associatedIdIn" == funcName || "associatedIdNotIn" == funcName) {
-                return baseProp.targetType!!.idProp!!.converterMetadata?.toListMetadata(resolver)
-            }
-            if (baseProp.idViewBaseProp !== null) {
-                return baseProp.idViewBaseProp!!.targetType!!.idProp!!.converterMetadata?.let {
-                    if (baseProp.isList) it.toListMetadata(resolver) else it
-                }
-            }
-            return null
-        }
 
     private fun TypeSpec.Builder.addCopy() {
         addFunction(

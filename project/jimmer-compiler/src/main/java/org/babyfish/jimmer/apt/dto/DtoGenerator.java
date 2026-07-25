@@ -6,7 +6,6 @@ import org.babyfish.jimmer.apt.GeneratorException;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
-import org.babyfish.jimmer.apt.util.ConverterMetadata;
 import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
@@ -39,6 +38,7 @@ import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
+import site.addzero.lsi.jimmer.dto.DtoConverterExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
@@ -47,6 +47,7 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchAnnotationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoTypeId;
+import site.addzero.lsi.model.LsiTypeRef;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
@@ -1145,7 +1146,11 @@ public class DtoGenerator {
                             lsiWorkspace
                     )
             );
-        } else if (withConverters && converterMetadataOf(prop) != null) {
+        } else if (withConverters && DtoConverterExtensionsKt.dtoConverterTargetTypeOrNull(
+                lsiProp(prop),
+                lsiGraph,
+                immutableSchema
+        ) != null) {
             cb.add(",\narg -> ");
             addConverterLoading(cb, prop, true);
             cb.add(".output(arg)");
@@ -1180,7 +1185,11 @@ public class DtoGenerator {
             return false;
         }
         if ((prop.isNullable() && (!prop.isBaseNullable() || dtoType.getModifiers().contains(DtoModifier.SPECIFICATION))) ||
-                (prop.getBaseProp().getConverterMetadata() != null &&
+                (DtoConverterExtensionsKt.boundImmutableProp(
+                        lsiProp(prop),
+                        lsiGraph,
+                        immutableSchema
+                ).getConverter() != null &&
                         !dtoType.getModifiers().contains(DtoModifier.INPUT) &&
                         !dtoType.getModifiers().contains(DtoModifier.SPECIFICATION))
         ) {
@@ -2132,7 +2141,14 @@ public class DtoGenerator {
         if (lsiEnumProp != null) {
             return AptDtoEnumRenderer.renderScalarType(lsiEnumProp, lsiWorkspace);
         }
-        ConverterMetadata metadata = converterMetadataOf(prop);
+        LsiTypeRef converterTargetType = DtoConverterExtensionsKt.dtoConverterTargetTypeOrNull(
+                lsiProp(prop),
+                lsiGraph,
+                immutableSchema
+        );
+        TypeName converterTargetTypeName = converterTargetType != null ?
+                AptDtoTypeRefRenderer.render(converterTargetType, lsiWorkspace) :
+                null;
         final TypeName propElementName = getPropElementName(prop);
         if (dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
             String funcName = prop.toTailProp().getFuncName();
@@ -2145,8 +2161,8 @@ public class DtoGenerator {
                     case "valueNotIn":
                         return ParameterizedTypeName.get(
                                 org.babyfish.jimmer.apt.immutable.generator.Constants.COLLECTION_CLASS_NAME,
-                                metadata != null ?
-                                        metadata.getTargetTypeName() :
+                                converterTargetTypeName != null ?
+                                        converterTargetTypeName :
                                         toListType(
                                                 propElementName,
                                                 baseProp.isList()
@@ -2155,7 +2171,14 @@ public class DtoGenerator {
                     case "id":
                     case "associatedIdEq":
                     case "associatedIdNe":
-                        final TypeName clientTypeName = baseProp.getTargetType().getIdProp().getClientTypeName();
+                        final TypeName clientTypeName = AptDtoTypeRefRenderer.render(
+                                DtoConverterExtensionsKt.dtoAssociatedIdClientType(
+                                        lsiTailProp(prop),
+                                        lsiGraph,
+                                        immutableSchema
+                                ),
+                                lsiWorkspace
+                        );
                         if (prop.isNullable()) {
                             return clientTypeName.box();
                         }
@@ -2164,7 +2187,14 @@ public class DtoGenerator {
                     case "associatedIdNotIn":
                         return ParameterizedTypeName.get(
                                 org.babyfish.jimmer.apt.immutable.generator.Constants.COLLECTION_CLASS_NAME,
-                                baseProp.getTargetType().getIdProp().getClientTypeName().box()
+                                AptDtoTypeRefRenderer.render(
+                                        DtoConverterExtensionsKt.dtoAssociatedIdClientType(
+                                                lsiTailProp(prop),
+                                                lsiGraph,
+                                                immutableSchema
+                                        ),
+                                        lsiWorkspace
+                                ).box()
                         );
                 }
             }
@@ -2172,8 +2202,8 @@ public class DtoGenerator {
                 return propElementName;
             }
         }
-        if (metadata != null) {
-            return metadata.getTargetTypeName();
+        if (converterTargetTypeName != null) {
+            return converterTargetTypeName;
         }
 
         return toListType(propElementName, baseProp.isList()
@@ -2254,15 +2284,14 @@ public class DtoGenerator {
                     targetType.getName()
             );
         }
-        ImmutableProp baseProp = tailProp.getBaseProp();
-        TypeName typeName;
-        if (tailProp.isIdOnly()) {
-            typeName = tailProp.getBaseProp().getTargetType().getIdProp().getTypeName();
-        } else if (baseProp.getIdViewBaseProp() != null) {
-            typeName = baseProp.getIdViewBaseProp().getTargetType().getIdProp().getClientTypeName();
-        } else {
-            typeName = tailProp.getBaseProp().getClientTypeName();
-        }
+        TypeName typeName = AptDtoTypeRefRenderer.render(
+                DtoConverterExtensionsKt.dtoClientType(
+                        lsiProp(prop),
+                        lsiGraph,
+                        immutableSchema
+                ),
+                lsiWorkspace
+        );
         if (typeName.isPrimitive() && prop.isNullable()) {
             return typeName.box();
         }
@@ -2383,42 +2412,12 @@ public class DtoGenerator {
         if (!dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
             return false;
         }
-        return lsiEnumPropOrNull(prop) != null || converterMetadataOf(prop) != null;
-    }
-
-    private ConverterMetadata converterMetadataOf(DtoProp<ImmutableType, ImmutableProp> prop) {
-        String funcName = prop.getFuncName();
-        if ("null".equals(funcName) || "notNull".equals(funcName)) {
-            return null;
-        }
-        ImmutableProp baseProp = prop.toTailProp().getBaseProp();
-        ConverterMetadata metadata = baseProp.getConverterMetadata();
-        if (metadata != null) {
-            return metadata;
-        }
-        if ("id".equals(funcName)) {
-            metadata = baseProp.getTargetType().getIdProp().getConverterMetadata();
-            if (metadata != null && baseProp.isList() && !dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
-                metadata = metadata.toListMetadata(baseProp.context());
-            }
-            return metadata;
-        }
-        if ("associatedInEq".equals(funcName) || "associatedInNe".equals(funcName)) {
-            return baseProp.getTargetType().getIdProp().getConverterMetadata();
-        }
-        if ("associatedIdIn".equals(funcName) || "associatedIdNotIn".equals(funcName)) {
-            metadata = baseProp.getTargetType().getIdProp().getConverterMetadata();
-            if (metadata != null) {
-                return metadata.toListMetadata(baseProp.context());
-            }
-        }
-        if (baseProp.getIdViewBaseProp() != null) {
-            metadata = baseProp.getIdViewBaseProp().getTargetType().getIdProp().getConverterMetadata();
-            if (metadata != null) {
-                return baseProp.isList() ? metadata.toListMetadata(baseProp.context()) : metadata;
-            }
-        }
-        return null;
+        return lsiEnumPropOrNull(prop) != null ||
+                DtoConverterExtensionsKt.dtoConverterTargetTypeOrNull(
+                        lsiProp(prop),
+                        lsiGraph,
+                        immutableSchema
+                ) != null;
     }
 
     String getterName(AbstractProp prop) {
