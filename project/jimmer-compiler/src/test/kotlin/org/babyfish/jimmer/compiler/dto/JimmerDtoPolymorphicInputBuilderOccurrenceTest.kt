@@ -53,6 +53,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(source, "TargetOf_summary getSummary();")
         assertContains(addressBody, "\$\$_hibernateValidator_getFieldValue")
         assertContains(addressBody, "\$\$_hibernateValidator_getGetterValue")
+        assertContains(addressBody, "case \"city\": return this.city;")
         assertContains(summaryBody, "String getName()")
         assertFalse("class TargetOf_address" in personBody)
         assertFalse("class TargetOf_summary" in personBody)
@@ -61,6 +62,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(personBody, "Builder address(TargetOf_address address)")
         assertContains(personBody, "\$\$_hibernateValidator_getFieldValue")
         assertContains(personBody, "\$\$_hibernateValidator_getGetterValue")
+        assertContains(personBody, "case \"address\": return this.address;")
 
         assertFalse("class TargetOf_address" in organizationBody)
         assertFalse("class TargetOf_summary" in organizationBody)
@@ -99,6 +101,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(source, "public val summary: TargetOf_summary")
         assertContains(addressBody, "\$\$_hibernateValidator_getFieldValue")
         assertContains(addressBody, "\$\$_hibernateValidator_getGetterValue")
+        assertContains(addressBody, "\"city\" -> this.city")
         assertContains(summaryHeader, "public var name: String")
         assertFalse("class TargetOf_address" in personBody)
         assertFalse("class TargetOf_summary" in personBody)
@@ -107,6 +110,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertContains(personBody, "fun address(address: TargetOf_address): Builder")
         assertContains(personBody, "\$\$_hibernateValidator_getFieldValue")
         assertContains(personBody, "\$\$_hibernateValidator_getGetterValue")
+        assertContains(personBody, "\"address\" -> this.address")
 
         assertFalse("class TargetOf_address" in organizationBody)
         assertFalse("class TargetOf_summary" in organizationBody)

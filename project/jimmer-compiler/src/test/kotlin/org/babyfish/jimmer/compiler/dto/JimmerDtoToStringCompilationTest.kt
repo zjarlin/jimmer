@@ -7,6 +7,7 @@ import com.google.devtools.ksp.symbol.KSNode
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.PrintStream
+import java.lang.reflect.InvocationTargetException
 import java.net.URLClassLoader
 import java.nio.charset.StandardCharsets
 import javax.tools.DiagnosticCollector
@@ -16,6 +17,7 @@ import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
@@ -31,6 +33,7 @@ class JimmerDtoToStringCompilationTest {
 
         assertEquals(EXPECTED_SNAPSHOTS, runtimeSnapshots(classesDir))
         assertEqualityAndHashContracts(classesDir)
+        assertHibernateValidatorContracts(classesDir, kotlin = false)
     }
 
     @Test
@@ -39,6 +42,7 @@ class JimmerDtoToStringCompilationTest {
 
         assertEquals(EXPECTED_SNAPSHOTS, runtimeSnapshots(classesDir))
         assertEqualityAndHashContracts(classesDir)
+        assertHibernateValidatorContracts(classesDir, kotlin = true)
     }
 
     private fun compileApt(): File {
@@ -64,7 +68,12 @@ class JimmerDtoToStringCompilationTest {
                 null,
                 fileManager,
                 diagnostics,
-                listOf("-proc:only", "-classpath", runtimeClasspathText()),
+                listOf(
+                    "-proc:only",
+                    "-classpath",
+                    runtimeClasspathText(),
+                    "-Ajimmer.dto.hibernateValidatorEnhancement=true",
+                ),
                 null,
                 fileManager.getJavaFileObjectsFromFiles(sourceFiles),
             )
@@ -105,7 +114,10 @@ class JimmerDtoToStringCompilationTest {
             javaOutputDir = outputDir.resolve("java").apply(File::mkdirs)
             this.kotlinOutputDir = kotlinOutputDir
             resourceOutputDir = outputDir.resolve("resources").apply(File::mkdirs)
-            processorOptions = mapOf("jimmer.dto.mutable" to "true")
+            processorOptions = mapOf(
+                "jimmer.dto.mutable" to "true",
+                "jimmer.dto.hibernateValidatorEnhancement" to "true",
+            )
             languageVersion = "2.1"
             apiVersion = "2.1"
             jvmTarget = "17"
@@ -307,6 +319,76 @@ class JimmerDtoToStringCompilationTest {
         }
     }
 
+    private fun assertHibernateValidatorContracts(classesDir: File, kotlin: Boolean) {
+        val urls = arrayOf(classesDir.toURI().toURL())
+        URLClassLoader(urls, javaClass.classLoader).use { classLoader ->
+            val input = newDto(classLoader, "ValidatorInput").apply {
+                setProperty("name", "dto-name")
+                setProperty("active", true)
+                setProperty("isEnabled", true)
+                setProperty("when", "keyword")
+                setProperty("is1", true)
+                setProperty("isDisplayName", "display-name")
+            }
+            val enhancedType = classLoader.loadClass(
+                "org.hibernate.validator.engine.HibernateValidatorEnhancedBean",
+            )
+            assertTrue(enhancedType.isInstance(input))
+            val fieldValue = enhancedType.getMethod(
+                "\$\$_hibernateValidator_getFieldValue",
+                String::class.java,
+            )
+            val getterValue = enhancedType.getMethod(
+                "\$\$_hibernateValidator_getGetterValue",
+                String::class.java,
+            )
+
+            val fieldValues = linkedMapOf(
+                "name" to "dto-name",
+                "active" to true,
+                "isEnabled" to true,
+                "when" to "keyword",
+                "is1" to true,
+                "isDisplayName" to "display-name",
+            )
+            fieldValues.forEach { (name, expected) ->
+                assertEquals(expected, fieldValue.invoke(input, name))
+            }
+            val getterValues = linkedMapOf(
+                "getName" to "dto-name",
+                "getActive" to true,
+                (if (kotlin) "isEnabled" else "getIsEnabled") to true,
+                "getWhen" to "keyword",
+                (if (kotlin) "is1" else "getIs1") to true,
+                (if (kotlin) "isDisplayName" else "getIsDisplayName") to "display-name",
+            )
+            getterValues.forEach { (name, expected) ->
+                val actualGetter = input.javaClass.getMethod(name)
+                assertEquals(expected, actualGetter.invoke(input))
+                assertEquals(expected, getterValue.invoke(input, name))
+            }
+
+            val wrongBooleanGetter = if (kotlin) "getIsEnabled" else "isEnabled"
+            assertUnknownHibernateValidatorMember(getterValue, input, wrongBooleanGetter)
+            val wrongNumericGetter = if (kotlin) "getIs1" else "is1"
+            assertUnknownHibernateValidatorMember(getterValue, input, wrongNumericGetter)
+            val wrongStringGetter = if (kotlin) "getIsDisplayName" else "isDisplayName"
+            assertUnknownHibernateValidatorMember(getterValue, input, wrongStringGetter)
+            assertUnknownHibernateValidatorMember(fieldValue, input, "missing")
+        }
+    }
+
+    private fun assertUnknownHibernateValidatorMember(
+        method: java.lang.reflect.Method,
+        input: Any,
+        name: String,
+    ) {
+        val exception = assertFailsWith<InvocationTargetException> {
+            method.invoke(input, name)
+        }
+        assertTrue(exception.cause is IllegalArgumentException)
+    }
+
     private fun newPlainArrayInput(
         classLoader: ClassLoader,
         chars: CharArray,
@@ -401,16 +483,22 @@ class JimmerDtoToStringCompilationTest {
     }
 
     private fun Any.setProperty(name: String, value: Any?) {
-        val setterName = "set" + name.replaceFirstChar { character ->
+        val setterSuffix = name.replaceFirstChar { character ->
             if (character.isLowerCase()) {
                 character.titlecase()
             } else {
                 character.toString()
             }
         }
+        val setterNames = buildSet {
+            add("set$setterSuffix")
+            if (name.startsWith("is") && name.length > 2 && !name[2].isLowerCase()) {
+                add("set${name.substring(2)}")
+            }
+        }
         val setter = javaClass.methods.singleOrNull { method ->
-            method.name == setterName && method.parameterCount == 1
-        } ?: error("There is no unique setter '$setterName' on ${javaClass.name}")
+            method.name in setterNames && method.parameterCount == 1
+        } ?: error("There is no unique setter in $setterNames on ${javaClass.name}")
         setter.invoke(this, value)
     }
 
@@ -500,6 +588,7 @@ class JimmerDtoToStringCompilationTest {
             "FloatingInput",
             "EmptyInput",
             "SampleSpecification",
+            "ValidatorInput",
         )
 
         val EXPECTED_SNAPSHOTS = listOf(
@@ -557,6 +646,16 @@ class JimmerDtoToStringCompilationTest {
                 char[] chars();
 
                 int[] numbers();
+
+                String validationName();
+
+                boolean active();
+
+                boolean enabled();
+
+                boolean flag1();
+
+                String displayName();
             }
         """.trimIndent()
 
@@ -594,6 +693,16 @@ class JimmerDtoToStringCompilationTest {
                 val chars: CharArray
 
                 val numbers: IntArray
+
+                val validationName: String
+
+                val active: Boolean
+
+                val enabled: Boolean
+
+                val flag1: Boolean
+
+                val displayName: String
             }
         """.trimIndent()
 
@@ -644,6 +753,15 @@ class JimmerDtoToStringCompilationTest {
             }
 
             input EmptyInput {
+            }
+
+            dynamic input ValidatorInput {
+                validationName? as name
+                active?
+                enabled? as isEnabled
+                marker? as when
+                flag1? as is1
+                displayName? as isDisplayName
             }
 
             specification SampleSpecification {

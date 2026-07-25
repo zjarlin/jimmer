@@ -9,6 +9,7 @@ import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
@@ -560,7 +561,9 @@ internal class DtoGenerator private constructor(
             typeBuilder.addSuperinterface(KspDtoTypeRefRenderer.render(typeRef, workspace))
         }
         if (isHibernateValidatorEnhancementRequired) {
-            typeBuilder.addSuperinterface(HIBERNATE_VALIDATOR_ENHANCED_BEAN)
+            typeBuilder.addSuperinterface(
+                KspDtoHibernateValidatorRenderer.renderEnhancedBeanType(workspace),
+            )
         }
 
         addPrimaryConstructor()
@@ -615,8 +618,12 @@ internal class DtoGenerator private constructor(
         generateNestedDtoTypes()
 
         if (isHibernateValidatorEnhancementRequired) {
-            typeBuilder.addHibernateValidatorEnhancement(false)
-            typeBuilder.addHibernateValidatorEnhancement(true)
+            KspDtoHibernateValidatorRenderer.renderFunctions(
+                dtoType = lsiDtoType,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                workspace = workspace,
+            ).forEach(typeBuilder::addFunction)
         }
         if (isSerializerRequired) {
             typeBuilder.addType(
@@ -720,7 +727,9 @@ internal class DtoGenerator private constructor(
             typeBuilder.addSuperinterface(KspDtoTypeRefRenderer.render(typeRef, workspace))
         }
         if (isHibernateValidatorEnhancementRequired) {
-            typeBuilder.addSuperinterface(HIBERNATE_VALIDATOR_ENHANCED_BEAN)
+            typeBuilder.addSuperinterface(
+                KspDtoHibernateValidatorRenderer.renderEnhancedBeanType(workspace),
+            )
         }
         for (prop in dtoType.props) {
             typeBuilder.addAccessorDeclaration(prop)
@@ -2190,43 +2199,6 @@ internal class DtoGenerator private constructor(
                     .build()
             )
         addFunction(builder.build())
-    }
-
-    private fun TypeSpec.Builder.addHibernateValidatorEnhancement(getter: Boolean) {
-        addFunction(
-            FunSpec
-                .builder(
-                    "\$\$_hibernateValidator_get${
-                        if (getter) "Getter" else "Field"
-                    }Value"
-                )
-                .addModifiers(KModifier.OVERRIDE)
-                .addParameter("name", STRING)
-                .returns(ANY.copy(nullable = true))
-                .beginControlFlow("return when(name)")
-                .apply {
-                    for (prop in dtoType.props) {
-                        addStatement(
-                            "%S -> %N",
-                            if (getter) {
-                                StringUtil.identifier(
-                                    if (propTypeName(prop) == BOOLEAN) "is" else "get",
-                                    prop.name
-                                )
-                            } else {
-                                prop.name
-                            },
-                            prop.name
-                        )
-                    }
-                }
-                .addStatement(
-                    "else -> throw IllegalArgumentException(%L)",
-                    "\"No ${if (getter) "getter" else "field"} named \\\"\${name}\\\"\""
-                )
-                .endControlFlow()
-                .build()
-        )
     }
 
     @Suppress("UNCHECKED_CAST")

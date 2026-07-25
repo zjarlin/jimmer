@@ -453,12 +453,6 @@ public class Constants {
     public static final ClassName CLIENT_EXCEPTION_CLASS_NAME =
             ClassName.get(ClientException.class);
 
-    public static final ClassName HIBERNATE_VALIDATOR_ENHANCED_BEAN =
-            ClassName.get(
-                    "org.hibernate.validator.engine",
-                    "HibernateValidatorEnhancedBean"
-            );
-
     public static final ClassName SELECTION_CLASS_NAME =
             ClassName.get(
                     "org.babyfish.jimmer.sql.ast",

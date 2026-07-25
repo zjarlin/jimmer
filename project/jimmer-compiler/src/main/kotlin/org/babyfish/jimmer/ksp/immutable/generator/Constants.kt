@@ -261,11 +261,6 @@ internal val PREDICATE_APPLIER =
         "PredicateApplier"
     )
 
-internal val HIBERNATE_VALIDATOR_ENHANCED_BEAN = ClassName(
-    "org.hibernate.validator.engine",
-    "HibernateValidatorEnhancedBean"
-)
-
 internal val PROPAGATION_CLASS_NAME = ClassName(
     "org.babyfish.jimmer.sql.transaction",
     "Propagation"

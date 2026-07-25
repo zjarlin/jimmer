@@ -708,6 +708,162 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `derives Hibernate Validator getter names from final target language semantics`() {
+        fun assertBaseGetterNames(
+            name: String,
+            nullable: Boolean = false,
+            expectedJava: String,
+            expectedKotlin: String,
+        ) {
+            val prop = baseProp(name = name, nullable = nullable)
+            val graph = singlePropGraph(prop)
+            val schema = immutableSchema(immutableProp(name, BOOLEAN_TYPE))
+
+            assertEquals(
+                expectedJava,
+                prop.hibernateValidatorGetterName(LsiLanguage.JAVA, graph, schema),
+            )
+            assertEquals(
+                expectedKotlin,
+                prop.hibernateValidatorGetterName(LsiLanguage.KOTLIN, graph, schema),
+            )
+        }
+
+        assertBaseGetterNames(
+            name = "active",
+            expectedJava = "isActive",
+            expectedKotlin = "getActive",
+        )
+        assertBaseGetterNames(
+            name = "isEnabled",
+            expectedJava = "isEnabled",
+            expectedKotlin = "isEnabled",
+        )
+        assertBaseGetterNames(
+            name = "isEnabled",
+            nullable = true,
+            expectedJava = "getIsEnabled",
+            expectedKotlin = "isEnabled",
+        )
+        assertBaseGetterNames(
+            name = "is1",
+            expectedJava = "isIs1",
+            expectedKotlin = "is1",
+        )
+        assertBaseGetterNames(
+            name = "is_",
+            expectedJava = "isIs_",
+            expectedKotlin = "is_",
+        )
+
+        val nullCheck = baseProp(name = "isMissing", baseName = "name")
+            .copy(functionName = "null")
+        val nullCheckGraph = singlePropGraph(nullCheck)
+        val nullCheckSchema = immutableSchema(immutableProp("name", STRING_TYPE))
+        assertTrue(nullCheck.hasPrimitiveBooleanValue(nullCheckGraph, nullCheckSchema))
+        assertEquals(
+            "isMissing",
+            nullCheck.hibernateValidatorGetterName(
+                LsiLanguage.JAVA,
+                nullCheckGraph,
+                nullCheckSchema,
+            ),
+        )
+        assertEquals(
+            "isMissing",
+            nullCheck.hibernateValidatorGetterName(
+                LsiLanguage.KOTLIN,
+                nullCheckGraph,
+                nullCheckSchema,
+            ),
+        )
+
+        val userBoolean = userProp().copy(
+            name = "isEnabled",
+            alias = "isEnabled",
+            type = DtoTypeRef("Boolean", emptyList(), false, LOCATION),
+        )
+        val userGraph = singlePropGraph(userBoolean)
+        val emptySchema = immutableSchema()
+        assertTrue(userBoolean.hasPrimitiveBooleanValue(userGraph, emptySchema))
+        assertEquals(
+            "isEnabled",
+            userBoolean.hibernateValidatorGetterName(LsiLanguage.JAVA, userGraph, emptySchema),
+        )
+        assertEquals(
+            "isEnabled",
+            userBoolean.hibernateValidatorGetterName(LsiLanguage.KOTLIN, userGraph, emptySchema),
+        )
+
+        val nullableUserBoolean = userBoolean.copy(
+            nullable = true,
+            type = userBoolean.type.copy(nullable = true),
+        )
+        val nullableUserGraph = singlePropGraph(nullableUserBoolean)
+        assertFalse(nullableUserBoolean.hasPrimitiveBooleanValue(nullableUserGraph, emptySchema))
+        assertEquals(
+            "isEnabled",
+            nullableUserBoolean.hibernateValidatorGetterName(
+                LsiLanguage.KOTLIN,
+                nullableUserGraph,
+                emptySchema,
+            ),
+        )
+
+        listOf(
+            "isDisplayName" to "getIsDisplayName",
+            "is1" to "getIs1",
+            "is_" to "getIs_",
+            "is\u00e4" to "getIs\u00e4",
+            "isabc" to "getIsabc",
+        ).forEach { (name, javaGetterName) ->
+            val userString = userProp().copy(name = name, alias = name)
+            val userStringGraph = singlePropGraph(userString)
+            assertEquals(
+                javaGetterName,
+                userString.hibernateValidatorGetterName(
+                    LsiLanguage.JAVA,
+                    userStringGraph,
+                    emptySchema,
+                ),
+            )
+            assertEquals(
+                if (name == "isabc") "getIsabc" else name,
+                userString.hibernateValidatorGetterName(
+                    LsiLanguage.KOTLIN,
+                    userStringGraph,
+                    emptySchema,
+                ),
+            )
+        }
+
+        val fold = foldProp()
+        val foldGraph = singlePropGraph(fold)
+        assertFalse(fold.hasPrimitiveBooleanValue(foldGraph, emptySchema))
+        assertEquals(
+            "getFoldValue",
+            fold.hibernateValidatorGetterName(LsiLanguage.JAVA, foldGraph, emptySchema),
+        )
+        assertEquals(
+            "getFoldValue",
+            fold.hibernateValidatorGetterName(LsiLanguage.KOTLIN, foldGraph, emptySchema),
+        )
+        val isFold = fold.copy(name = "isFold", alias = "isFold")
+        val isFoldGraph = singlePropGraph(isFold)
+        assertEquals(
+            "getIsFold",
+            isFold.hibernateValidatorGetterName(LsiLanguage.JAVA, isFoldGraph, emptySchema),
+        )
+        assertEquals(
+            "isFold",
+            isFold.hibernateValidatorGetterName(LsiLanguage.KOTLIN, isFoldGraph, emptySchema),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            fold.hibernateValidatorGetterName(LsiLanguage.UNKNOWN, foldGraph, emptySchema)
+        }
+    }
+
+    @Test
     fun `derives Java accessors for id functions and id views`() {
         val targetId = immutableProp(
             name = "id",
@@ -1118,7 +1274,7 @@ class DtoAccessorExtensionsTest {
     }
 
     private fun singlePropGraph(
-        prop: DtoBaseProp,
+        prop: DtoProp,
         input: Boolean = true,
     ): DtoGraph {
         val type = DtoType(

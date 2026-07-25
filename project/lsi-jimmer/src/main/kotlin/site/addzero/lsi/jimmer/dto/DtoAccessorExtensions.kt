@@ -11,6 +11,7 @@ import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeRef
 
 /** 按 DTO 声明顺序返回全部可见属性。 */
 fun DtoType.propsInDeclarationOrder(graph: DtoGraph): List<DtoProp> {
@@ -273,30 +274,70 @@ fun DtoBaseProp.serializerValueAccessorName(
     require(targetLanguage == LsiLanguage.JAVA) {
         "DTO value accessor requires Java or Kotlin target language"
     }
-    val primitiveBoolean = hasPrimitiveBooleanValue(graph, immutableSchema)
-    val suffix = if (
-        primitiveBoolean &&
-        name.startsWith("is") &&
-        name.length > 2 &&
-        name[2].isUpperCase()
-    ) {
-        name.substring(2)
-    } else {
-        name
-    }
-    return dtoIdentifier(if (primitiveBoolean) "is" else "get", suffix)
+    return javaValueAccessorName(hasPrimitiveBooleanValue(graph, immutableSchema))
 }
 
-private fun DtoBaseProp.hasPrimitiveBooleanValue(
+/** 判断 DTO 属性的最终值是否为非空原生 Boolean。 */
+fun DtoProp.hasPrimitiveBooleanValue(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
 ): Boolean {
-    if (nullable || enumType != null || targetTypeId != null) {
+    requireVisibleProp(graph)
+    return when (this) {
+        is DtoBaseProp -> hasPrimitiveBooleanBaseValue(graph, immutableSchema)
+        is DtoUserProp -> type.toLsiType(LsiLanguage.JAVA).isPrimitiveBooleanValue()
+        is DtoFoldProp -> false
+    }
+}
+
+/** 返回 Hibernate Validator 查询属性 getter 时使用的真实 JVM 方法名。 */
+fun DtoProp.hibernateValidatorGetterName(
+    targetLanguage: LsiLanguage,
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): String {
+    return when (targetLanguage) {
+        LsiLanguage.JAVA -> javaValueAccessorName(
+            hasPrimitiveBooleanValue(graph, immutableSchema),
+        )
+        LsiLanguage.KOTLIN -> {
+            requireVisibleProp(graph)
+            if (name.hasKotlinIsPrefix()) {
+                name
+            } else {
+                dtoIdentifier("get", name)
+            }
+        }
+        LsiLanguage.UNKNOWN -> throw IllegalArgumentException(
+            "Hibernate Validator getter name requires Java or Kotlin target language",
+        )
+    }
+}
+
+private fun DtoProp.requireVisibleProp(graph: DtoGraph) {
+    require(graph.propsById[id] == this) {
+        "DTO property does not belong to this graph: ${id.value}"
+    }
+    val ownerType = graph.typesById.getValue(ownerTypeId)
+    require(id in ownerType.propIds) {
+        "DTO property is not visible in its owner type: ${id.value}"
+    }
+}
+
+private fun DtoBaseProp.hasPrimitiveBooleanBaseValue(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): Boolean {
+    if (nullable || enumType != null || targetTypeId != null || targetTypeReference != null) {
         return false
     }
     val tailProp = graph.propsById.getValue(tailPropId) as? DtoBaseProp
         ?: error("DTO tail property is not a base property: ${tailPropId.value}")
-    if (tailProp.enumType != null || tailProp.targetTypeId != null) {
+    if (
+        tailProp.enumType != null ||
+        tailProp.targetTypeId != null ||
+        tailProp.targetTypeReference != null
+    ) {
         return false
     }
     val primitiveBooleanValues = tailProp.baseProps.map { binding ->
@@ -309,15 +350,42 @@ private fun DtoBaseProp.hasPrimitiveBooleanValue(
     return primitiveBooleanValues.single()
 }
 
+private fun DtoProp.javaValueAccessorName(primitiveBoolean: Boolean): String {
+    val suffix = if (primitiveBoolean && name.hasJavaIsPrefix()) {
+        name.substring(2)
+    } else {
+        name
+    }
+    return dtoIdentifier(if (primitiveBoolean) "is" else "get", suffix)
+}
+
+private fun String.hasJavaIsPrefix(): Boolean {
+    return startsWith("is") && length > 2 && this[2].isUpperCase()
+}
+
+private fun String.hasKotlinIsPrefix(): Boolean {
+    return startsWith("is") && length > 2 && this[2] !in 'a'..'z'
+}
+
+private fun LsiTypeRef.isPrimitiveBooleanValue(): Boolean {
+    return this is LsiPrimitiveType &&
+        kind == LsiPrimitiveKind.BOOLEAN &&
+        !boxed &&
+        nullability == LsiNullability.NON_NULL
+}
+
 private fun ImmutableProp.hasPrimitiveBooleanValue(
     functionName: String?,
     immutableSchema: ImmutableSchema,
 ): Boolean {
-    if (list || converter != null) {
+    if (functionName == "null" || functionName == "notNull") {
+        return true
+    }
+    if (functionName in COLLECTION_VALUE_FUNCTIONS || list || converter != null) {
         return false
     }
     val valueProp = when {
-        functionName == "id" -> requireNotNull(immutableSchema.targetIdPropOf(this)) {
+        functionName in ID_VALUE_FUNCTIONS -> requireNotNull(immutableSchema.targetIdPropOf(this)) {
             "DTO id function must reference an immutable association: ${id.value}"
         }
         view is ImmutableView.Id -> {
@@ -329,11 +397,17 @@ private fun ImmutableProp.hasPrimitiveBooleanValue(
         return false
     }
     val valueType = valueProp.type
-    return valueType is LsiPrimitiveType &&
-        valueType.kind == LsiPrimitiveKind.BOOLEAN &&
-        !valueType.boxed &&
-        valueType.nullability == LsiNullability.NON_NULL
+    return valueType.isPrimitiveBooleanValue()
 }
+
+private val ID_VALUE_FUNCTIONS = setOf("id", "associatedIdEq", "associatedIdNe")
+
+private val COLLECTION_VALUE_FUNCTIONS = setOf(
+    "valueIn",
+    "valueNotIn",
+    "associatedIdIn",
+    "associatedIdNotIn",
+)
 
 internal fun dtoIdentifier(vararg parts: String): String = buildString {
     var previousPartEndsWithLowerCase = false

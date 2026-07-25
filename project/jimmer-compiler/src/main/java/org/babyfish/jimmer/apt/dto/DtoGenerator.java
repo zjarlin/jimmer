@@ -12,6 +12,7 @@ import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
@@ -258,7 +259,7 @@ public class DtoGenerator {
         }
         if (isHibernateValidatorEnhancementRequired()) {
             typeBuilder.addSuperinterface(
-                    org.babyfish.jimmer.apt.immutable.generator.Constants.HIBERNATE_VALIDATOR_ENHANCED_BEAN
+                    AptDtoHibernateValidatorRenderer.renderEnhancedBeanType(lsiWorkspace)
             );
         }
         if (parent == null) {
@@ -359,7 +360,7 @@ public class DtoGenerator {
         }
         if (isHibernateValidatorEnhancementRequired()) {
             typeBuilder.addSuperinterface(
-                    org.babyfish.jimmer.apt.immutable.generator.Constants.HIBERNATE_VALIDATOR_ENHANCED_BEAN
+                    AptDtoHibernateValidatorRenderer.renderEnhancedBeanType(lsiWorkspace)
             );
         }
         if (parent == null) {
@@ -778,8 +779,14 @@ public class DtoGenerator {
         }
 
         if (isHibernateValidatorEnhancementRequired()) {
-            addHibernateValidatorEnhancement(false);
-            addHibernateValidatorEnhancement(true);
+            for (MethodSpec method : AptDtoHibernateValidatorRenderer.renderFunctions(
+                    lsiDtoType,
+                    lsiGraph,
+                    immutableSchema,
+                    lsiWorkspace
+            )) {
+                typeBuilder.addMethod(method);
+            }
         }
     }
 
@@ -2282,39 +2289,6 @@ public class DtoGenerator {
             );
         }
         builder.addCode(cb.build());
-        typeBuilder.addMethod(builder.build());
-    }
-
-    private void addHibernateValidatorEnhancement(boolean getter) {
-        String methodName = "$$_hibernateValidator_get" +
-                (getter ? "Getter" : "Field") +
-                "Value";
-        MethodSpec.Builder builder = MethodSpec
-                .methodBuilder(methodName)
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(Override.class)
-                .addParameter(org.babyfish.jimmer.apt.immutable.generator.Constants.STRING_CLASS_NAME, "name")
-                .returns(TypeName.OBJECT)
-                .beginControlFlow("switch (name)");
-        for (AbstractProp prop : dtoType.getProps()) {
-            builder.addStatement(
-                    "case $S: return $L",
-                    getter ?
-                            StringUtil.identifier(
-                                    getPropTypeName(prop) == TypeName.BOOLEAN ? "is" : "get",
-                                    prop.getName()
-                            ) :
-                            prop.getName(),
-                    prop.getName()
-            );
-        }
-        builder
-                .addStatement(
-                        "default: throw new IllegalArgumentException($S + name + $S)",
-                        "No " + (getter ? "getter" : "field") + " named \"",
-                        "\""
-                )
-                .endControlFlow();
         typeBuilder.addMethod(builder.build());
     }
 
