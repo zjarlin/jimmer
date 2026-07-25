@@ -74,6 +74,41 @@ fun DtoType.isNestedSpecificationFragment(
         baseType.kind != ImmutableTypeKind.ENTITY
 }
 
+/** DTO 生成类需要实现的 Jimmer 基础契约。 */
+enum class DtoGeneratedBaseContractKind {
+    ENTITY_INPUT,
+    ENTITY_VIEW,
+    ENTITY_SPECIFICATION,
+    EMBEDDABLE,
+}
+
+/** 返回 DTO 生成类需要实现的 Jimmer 基础契约；无需基础契约时返回空。 */
+fun DtoType.generatedBaseContractKind(
+    immutableSchema: ImmutableSchema,
+): DtoGeneratedBaseContractKind? {
+    val baseTypeId = requireNotNull(baseTypeId) {
+        "DTO base contract resolution requires a base immutable type: ${id.value}"
+    }
+    val baseType = requireNotNull(immutableSchema.typesById[baseTypeId]) {
+        "No immutable base type '${baseTypeId.value}' for DTO type: ${id.value}"
+    }
+    if (DtoModifier.SPECIFICATION in modifiers && baseType.kind != ImmutableTypeKind.ENTITY) {
+        return null
+    }
+    return when (baseType.kind) {
+        ImmutableTypeKind.ENTITY -> when {
+            polymorphism == null && DtoModifier.SPECIFICATION in modifiers ->
+                DtoGeneratedBaseContractKind.ENTITY_SPECIFICATION
+            DtoModifier.INPUT in modifiers -> DtoGeneratedBaseContractKind.ENTITY_INPUT
+            else -> DtoGeneratedBaseContractKind.ENTITY_VIEW
+        }
+        ImmutableTypeKind.EMBEDDABLE -> DtoGeneratedBaseContractKind.EMBEDDABLE
+        ImmutableTypeKind.IMMUTABLE,
+        ImmutableTypeKind.MAPPED_SUPERCLASS,
+        -> null
+    }
+}
+
 /** 判断 DTO 是否为需要生成多态输入注解的实体根类型。 */
 fun DtoType.isPolymorphicInputRoot(
     immutableSchema: ImmutableSchema,

@@ -31,6 +31,7 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractKind;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractKt;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
+import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
@@ -243,29 +244,11 @@ public class DtoGenerator {
         }
         if (polymorphicSuperInterfaceName != null) {
             typeBuilder.addSuperinterface(polymorphicSuperInterfaceName);
-        } else if (!isNestedSpecificationFragment() && dtoType.getBaseType().isEntity()) {
-            typeBuilder.addSuperinterface(
-                    dtoType.getModifiers().contains(DtoModifier.SPECIFICATION) ?
-                            ParameterizedTypeName.get(
-                                    org.babyfish.jimmer.apt.immutable.generator.Constants.JSPECIFICATION_CLASS_NAME,
-                                    dtoType.getBaseType().getClassName(),
-                                    dtoType.getBaseType().getTableClassName()
-                            ) :
-                            ParameterizedTypeName.get(
-                                    dtoType.getModifiers().contains(DtoModifier.INPUT) ?
-                                            org.babyfish.jimmer.apt.immutable.generator.Constants.INPUT_CLASS_NAME :
-                                            org.babyfish.jimmer.apt.immutable.generator.Constants.VIEW_CLASS_NAME,
-                                    dtoType.getBaseType().getClassName()
-                            )
-            );
-        }
-        if (!isNestedSpecificationFragment() && dtoType.getBaseType().isEmbeddable()) {
-            typeBuilder.addSuperinterface(
-                    ParameterizedTypeName.get(
-                            org.babyfish.jimmer.apt.immutable.generator.Constants.EMBEDDABLE_DTO_CLASS_NAME,
-                            dtoType.getBaseType().getClassName()
-                    )
-            );
+        } else {
+            DtoGeneratedBaseContractKind baseContractKind = generatedBaseContractKind();
+            if (baseContractKind != null) {
+                typeBuilder.addSuperinterface(generatedBaseContractTypeName(baseContractKind));
+            }
         }
         for (site.addzero.lsi.jimmer.dto.DtoTypeRef typeRef : lsiDtoType.getSuperInterfaces()) {
             typeBuilder.addSuperinterface(AptDtoTypeRefRenderer.render(typeRef, lsiWorkspace));
@@ -350,7 +333,9 @@ public class DtoGenerator {
     }
 
     private void generatePolymorphic() {
-        if (!dtoType.getBaseType().isEntity()) {
+        DtoGeneratedBaseContractKind baseContractKind = generatedBaseContractKind();
+        if (baseContractKind != DtoGeneratedBaseContractKind.ENTITY_INPUT &&
+                baseContractKind != DtoGeneratedBaseContractKind.ENTITY_VIEW) {
             throw new GeneratorException(
                     "Polymorphic DTO generation is only supported for entity types",
                     null
@@ -364,12 +349,7 @@ public class DtoGenerator {
             typeBuilder.addModifiers(sealedModifier());
         }
         typeBuilder.addSuperinterface(
-                ParameterizedTypeName.get(
-                        dtoType.getModifiers().contains(DtoModifier.INPUT) ?
-                                org.babyfish.jimmer.apt.immutable.generator.Constants.INPUT_CLASS_NAME :
-                                org.babyfish.jimmer.apt.immutable.generator.Constants.VIEW_CLASS_NAME,
-                        dtoType.getBaseType().getClassName()
-                )
+                generatedBaseContractTypeName(baseContractKind)
         );
         for (site.addzero.lsi.jimmer.dto.DtoTypeRef typeRef : lsiDtoType.getSuperInterfaces()) {
             typeBuilder.addSuperinterface(AptDtoTypeRefRenderer.render(typeRef, lsiWorkspace));
@@ -439,6 +419,39 @@ public class DtoGenerator {
                         ex
                 );
             }
+        }
+    }
+
+    @Nullable
+    private DtoGeneratedBaseContractKind generatedBaseContractKind() {
+        return DtoAccessorExtensionsKt.generatedBaseContractKind(lsiDtoType, immutableSchema);
+    }
+
+    private TypeName generatedBaseContractTypeName(DtoGeneratedBaseContractKind kind) {
+        switch (kind) {
+            case ENTITY_INPUT:
+                return ParameterizedTypeName.get(
+                        org.babyfish.jimmer.apt.immutable.generator.Constants.INPUT_CLASS_NAME,
+                        dtoType.getBaseType().getClassName()
+                );
+            case ENTITY_VIEW:
+                return ParameterizedTypeName.get(
+                        org.babyfish.jimmer.apt.immutable.generator.Constants.VIEW_CLASS_NAME,
+                        dtoType.getBaseType().getClassName()
+                );
+            case ENTITY_SPECIFICATION:
+                return ParameterizedTypeName.get(
+                        org.babyfish.jimmer.apt.immutable.generator.Constants.JSPECIFICATION_CLASS_NAME,
+                        dtoType.getBaseType().getClassName(),
+                        dtoType.getBaseType().getTableClassName()
+                );
+            case EMBEDDABLE:
+                return ParameterizedTypeName.get(
+                        org.babyfish.jimmer.apt.immutable.generator.Constants.EMBEDDABLE_DTO_CLASS_NAME,
+                        dtoType.getBaseType().getClassName()
+                );
+            default:
+                throw new AssertionError("Unexpected DTO base contract kind: " + kind);
         }
     }
 

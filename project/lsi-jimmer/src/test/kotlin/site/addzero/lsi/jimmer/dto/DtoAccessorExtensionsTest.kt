@@ -207,6 +207,135 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `classifies generated base contracts from frozen semantics`() {
+        val baseGraph = graph(visibleDynamic = false)
+        val dtoType = baseGraph.types.single()
+        val idProp = immutableProp(
+            name = "id",
+            type = STRING_TYPE,
+            primaryMapping = PrimaryMapping.ID,
+        )
+        fun schema(kind: ImmutableTypeKind): ImmutableSchema {
+            val entity = kind == ImmutableTypeKind.ENTITY
+            return ImmutableSchema(
+                listOf(
+                    immutableType(
+                        id = BASE_TYPE_ID,
+                        props = if (entity) listOf(idProp) else emptyList(),
+                        kind = kind,
+                        idPropId = idProp.id.takeIf { entity },
+                    ),
+                ),
+            )
+        }
+
+        val cases = listOf(
+            Triple(
+                ImmutableTypeKind.ENTITY,
+                setOf(DtoModifier.INPUT),
+                DtoGeneratedBaseContractKind.ENTITY_INPUT,
+            ),
+            Triple(
+                ImmutableTypeKind.ENTITY,
+                emptySet(),
+                DtoGeneratedBaseContractKind.ENTITY_VIEW,
+            ),
+            Triple(
+                ImmutableTypeKind.ENTITY,
+                setOf(DtoModifier.SPECIFICATION),
+                DtoGeneratedBaseContractKind.ENTITY_SPECIFICATION,
+            ),
+            Triple(
+                ImmutableTypeKind.EMBEDDABLE,
+                setOf(DtoModifier.INPUT),
+                DtoGeneratedBaseContractKind.EMBEDDABLE,
+            ),
+            Triple(
+                ImmutableTypeKind.EMBEDDABLE,
+                emptySet(),
+                DtoGeneratedBaseContractKind.EMBEDDABLE,
+            ),
+            Triple(ImmutableTypeKind.EMBEDDABLE, setOf(DtoModifier.SPECIFICATION), null),
+            Triple(ImmutableTypeKind.IMMUTABLE, setOf(DtoModifier.INPUT), null),
+            Triple(ImmutableTypeKind.IMMUTABLE, emptySet(), null),
+            Triple(ImmutableTypeKind.IMMUTABLE, setOf(DtoModifier.SPECIFICATION), null),
+            Triple(ImmutableTypeKind.MAPPED_SUPERCLASS, setOf(DtoModifier.INPUT), null),
+            Triple(ImmutableTypeKind.MAPPED_SUPERCLASS, emptySet(), null),
+            Triple(ImmutableTypeKind.MAPPED_SUPERCLASS, setOf(DtoModifier.SPECIFICATION), null),
+        )
+        cases.forEach { (kind, modifiers, expected) ->
+            assertEquals(
+                expected,
+                dtoType.copy(modifiers = modifiers).generatedBaseContractKind(schema(kind)),
+                "$kind with $modifiers",
+            )
+        }
+
+        val branch = DtoPolymorphicBranch(
+            kind = DtoPolymorphicBranchKind.DEFAULT,
+            targetBaseTypeId = null,
+            declaredClassName = null,
+            className = "DefaultBook",
+            bodyTypeId = BODY_TYPE_ID,
+            mergedTypeId = MERGED_TYPE_ID,
+            implicit = false,
+            location = LOCATION,
+        )
+        val polymorphism = DtoPolymorphism(exhaustive = true, branches = listOf(branch))
+        fun polymorphicGraph(modifiers: Set<DtoModifier>): DtoGraph {
+            val root = dtoType.copy(modifiers = modifiers, polymorphism = polymorphism)
+            val body = dtoType.copy(
+                id = BODY_TYPE_ID,
+                name = null,
+                modifiers = modifiers,
+                propIds = emptyList(),
+                hiddenFlatPropIds = emptyList(),
+            )
+            val merged = dtoType.copy(
+                id = MERGED_TYPE_ID,
+                name = null,
+                modifiers = modifiers,
+                propIds = emptyList(),
+                hiddenFlatPropIds = emptyList(),
+            )
+            return DtoGraph(
+                source = SOURCE,
+                rootTypeIds = listOf(TYPE_ID),
+                types = listOf(root, body, merged).sortedBy(DtoType::id),
+                props = baseGraph.props,
+            )
+        }
+        val inputGraph = polymorphicGraph(setOf(DtoModifier.INPUT))
+        val inputRoot = inputGraph.typesById.getValue(TYPE_ID)
+        assertEquals(
+            DtoGeneratedBaseContractKind.ENTITY_INPUT,
+            inputRoot.generatedBaseContractKind(schema(ImmutableTypeKind.ENTITY)),
+        )
+        assertEquals(
+            DtoGeneratedBaseContractKind.ENTITY_INPUT,
+            branch.mergedType(inputGraph).generatedBaseContractKind(schema(ImmutableTypeKind.ENTITY)),
+        )
+        val viewGraph = polymorphicGraph(emptySet())
+        val viewRoot = viewGraph.typesById.getValue(TYPE_ID)
+        assertEquals(
+            DtoGeneratedBaseContractKind.ENTITY_VIEW,
+            viewRoot.generatedBaseContractKind(schema(ImmutableTypeKind.ENTITY)),
+        )
+        assertEquals(
+            DtoGeneratedBaseContractKind.ENTITY_VIEW,
+            branch.mergedType(viewGraph).generatedBaseContractKind(schema(ImmutableTypeKind.ENTITY)),
+        )
+
+        val entitySchema = schema(ImmutableTypeKind.ENTITY)
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.generatedBaseContractKind(ImmutableSchema(emptyList()))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.copy(baseTypeId = null).generatedBaseContractKind(entitySchema)
+        }
+    }
+
+    @Test
     fun `identifies polymorphic input roots from frozen DTO semantics`() {
         val dtoType = graph(visibleDynamic = false).types.single()
         val branch = DtoPolymorphicBranch(

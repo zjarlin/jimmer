@@ -46,6 +46,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             source,
             "public interface ClientInput extends Input<Client>, HibernateValidatorEnhancedBean",
         )
+        assertEquals(1, source.countOccurrences("Input<Client>"))
         assertContains(source, "TargetOf_address getAddress();")
         assertContains(addressBody, "\$\$_hibernateValidator_getFieldValue")
         assertContains(addressBody, "\$\$_hibernateValidator_getGetterValue")
@@ -83,6 +84,7 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
             source,
             "public interface ClientInput : Input<Client>, HibernateValidatorEnhancedBean",
         )
+        assertEquals(1, source.countOccurrences("Input<Client>"))
         assertContains(source, "public val address: TargetOf_address")
         assertContains(addressBody, "\$\$_hibernateValidator_getFieldValue")
         assertContains(addressBody, "\$\$_hibernateValidator_getGetterValue")

@@ -33,6 +33,7 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
+import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
@@ -45,6 +46,7 @@ import site.addzero.lsi.jimmer.dto.configImplementationTypeOrNull
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
+import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
@@ -305,7 +307,10 @@ internal class DtoGenerator private constructor(
     }
 
     private fun generatePolymorphic(allFiles: List<KSFile>) {
-        if (!dtoType.baseType.isEntity) {
+        val baseContractKind = lsiDtoType.generatedBaseContractKind(immutableSchema)
+        if (baseContractKind != DtoGeneratedBaseContractKind.ENTITY_INPUT &&
+            baseContractKind != DtoGeneratedBaseContractKind.ENTITY_VIEW
+        ) {
             throw DtoException("Polymorphic DTO generation is only supported for entity types")
         }
         if (codeGenerator != null) {
@@ -321,7 +326,7 @@ internal class DtoGenerator private constructor(
                     ).apply {
                         indent("    ")
                         addImports()
-                        addType(buildPolymorphicType())
+                        addType(buildPolymorphicType(baseContractKind))
                         addExtensions(includeBlockConverter = false)
                     }.build()
                 val writer = OutputStreamWriter(it, Charsets.UTF_8)
@@ -329,11 +334,13 @@ internal class DtoGenerator private constructor(
                 writer.flush()
             }
         } else if (innerClassName !== null && parent !== null) {
-            parent.typeBuilder.addType(buildPolymorphicType())
+            parent.typeBuilder.addType(buildPolymorphicType(baseContractKind))
         }
     }
 
-    private fun buildPolymorphicType(): TypeSpec {
+    private fun buildPolymorphicType(
+        baseContractKind: DtoGeneratedBaseContractKind,
+    ): TypeSpec {
         val builder = TypeSpec
             .interfaceBuilder(innerClassName ?: dtoType.name!!)
             .apply {
@@ -353,7 +360,7 @@ internal class DtoGenerator private constructor(
         _typeBuilder = builder
         try {
             addDoc()
-            addPolymorphicMembers()
+            addPolymorphicMembers(baseContractKind)
             return builder.build()
         } finally {
             _typeBuilder = null
@@ -538,28 +545,10 @@ internal class DtoGenerator private constructor(
         val isSpecification = dtoType.modifiers.contains(DtoModifier.SPECIFICATION)
         if (polymorphicSuperInterfaceName != null) {
             typeBuilder.addSuperinterface(polymorphicSuperInterfaceName)
-        } else if (!isNestedSpecificationFragment && dtoType.baseType.isEntity) {
-            typeBuilder.addSuperinterface(
-                when {
-                    isSpecification ->
-                        K_SPECIFICATION_CLASS_NAME
-
-                    dtoType.modifiers.contains(DtoModifier.INPUT) ->
-                        INPUT_CLASS_NAME
-
-                    else ->
-                        VIEW_CLASS_NAME
-                }.parameterizedBy(
-                    dtoType.baseType.className
-                )
-            )
-        }
-        if (!isNestedSpecificationFragment && dtoType.baseType.isEmbeddable) {
-            typeBuilder.addSuperinterface(
-                EMBEDDED_DTO_CLASS_NAME.parameterizedBy(
-                    dtoType.baseType.className
-                )
-            )
+        } else {
+            lsiDtoType.generatedBaseContractKind(immutableSchema)?.let { baseContractKind ->
+                typeBuilder.addSuperinterface(generatedBaseContractTypeName(baseContractKind))
+            }
         }
         for (typeRef in lsiDtoType.superInterfaces) {
             typeBuilder.addSuperinterface(KspDtoTypeRefRenderer.render(typeRef, workspace))
@@ -652,6 +641,16 @@ internal class DtoGenerator private constructor(
         }
     }
 
+    private fun generatedBaseContractTypeName(kind: DtoGeneratedBaseContractKind): TypeName {
+        val rawType = when (kind) {
+            DtoGeneratedBaseContractKind.ENTITY_INPUT -> INPUT_CLASS_NAME
+            DtoGeneratedBaseContractKind.ENTITY_VIEW -> VIEW_CLASS_NAME
+            DtoGeneratedBaseContractKind.ENTITY_SPECIFICATION -> K_SPECIFICATION_CLASS_NAME
+            DtoGeneratedBaseContractKind.EMBEDDABLE -> EMBEDDED_DTO_CLASS_NAME
+        }
+        return rawType.parameterizedBy(dtoType.baseType.className)
+    }
+
     private fun generateNestedDtoTypes() {
         for (prop in dtoType.dtoProps) {
             if (polymorphicRootPropOrNull(prop) != null) {
@@ -709,14 +708,8 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    private fun addPolymorphicMembers() {
-        typeBuilder.addSuperinterface(
-            (if (dtoType.modifiers.contains(DtoModifier.INPUT)) {
-                INPUT_CLASS_NAME
-            } else {
-                VIEW_CLASS_NAME
-            }).parameterizedBy(dtoType.baseType.className)
-        )
+    private fun addPolymorphicMembers(baseContractKind: DtoGeneratedBaseContractKind) {
+        typeBuilder.addSuperinterface(generatedBaseContractTypeName(baseContractKind))
         for (typeRef in lsiDtoType.superInterfaces) {
             typeBuilder.addSuperinterface(KspDtoTypeRefRenderer.render(typeRef, workspace))
         }
