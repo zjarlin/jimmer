@@ -16,6 +16,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicBranchRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSpecificationRenderer;
@@ -42,6 +43,7 @@ import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchAnnotationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoTypeId;
 import site.addzero.lsi.model.LsiDeclaredType;
 import site.addzero.lsi.model.LsiWorkspace;
@@ -94,9 +96,7 @@ public class DtoGenerator {
 
     private final boolean polymorphicBranch;
 
-    private final site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind polymorphicBranchKind;
-
-    private final int polymorphicBranchOrder;
+    private final site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch lsiPolymorphicBranch;
 
     private final Set<String> interfaceMethodNames;
 
@@ -132,9 +132,7 @@ public class DtoGenerator {
                 null,
                 null,
                 null,
-                false,
-                null,
-                -1
+                null
         );
     }
 
@@ -161,9 +159,7 @@ public class DtoGenerator {
                 parent,
                 innerClassName,
                 null,
-                false,
-                null,
-                -1
+                null
         );
     }
 
@@ -183,9 +179,7 @@ public class DtoGenerator {
             DtoGenerator parent,
             String innerClassName,
             @Nullable TypeName polymorphicSuperInterfaceName,
-            boolean polymorphicBranch,
-            site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind polymorphicBranchKind,
-            int polymorphicBranchOrder
+            site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch lsiPolymorphicBranch
     ) {
         if ((parent == null) != (innerClassName == null)) {
             throw new IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same");
@@ -218,9 +212,17 @@ public class DtoGenerator {
                 parent.hibernateValidatorEnhancement :
                 hibernateValidatorEnhancement;
         this.polymorphicSuperInterfaceName = polymorphicSuperInterfaceName;
-        this.polymorphicBranch = polymorphicBranch;
-        this.polymorphicBranchKind = polymorphicBranchKind;
-        this.polymorphicBranchOrder = polymorphicBranchOrder;
+        this.polymorphicBranch = lsiPolymorphicBranch != null;
+        this.lsiPolymorphicBranch = lsiPolymorphicBranch;
+        if (lsiPolymorphicBranch != null) {
+            if (parent == null) {
+                throw new IllegalArgumentException("Frozen DTO polymorphic branch has no direct parent");
+            }
+            DtoPolymorphicBranchAnnotationExtensionsKt.generatedPolymorphicDtoBranchOrder(
+                    lsiPolymorphicBranch,
+                    parent.lsiDtoType
+            );
+        }
         DtoInterfaceContract interfaceContract = DtoInterfaceContractExtensionsKt.contractFor(
                 this.interfaceContractResolution,
                 lsiDtoType
@@ -239,13 +241,16 @@ public class DtoGenerator {
                 .classBuilder(simpleName)
                 .addModifiers(Modifier.PUBLIC);
         if (polymorphicBranch) {
+            assert parent != null;
+            assert lsiPolymorphicBranch != null;
             typeBuilder.addModifiers(Modifier.FINAL);
             typeBuilder.addAnnotation(
-                    AnnotationSpec
-                            .builder(Constants.GENERATED_POLYMORPHIC_DTO_BRANCH_CLASS_NAME)
-                            .addMember("value", "$T.class", polymorphicSuperInterfaceName)
-                            .addMember("order", "$L", polymorphicBranchOrder)
-                            .build()
+                    AptDtoPolymorphicBranchRenderer.render(
+                            parent.lsiDtoType,
+                            lsiPolymorphicBranch,
+                            getGeneratedDtoPackageName(),
+                            parent.getGeneratedDtoSimpleNames()
+                    )
             );
         }
         if (polymorphicSuperInterfaceName != null) {
@@ -408,13 +413,12 @@ public class DtoGenerator {
 
         addPolymorphicMetadata(polymorphism);
         ClassName superInterfaceName = getDtoClassName();
-        int branchOrder = 0;
         DtoPolymorphicBranch<ImmutableType, ImmutableProp> defaultBranch = polymorphism.getDefaultBranch();
         if (defaultBranch != null) {
-            generatePolymorphicBranch(defaultBranch, superInterfaceName, branchOrder++);
+            generatePolymorphicBranch(defaultBranch, superInterfaceName);
         }
         for (DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch : polymorphism.getTypeBranches()) {
-            generatePolymorphicBranch(branch, superInterfaceName, branchOrder++);
+            generatePolymorphicBranch(branch, superInterfaceName);
         }
 
         if (innerClassName != null) {
@@ -478,8 +482,7 @@ public class DtoGenerator {
 
     private void generatePolymorphicBranch(
             DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch,
-            TypeName superInterfaceName,
-            int branchOrder
+            TypeName superInterfaceName
     ) {
         site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch lsiBranch = lsiPolymorphicBranch(branch);
         new DtoGenerator(
@@ -498,9 +501,7 @@ public class DtoGenerator {
                 this,
                 branch.getClassName(),
                 superInterfaceName,
-                true,
-                lsiBranch.getKind(),
-                branchOrder
+                lsiBranch
         ).generate();
     }
 
@@ -537,20 +538,11 @@ public class DtoGenerator {
         if (!polymorphicBranch) {
             return null;
         }
-        assert parent != null;
-        site.addzero.lsi.jimmer.dto.DtoPolymorphism polymorphism = parent.lsiDtoType.getPolymorphism();
-        if (polymorphism == null ||
-                polymorphicBranchOrder < 0 ||
-                polymorphicBranchOrder >= polymorphism.getBranches().size()) {
-            throw new DtoException("Frozen DTO polymorphism has no generated branch at order " + polymorphicBranchOrder);
+        if (lsiPolymorphicBranch == null ||
+                !DtoGenerationExtensionsKt.mergedType(lsiPolymorphicBranch, lsiGraph).equals(lsiDtoType)) {
+            throw new DtoException("Frozen DTO polymorphic branch does not match generated branch");
         }
-        site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch branch =
-                polymorphism.getBranches().get(polymorphicBranchOrder);
-        if (branch.getKind() != polymorphicBranchKind ||
-                !DtoGenerationExtensionsKt.mergedType(branch, lsiGraph).equals(lsiDtoType)) {
-            throw new DtoException("Frozen DTO polymorphic branch order does not match generated branch");
-        }
-        return branch;
+        return lsiPolymorphicBranch;
     }
 
     public String getSimpleName() {
@@ -1923,11 +1915,13 @@ public class DtoGenerator {
     }
 
     private boolean isDefaultPolymorphicInputBranch() {
-        return polymorphicBranchKind == site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind.DEFAULT;
+        return lsiPolymorphicBranch != null &&
+                lsiPolymorphicBranch.getKind() == site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind.DEFAULT;
     }
 
     private boolean isTypedPolymorphicInputBranch() {
-        return polymorphicBranchKind == site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind.TYPE;
+        return lsiPolymorphicBranch != null &&
+                lsiPolymorphicBranch.getKind() == site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind.TYPE;
     }
 
     private ImmutableType polymorphicRootType() {

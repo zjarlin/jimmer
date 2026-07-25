@@ -13,6 +13,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicBranchRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSpecificationRenderer
@@ -41,6 +42,7 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
+import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch as LsiDtoPolymorphicBranch
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp as LsiDtoProp
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
@@ -55,6 +57,7 @@ import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedTargetTypeOrNull
+import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
@@ -93,11 +96,12 @@ internal class DtoGenerator private constructor(
     private val parent: DtoGenerator?,
     private val innerClassName: String?,
     private val polymorphicSuperInterfaceName: TypeName? = null,
-    private val polymorphicBranch: Boolean = false,
-    private val polymorphicBranchKind: DtoPolymorphicBranchKind? = null,
-    private val polymorphicBranchOrder: Int = -1,
+    private val lsiPolymorphicBranch: LsiDtoPolymorphicBranch? = null,
 ) {
     private val root: DtoGenerator = parent?.root ?: this
+
+    private val polymorphicBranch: Boolean
+        get() = lsiPolymorphicBranch != null
 
     private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiPoetTypeName> =
         (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
@@ -129,6 +133,11 @@ internal class DtoGenerator private constructor(
             "Frozen DTO type '${lsiDtoType.id.value}' has conflicting generated names: " +
                 "${oldTypeName?.canonicalName} and ${currentTypeName.canonicalName}"
         }
+        lsiPolymorphicBranch?.generatedPolymorphicDtoBranchOrder(
+            requireNotNull(parent) {
+                "Frozen DTO polymorphic branch has no direct parent"
+            }.lsiDtoType
+        )
     }
 
     private var _typeBuilder: TypeSpec.Builder? = null
@@ -177,9 +186,7 @@ internal class DtoGenerator private constructor(
         parent: DtoGenerator,
         innerClassName: String,
         polymorphicSuperInterfaceName: TypeName? = null,
-        polymorphicBranch: Boolean = false,
-        polymorphicBranchKind: DtoPolymorphicBranchKind? = null,
-        polymorphicBranchOrder: Int = -1,
+        lsiPolymorphicBranch: LsiDtoPolymorphicBranch? = null,
     ) : this(
         ctx = ctx,
         mutable = mutable,
@@ -200,9 +207,7 @@ internal class DtoGenerator private constructor(
         parent = parent,
         innerClassName = innerClassName,
         polymorphicSuperInterfaceName = polymorphicSuperInterfaceName,
-        polymorphicBranch = polymorphicBranch,
-        polymorphicBranchKind = polymorphicBranchKind,
-        polymorphicBranchOrder = polymorphicBranchOrder,
+        lsiPolymorphicBranch = lsiPolymorphicBranch,
     )
 
     val typeBuilder: TypeSpec.Builder
@@ -288,12 +293,16 @@ internal class DtoGenerator private constructor(
                     if (!polymorphicBranch) {
                         addModifiers(KModifier.OPEN)
                     } else {
+                        val polymorphicRootGenerator = requireNotNull(parent) {
+                            "Generated polymorphic branch has no parent generator"
+                        }
                         addAnnotation(
-                            AnnotationSpec
-                                .builder(GENERATED_POLYMORPHIC_DTO_BRANCH_CLASS_NAME)
-                                .addMember("value = %T::class", polymorphicSuperInterfaceName!!)
-                                .addMember("order = %L", polymorphicBranchOrder)
-                                .build()
+                            KspDtoPolymorphicBranchRenderer.render(
+                                rootType = polymorphicRootGenerator.lsiDtoType,
+                                branch = requireNotNull(lsiPolymorphicBranch),
+                                generatedPackageName = generatedDtoPackageName,
+                                generatedRootSimpleNames = polymorphicRootGenerator.generatedDtoSimpleNames,
+                            )
                         )
                     }
                 }
@@ -661,19 +670,17 @@ internal class DtoGenerator private constructor(
                 }
                 .build()
         )
-        var branchOrder = 0
         polymorphism.defaultBranch?.let { branch ->
-            generatePolymorphicBranch(branch, getDtoClassName(), branchOrder++)
+            generatePolymorphicBranch(branch, getDtoClassName())
         }
         for (branch in polymorphism.typeBranches) {
-            generatePolymorphicBranch(branch, getDtoClassName(), branchOrder++)
+            generatePolymorphicBranch(branch, getDtoClassName())
         }
     }
 
     private fun generatePolymorphicBranch(
         branch: DtoPolymorphicBranch<ImmutableType, ImmutableProp>,
         superInterfaceName: TypeName,
-        branchOrder: Int,
     ) {
         val lsiBranch = lsiPolymorphicBranch(branch)
         DtoGenerator(
@@ -684,9 +691,7 @@ internal class DtoGenerator private constructor(
             parent = this,
             innerClassName = branch.className,
             polymorphicSuperInterfaceName = superInterfaceName,
-            polymorphicBranch = true,
-            polymorphicBranchKind = lsiBranch.kind,
-            polymorphicBranchOrder = branchOrder,
+            lsiPolymorphicBranch = lsiBranch,
         ).generate(emptyList())
     }
 
@@ -1641,27 +1646,19 @@ internal class DtoGenerator private constructor(
     }
 
     private val isDefaultPolymorphicInputBranch: Boolean
-        get() = polymorphicBranchKind == DtoPolymorphicBranchKind.DEFAULT
+        get() = lsiPolymorphicBranch?.kind == DtoPolymorphicBranchKind.DEFAULT
 
     private val isTypedPolymorphicInputBranch: Boolean
-        get() = polymorphicBranchKind == DtoPolymorphicBranchKind.TYPE
+        get() = lsiPolymorphicBranch?.kind == DtoPolymorphicBranchKind.TYPE
 
     private val currentLsiPolymorphicBranchOrNull: site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch?
         get() {
             if (!polymorphicBranch) {
                 return null
             }
-            val polymorphicRootGenerator = requireNotNull(parent) {
-                "Generated polymorphic branch has no parent generator"
-            }
-            val branches = polymorphicRootGenerator.lsiDtoType.polymorphism?.branches
-                ?: throw DtoException("Frozen DTO root is not polymorphic")
-            val branch = branches.getOrNull(polymorphicBranchOrder)
-                ?: throw DtoException(
-                    "Frozen DTO polymorphism has no generated branch at order $polymorphicBranchOrder"
-                )
-            if (branch.kind != polymorphicBranchKind || branch.mergedTypeId != lsiDtoType.id) {
-                throw DtoException("Frozen DTO polymorphic branch order does not match generated branch")
+            val branch = requireNotNull(lsiPolymorphicBranch)
+            if (branch.mergedTypeId != lsiDtoType.id) {
+                throw DtoException("Frozen DTO polymorphic branch does not match generated branch")
             }
             return branch
         }

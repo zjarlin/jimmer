@@ -428,10 +428,32 @@ class JimmerDtoPolymorphicInputBuilderOccurrenceTest {
         assertEquals(2, topLevelOwnsJsonSubTypes.countOccurrences("@JsonTypeName("))
         assertContains(topLevelOwnsJsonSubTypes, "@JsonTypeName(\"ORG\")")
         assertContains(topLevelOwnsJsonSubTypes, "@JsonTypeName(\"Person\")")
+        topLevelOwnsJsonSubTypes.assertGeneratedPolymorphicBranchMarkers(
+            ownerSimpleName = "TargetOf_topLevelOwned",
+        )
 
         assertEquals(1, nestedRootOwnsJsonSubTypes.countOccurrences("@JsonTypeInfo("))
         assertEquals(1, nestedRootOwnsJsonSubTypes.countOccurrences("@JsonSubTypes("))
         assertEquals(0, nestedRootOwnsJsonSubTypes.countOccurrences("@JsonTypeName("))
+        nestedRootOwnsJsonSubTypes.assertGeneratedPolymorphicBranchMarkers(
+            ownerSimpleName = "TargetOf_nestedRootOwned",
+        )
+    }
+
+    private fun String.assertGeneratedPolymorphicBranchMarkers(ownerSimpleName: String) {
+        assertEquals(2, countOccurrences("@GeneratedPolymorphicDtoBranch("))
+        val ownerLiteral = if ("$ownerSimpleName.class" in this) {
+            "$ownerSimpleName.class"
+        } else {
+            "$ownerSimpleName::class"
+        }
+        val markerPattern = Regex(
+            """@GeneratedPolymorphicDtoBranch\(\s*value\s*=\s*${Regex.escape(ownerLiteral)},\s*order\s*=\s*(\d+),?\s*\)""",
+        )
+        val orders = markerPattern.findAll(this)
+            .map { match -> match.groupValues[1].toInt() }
+            .toList()
+        assertEquals(listOf(0, 1), orders)
     }
 
     private fun String.firstIndexOf(vararg candidates: String): Int {
