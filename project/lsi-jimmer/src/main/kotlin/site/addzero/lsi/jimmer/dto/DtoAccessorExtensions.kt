@@ -213,25 +213,28 @@ fun DtoProp.dtoLoadedStateStorageNameOrNull(
     graph: DtoGraph,
     targetLanguage: LsiLanguage,
 ): String? {
-    require(graph.propsById[id] == this) {
-        "DTO property does not belong to this graph: ${id.value}"
-    }
-    val ownerType = graph.typesById.getValue(ownerTypeId)
-    if (
-        id !in ownerType.propIds ||
-        DtoModifier.INPUT !in ownerType.modifiers ||
-        !nullable ||
-        (this as? DtoBaseProp)?.inputModifier != DtoModifier.DYNAMIC
-    ) {
+    if (!requiresDtoLoadedStateStorage(graph)) {
         return null
     }
     return when (targetLanguage) {
         LsiLanguage.JAVA -> dtoIdentifier("_is", name, "Loaded")
-        LsiLanguage.KOTLIN -> loadedAccessorName()
+        LsiLanguage.KOTLIN -> (this as DtoBaseProp).loadedAccessorName()
         LsiLanguage.UNKNOWN -> throw IllegalArgumentException(
             "DTO target language must be Java or Kotlin",
         )
     }
+}
+
+/** 判断可见 DTO 属性是否需要独立的加载状态存储。 */
+fun DtoProp.requiresDtoLoadedStateStorage(graph: DtoGraph): Boolean {
+    require(graph.propsById[id] == this) {
+        "DTO property does not belong to this graph: ${id.value}"
+    }
+    val ownerType = graph.typesById.getValue(ownerTypeId)
+    return id in ownerType.propIds &&
+        DtoModifier.INPUT in ownerType.modifiers &&
+        nullable &&
+        (this as? DtoBaseProp)?.inputModifier == DtoModifier.DYNAMIC
 }
 
 /** 返回 Serializer 的加载状态访问器；非动态属性返回空。 */

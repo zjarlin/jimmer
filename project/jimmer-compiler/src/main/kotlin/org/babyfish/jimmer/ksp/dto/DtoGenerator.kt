@@ -38,6 +38,7 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp as LsiDtoProp
+import site.addzero.lsi.jimmer.dto.DtoToStringInclusion
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
@@ -64,6 +65,7 @@ import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
 import site.addzero.lsi.jimmer.dto.tailProp
+import site.addzero.lsi.jimmer.dto.toStringInclusion
 import site.addzero.lsi.jimmer.dto.userProp
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
@@ -2646,47 +2648,45 @@ internal class DtoGenerator private constructor(
                     CodeBlock
                         .builder()
                         .apply {
-                            val hashCondProps = dtoType.modifiers.contains(DtoModifier.INPUT) &&
-                                    dtoType.dtoProps.any {
-                                        lsiDtoType
-                                            .prop(lsiGraph, it.name)
-                                            .dtoLoadedStateStorageNameOrNull(
-                                                lsiGraph,
-                                                LsiLanguage.KOTLIN,
-                                            ) != null || it.inputModifier == DtoModifier.FUZZY
-                                    }
-                            if (hashCondProps) {
+                            val hasConditionalProps = dtoType.props.any { prop ->
+                                lsiDtoType
+                                    .prop(lsiGraph, prop.name)
+                                    .toStringInclusion(lsiGraph) != DtoToStringInclusion.ALWAYS
+                            }
+                            if (hasConditionalProps) {
                                 addStatement("val builder = StringBuilder()")
                                 addStatement("var separator = \"\"")
                                 addStatement("builder.append(%S).append('(')", simpleNamePart())
                                 for (prop in dtoType.props) {
-                                    val stateFieldName = lsiDtoType
-                                        .prop(lsiGraph, prop.name)
-                                        .dtoLoadedStateStorageNameOrNull(
-                                            lsiGraph,
-                                            LsiLanguage.KOTLIN,
+                                    val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
+                                    val inclusion = lsiProp.toStringInclusion(lsiGraph)
+                                    if (inclusion == DtoToStringInclusion.WHEN_LOADED) {
+                                        val stateFieldName = checkNotNull(
+                                            lsiProp.dtoLoadedStateStorageNameOrNull(
+                                                lsiGraph,
+                                                LsiLanguage.KOTLIN,
+                                            ),
                                         )
-                                    if (stateFieldName != null) {
                                         beginControlFlow("if (%L)", stateFieldName)
-                                    } else if (prop is DtoProp<*, *> && prop.getInputModifier() == DtoModifier.FUZZY) {
-                                        beginControlFlow("if (%L != null)", prop.getName())
+                                    } else if (inclusion == DtoToStringInclusion.WHEN_NON_NULL) {
+                                        beginControlFlow("if (%L != null)", prop.name)
                                     }
-                                    if (prop.getName() == "builder") {
+                                    if (prop.name == "builder") {
                                         addStatement(
                                             "builder.append(separator).append(%S).append(this.%L)",
-                                            prop.getName() + '=',
-                                            prop.getName()
+                                            prop.name + '=',
+                                            prop.name,
                                         )
                                         addStatement("separator = \", \"")
                                     } else {
                                         addStatement(
                                             "builder.append(separator).append(%S).append(%L)",
-                                            prop.getName() + '=',
-                                            prop.getName()
+                                            prop.name + '=',
+                                            prop.name,
                                         )
                                         addStatement("separator = \", \"")
                                     }
-                                    if (stateFieldName != null || (prop is DtoProp<*, *> && prop.getInputModifier() == DtoModifier.FUZZY)) {
+                                    if (inclusion != DtoToStringInclusion.ALWAYS) {
                                         endControlFlow()
                                     }
                                 }

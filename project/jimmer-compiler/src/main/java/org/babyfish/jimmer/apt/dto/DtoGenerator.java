@@ -36,6 +36,8 @@ import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
+import site.addzero.lsi.jimmer.dto.DtoToStringExtensionsKt;
+import site.addzero.lsi.jimmer.dto.DtoToStringInclusion;
 import site.addzero.lsi.jimmer.dto.DtoTypeId;
 import site.addzero.lsi.model.LsiDeclaredType;
 import site.addzero.lsi.model.LsiWorkspace;
@@ -2522,30 +2524,30 @@ public class DtoGenerator {
         builder.addStatement("StringBuilder builder = new StringBuilder()");
         builder.addStatement("builder.append($S).append('(')", simpleNamePath());
         String separator = "\"\"";
-        boolean dynamicSeparator = dtoType.getDtoProps().stream().anyMatch(prop ->
-                DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+        boolean dynamicSeparator = dtoType.getProps().stream().anyMatch(prop ->
+                DtoToStringExtensionsKt.toStringInclusion(
                         DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
-                        lsiGraph,
-                        LsiLanguage.JAVA
-                ) != null || (
-                        prop.getInputModifier() == DtoModifier.FUZZY && prop.isNullable()
-                )
+                        lsiGraph
+                ) != DtoToStringInclusion.ALWAYS
         );
         if (dynamicSeparator) {
             builder.addStatement("String _sp = \"\"");
         }
         for (AbstractProp prop : dtoType.getProps()) {
-            String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
-                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
-                    lsiGraph,
-                    LsiLanguage.JAVA
-            );
-            boolean fuzzy = prop instanceof DtoProp<?, ?> &&
-                    prop.getInputModifier() == DtoModifier.FUZZY &&
-                    prop.isNullable();
-            if (stateFieldName != null) {
+            site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
+                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
+            DtoToStringInclusion inclusion =
+                    DtoToStringExtensionsKt.toStringInclusion(lsiProp, lsiGraph);
+            if (inclusion == DtoToStringInclusion.WHEN_LOADED) {
+                String stateFieldName = Objects.requireNonNull(
+                        DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+                                lsiProp,
+                                lsiGraph,
+                                LsiLanguage.JAVA
+                        )
+                );
                 builder.beginControlFlow("if ($L)", stateFieldName);
-            } else if (fuzzy) {
+            } else if (inclusion == DtoToStringInclusion.WHEN_NON_NULL) {
                 builder.beginControlFlow("if ($L != null)", prop.getName());
             }
             if (prop.getName().equals("builder")) {
@@ -2559,7 +2561,7 @@ public class DtoGenerator {
             } else {
                 separator = "\", \"";
             }
-            if (stateFieldName != null || fuzzy) {
+            if (inclusion != DtoToStringInclusion.ALWAYS) {
                 builder.endControlFlow();
             }
         }

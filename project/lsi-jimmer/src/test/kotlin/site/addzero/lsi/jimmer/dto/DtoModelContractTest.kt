@@ -107,6 +107,49 @@ class DtoModelContractTest {
     }
 
     @Test
+    fun `rejects invalid conditional input strategies`() {
+        val ownerTypeId = DtoTypeId("demo#root")
+
+        assertFailsWith<IllegalArgumentException> {
+            baseProp(
+                id = DtoPropId("demo#root/prop:fuzzy"),
+                ownerTypeId = ownerTypeId,
+                inputModifier = DtoModifier.FUZZY,
+            )
+        }
+
+        listOf(DtoModifier.DYNAMIC, DtoModifier.FUZZY).forEach { inputModifier ->
+            val propId = DtoPropId("demo#root/prop:${inputModifier.name.lowercase()}")
+            val prop = baseProp(
+                id = propId,
+                ownerTypeId = ownerTypeId,
+                nullable = true,
+                inputModifier = inputModifier,
+            )
+            assertFailsWith<IllegalArgumentException> {
+                DtoGraph(
+                    source = SOURCE,
+                    rootTypeIds = listOf(ownerTypeId),
+                    types = listOf(type(ownerTypeId, listOf(propId))),
+                    props = listOf(prop),
+                )
+            }
+            DtoGraph(
+                source = SOURCE,
+                rootTypeIds = listOf(ownerTypeId),
+                types = listOf(
+                    type(
+                        id = ownerTypeId,
+                        propIds = listOf(propId),
+                        modifiers = setOf(DtoModifier.INPUT),
+                    ),
+                ),
+                props = listOf(prop),
+            )
+        }
+    }
+
+    @Test
     fun `rejects non-base property chain references`() {
         val rootTypeId = DtoTypeId("demo#root")
         val basePropId = DtoPropId("demo#root/prop:base")
@@ -157,13 +200,14 @@ class DtoModelContractTest {
         id: DtoTypeId,
         propIds: List<DtoPropId> = emptyList(),
         polymorphism: DtoPolymorphism? = null,
+        modifiers: Set<DtoModifier> = emptySet(),
     ): DtoType {
         return DtoType(
             id = id,
             baseTypeId = null,
             packageName = "demo",
             name = id.value.substringAfterLast('#'),
-            modifiers = emptySet(),
+            modifiers = modifiers,
             annotations = emptyList(),
             superInterfaces = emptyList(),
             documentation = null,
@@ -196,13 +240,15 @@ class DtoModelContractTest {
         nextPropId: DtoPropId? = null,
         tailPropId: DtoPropId = id,
         targetTypeId: DtoTypeId? = null,
+        nullable: Boolean = false,
+        inputModifier: DtoModifier = DtoModifier.STATIC,
     ): DtoBaseProp {
         return DtoBaseProp(
             id = id,
             ownerTypeId = ownerTypeId,
             name = "base",
             alias = "base",
-            nullable = false,
+            nullable = nullable,
             annotations = emptyList(),
             documentation = null,
             aliasLocation = LOCATION,
@@ -217,7 +263,7 @@ class DtoModelContractTest {
             nextPropId = nextPropId,
             tailPropId = tailPropId,
             baseNullable = false,
-            inputModifier = DtoModifier.STATIC,
+            inputModifier = inputModifier,
             functionName = null,
             targetTypeId = targetTypeId,
             enumType = null,

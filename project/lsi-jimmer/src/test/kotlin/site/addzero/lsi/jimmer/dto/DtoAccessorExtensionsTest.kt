@@ -283,15 +283,20 @@ class DtoAccessorExtensionsTest {
         )
         val polymorphism = DtoPolymorphism(exhaustive = true, branches = listOf(branch))
         fun polymorphicGraph(modifiers: Set<DtoModifier>): DtoGraph {
-            val root = dtoType.copy(modifiers = modifiers, polymorphism = polymorphism)
-            val body = dtoType.copy(
+            val sourceGraph = graph(
+                visibleDynamic = false,
+                input = DtoModifier.INPUT in modifiers,
+            )
+            val sourceType = sourceGraph.types.single()
+            val root = sourceType.copy(modifiers = modifiers, polymorphism = polymorphism)
+            val body = sourceType.copy(
                 id = BODY_TYPE_ID,
                 name = null,
                 modifiers = modifiers,
                 propIds = emptyList(),
                 hiddenFlatPropIds = emptyList(),
             )
-            val merged = dtoType.copy(
+            val merged = sourceType.copy(
                 id = MERGED_TYPE_ID,
                 name = null,
                 modifiers = modifiers,
@@ -302,7 +307,7 @@ class DtoAccessorExtensionsTest {
                 source = SOURCE,
                 rootTypeIds = listOf(TYPE_ID),
                 types = listOf(root, body, merged).sortedBy(DtoType::id),
-                props = baseGraph.props,
+                props = sourceGraph.props,
             )
         }
         val inputGraph = polymorphicGraph(setOf(DtoModifier.INPUT))
@@ -884,6 +889,53 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `derives toString inclusion from the frozen DTO graph`() {
+        val graph = graph(visibleDynamic = true)
+        val type = graph.types.single()
+
+        assertEquals(
+            listOf(
+                "dynamicValue" to DtoToStringInclusion.WHEN_LOADED,
+                "userValue" to DtoToStringInclusion.ALWAYS,
+                "staticValue" to DtoToStringInclusion.ALWAYS,
+                "foldValue" to DtoToStringInclusion.ALWAYS,
+                "fuzzyValue" to DtoToStringInclusion.WHEN_NON_NULL,
+            ),
+            type.propsInDeclarationOrder(graph).map { prop ->
+                prop.name to prop.toStringInclusion(graph)
+            },
+        )
+
+        val nonInputGraph = graph(visibleDynamic = true, input = false)
+        assertTrue(
+            nonInputGraph.types.single().propsInDeclarationOrder(nonInputGraph).all { prop ->
+                prop.toStringInclusion(nonInputGraph) == DtoToStringInclusion.ALWAYS
+            },
+        )
+
+        val nullableFixed = baseProp(
+            name = "nullableFixed",
+            modifier = DtoModifier.FIXED,
+            nullable = true,
+        )
+        val nullableFixedGraph = singlePropGraph(nullableFixed)
+        assertEquals(
+            DtoToStringInclusion.ALWAYS,
+            nullableFixed.toStringInclusion(nullableFixedGraph),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            graph.propsById.getValue(DtoPropId("dto#h-hidden"))
+                .toStringInclusion(graph)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            type.baseProp(graph, "dynamicValue")
+                .copy(name = "foreign")
+                .toStringInclusion(graph)
+        }
+    }
+
+    @Test
     fun `rejects inconsistent Java boolean semantics across base bindings`() {
         val prop = baseProp("mixed", baseName = "active").copy(
             baseProps = listOf(
@@ -955,7 +1007,7 @@ class DtoAccessorExtensionsTest {
                 add(
                     baseProp(
                         name = "dynamicValue",
-                        modifier = DtoModifier.DYNAMIC,
+                        modifier = if (input) DtoModifier.DYNAMIC else DtoModifier.STATIC,
                         idSuffix = "z-dynamic",
                         nullable = true,
                     ),
@@ -964,11 +1016,18 @@ class DtoAccessorExtensionsTest {
             add(userProp().copy(nullable = true))
             add(baseProp("staticValue", DtoModifier.STATIC, "a-static", nullable = true))
             add(foldProp().copy(nullable = true))
-            add(baseProp("fuzzyValue", DtoModifier.FUZZY, "b-fuzzy", nullable = true))
+            add(
+                baseProp(
+                    name = "fuzzyValue",
+                    modifier = if (input) DtoModifier.FUZZY else DtoModifier.STATIC,
+                    idSuffix = "b-fuzzy",
+                    nullable = true,
+                ),
+            )
         }
         val hiddenDynamic = baseProp(
             name = "hiddenDynamic",
-            modifier = DtoModifier.DYNAMIC,
+            modifier = if (input) DtoModifier.DYNAMIC else DtoModifier.STATIC,
             idSuffix = "h-hidden",
             nullable = true,
         )

@@ -98,6 +98,16 @@ data class DtoGraph(
         validateAnnotations(prop.annotations)
         when (prop) {
             is DtoBaseProp -> {
+                val ownerType = typesById.getValue(prop.ownerTypeId)
+                require(
+                    (
+                        prop.inputModifier != DtoModifier.DYNAMIC &&
+                            prop.inputModifier != DtoModifier.FUZZY
+                    ) ||
+                        DtoModifier.INPUT in ownerType.modifiers
+                ) {
+                    "Dynamic or fuzzy DTO property must belong to an input type: ${prop.id.value}"
+                }
                 val nextProp = prop.nextPropId?.let(propsById::get)
                 require(prop.nextPropId == null || nextProp != null) {
                     "DTO next property must exist: ${prop.id.value}"
@@ -245,8 +255,11 @@ data class DtoBaseProp(
         require(inputModifier.isInputStrategy) {
             "DTO base property input modifier must be an input strategy: ${inputModifier.name}"
         }
-        require(inputModifier != DtoModifier.DYNAMIC || nullable) {
-            "Dynamic DTO input property must be nullable: ${id.value}"
+        require(
+            nullable ||
+                (inputModifier != DtoModifier.DYNAMIC && inputModifier != DtoModifier.FUZZY)
+        ) {
+            "Dynamic or fuzzy DTO input property must be nullable: ${id.value}"
         }
     }
 }
