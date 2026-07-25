@@ -1076,15 +1076,16 @@ private class ImmutableSchemaBuilder {
         if (property.declaration.ownerId != ownerType.id || property.overrideChain.size < 2) {
             return
         }
-        val overriddenDeclaration = property.overrideChain[1]
-        val inheritedOwnerId = overriddenDeclaration.ownerId
+        val overriddenDeclarations = property.overrideChain.drop(1)
         val directSuperTypeIds = ownerType.superTypes
             .filterIsInstance<LsiDeclaredType>()
             .mapTo(linkedSetOf(), LsiDeclaredType::declarationId)
-        val overrideAllowed =
-            ownerKind == ImmutableTypeKind.ENTITY &&
-            kindByTypeId[inheritedOwnerId] == ImmutableTypeKind.MAPPED_SUPERCLASS &&
-            inheritedOwnerId in directSuperTypeIds
+        val overrideAllowed = ownerKind == ImmutableTypeKind.ENTITY &&
+            overriddenDeclarations.all { overriddenDeclaration ->
+                val inheritedOwnerId = overriddenDeclaration.ownerId
+                kindByTypeId[inheritedOwnerId] == ImmutableTypeKind.MAPPED_SUPERCLASS &&
+                    inheritedOwnerId in directSuperTypeIds
+            }
         if (!overrideAllowed) {
             throw ImmutablePrecompileException(
                 declarationId = property.declaration.id,
@@ -1092,31 +1093,6 @@ private class ImmutableSchemaBuilder {
                     "declared directly by a mapped superclass of an entity",
             )
         }
-        val inheritedOwner = workspace[inheritedOwnerId] as? LsiTypeDeclaration
-            ?: throw ImmutablePrecompileException(
-                declarationId = property.declaration.id,
-                recoverable = true,
-                message = "Missing inherited immutable type '${inheritedOwnerId.value}'",
-            )
-        val inheritedProperty = typeSystem.effectiveProperties(inheritedOwnerId)
-            .firstOrNull { inherited ->
-                inherited.overrideChain.any { declaration -> declaration.id == overriddenDeclaration.id }
-            }
-            ?: throw ImmutablePrecompileException(
-                declarationId = property.declaration.id,
-                message = "Cannot resolve inherited property '${overriddenDeclaration.id.value}'",
-            )
-        val inheritedType = resolveInheritedPropertyType(
-            ownerTypeId = ownerType.id,
-            inheritedOwner = inheritedOwner,
-            inheritedType = inheritedProperty.type,
-            typeSystem = typeSystem,
-            sourceId = property.declaration.id,
-        )
-        val inheritedInOwner = inheritedProperty.copy(
-            ownerId = ownerType.id,
-            type = inheritedType,
-        )
         val currentModel = property.toImmutableProp(
             ownerTypeId = ownerType.id,
             kindByTypeId = kindByTypeId,
@@ -1124,50 +1100,78 @@ private class ImmutableSchemaBuilder {
             workspace = workspace,
             typeSystem = typeSystem,
         )
-        val inheritedModel = inheritedInOwner.toImmutableProp(
-            ownerTypeId = ownerType.id,
-            kindByTypeId = kindByTypeId,
-            microServiceMetadataByTypeId = microServiceMetadataByTypeId,
-            workspace = workspace,
-            typeSystem = typeSystem,
-        )
-        val violations = buildList {
-            if (currentModel.type.jimmerTypeSignature(ignoreRootNullability = true) !=
-                inheritedModel.type.jimmerTypeSignature(ignoreRootNullability = true)
-            ) {
-                add("resolved type")
-            }
-            if (currentModel.nullable != inheritedModel.nullable) {
-                add("nullability")
-            }
-            if (currentModel.list != inheritedModel.list) {
-                add("list category")
-            }
-            if (currentModel.association != inheritedModel.association) {
-                add("association category")
-            }
-            if (currentModel.associationKind != inheritedModel.associationKind) {
-                add("association kind")
-            }
-            if (currentModel.primaryAnnotationTypeId != inheritedModel.primaryAnnotationTypeId) {
-                add("primary mapping annotation")
-            }
-            if (currentModel.mappedBy?.name != inheritedModel.mappedBy?.name) {
-                add("mappedBy ownership")
-            }
-            if (currentModel.associationStorage != inheritedModel.associationStorage) {
-                add("association storage")
-            }
-            if (currentModel.formulaKind != inheritedModel.formulaKind) {
-                add("formula kind")
-            }
-        }
-        if (violations.isNotEmpty()) {
-            throw ImmutablePrecompileException(
-                declarationId = property.declaration.id,
-                message = "Immutable property '${property.declaration.id.value}' overrides annotations but changes " +
-                    violations.joinToString(),
+        for (overriddenDeclaration in overriddenDeclarations) {
+            val inheritedOwnerId = overriddenDeclaration.ownerId
+            val inheritedOwner = workspace[inheritedOwnerId] as? LsiTypeDeclaration
+                ?: throw ImmutablePrecompileException(
+                    declarationId = property.declaration.id,
+                    recoverable = true,
+                    message = "Missing inherited immutable type '${inheritedOwnerId.value}'",
+                )
+            val inheritedProperty = typeSystem.effectiveProperties(inheritedOwnerId)
+                .firstOrNull { inherited ->
+                    inherited.overrideChain.any { declaration -> declaration.id == overriddenDeclaration.id }
+                }
+                ?: throw ImmutablePrecompileException(
+                    declarationId = property.declaration.id,
+                    message = "Cannot resolve inherited property '${overriddenDeclaration.id.value}'",
+                )
+            val inheritedType = resolveInheritedPropertyType(
+                ownerTypeId = ownerType.id,
+                inheritedOwner = inheritedOwner,
+                inheritedType = inheritedProperty.type,
+                typeSystem = typeSystem,
+                sourceId = property.declaration.id,
             )
+            val inheritedInOwner = inheritedProperty.copy(
+                ownerId = ownerType.id,
+                type = inheritedType,
+            )
+            val inheritedModel = inheritedInOwner.toImmutableProp(
+                ownerTypeId = ownerType.id,
+                kindByTypeId = kindByTypeId,
+                microServiceMetadataByTypeId = microServiceMetadataByTypeId,
+                workspace = workspace,
+                typeSystem = typeSystem,
+            )
+            val violations = buildList {
+                if (currentModel.type.jimmerTypeSignature(ignoreRootNullability = true) !=
+                    inheritedModel.type.jimmerTypeSignature(ignoreRootNullability = true)
+                ) {
+                    add("resolved type")
+                }
+                if (currentModel.nullable != inheritedModel.nullable) {
+                    add("nullability")
+                }
+                if (currentModel.list != inheritedModel.list) {
+                    add("list category")
+                }
+                if (currentModel.association != inheritedModel.association) {
+                    add("association category")
+                }
+                if (currentModel.associationKind != inheritedModel.associationKind) {
+                    add("association kind")
+                }
+                if (currentModel.primaryAnnotationTypeId != inheritedModel.primaryAnnotationTypeId) {
+                    add("primary mapping annotation")
+                }
+                if (currentModel.mappedBy?.name != inheritedModel.mappedBy?.name) {
+                    add("mappedBy ownership")
+                }
+                if (currentModel.associationStorage != inheritedModel.associationStorage) {
+                    add("association storage")
+                }
+                if (currentModel.formulaKind != inheritedModel.formulaKind) {
+                    add("formula kind")
+                }
+            }
+            if (violations.isNotEmpty()) {
+                throw ImmutablePrecompileException(
+                    declarationId = property.declaration.id,
+                    message = "Immutable property '${property.declaration.id.value}' overrides annotations but changes " +
+                        violations.joinToString(),
+                )
+            }
         }
     }
 

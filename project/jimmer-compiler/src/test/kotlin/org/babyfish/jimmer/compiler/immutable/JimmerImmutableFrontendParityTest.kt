@@ -535,6 +535,142 @@ class JimmerImmutableFrontendParityTest {
     }
 
     @Test
+    fun `real apt and ksp frontends validate every direct mapped superclass override`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+                import org.jetbrains.annotations.Nullable;
+
+                @MappedSuperclass
+                interface AlignedBase {
+                    String value();
+                }
+
+                @MappedSuperclass
+                interface NullableBase<T> {
+                    @Nullable
+                    T value();
+                }
+
+                @Entity
+                interface MultiBaseEntity extends AlignedBase, NullableBase<String> {
+                    @Id
+                    long id();
+
+                    @Override
+                    String value();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface AlignedBase {
+                    val value: String
+                }
+
+                @MappedSuperclass
+                interface NullableBase<T : Any> {
+                    val value: T?
+                }
+
+                @Entity
+                interface MultiBaseEntity : AlignedBase, NullableBase<String> {
+                    @Id
+                    val id: Long
+
+                    override val value: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(apt.diagnostic.orEmpty().contains("nullability"))
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject an indirect override hidden by a direct override`() {
+        val apt = compileApt(
+            """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface AlignedBase {
+                    String value();
+                }
+
+                @MappedSuperclass
+                interface RootBase {
+                    String value();
+                }
+
+                @MappedSuperclass
+                interface MiddleBase extends RootBase {}
+
+                @Entity
+                interface MultiPathEntity extends AlignedBase, MiddleBase {
+                    @Id
+                    long id();
+
+                    @Override
+                    String value();
+                }
+            """.trimIndent()
+        )
+        val ksp = compileKsp(
+            """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface AlignedBase {
+                    val value: String
+                }
+
+                @MappedSuperclass
+                interface RootBase {
+                    val value: String
+                }
+
+                @MappedSuperclass
+                interface MiddleBase : RootBase
+
+                @Entity
+                interface MultiPathEntity : AlignedBase, MiddleBase {
+                    @Id
+                    val id: Long
+
+                    override val value: String
+                }
+            """.trimIndent()
+        )
+
+        assertNull(apt.schema)
+        assertNull(ksp.schema)
+        assertEquals(apt.diagnostic, ksp.diagnostic)
+        assertTrue(apt.diagnostic.orEmpty().contains("mapped superclass of an entity"))
+    }
+
+    @Test
     fun `generic mapped superclass draft property is rebound only by concrete entity`() {
         val apt = compileApt(
             """

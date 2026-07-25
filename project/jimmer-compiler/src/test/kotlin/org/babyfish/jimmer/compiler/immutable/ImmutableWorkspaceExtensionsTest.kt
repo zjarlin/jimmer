@@ -3462,6 +3462,157 @@ class ImmutableWorkspaceExtensionsTest {
     }
 
     @Test
+    fun `validates override against every direct mapped superclass property`() {
+        val alignedBaseId = LsiSymbolId.type("demo.AlignedBase")
+        val nullableBaseId = LsiSymbolId.type("demo.NullableBase")
+        val entityId = LsiSymbolId.type("demo.MultiBaseEntity")
+        val nullableParameterId = LsiSymbolId.typeParameter(nullableBaseId, "T")
+        val alignedValue = property(
+            ownerId = alignedBaseId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+        )
+        val nullableValue = property(
+            ownerId = nullableBaseId,
+            name = "value",
+            type = LsiTypeParameterRef(
+                parameterId = nullableParameterId,
+                nullability = LsiNullability.NULLABLE,
+            ),
+        )
+        val entityValue = property(
+            ownerId = entityId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+            overrides = listOf(
+                LsiOverride(alignedValue.id),
+                LsiOverride(nullableValue.id),
+            ),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = alignedBaseId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(alignedValue.id),
+                ),
+                alignedValue,
+                type(
+                    qualifiedName = nullableBaseId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(nullableValue.id),
+                    typeParameters = listOf(LsiTypeParameter(nullableParameterId, "T")),
+                ),
+                nullableValue,
+                type(
+                    qualifiedName = entityId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = listOf(entityValue.id),
+                    superTypes = listOf(
+                        LsiDeclaredType(alignedBaseId),
+                        LsiDeclaredType(
+                            declarationId = nullableBaseId,
+                            arguments = listOf(
+                                LsiTypeArgument.invariant(LsiDeclaredType(STRING_TYPE)),
+                            ),
+                        ),
+                    ),
+                ),
+                entityValue,
+            ),
+        )
+
+        val alignedWorkspace = LsiWorkspace(
+            sources = workspace.sources,
+            declarations = workspace.declarations.map { declaration ->
+                if (declaration.id == nullableValue.id) {
+                    nullableValue.copy(
+                        type = LsiTypeParameterRef(
+                            parameterId = nullableParameterId,
+                            nullability = LsiNullability.NON_NULL,
+                        ),
+                    )
+                } else {
+                    declaration
+                }
+            },
+        )
+        val alignedEntityValue = compileFixture(alignedWorkspace)
+            .types
+            .single { type -> type.id == entityId }
+            .props
+            .single { prop -> prop.name == "value" }
+        assertEquals(3, alignedEntityValue.overrideChain.size)
+
+        val exception = assertFailsWith<ImmutablePrecompileException> {
+            compileFixture(workspace)
+        }
+        assertEquals(entityValue.id, exception.declarationId)
+        assertTrue(exception.message.orEmpty().contains("nullability"))
+    }
+
+    @Test
+    fun `rejects an indirect override hidden behind an aligned direct override`() {
+        val alignedBaseId = LsiSymbolId.type("demo.AlignedBase")
+        val rootBaseId = LsiSymbolId.type("demo.RootBase")
+        val middleBaseId = LsiSymbolId.type("demo.MiddleBase")
+        val entityId = LsiSymbolId.type("demo.MultiPathEntity")
+        val alignedValue = property(
+            ownerId = alignedBaseId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+        )
+        val rootValue = property(
+            ownerId = rootBaseId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+        )
+        val entityValue = property(
+            ownerId = entityId,
+            name = "value",
+            type = LsiDeclaredType(STRING_TYPE),
+            overrides = listOf(
+                LsiOverride(alignedValue.id, distance = 1),
+                LsiOverride(rootValue.id, distance = 2),
+            ),
+        )
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = alignedBaseId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(alignedValue.id),
+                ),
+                alignedValue,
+                type(
+                    qualifiedName = rootBaseId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = listOf(rootValue.id),
+                ),
+                rootValue,
+                type(
+                    qualifiedName = middleBaseId.requireTypeQualifiedName(),
+                    marker = MAPPED_SUPERCLASS,
+                    memberIds = emptyList(),
+                    superTypes = listOf(LsiDeclaredType(rootBaseId)),
+                ),
+                type(
+                    qualifiedName = entityId.requireTypeQualifiedName(),
+                    marker = ENTITY,
+                    memberIds = listOf(entityValue.id),
+                    superTypes = listOf(
+                        LsiDeclaredType(alignedBaseId),
+                        LsiDeclaredType(middleBaseId),
+                    ),
+                ),
+                entityValue,
+            ),
+        )
+
+        assertOverrideEligibilityRejected(workspace)
+    }
+
+    @Test
     fun `rejects overridden property type nullability and list changes`() {
         assertOverrideRejected(
             baseType = LsiDeclaredType(STRING_TYPE),
