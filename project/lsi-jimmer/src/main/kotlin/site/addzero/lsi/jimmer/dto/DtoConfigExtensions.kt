@@ -53,7 +53,7 @@ private class DtoConfigContractResolver(
 
     fun resolve(graph: DtoGraph): DtoConfigContractResolution {
         val contracts = mutableListOf<DtoConfigContract>()
-        val diagnostics = mutableListOf<LsiDiagnostic>()
+        val diagnostics = graph.validateDtoConfigPaths(immutableSchema).toMutableList()
         val unresolvedTypeIds = sortedSetOf<LsiSymbolId>()
         graph.props.filterIsInstance<DtoBaseProp>().forEach { prop ->
             val config = prop.config ?: return@forEach
