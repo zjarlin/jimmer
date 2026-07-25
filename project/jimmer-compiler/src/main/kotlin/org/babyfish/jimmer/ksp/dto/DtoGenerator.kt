@@ -26,6 +26,7 @@ import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.ksp.util.ConverterMetadata
 import org.babyfish.jimmer.ksp.util.GenericParser
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoToStringRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -38,7 +39,6 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp as LsiDtoProp
-import site.addzero.lsi.jimmer.dto.DtoToStringInclusion
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
@@ -58,7 +58,6 @@ import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.polymorphicRootDiscriminatorPropNameOrNull
 import site.addzero.lsi.jimmer.dto.prop
-import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
@@ -66,7 +65,6 @@ import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
 import site.addzero.lsi.jimmer.dto.tailProp
-import site.addzero.lsi.jimmer.dto.toStringInclusion
 import site.addzero.lsi.jimmer.dto.userProp
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
@@ -2641,72 +2639,7 @@ internal class DtoGenerator private constructor(
     }
 
     private fun TypeSpec.Builder.addToString() {
-        addFunction(
-            FunSpec.builder("toString")
-                .addModifiers(KModifier.PUBLIC, KModifier.OVERRIDE)
-                .returns(STRING)
-                .addCode(
-                    CodeBlock
-                        .builder()
-                        .apply {
-                            val toStringProps = lsiDtoType.propsInDeclarationOrder(lsiGraph)
-                            val hasConditionalProps = toStringProps.any { prop ->
-                                prop.toStringInclusion(lsiGraph) != DtoToStringInclusion.ALWAYS
-                            }
-                            if (hasConditionalProps) {
-                                addStatement("val builder = StringBuilder()")
-                                addStatement("var separator = \"\"")
-                                addStatement("builder.append(%S).append('(')", simpleNamePart())
-                                for (lsiProp in toStringProps) {
-                                    val inclusion = lsiProp.toStringInclusion(lsiGraph)
-                                    if (inclusion == DtoToStringInclusion.WHEN_LOADED) {
-                                        val stateFieldName = checkNotNull(
-                                            lsiProp.dtoLoadedStateStorageNameOrNull(
-                                                lsiGraph,
-                                                LsiLanguage.KOTLIN,
-                                            ),
-                                        )
-                                        beginControlFlow("if (%L)", stateFieldName)
-                                    } else if (inclusion == DtoToStringInclusion.WHEN_NON_NULL) {
-                                        beginControlFlow("if (%L != null)", lsiProp.name)
-                                    }
-                                    if (lsiProp.name == "builder") {
-                                        addStatement(
-                                            "builder.append(separator).append(%S).append(this.%L)",
-                                            lsiProp.name + '=',
-                                            lsiProp.name,
-                                        )
-                                        addStatement("separator = \", \"")
-                                    } else {
-                                        addStatement(
-                                            "builder.append(separator).append(%S).append(%L)",
-                                            lsiProp.name + '=',
-                                            lsiProp.name,
-                                        )
-                                        addStatement("separator = \", \"")
-                                    }
-                                    if (inclusion != DtoToStringInclusion.ALWAYS) {
-                                        endControlFlow()
-                                    }
-                                }
-                                addStatement("builder.append(')')")
-                                addStatement("return builder.toString()")
-                            } else {
-                                add("return %S +\n", simpleNamePart() + "(")
-                                toStringProps.forEachIndexed { index, prop ->
-                                    add(
-                                        "    %S + %L + \n",
-                                        (if (index == 0) "" else ", ") + prop.name + '=',
-                                        prop.name
-                                    )
-                                }
-                                add("    %S\n", ")")
-                            }
-                        }
-                        .build()
-                )
-                .build()
-        )
+        addFunction(KspDtoToStringRenderer.render(lsiDtoType, lsiGraph, simpleNamePart()))
     }
 
     private fun simpleNamePart(): String =

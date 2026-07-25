@@ -14,6 +14,7 @@ import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoToStringRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeRefRenderer;
 import org.babyfish.jimmer.dto.compiler.*;
@@ -36,8 +37,6 @@ import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
-import site.addzero.lsi.jimmer.dto.DtoToStringExtensionsKt;
-import site.addzero.lsi.jimmer.dto.DtoToStringInclusion;
 import site.addzero.lsi.jimmer.dto.DtoTypeId;
 import site.addzero.lsi.model.LsiDeclaredType;
 import site.addzero.lsi.model.LsiWorkspace;
@@ -2516,55 +2515,9 @@ public class DtoGenerator {
     }
 
     private void addToString() {
-        MethodSpec.Builder builder = MethodSpec
-                .methodBuilder("toString")
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(Override.class)
-                .returns(org.babyfish.jimmer.apt.immutable.generator.Constants.STRING_CLASS_NAME);
-        builder.addStatement("StringBuilder builder = new StringBuilder()");
-        builder.addStatement("builder.append($S).append('(')", simpleNamePath());
-        String separator = "\"\"";
-        List<site.addzero.lsi.jimmer.dto.DtoProp> toStringProps =
-                DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph);
-        boolean dynamicSeparator = toStringProps.stream().anyMatch(prop ->
-                DtoToStringExtensionsKt.toStringInclusion(prop, lsiGraph) != DtoToStringInclusion.ALWAYS
+        typeBuilder.addMethod(
+                AptDtoToStringRenderer.render(lsiDtoType, lsiGraph, simpleNamePath())
         );
-        if (dynamicSeparator) {
-            builder.addStatement("String _sp = \"\"");
-        }
-        for (site.addzero.lsi.jimmer.dto.DtoProp lsiProp : toStringProps) {
-            DtoToStringInclusion inclusion =
-                    DtoToStringExtensionsKt.toStringInclusion(lsiProp, lsiGraph);
-            if (inclusion == DtoToStringInclusion.WHEN_LOADED) {
-                String stateFieldName = Objects.requireNonNull(
-                        DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
-                                lsiProp,
-                                lsiGraph,
-                                LsiLanguage.JAVA
-                        )
-                );
-                builder.beginControlFlow("if ($L)", stateFieldName);
-            } else if (inclusion == DtoToStringInclusion.WHEN_NON_NULL) {
-                builder.beginControlFlow("if ($L != null)", lsiProp.getName());
-            }
-            if (lsiProp.getName().equals("builder")) {
-                builder.addStatement("builder.append($L).append($S).append(this.$L)", separator, lsiProp.getName() + '=', lsiProp.getName());
-            } else {
-                builder.addStatement("builder.append($L).append($S).append($L)", separator, lsiProp.getName() + '=', lsiProp.getName());
-            }
-            if (dynamicSeparator) {
-                builder.addStatement("_sp = \", \"");
-                separator = "_sp";
-            } else {
-                separator = "\", \"";
-            }
-            if (inclusion != DtoToStringInclusion.ALWAYS) {
-                builder.endControlFlow();
-            }
-        }
-        builder.addStatement("builder.append(')')");
-        builder.addStatement("return builder.toString()");
-        typeBuilder.addMethod(builder.build());
     }
 
     private String simpleNamePath() {

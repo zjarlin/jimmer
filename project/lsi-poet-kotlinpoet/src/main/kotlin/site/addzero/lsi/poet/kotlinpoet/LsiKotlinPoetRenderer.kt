@@ -58,6 +58,14 @@ class LsiKotlinPoetRenderer : LsiPoetRenderer {
         return type.toKotlinTypeSpec(typeNames)
     }
 
+    /** 将单个 LSI 函数渲染为可嵌入现有 KotlinPoet 类型的结构。 */
+    fun renderFunction(
+        function: LsiPoetFunction,
+        typeNames: List<LsiPoetTypeName>,
+    ): FunSpec {
+        return function.toKotlinFunction(typeNames)
+    }
+
     /** 将单个 LSI Poet 注解渲染为可嵌入现有 KotlinPoet 声明的结构。 */
     fun renderAnnotation(
         annotation: LsiPoetAnnotation,
