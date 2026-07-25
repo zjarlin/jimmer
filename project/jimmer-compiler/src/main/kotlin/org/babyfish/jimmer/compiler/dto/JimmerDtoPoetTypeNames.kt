@@ -77,6 +77,17 @@ internal object JimmerDtoPoetTypeNames {
         typeNamesByTypeId[type.id] = typeName
     }
 
+    /** 返回冻结 DTO 类型已经注册的精确生成名称。 */
+    @JvmStatic
+    fun requireRegistered(
+        type: DtoType,
+        typeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
+    ): LsiPoetTypeName {
+        return requireNotNull(typeNamesByTypeId[type.id]) {
+            "Frozen DTO type has no registered generated name: ${type.id.value}"
+        }
+    }
+
     /** 返回可复用 DTO 目标在当前生成批次中的精确源码名称。 */
     @JvmStatic
     fun reusableTarget(

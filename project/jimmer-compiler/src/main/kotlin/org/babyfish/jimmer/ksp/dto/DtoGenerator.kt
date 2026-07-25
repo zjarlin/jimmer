@@ -37,6 +37,7 @@ import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import site.addzero.lsi.jimmer.dto.DtoProp as LsiDtoProp
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
@@ -48,6 +49,7 @@ import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
 import site.addzero.lsi.jimmer.dto.generatedTargetType
+import site.addzero.lsi.jimmer.dto.generatedTargetTypeOrNull
 import site.addzero.lsi.jimmer.dto.hasTypeAnnotation
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
 import site.addzero.lsi.jimmer.dto.isPolymorphicInputRoot
@@ -55,6 +57,7 @@ import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.polymorphicRootDiscriminatorPropNameOrNull
 import site.addzero.lsi.jimmer.dto.prop
+import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
@@ -677,7 +680,7 @@ internal class DtoGenerator private constructor(
             }
         }
         for (foldProp in dtoType.foldProps) {
-            if (polymorphicRootFoldPropOrNull(foldProp) != null) {
+            if (polymorphicRootPropOrNull(foldProp) != null) {
                 continue
             }
             val lsiTargetType = lsiDtoType
@@ -2253,10 +2256,9 @@ internal class DtoGenerator private constructor(
         this as FoldProp<ImmutableType, ImmutableProp>
 
     private fun propTypeName(prop: FoldProp<ImmutableType, ImmutableProp>): TypeName {
-        val polymorphicRootProp = polymorphicRootFoldPropOrNull(prop)
+        val polymorphicRootProp = polymorphicRootPropOrNull(prop)
         val typeName = if (polymorphicRootProp != null) {
-            val polymorphicOwner = requireNotNull(parent)
-            polymorphicOwner.getDtoClassName(polymorphicOwner.targetSimpleName(polymorphicRootProp))
+            generatedTargetTypeName(polymorphicRootProp)
         } else {
             getDtoClassName(targetSimpleName(prop))
         }
@@ -2312,10 +2314,7 @@ internal class DtoGenerator private constructor(
 
     private fun propElementName(prop: DtoProp<ImmutableType, ImmutableProp>): TypeName {
         polymorphicRootPropOrNull(prop)?.let { polymorphicRootProp ->
-            val polymorphicOwner = requireNotNull(parent)
-            return polymorphicOwner.getDtoClassName(
-                polymorphicOwner.targetSimpleName(polymorphicRootProp)
-            )
+            return generatedTargetTypeName(polymorphicRootProp)
         }
         val tailProp = prop.toTailProp()
         val lsiTailProp = lsiTailProp(prop)
@@ -2382,27 +2381,27 @@ internal class DtoGenerator private constructor(
     private fun targetSimpleName(prop: FoldProp<ImmutableType, ImmutableProp>): String =
         standardTargetSimpleName("TargetOf_${prop.name}")
 
-    private fun polymorphicRootPropOrNull(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
-    ): DtoProp<ImmutableType, ImmutableProp>? {
-        if (!polymorphicBranch) {
+    private fun polymorphicRootPropOrNull(prop: AbstractProp): LsiDtoProp? {
+        val polymorphicOwner = parent
+        if (!polymorphicBranch || polymorphicOwner == null) {
             return null
         }
-        return parent?.dtoType?.dtoProps?.singleOrNull { rootProp ->
-            val targetType = rootProp.targetType
-            rootProp.name == prop.name &&
-                targetType != null &&
-                (!rootProp.isRecursive || targetType.isFocusedRecursion)
-        }
+        return polymorphicOwner.lsiDtoType.promotedPolymorphicRootPropOrNull(
+            lsiGraph,
+            lsiDtoType.prop(lsiGraph, prop.name),
+        )
     }
 
-    private fun polymorphicRootFoldPropOrNull(
-        prop: FoldProp<ImmutableType, ImmutableProp>,
-    ): FoldProp<ImmutableType, ImmutableProp>? {
-        if (!polymorphicBranch) {
-            return null
-        }
-        return parent?.dtoType?.foldProps?.singleOrNull { rootProp -> rootProp.name == prop.name }
+    private fun generatedTargetTypeName(prop: LsiDtoProp): TypeName {
+        val targetType = prop.generatedTargetTypeOrNull(lsiGraph)
+            ?: throw DtoException(
+                "Promoted DTO root property has no generated target: \"${prop.name}\""
+            )
+        val typeName = JimmerDtoPoetTypeNames.requireRegistered(
+            targetType,
+            generatedDtoTypeNamesByTypeId,
+        )
+        return KspDtoTypeRefRenderer.render(typeName, workspace)
     }
 
     private fun accessorFieldName(propName: String): String =

@@ -104,6 +104,18 @@ fun DtoFoldProp.generatedTargetType(graph: DtoGraph): DtoType {
     return graph.typesById.getValue(targetTypeId)
 }
 
+/** 返回属性需要生成的目标 DTO 类型；用户属性及无需生成目标的基础属性返回空。 */
+fun DtoProp.generatedTargetTypeOrNull(graph: DtoGraph): DtoType? {
+    require(graph.propsById[id] == this) {
+        "DTO property does not belong to this graph: ${id.value}"
+    }
+    return when (this) {
+        is DtoBaseProp -> generatedTargetType(graph)
+        is DtoFoldProp -> generatedTargetType(graph)
+        is DtoUserProp -> null
+    }
+}
+
 /** 返回折叠属性的空值守卫属性。 */
 fun DtoFoldProp.nullGuardProp(graph: DtoGraph): DtoBaseProp? {
     require(graph.propsById[id] == this) {
@@ -130,4 +142,34 @@ fun DtoPolymorphicBranch.bodyType(graph: DtoGraph): DtoType {
 /** 返回多态根与分支合并后的生成语义类型。 */
 fun DtoPolymorphicBranch.mergedType(graph: DtoGraph): DtoType {
     return graph.typesById.getValue(mergedTypeId)
+}
+
+/** 返回多态分支属性复用的根 DTO 属性；该属性需要生成分支共享的嵌套类型。 */
+fun DtoType.promotedPolymorphicRootPropOrNull(
+    graph: DtoGraph,
+    mergedProp: DtoProp,
+): DtoProp? {
+    require(graph.typesById[id] == this) {
+        "DTO polymorphic root does not belong to this graph: ${id.value}"
+    }
+    require(graph.propsById[mergedProp.id] == mergedProp) {
+        "DTO merged property does not belong to this graph: ${mergedProp.id.value}"
+    }
+    val mergedType = graph.typesById.getValue(mergedProp.ownerTypeId)
+    require(mergedProp.id in mergedType.propIds) {
+        "DTO merged property must be visible in its owner type: ${mergedProp.id.value}"
+    }
+    val polymorphism = requireNotNull(polymorphism) {
+        "DTO type is not a polymorphic root: ${id.value}"
+    }
+    val branches = polymorphism.branches.filter { branch -> branch.mergedTypeId == mergedType.id }
+    require(branches.size == 1) {
+        "DTO merged property must belong to exactly one polymorphic branch: ${mergedProp.id.value}"
+    }
+    val rootProp = propsInDeclarationOrder(graph).singleOrNull { prop -> prop.name == mergedProp.name }
+        ?: return null
+    val sameKind =
+        rootProp is DtoBaseProp && mergedProp is DtoBaseProp ||
+            rootProp is DtoFoldProp && mergedProp is DtoFoldProp
+    return rootProp.takeIf { sameKind && rootProp.generatedTargetTypeOrNull(graph) != null }
 }

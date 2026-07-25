@@ -6,6 +6,7 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.toLsiType
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
@@ -28,6 +29,11 @@ internal object KspDtoTypeRefRenderer {
         generatedTypeName: LsiPoetTypeName?,
     ): TypeName {
         return render(typeRef.toLsiType(), workspace, listOfNotNull(generatedTypeName))
+    }
+
+    /** 将已注册的 DTO 生成类型名渲染为 KotlinPoet 类型。 */
+    fun render(typeName: LsiPoetTypeName, workspace: LsiWorkspace): TypeName {
+        return render(LsiDeclaredType(typeName.typeId), workspace, listOf(typeName))
     }
 
     private fun render(

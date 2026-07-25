@@ -74,6 +74,51 @@ class DtoGenerationExtensionsTest {
     }
 
     @Test
+    fun `promotes only root properties with shared generated targets`() {
+        val graph = graph()
+        val root = graph.typesById.getValue(ROOT_TYPE_ID)
+        val merged = rootPolymorphism(graph).defaultBranch()!!.mergedType(graph)
+
+        assertEquals(
+            root.prop(graph, "nested"),
+            root.promotedPolymorphicRootPropOrNull(graph, merged.prop(graph, "nested")),
+        )
+        assertEquals(
+            root.prop(graph, "focused"),
+            root.promotedPolymorphicRootPropOrNull(graph, merged.prop(graph, "focused")),
+        )
+        assertEquals(
+            root.prop(graph, "folded"),
+            root.promotedPolymorphicRootPropOrNull(graph, merged.prop(graph, "folded")),
+        )
+        val secondMerged = rootPolymorphism(graph).typeBranchesInDeclarationOrder().single().mergedType(graph)
+        assertEquals(
+            root.prop(graph, "nested"),
+            root.promotedPolymorphicRootPropOrNull(graph, secondMerged.prop(graph, "nested")),
+        )
+        assertEquals(
+            root.prop(graph, "folded"),
+            root.promotedPolymorphicRootPropOrNull(graph, secondMerged.prop(graph, "folded")),
+        )
+        listOf(
+            "recursive",
+            "sourceReference",
+            "binaryReference",
+            "scalar",
+            "userValue",
+            "branchOnly",
+        ).forEach { name ->
+            assertNull(
+                root.promotedPolymorphicRootPropOrNull(graph, merged.prop(graph, name)),
+                name,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            root.promotedPolymorphicRootPropOrNull(graph, root.prop(graph, "nested"))
+        }
+    }
+
+    @Test
     fun `rejects properties copied from another graph`() {
         val graph = graph()
         val root = graph.typesById.getValue(ROOT_TYPE_ID)
@@ -81,6 +126,12 @@ class DtoGenerationExtensionsTest {
 
         assertFailsWith<IllegalArgumentException> {
             foreignProp.generatedTargetType(graph)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            root.userPropsInDeclarationOrder(graph)
+                .single()
+                .copy(name = "foreign")
+                .generatedTargetTypeOrNull(graph)
         }
         assertFailsWith<IllegalArgumentException> {
             root.prop(graph, "missing")
@@ -151,6 +202,58 @@ class DtoGenerationExtensionsTest {
             type = DtoTypeRef("kotlin.String", emptyList(), false, LOCATION),
             defaultValueText = null,
         )
+        fun DtoBaseProp.copyToMerged(
+            id: DtoPropId,
+            ownerTypeId: DtoTypeId = BRANCH_MERGED_TYPE_ID,
+        ): DtoBaseProp = copy(
+            id = id,
+            ownerTypeId = ownerTypeId,
+            nextPropId = null,
+            tailPropId = id,
+        )
+        val mergedNested = nested.copyToMerged(BRANCH_NESTED_PROP_ID)
+        val mergedRecursive = recursive.copyToMerged(BRANCH_RECURSIVE_PROP_ID)
+        val mergedFocused = focused
+            .copyToMerged(BRANCH_FOCUSED_PROP_ID)
+            .copy(targetTypeId = BRANCH_FOCUSED_TYPE_ID)
+        val mergedSourceReference = sourceReference.copyToMerged(BRANCH_SOURCE_REFERENCE_PROP_ID)
+        val mergedBinaryReference = binaryReference.copyToMerged(BRANCH_BINARY_REFERENCE_PROP_ID)
+        val mergedScalar = scalar.copyToMerged(BRANCH_SCALAR_PROP_ID)
+        val mergedUserValue = userValue.copy(
+            id = BRANCH_USER_PROP_ID,
+            ownerTypeId = BRANCH_MERGED_TYPE_ID,
+        )
+        val mergedFolded = folded.copy(
+            id = BRANCH_FOLD_PROP_ID,
+            ownerTypeId = BRANCH_MERGED_TYPE_ID,
+            nullGuardPropId = mergedNested.id,
+        )
+        val branchOnly = baseProp(
+            id = BRANCH_ONLY_PROP_ID,
+            ownerTypeId = BRANCH_MERGED_TYPE_ID,
+            name = "branchOnly",
+            targetTypeId = BRANCH_ONLY_TYPE_ID,
+        )
+        val secondMergedNested = nested.copyToMerged(
+            id = SECOND_BRANCH_NESTED_PROP_ID,
+            ownerTypeId = SECOND_BRANCH_MERGED_TYPE_ID,
+        )
+        val secondMergedFolded = folded.copy(
+            id = SECOND_BRANCH_FOLD_PROP_ID,
+            ownerTypeId = SECOND_BRANCH_MERGED_TYPE_ID,
+            nullGuardPropId = secondMergedNested.id,
+        )
+        val mergedPropIds = listOf(
+            mergedNested.id,
+            mergedRecursive.id,
+            mergedFocused.id,
+            mergedSourceReference.id,
+            mergedBinaryReference.id,
+            mergedScalar.id,
+            mergedUserValue.id,
+            mergedFolded.id,
+            branchOnly.id,
+        )
         val branches = listOf(
             branch(
                 kind = DtoPolymorphicBranchKind.DEFAULT,
@@ -186,12 +289,18 @@ class DtoGenerationExtensionsTest {
             type(NESTED_TYPE_ID, name = null),
             type(RECURSIVE_TYPE_ID, name = null),
             type(FOCUSED_TYPE_ID, name = null, focusedRecursion = true),
+            type(BRANCH_FOCUSED_TYPE_ID, name = null, focusedRecursion = true),
             type(REUSABLE_SOURCE_TYPE_ID, name = "ReusableView"),
             type(FOLD_TYPE_ID, name = null),
+            type(BRANCH_ONLY_TYPE_ID, name = null),
             type(BRANCH_BODY_TYPE_ID, name = null),
-            type(BRANCH_MERGED_TYPE_ID, name = null),
+            type(BRANCH_MERGED_TYPE_ID, name = null, propIds = mergedPropIds),
             type(SECOND_BRANCH_BODY_TYPE_ID, name = null),
-            type(SECOND_BRANCH_MERGED_TYPE_ID, name = null),
+            type(
+                SECOND_BRANCH_MERGED_TYPE_ID,
+                name = null,
+                propIds = listOf(secondMergedNested.id, secondMergedFolded.id),
+            ),
         ).sortedBy(DtoType::id)
         return DtoGraph(
             source = SOURCE,
@@ -207,6 +316,17 @@ class DtoGenerationExtensionsTest {
                 userValue,
                 hiddenTail,
                 folded,
+                mergedNested,
+                mergedRecursive,
+                mergedFocused,
+                mergedSourceReference,
+                mergedBinaryReference,
+                mergedScalar,
+                mergedUserValue,
+                mergedFolded,
+                branchOnly,
+                secondMergedNested,
+                secondMergedFolded,
             ).sortedBy(DtoProp::id),
         )
     }
@@ -238,6 +358,7 @@ class DtoGenerationExtensionsTest {
 
     private fun baseProp(
         id: DtoPropId,
+        ownerTypeId: DtoTypeId = ROOT_TYPE_ID,
         name: String,
         targetTypeId: DtoTypeId?,
         recursive: Boolean = false,
@@ -245,7 +366,7 @@ class DtoGenerationExtensionsTest {
     ): DtoBaseProp {
         return DtoBaseProp(
             id = id,
-            ownerTypeId = ROOT_TYPE_ID,
+            ownerTypeId = ownerTypeId,
             name = name,
             alias = name,
             nullable = false,
@@ -314,8 +435,10 @@ class DtoGenerationExtensionsTest {
         val NESTED_TYPE_ID = DtoTypeId("dto#nested")
         val RECURSIVE_TYPE_ID = DtoTypeId("dto#recursive")
         val FOCUSED_TYPE_ID = DtoTypeId("dto#focused")
+        val BRANCH_FOCUSED_TYPE_ID = DtoTypeId("dto#branch-focused")
         val REUSABLE_SOURCE_TYPE_ID = DtoTypeId("dto#reusable-source")
         val FOLD_TYPE_ID = DtoTypeId("dto#fold")
+        val BRANCH_ONLY_TYPE_ID = DtoTypeId("dto#branch-only")
         val BRANCH_BODY_TYPE_ID = DtoTypeId("dto#branch-body")
         val BRANCH_MERGED_TYPE_ID = DtoTypeId("dto#branch-merged")
         val SECOND_BRANCH_BODY_TYPE_ID = DtoTypeId("dto#second-branch-body")
@@ -329,5 +452,16 @@ class DtoGenerationExtensionsTest {
         val FOLD_PROP_ID = DtoPropId("dto#prop-fold")
         val HIDDEN_PROP_ID = DtoPropId("dto#prop-hidden")
         val USER_PROP_ID = DtoPropId("dto#prop-user")
+        val BRANCH_NESTED_PROP_ID = DtoPropId("dto#branch-prop-nested")
+        val BRANCH_RECURSIVE_PROP_ID = DtoPropId("dto#branch-prop-recursive")
+        val BRANCH_FOCUSED_PROP_ID = DtoPropId("dto#branch-prop-focused")
+        val BRANCH_SOURCE_REFERENCE_PROP_ID = DtoPropId("dto#branch-prop-source-reference")
+        val BRANCH_BINARY_REFERENCE_PROP_ID = DtoPropId("dto#branch-prop-binary-reference")
+        val BRANCH_SCALAR_PROP_ID = DtoPropId("dto#branch-prop-scalar")
+        val BRANCH_USER_PROP_ID = DtoPropId("dto#branch-prop-user")
+        val BRANCH_FOLD_PROP_ID = DtoPropId("dto#branch-prop-fold")
+        val BRANCH_ONLY_PROP_ID = DtoPropId("dto#branch-prop-only")
+        val SECOND_BRANCH_NESTED_PROP_ID = DtoPropId("dto#second-branch-prop-nested")
+        val SECOND_BRANCH_FOLD_PROP_ID = DtoPropId("dto#second-branch-prop-fold")
     }
 }

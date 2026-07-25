@@ -812,7 +812,7 @@ public class DtoGenerator {
             }
         }
         for (FoldProp<ImmutableType, ImmutableProp> prop : dtoType.getFoldProps()) {
-            if (polymorphicRootFoldPropOrNull(prop) != null) {
+            if (polymorphicRootPropOrNull(prop) != null) {
                 continue;
             }
             site.addzero.lsi.jimmer.dto.DtoFoldProp lsiProp =
@@ -2328,11 +2328,10 @@ public class DtoGenerator {
         }
         if (prop instanceof FoldProp<?, ?>) {
             FoldProp<ImmutableType, ImmutableProp> foldProp = asFoldProp(prop);
-            FoldProp<ImmutableType, ImmutableProp> polymorphicRootProp =
-                    polymorphicRootFoldPropOrNull(foldProp);
+            site.addzero.lsi.jimmer.dto.DtoProp polymorphicRootProp =
+                    polymorphicRootPropOrNull(foldProp);
             if (polymorphicRootProp != null) {
-                assert parent != null;
-                return parent.getDtoClassName(parent.targetSimpleName(polymorphicRootProp));
+                return generatedTargetTypeName(polymorphicRootProp);
             }
             return getDtoClassName(targetSimpleName(foldProp));
         }
@@ -2578,10 +2577,9 @@ public class DtoGenerator {
     }
 
     public TypeName getPropElementName(DtoProp<ImmutableType, ImmutableProp> prop) {
-        DtoProp<ImmutableType, ImmutableProp> polymorphicRootProp = polymorphicRootPropOrNull(prop);
+        site.addzero.lsi.jimmer.dto.DtoProp polymorphicRootProp = polymorphicRootPropOrNull(prop);
         if (polymorphicRootProp != null) {
-            assert parent != null;
-            return parent.getDtoClassName(parent.targetSimpleName(polymorphicRootProp));
+            return generatedTargetTypeName(polymorphicRootProp);
         }
         DtoProp<ImmutableType, ImmutableProp> tailProp = prop.toTailProp();
         DtoBaseProp lsiTailProp = lsiTailProp(prop);
@@ -2638,37 +2636,35 @@ public class DtoGenerator {
         );
     }
 
-    @Nullable
-    private DtoProp<ImmutableType, ImmutableProp> polymorphicRootPropOrNull(
-            DtoProp<ImmutableType, ImmutableProp> prop
-    ) {
+    private site.addzero.lsi.jimmer.dto.DtoProp polymorphicRootPropOrNull(AbstractProp prop) {
         if (!polymorphicBranch || parent == null) {
             return null;
         }
-        for (DtoProp<ImmutableType, ImmutableProp> rootProp : parent.dtoType.getDtoProps()) {
-            DtoType<ImmutableType, ImmutableProp> targetType = rootProp.getTargetType();
-            if (rootProp.getName().equals(prop.getName()) &&
-                    targetType != null &&
-                    (!rootProp.isRecursive() || targetType.isFocusedRecursion())) {
-                return rootProp;
-            }
-        }
-        return null;
+        site.addzero.lsi.jimmer.dto.DtoProp mergedProp = DtoGenerationExtensionsKt.prop(
+                lsiDtoType,
+                lsiGraph,
+                prop.getName()
+        );
+        return DtoGenerationExtensionsKt.promotedPolymorphicRootPropOrNull(
+                parent.lsiDtoType,
+                lsiGraph,
+                mergedProp
+        );
     }
 
-    @Nullable
-    private FoldProp<ImmutableType, ImmutableProp> polymorphicRootFoldPropOrNull(
-            FoldProp<ImmutableType, ImmutableProp> prop
-    ) {
-        if (!polymorphicBranch || parent == null) {
-            return null;
+    private TypeName generatedTargetTypeName(site.addzero.lsi.jimmer.dto.DtoProp prop) {
+        site.addzero.lsi.jimmer.dto.DtoType targetType =
+                DtoGenerationExtensionsKt.generatedTargetTypeOrNull(prop, lsiGraph);
+        if (targetType == null) {
+            throw new DtoException(
+                    "Promoted DTO root property has no generated target: \"" + prop.getName() + "\""
+            );
         }
-        for (FoldProp<ImmutableType, ImmutableProp> rootProp : parent.dtoType.getFoldProps()) {
-            if (rootProp.getName().equals(prop.getName())) {
-                return rootProp;
-            }
-        }
-        return null;
+        LsiPoetTypeName typeName = JimmerDtoPoetTypeNames.requireRegistered(
+                targetType,
+                generatedDtoTypeNames
+        );
+        return AptDtoTypeRefRenderer.render(typeName, lsiWorkspace);
     }
 
     private void collectNames(List<String> list) {
