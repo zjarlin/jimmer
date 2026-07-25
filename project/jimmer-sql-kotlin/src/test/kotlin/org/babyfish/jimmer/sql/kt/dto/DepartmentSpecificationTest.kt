@@ -65,6 +65,7 @@ class DepartmentSpecificationTest : AbstractQueryTest() {
     fun testSpecification2() {
         val specification = DepartmentSpecification2(
             id = "3",
+            excludedName = "Market",
             employeeIds = listOf("4", "5"),
             employeeName = "Bob"
         )
@@ -78,6 +79,7 @@ class DepartmentSpecificationTest : AbstractQueryTest() {
                 """select tb_1_.ID, tb_1_.NAME, tb_1_.DELETED_TIME 
                     |from DEPARTMENT tb_1_ 
                     |where tb_1_.ID = ? 
+                    |and tb_1_.NAME not like ?${' '}
                     |and exists(
                     |--->select 1 
                     |--->from EMPLOYEE tb_2_ 
@@ -86,7 +88,7 @@ class DepartmentSpecificationTest : AbstractQueryTest() {
                     |--->and lower(tb_2_.NAME) like ? 
                     |--->and tb_2_.DELETED_UUID is null
                     |) and tb_1_.DELETED_TIME is null""".trimMargin()
-            ).variables(3L, 4L, 5L, "%bob%")
+            ).variables(3L, "%Market%", 4L, 5L, "%bob%")
         }
     }
 }

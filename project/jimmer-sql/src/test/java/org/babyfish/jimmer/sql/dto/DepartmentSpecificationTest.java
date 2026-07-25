@@ -71,6 +71,7 @@ public class DepartmentSpecificationTest extends AbstractQueryTest {
         DepartmentTable table = DepartmentTable.$;
         DepartmentSpecification2 specification = new DepartmentSpecification2();
         specification.setId("3");
+        specification.setExcludedName("Market");
         specification.setEmployeeIds(Arrays.asList("4", "5"));
         specification.setEmployeeName("Bob");
         executeAndExpect(
@@ -83,6 +84,7 @@ public class DepartmentSpecificationTest extends AbstractQueryTest {
                             "select tb_1_.ID, tb_1_.NAME, tb_1_.DELETED_MILLIS " +
                                     "from DEPARTMENT tb_1_ " +
                                     "where tb_1_.ID = ? " +
+                                    "and tb_1_.NAME not like ? " +
                                     "and exists(" +
                                     "--->select 1 " +
                                     "--->from EMPLOYEE tb_2_ " +
@@ -92,7 +94,7 @@ public class DepartmentSpecificationTest extends AbstractQueryTest {
                                     "--->and tb_2_.DELETED_MILLIS = ?" +
                                     ") " +
                                     "and tb_1_.DELETED_MILLIS = ?"
-                    ).variables(3L, 4L, 5L, "%bob%", 0L, 0L);
+                    ).variables(3L, "%Market%", 4L, 5L, "%bob%", 0L, 0L);
                 }
         );
     }

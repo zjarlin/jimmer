@@ -2001,13 +2001,12 @@ public class DtoGenerator {
         } else {
             cb.add("this.$L()", propGetter);
         }
-        if ("like".equals(funcName) || "notLike".equals(funcName)) {
-            cb.add(", ");
-            cb.add(tailProp.getLikeOptions().contains(LikeOption.INSENSITIVE) ? "true" : "false");
-            cb.add(", ");
-            cb.add(tailProp.getLikeOptions().contains(LikeOption.MATCH_START) ? "true" : "false");
-            cb.add(", ");
-            cb.add(tailProp.getLikeOptions().contains(LikeOption.MATCH_END) ? "true" : "false");
+        CodeBlock likeOptionArguments = AptDtoSpecificationRenderer.renderLikeOptionArguments(
+                DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, propName),
+                lsiGraph
+        );
+        if (likeOptionArguments != null) {
+            cb.add("$L", likeOptionArguments);
         }
         cb.addStatement(")");
         builder.addCode(cb.build());

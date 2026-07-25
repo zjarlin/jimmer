@@ -3,9 +3,12 @@ package org.babyfish.jimmer.compiler.dto
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
 import site.addzero.lsi.jimmer.dto.specificationBaseType
+import site.addzero.lsi.jimmer.dto.specificationLikeOptionArguments
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiWorkspace
@@ -47,6 +50,19 @@ internal fun DtoType.toDtoEntityTypePoetFunction(
         },
         bodyStyle = LsiPoetBodyStyle.BLOCK,
     )
+}
+
+/** 将冻结的 like/notLike 匹配参数降低为调用参数片段。 */
+internal fun DtoBaseProp.toSpecificationLikeOptionArgumentsPoetCodeBlock(
+    graph: DtoGraph,
+): LsiPoetCodeBlock? {
+    val arguments = specificationLikeOptionArguments(graph) ?: return null
+    return LsiPoetCodeBlock.build {
+        arguments.forEach { argument ->
+            text(", ")
+            literal(argument.toString())
+        }
+    }
 }
 
 /** 解析 entityType lowering 引用的精确源码类型名称。 */

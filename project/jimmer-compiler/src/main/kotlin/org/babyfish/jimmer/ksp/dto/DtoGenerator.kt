@@ -1712,14 +1712,10 @@ internal class DtoGenerator private constructor(
                     } else {
                         add(", this.%N", propName)
                     }
-                    if (funcName == "like") {
-                        add(", ")
-                        add(if (tailProp.likeOptions.contains(LikeOption.INSENSITIVE)) "true" else "false")
-                        add(", ")
-                        add(if (tailProp.likeOptions.contains(LikeOption.MATCH_START)) "true" else "false")
-                        add(", ")
-                        add(if (tailProp.likeOptions.contains(LikeOption.MATCH_END)) "true" else "false")
-                    }
+                    KspDtoSpecificationRenderer.renderLikeOptionArguments(
+                        lsiDtoType.baseProp(lsiGraph, propName),
+                        lsiGraph,
+                    )?.let { arguments -> add("%L", arguments) }
                     add(")\n")
                 }
                 .build()
