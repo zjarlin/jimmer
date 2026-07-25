@@ -1,13 +1,12 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, AbstractPropBuilder {
+class DtoPropBuilder<T, P> implements DtoPropImplementor<P>, AbstractPropBuilder {
 
     private final DtoTypeBuilder<T, P> parent;
 
@@ -61,7 +60,9 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
             DtoModifier inputModifier,
             @Nullable String doc
     ) {
-        String name = baseProp.getName();
+        CompilerContext<T, P> ctx = parent.ctx;
+        String basePropName = ctx.getBasePropName(baseProp);
+        String name = basePropName;
         if (funcName != null) {
             if (!funcName.equals("id")) {
                 throw new AssertionError("Internal bug: auto property only accept the function `id`");
@@ -72,7 +73,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
         this.declaringFile = parent.ctx.getDtoFile();
         this.aliasPattern = aliasPattern;
         this.basePropMap = Collections.singletonMap(
-                Objects.requireNonNull(baseProp, "basePropMap cannot be null").getName(),
+                basePropName,
                 baseProp
         );
         this.aliasLine = line;
@@ -144,28 +145,28 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
         this.aliasCol = prop.alias != null ? prop.alias.getCharPositionInLine() : prop.props.get(prop.props.size() - 1).getCharPositionInLine();
         Iterator<Token> itr = prop.props.iterator();
         P firstBaseProp = getBaseProp(parent, itr.next());
-        basePropMap.put(firstBaseProp.getName(), firstBaseProp);
+        basePropMap.put(ctx.getBasePropName(firstBaseProp), firstBaseProp);
         while (itr.hasNext()) {
             Token token = itr.next();
             P baseProp = getBaseProp(parent, token);
-            P conflictBaseProp = basePropMap.put(baseProp.getName(), baseProp);
+            P conflictBaseProp = basePropMap.put(ctx.getBasePropName(baseProp), baseProp);
             if (conflictBaseProp != null) {
                 throw ctx.exception(
                         prop.func.getLine(),
                         prop.func.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                ctx.getBasePropName(baseProp) +
                                 "\", it is duplicated"
                 );
             }
-            if (!ctx.isSameType(firstBaseProp, baseProp)) {
+            if (!ctx.isSameBasePropType(firstBaseProp, baseProp)) {
                 throw ctx.exception(
                         prop.func.getLine(),
                         prop.func.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                ctx.getBasePropName(baseProp) +
                                 "\", its property type or converted type(From Converter<?, T>) is not same as the type of \"" +
-                                firstBaseProp.getName() +
+                                ctx.getBasePropName(firstBaseProp) +
                                 "\""
                 );
             }
@@ -269,6 +270,8 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
         this.doc = Docs.parse(prop.doc);
 
         P baseProp = basePropMap.values().iterator().next();
+        String basePropName = ctx.getBasePropName(baseProp);
+        String basePropDisplayName = ctx.getBasePropDisplayName(baseProp);
 
         if (funcName != null) {
             switch (funcName) {
@@ -283,42 +286,42 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                     }
                     // Don't break
                 case "associatedIdEq":
-                    if (!baseProp.isAssociation(true)) {
+                    if (!ctx.isBasePropAssociation(baseProp, true)) {
                         throw ctx.exception(
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"" + funcName + "\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is not entity level association property"
                         );
                     }
-                    if (prop.alias == null && baseProp.isList()) {
+                    if (prop.alias == null && ctx.isBasePropList(baseProp)) {
                         throw ctx.exception(
                                 prop.stop.getLine(),
                                 prop.stop.getCharPositionInLine(),
                                 "The alias must be specified for the mapping property with function \"" + funcName + "\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is list association"
                         );
                     }
                     funcName = "id";
                     break;
                 case "flat":
-                    if (!baseProp.isAssociation(true) && !baseProp.isEmbedded()) {
+                    if (!ctx.isBasePropAssociation(baseProp, true) && !ctx.isBasePropEmbedded(baseProp)) {
                         throw ctx.exception(
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"flat\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is neither association nor embedded"
                         );
                     }
-                    if (baseProp.isList() && !parent.modifiers.contains(DtoModifier.SPECIFICATION)) {
+                    if (ctx.isBasePropList(baseProp) && !parent.modifiers.contains(DtoModifier.SPECIFICATION)) {
                         throw ctx.exception(
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"flat\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is list and the current dto type is not specification"
                         );
                     }
@@ -330,7 +333,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"like\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is not string"
                         );
                     }
@@ -343,14 +346,14 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                 case "ge":
                 case "valueIn":
                 case "valueNotIn":
-                    if (baseProp.isAssociation(true)) {
+                    if (ctx.isBasePropAssociation(baseProp, true)) {
                         throw ctx.exception(
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"" +
                                         funcName +
                                         "\" the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" cannot be association"
                         );
                     }
@@ -358,34 +361,34 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                 case "associatedIdNe":
                 case "associatedIdIn":
                 case "associatedIdNotIn":
-                    if (!baseProp.isAssociation(true)) {
+                    if (!ctx.isBasePropAssociation(baseProp, true)) {
                         throw ctx.exception(
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"" + funcName + "\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is not association"
                         );
                     }
                     break;
                 case "null":
-                    if (!baseProp.isNullable()) {
+                    if (!ctx.isBasePropNullable(baseProp)) {
                         throw ctx.exception(
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"" + funcName + "\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is non-null"
                         );
                     }
                     // Don't break
                 case "notNull":
-                    if (baseProp.isList() && baseProp.isAssociation(true)) {
+                    if (ctx.isBasePropList(baseProp) && ctx.isBasePropAssociation(baseProp, true)) {
                         throw ctx.exception(
                                 prop.func.getLine(),
                                 prop.func.getCharPositionInLine(),
                                 "Cannot call the function \"" + funcName + "\" because the current prop \"" +
-                                        baseProp +
+                                        basePropDisplayName +
                                         "\" is neither scalar nor single reference association"
                         );
                     }
@@ -432,12 +435,12 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                 );
             }
             if (funcName == null) {
-                alias = baseProp.getName();
+                alias = basePropName;
             } else {
                 switch (funcName) {
                     case "id":
                     case "associatedIdEq":
-                        if (baseProp.isAssociation(true) && baseProp.isList()) {
+                        if (ctx.isBasePropAssociation(baseProp, true) && ctx.isBasePropList(baseProp)) {
                             throw ctx.exception(
                                     prop.stop.getLine(),
                                     prop.stop.getCharPositionInLine(),
@@ -445,7 +448,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                                             "`id` function when the base property is list association"
                             );
                         }
-                        alias = baseProp.getName() + "Id";
+                        alias = basePropName + "Id";
                         break;
                     case "flat":
                         alias = null;
@@ -462,67 +465,67 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                                         "` function"
                         );
                     case "gt":
-                        alias = baseProp.getName();
+                        alias = basePropName;
                         alias = "min" + Character.toUpperCase(alias.charAt(0)) + alias.substring(1) + "Exclusive";
                         break;
                     case "ge":
-                        alias = baseProp.getName();
+                        alias = basePropName;
                         alias = "min" + Character.toUpperCase(alias.charAt(0)) + alias.substring(1);
                         break;
                     case "lt":
-                        alias = baseProp.getName();
+                        alias = basePropName;
                         alias = "max" + Character.toUpperCase(alias.charAt(0)) + alias.substring(1) + "Exclusive";
                         break;
                     case "le":
-                        alias = baseProp.getName();
+                        alias = basePropName;
                         alias = "max" + Character.toUpperCase(alias.charAt(0)) + alias.substring(1);
                         break;
                     case "null":
-                        alias = baseProp.getName();
+                        alias = basePropName;
                         if (!alias.startsWith("is") || alias.length() < 3 || !Character.isUpperCase(alias.charAt(2))) {
                             alias = Character.toUpperCase(alias.charAt(0)) + alias.substring(1);
                         }
                         alias = "is" + alias + "Null";
                         break;
                     case "notNull":
-                        alias = baseProp.getName();
+                        alias = basePropName;
                         if (!alias.startsWith("is") || alias.length() < 3 || !Character.isUpperCase(alias.charAt(2))) {
                             alias = Character.toUpperCase(alias.charAt(0)) + alias.substring(1);
                         }
                         alias = "is" + alias + "NotNull";
                         break;
                     case "associatedIdNe":
-                        if (baseProp.isAssociation(true) && baseProp.isList()) {
+                        if (ctx.isBasePropAssociation(baseProp, true) && ctx.isBasePropList(baseProp)) {
                             throw ctx.exception(
                                     prop.stop.getLine(),
                                     prop.stop.getCharPositionInLine(),
                                     "The alias must be specified for `associatedIdIn` function when base property is list"
                             );
                         }
-                        alias = "excluded" + Character.toUpperCase(baseProp.getName().charAt(0)) + baseProp.getName().substring(1) + "Id";
+                        alias = "excluded" + Character.toUpperCase(basePropName.charAt(0)) + basePropName.substring(1) + "Id";
                         break;
                     case "associatedIdIn":
-                        if (baseProp.isAssociation(true) && baseProp.isList()) {
+                        if (ctx.isBasePropAssociation(baseProp, true) && ctx.isBasePropList(baseProp)) {
                             throw ctx.exception(
                                     prop.stop.getLine(),
                                     prop.stop.getCharPositionInLine(),
                                     "The alias must be specified for `associatedIdIn` function when base property is list"
                             );
                         }
-                        alias = baseProp.getName() + "Ids";
+                        alias = basePropName + "Ids";
                         break;
                     case "associatedIdNotIn":
-                        if (baseProp.isAssociation(true) && baseProp.isList()) {
+                        if (ctx.isBasePropAssociation(baseProp, true) && ctx.isBasePropList(baseProp)) {
                             throw ctx.exception(
                                     prop.stop.getLine(),
                                     prop.stop.getCharPositionInLine(),
                                     "The alias must be specified for `associatedIdNotIn` function when base property is list"
                             );
                         }
-                        alias = "excluded" + Character.toUpperCase(baseProp.getName().charAt(0)) + baseProp.getName().substring(1) + "Ids";
+                        alias = "excluded" + Character.toUpperCase(basePropName.charAt(0)) + basePropName.substring(1) + "Ids";
                         break;
                     default:
-                        alias = baseProp.getName();
+                        alias = basePropName;
                         break;
                 }
             }
@@ -549,7 +552,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         "Illegal optional modifier '?', it is not allowed for the function `flat`"
                 );
             }
-            if (baseProp.isNullable()) {
+            if (ctx.isBasePropNullable(baseProp)) {
                 throw ctx.exception(
                         prop.optional.getLine(),
                         prop.optional.getCharPositionInLine(),
@@ -562,7 +565,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         prop.optional.getLine(),
                         prop.optional.getCharPositionInLine(),
                         "Illegal optional modifier '?' because the flat parent property \"" +
-                                nullableFlatParent.basePropMap.values().iterator().next() +
+                                nullableFlatParent.parent.ctx.getBasePropDisplayName(nullableFlatParent.getBaseProp()) +
                                 "\" is already nullable"
                 );
             }
@@ -575,7 +578,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         "Illegal required modifier '!', it is not allowed for the function `flat`"
                 );
             }
-            if (baseProp.isId()) {
+            if (ctx.isBasePropId(baseProp)) {
                 if (!parent.modifiers.contains(DtoModifier.INPUT) &&
                         !parent.modifiers.contains(DtoModifier.SPECIFICATION)) {
                     throw ctx.exception(
@@ -595,7 +598,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                                     "the declared type is neither unsafe nor specification"
                     );
                 }
-                if (!baseProp.isNullable() &&
+                if (!ctx.isBasePropNullable(baseProp) &&
                         getNullableFlatParent() == null &&
                         !parent.modifiers.contains(DtoModifier.SPECIFICATION)) {
                     throw ctx.exception(
@@ -610,14 +613,14 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
         }
 
         if (prop.recursive != null) {
-            if (!baseProp.isRecursive()) {
+            if (!ctx.isBasePropRecursive(baseProp)) {
                 throw ctx.exception(
                         prop.recursive.getLine(),
                         prop.recursive.getCharPositionInLine(),
                         "Illegal symbol \"" +
                                 prop.recursive.getText() +
                                 "\", the property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\" is not recursive"
                 );
             }
@@ -628,7 +631,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         "Illegal symbol \"" +
                                 prop.recursive.getText() +
                                 "\", the property with function invocation \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\" cannot not recursive"
                 );
             }
@@ -639,7 +642,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         "Illegal symbol \"" +
                                 prop.recursive.getText() +
                                 "\", the child type of recursive property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\" cannot not specified"
                 );
             }
@@ -658,12 +661,12 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
         DtoTypeRef<T, P> targetTypeRef = null;
         DtoParser.DtoBodyContext dtoBody = prop.dtoBody();
         if (dtoBody != null) {
-            if (!baseProp.isAssociation(true) && !baseProp.isEmbedded()) {
+            if (!ctx.isBasePropAssociation(baseProp, true) && !ctx.isBasePropEmbedded(baseProp)) {
                 throw ctx.exception(
                         dtoBody.start.getLine(),
                         dtoBody.start.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", child body cannot be specified " +
                                 "because it is neither association nor embedded"
                 );
@@ -673,7 +676,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         dtoBody.start.getLine(),
                         dtoBody.start.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", child body cannot be specified by it is id view property"
                 );
             }
@@ -682,7 +685,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         dtoBody.start.getLine(),
                         dtoBody.start.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", child body cannot be specified by it is nullity check property"
                 );
             }
@@ -693,7 +696,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                                 subProp.positiveProp().recursive.getLine(),
                                 subProp.positiveProp().recursive.getCharPositionInLine(),
                                 "Illegal property \"" +
-                                        baseProp.getName() +
+                                        basePropName +
                                         "\", recursive property cannot be declared in the body of flat property"
                         );
                     }
@@ -704,7 +707,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         prop.bodySuperInterfaces.get(0).start.getLine(),
                         prop.bodySuperInterfaces.get(0).start.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", cannot invoke any function when the target dto implements some interfaces"
                 );
             }
@@ -720,12 +723,12 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                     ctx
             );
         } else if (prop.referencedType != null) {
-            if (!baseProp.isAssociation(true)) {
+            if (!ctx.isBasePropAssociation(baseProp, true)) {
                 throw ctx.exception(
                         prop.referencedType.start.getLine(),
                         prop.referencedType.start.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", reusable DTO type can only be specified for an association"
                 );
             }
@@ -734,7 +737,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         prop.referencedType.start.getLine(),
                         prop.referencedType.start.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", reusable DTO type cannot be specified for a function property"
                 );
             }
@@ -743,7 +746,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         prop.recursive.getLine(),
                         prop.recursive.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", reusable DTO type cannot be specified for a recursive property"
                 );
             }
@@ -755,7 +758,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                     prop.referencedType.start.getLine(),
                     prop.referencedType.start.getCharPositionInLine()
             );
-        } else if (baseProp.isAssociation(true) &&
+        } else if (ctx.isBasePropAssociation(baseProp, true) &&
                 !"id".equals(funcName) &&
                 !"associatedIdNe".equals(funcName) &&
                 !"associatedIdIn".equals(funcName) &&
@@ -767,7 +770,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                     prop.stop.getLine(),
                     prop.stop.getCharPositionInLine(),
                     "Illegal property \"" +
-                            baseProp.getName() +
+                            basePropName +
                             "\", the child body is required"
             );
         }
@@ -780,7 +783,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         enumBody.start.getLine(),
                         enumBody.start.getCharPositionInLine(),
                         "Illegal property \"" +
-                                baseProp.getName() +
+                                basePropName +
                                 "\", enum body cannot be specified by it is not enum property"
                 );
             }
@@ -822,7 +825,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                         "Illegal modifier \"" +
                                 prop.modifier.getText() +
                                 "\", the current property \"" +
-                                (alias != null ? alias : baseProp.getName()) +
+                                (alias != null ? alias : basePropName) +
                                 "\" is not nullable"
                 );
             }
@@ -900,7 +903,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
             case OPTIONAL:
                 return true;
             default:
-                return getBaseProp().isNullable();
+                return parent.ctx.isBasePropNullable(getBaseProp());
         }
     }
 
@@ -952,7 +955,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
         return recursive;
     }
 
-    private static <T, P extends BaseProp > P getBaseProp(DtoTypeBuilder<T, P> parent, Token token) {
+    private static <T, P> P getBaseProp(DtoTypeBuilder<T, P> parent, Token token) {
 
         T baseType = parent.baseType;
         CompilerContext<T, P> ctx = parent.ctx;
@@ -969,39 +972,39 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
             );
         }
         boolean isInput = parent.modifiers.contains(DtoModifier.INPUT);
-        if (baseProp.isFormula() && isInput) {
+        if (ctx.isBasePropFormula(baseProp) && isInput) {
             throw ctx.exception(
                     token.getLine(),
                     token.getCharPositionInLine(),
                     "The property \"" +
-                            baseProp.getName() +
+                            ctx.getBasePropName(baseProp) +
                             "\" cannot be declared in input dto because it is formula"
             );
         }
-        if (baseProp.getManyToManyViewBaseProp() != null && isInput) {
+        if (ctx.getManyToManyViewBaseProp(baseProp) != null && isInput) {
             throw ctx.exception(
                     token.getLine(),
                     token.getCharPositionInLine(),
                     "The property \"" +
-                            baseProp.getName() +
+                            ctx.getBasePropName(baseProp) +
                             "\" cannot be declared in input dto because it is many-to-many-view"
             );
         }
-        if (baseProp.isTransient()) {
+        if (ctx.isBasePropTransient(baseProp)) {
             if (isInput) {
                 throw ctx.exception(
                         token.getLine(),
                         token.getCharPositionInLine(),
                         "The property \"" +
-                                baseProp.getName() +
+                                ctx.getBasePropName(baseProp) +
                                 "\" cannot be declared in input dto because it is transient"
                 );
-            } else if (!baseProp.hasTransientResolver()) {
+            } else if (!ctx.hasBasePropTransientResolver(baseProp)) {
                 throw ctx.exception(
                         token.getLine(),
                         token.getCharPositionInLine(),
                         "The property \"" +
-                                baseProp.getName() +
+                                ctx.getBasePropName(baseProp) +
                                 "\" cannot be declared in dto because it is transient " +
                                 "but has no transient resolver"
                 );
@@ -1013,7 +1016,8 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
     private DtoPropBuilder<T, P> getNullableFlatParent() {
         DtoPropBuilder<T, P> parentProp = parent.parentProp;
         while (parentProp != null) {
-            if (parentProp.getBaseProp().isNullable() && "flat".equals(parentProp.funcName)) {
+            if (parentProp.parent.ctx.isBasePropNullable(parentProp.getBaseProp()) &&
+                    "flat".equals(parentProp.funcName)) {
                 return parentProp;
             }
             parentProp = parentProp.parent.parentProp;
@@ -1050,6 +1054,7 @@ class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, Abstr
                 inputModifier,
                 funcName,
                 recursive,
+                parent.ctx.isBasePropNullable(getBaseProp()),
                 likeOptions
         );
     }

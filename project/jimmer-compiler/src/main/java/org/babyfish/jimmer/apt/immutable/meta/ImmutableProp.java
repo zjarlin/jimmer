@@ -10,7 +10,6 @@ import org.babyfish.jimmer.apt.MetaException;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.generator.Strings;
 import org.babyfish.jimmer.apt.util.RecursiveAnnotations;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.babyfish.jimmer.impl.util.Keywords;
 import org.babyfish.jimmer.meta.impl.PropDescriptor;
 import org.babyfish.jimmer.meta.impl.Utils;
@@ -26,7 +25,7 @@ import java.lang.annotation.Annotation;
 import java.util.*;
 import java.util.regex.Pattern;
 
-public class ImmutableProp implements BaseProp {
+public class ImmutableProp {
 
     private static final Pattern DOT_PATTERN = Pattern.compile("\\.");
 
@@ -580,17 +579,14 @@ public class ImmutableProp implements BaseProp {
         return draftElementTypeName;
     }
 
-    @Override
     public boolean isTransient() {
         return isTransient;
     }
 
-    @Override
     public boolean hasTransientResolver() {
         return hasTransientResolver;
     }
 
-    @Override
     public boolean isFormula() {
         return isFormula;
     }
@@ -603,33 +599,27 @@ public class ImmutableProp implements BaseProp {
         return isDiscriminator;
     }
 
-    @Override
     public boolean isList() {
         return isList;
     }
 
-    @Override
     public boolean isReference() {
         return !isList && isAssociation(false);
     }
 
-    @Override
     public boolean isEmbedded() {
         ImmutableType targetType = getTargetType();
         return targetType != null && targetType.isEmbeddable();
     }
 
-    @Override
     public boolean isLogicalDeleted() {
         return getAnnotation(LogicalDeleted.class) != null;
     }
 
-    @Override
     public boolean isExcludedFromAllScalars() {
         return getAnnotation(ExcludeFromAllScalars.class) != null;
     }
 
-    @Override
     public boolean isAssociation(boolean entityLevel) {
         return entityLevel ? isEntityAssociation : isAssociation;
     }
@@ -645,7 +635,6 @@ public class ImmutableProp implements BaseProp {
                 );
     }
 
-    @Override
     public boolean isNullable() {
         return isNullable;
     }
@@ -654,12 +643,10 @@ public class ImmutableProp implements BaseProp {
         return isReverse;
     }
 
-    @Override
     public boolean isId() {
         return isId;
     }
 
-    @Override
     public boolean isKey() {
         return isKey;
     }
@@ -877,7 +864,6 @@ public class ImmutableProp implements BaseProp {
         return _idViewProp;
     }
 
-    @Override
     public ImmutableProp getIdViewBaseProp() {
         if (idViewBasePropResolved) {
             return _idViewBaseProp;
@@ -993,7 +979,6 @@ public class ImmutableProp implements BaseProp {
         return _idViewBaseProp = baseProp;
     }
 
-    @Override
     public ImmutableProp getManyToManyViewBaseProp() {
         if (manyToManyViewBasePropResolved) {
             return _manyToManyViewBaseProp;

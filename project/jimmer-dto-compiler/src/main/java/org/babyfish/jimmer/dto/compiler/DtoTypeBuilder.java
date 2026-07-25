@@ -1,12 +1,10 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoTypeBuilder<T, P extends BaseProp> {
+class DtoTypeBuilder<T, P> {
 
     final DtoPropBuilder<T, P> parentProp;
 
@@ -341,7 +339,7 @@ class DtoTypeBuilder<T, P extends BaseProp> {
                 }
                 for (P baseProp : ctx.getDeclaredProps(baseType).values()) {
                     if ((isAllReferences ? isAutoReference(baseProp) : isAutoScalar(baseProp)) &&
-                            !autoPropMap.containsKey(baseProp.getName())) {
+                            !autoPropMap.containsKey(ctx.getBasePropName(baseProp))) {
                         DtoPropBuilder<T, P> propBuilder =
                                 new DtoPropBuilder<>(
                                         this,
@@ -393,7 +391,7 @@ class DtoTypeBuilder<T, P extends BaseProp> {
                         propBuilder.getBaseLine(),
                         propBuilder.getBaseColumn(),
                         "Base property \"" +
-                                baseProp +
+                                ctx.getBasePropDisplayName(baseProp) +
                                 "\" cannot be referenced too many times"
                 );
             }
@@ -600,20 +598,20 @@ class DtoTypeBuilder<T, P extends BaseProp> {
     }
 
     private boolean isAutoScalar(P baseProp) {
-        return !baseProp.isFormula() &&
-                !baseProp.isTransient() &&
-                baseProp.getIdViewBaseProp() == null &&
-                baseProp.getManyToManyViewBaseProp() == null &&
-                !baseProp.isList() &&
-                !baseProp.isAssociation(true) &&
-                !baseProp.isLogicalDeleted() &&
-                !baseProp.isExcludedFromAllScalars();
+        return !ctx.isBasePropFormula(baseProp) &&
+                !ctx.isBasePropTransient(baseProp) &&
+                ctx.getIdViewBaseProp(baseProp) == null &&
+                ctx.getManyToManyViewBaseProp(baseProp) == null &&
+                !ctx.isBasePropList(baseProp) &&
+                !ctx.isBasePropAssociation(baseProp, true) &&
+                !ctx.isBasePropLogicalDeleted(baseProp) &&
+                !ctx.isBasePropExcludedFromAllScalars(baseProp);
     }
 
     private boolean isAutoReference(P baseProp) {
-        return baseProp.isAssociation(true) &&
-                !baseProp.isList() &&
-                !baseProp.isTransient();
+        return ctx.isBasePropAssociation(baseProp, true) &&
+                !ctx.isBasePropList(baseProp) &&
+                !ctx.isBasePropTransient(baseProp);
     }
 
     private void collectSuperTypes(
@@ -935,7 +933,7 @@ class DtoTypeBuilder<T, P extends BaseProp> {
     }
 
     private boolean isUnderBaseType(T targetType) {
-        if (ctx.isSameType(targetType, baseType)) {
+        if (ctx.isSameBaseType(targetType, baseType)) {
             return true;
         }
         for (T superType : ctx.getSuperTypes(targetType)) {
@@ -1167,7 +1165,7 @@ class DtoTypeBuilder<T, P extends BaseProp> {
         );
         targetType.setProps(Collections.unmodifiableList(props));
         String name = renameFold ?
-                AliasPattern.join(head.getBaseProp().getName(), foldProp.getName()) :
+                AliasPattern.join(head.getBasePropName(), foldProp.getName()) :
                 foldProp.getName();
         DtoProp<T, P> nullGuardProp;
         if (head.isNullable()) {

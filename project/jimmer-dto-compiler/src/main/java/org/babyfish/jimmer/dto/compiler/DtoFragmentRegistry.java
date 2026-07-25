@@ -1,10 +1,8 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-
 import java.util.*;
 
-class DtoFragmentRegistry<T, P extends BaseProp> {
+class DtoFragmentRegistry<T, P> {
 
     private final Map<String, DtoFragment<T, P>> fragmentMap = new LinkedHashMap<>();
 
@@ -146,7 +144,7 @@ class DtoFragmentRegistry<T, P extends BaseProp> {
             T type,
             CompilerContext<T, P> ctx
     ) {
-        if (ctx.isSameType(superType, type)) {
+        if (ctx.isSameBaseType(superType, type)) {
             return true;
         }
         String typeQualifiedName = ctx.getBaseTypeQualifiedName(type);

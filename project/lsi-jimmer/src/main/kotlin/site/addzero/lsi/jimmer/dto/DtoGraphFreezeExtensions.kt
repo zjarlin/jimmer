@@ -22,20 +22,21 @@ import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.model.parseLsiDocumentation
 
 /**
  * 将 DTO 编译器语义树冻结为稳定的 Jimmer LSI 图。
  */
-fun List<AstDtoType<ImmutableType, LsiDtoBaseProp>>.toLsiDtoGraph(
+fun List<AstDtoType<ImmutableType, ImmutableProp>>.toLsiDtoGraph(
     source: LsiSource,
 ): DtoGraph = DtoGraphFreezer(source).freeze(this)
 
 private class DtoGraphFreezer(
     private val graphSource: LsiSource,
 ) {
-    private val typeIds = IdentityHashMap<AstDtoType<ImmutableType, LsiDtoBaseProp>, DtoTypeId>()
+    private val typeIds = IdentityHashMap<AstDtoType<ImmutableType, ImmutableProp>, DtoTypeId>()
 
     private val propIdsByOwner = mutableMapOf<
         DtoTypeId,
@@ -47,7 +48,7 @@ private class DtoGraphFreezer(
     private val props = mutableMapOf<DtoPropId, DtoProp>()
 
     fun freeze(
-        compiledTypes: List<AstDtoType<ImmutableType, LsiDtoBaseProp>>,
+        compiledTypes: List<AstDtoType<ImmutableType, ImmutableProp>>,
     ): DtoGraph {
         val rootTypeIds = compiledTypes.mapIndexed { index, dtoType ->
             freezeType(
@@ -65,7 +66,7 @@ private class DtoGraphFreezer(
     }
 
     private fun freezeType(
-        dtoType: AstDtoType<ImmutableType, LsiDtoBaseProp>,
+        dtoType: AstDtoType<ImmutableType, ImmutableProp>,
         path: String,
         location: LsiLocation,
     ): DtoTypeId {
@@ -122,7 +123,7 @@ private class DtoGraphFreezer(
 
     private fun freezeProp(
         prop: AbstractProp,
-        ownerType: AstDtoType<ImmutableType, LsiDtoBaseProp>,
+        ownerType: AstDtoType<ImmutableType, ImmutableProp>,
         ownerTypeId: DtoTypeId,
         path: String,
     ): DtoPropId {
@@ -144,8 +145,8 @@ private class DtoGraphFreezer(
     }
 
     private fun freezeBaseProp(
-        prop: AstDtoProp<ImmutableType, LsiDtoBaseProp>,
-        ownerType: AstDtoType<ImmutableType, LsiDtoBaseProp>,
+        prop: AstDtoProp<ImmutableType, ImmutableProp>,
+        ownerType: AstDtoType<ImmutableType, ImmutableProp>,
         propId: DtoPropId,
         ownerTypeId: DtoTypeId,
         path: String,
@@ -210,7 +211,7 @@ private class DtoGraphFreezer(
 
     private fun freezeUserProp(
         prop: UserProp,
-        ownerType: AstDtoType<ImmutableType, LsiDtoBaseProp>,
+        ownerType: AstDtoType<ImmutableType, ImmutableProp>,
         propId: DtoPropId,
         ownerTypeId: DtoTypeId,
     ): DtoUserProp {
@@ -231,8 +232,8 @@ private class DtoGraphFreezer(
     }
 
     private fun freezeFoldProp(
-        prop: FoldProp<ImmutableType, LsiDtoBaseProp>,
-        ownerType: AstDtoType<ImmutableType, LsiDtoBaseProp>,
+        prop: FoldProp<ImmutableType, ImmutableProp>,
+        ownerType: AstDtoType<ImmutableType, ImmutableProp>,
         propId: DtoPropId,
         ownerTypeId: DtoTypeId,
         path: String,
@@ -262,10 +263,10 @@ private class DtoGraphFreezer(
     }
 
     private fun freezePolymorphism(
-        rootType: AstDtoType<ImmutableType, LsiDtoBaseProp>,
+        rootType: AstDtoType<ImmutableType, ImmutableProp>,
         rootTypeId: DtoTypeId,
         rootPath: String,
-        polymorphism: org.babyfish.jimmer.dto.compiler.DtoPolymorphism<ImmutableType, LsiDtoBaseProp>,
+        polymorphism: org.babyfish.jimmer.dto.compiler.DtoPolymorphism<ImmutableType, ImmutableProp>,
     ): DtoPolymorphism {
         val branches = buildList {
             polymorphism.defaultBranch?.let { branch ->
@@ -282,10 +283,10 @@ private class DtoGraphFreezer(
     }
 
     private fun freezeBranch(
-        rootType: AstDtoType<ImmutableType, LsiDtoBaseProp>,
+        rootType: AstDtoType<ImmutableType, ImmutableProp>,
         rootTypeId: DtoTypeId,
         rootPath: String,
-        branch: AstDtoPolymorphicBranch<ImmutableType, LsiDtoBaseProp>,
+        branch: AstDtoPolymorphicBranch<ImmutableType, ImmutableProp>,
         index: Int,
     ): DtoPolymorphicBranch {
         val kind = branch.kind.toDtoBranchKind()
@@ -333,7 +334,7 @@ private class DtoGraphFreezer(
         )
     }
 
-    private fun AstDtoTypeReference<ImmutableType, LsiDtoBaseProp>.toDtoReusableTypeReference(
+    private fun AstDtoTypeReference<ImmutableType, ImmutableProp>.toDtoReusableTypeReference(
         declaringFile: DtoFile,
     ): DtoReusableTypeReference {
         val typeInfo = requireNotNull(typeInfo) {
@@ -385,7 +386,7 @@ private class DtoGraphFreezer(
         )
     }
 
-    private fun PropConfig<LsiDtoBaseProp>.toDtoConfig(
+    private fun PropConfig<ImmutableProp>.toDtoConfig(
         declaringFile: DtoFile,
     ): DtoPropConfig {
         return DtoPropConfig(
@@ -438,7 +439,7 @@ private class DtoGraphFreezer(
         }
     }
 
-    private fun PropConfig.PathNode<LsiDtoBaseProp>.toDtoPathNode(): DtoPropPathNode {
+    private fun PropConfig.PathNode<ImmutableProp>.toDtoPathNode(): DtoPropPathNode {
         return DtoPropPathNode(
             propId = prop.id,
             associatedId = isAssociatedId,
@@ -489,18 +490,18 @@ private class DtoGraphFreezer(
     }
 }
 
-private fun AstDtoType<ImmutableType, LsiDtoBaseProp>.effectiveDocumentation(): String? {
+private fun AstDtoType<ImmutableType, ImmutableProp>.effectiveDocumentation(): String? {
     return doc.parseLsiDocumentation()?.canonicalText()
         ?: baseType?.documentation.parseLsiDocumentation()?.canonicalText()
 }
 
-private fun AstDtoType<ImmutableType, LsiDtoBaseProp>.effectiveDocumentation(
+private fun AstDtoType<ImmutableType, ImmutableProp>.effectiveDocumentation(
     prop: AbstractProp,
 ): String? {
     return effectiveDocumentation(prop, dtoDocumentation(prop))
 }
 
-private fun AstDtoType<ImmutableType, LsiDtoBaseProp>.effectiveDocumentation(
+private fun AstDtoType<ImmutableType, ImmutableProp>.effectiveDocumentation(
     prop: AbstractProp,
     dtoDocumentation: String?,
 ): String? {
@@ -509,7 +510,7 @@ private fun AstDtoType<ImmutableType, LsiDtoBaseProp>.effectiveDocumentation(
         ?.castBaseProp()
         ?.toTailProp()
         ?.baseProp
-    baseProp?.immutableProp?.documentation.parseLsiDocumentation()?.canonicalText()?.let { documentation ->
+    baseProp?.documentation.parseLsiDocumentation()?.canonicalText()?.let { documentation ->
         return documentation
     }
     return baseProp?.let { immutableProp ->
@@ -519,7 +520,7 @@ private fun AstDtoType<ImmutableType, LsiDtoBaseProp>.effectiveDocumentation(
     }
 }
 
-private fun AstDtoType<ImmutableType, LsiDtoBaseProp>.dtoDocumentation(
+private fun AstDtoType<ImmutableType, ImmutableProp>.dtoDocumentation(
     prop: AbstractProp,
 ): String? {
     prop.doc.parseLsiDocumentation()?.canonicalText()?.let { documentation -> return documentation }
@@ -532,15 +533,15 @@ private fun AstDtoType<ImmutableType, LsiDtoBaseProp>.dtoDocumentation(
 }
 
 @Suppress("UNCHECKED_CAST")
-private fun AstDtoProp<*, *>.castBaseProp(): AstDtoProp<ImmutableType, LsiDtoBaseProp> =
-    this as AstDtoProp<ImmutableType, LsiDtoBaseProp>
+private fun AstDtoProp<*, *>.castBaseProp(): AstDtoProp<ImmutableType, ImmutableProp> =
+    this as AstDtoProp<ImmutableType, ImmutableProp>
 
 @Suppress("UNCHECKED_CAST")
-private fun FoldProp<*, *>.castFoldProp(): FoldProp<ImmutableType, LsiDtoBaseProp> =
-    this as FoldProp<ImmutableType, LsiDtoBaseProp>
+private fun FoldProp<*, *>.castFoldProp(): FoldProp<ImmutableType, ImmutableProp> =
+    this as FoldProp<ImmutableType, ImmutableProp>
 
 @Suppress("UNCHECKED_CAST")
-private fun PropConfig.PathNode<*>.castPathNode(): PropConfig.PathNode<LsiDtoBaseProp> =
-    this as PropConfig.PathNode<LsiDtoBaseProp>
+private fun PropConfig.PathNode<*>.castPathNode(): PropConfig.PathNode<ImmutableProp> =
+    this as PropConfig.PathNode<ImmutableProp>
 
 private fun Int.stableIndex(): String = toString().padStart(8, '0')

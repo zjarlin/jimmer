@@ -1,6 +1,5 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -30,11 +29,6 @@ public interface AbstractProp {
 
     @Nullable
     default DtoModifier getInputModifier() {
-        return null;
-    }
-
-    @Nullable
-    default BaseProp getBasePropOrNull() {
         return null;
     }
 }

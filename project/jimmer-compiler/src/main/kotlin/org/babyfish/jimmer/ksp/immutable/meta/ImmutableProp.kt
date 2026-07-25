@@ -10,7 +10,6 @@ import com.squareup.kotlinpoet.ksp.toTypeName
 import org.babyfish.jimmer.Formula
 import org.babyfish.jimmer.Immutable
 import org.babyfish.jimmer.Scalar
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp
 import org.babyfish.jimmer.impl.util.Keywords
 import org.babyfish.jimmer.ksp.*
 import org.babyfish.jimmer.ksp.immutable.generator.DRAFT
@@ -32,7 +31,7 @@ class ImmutableProp(
     val propDeclaration: KSPropertyDeclaration,
     private val inherited: Boolean = false,
     val overriddenProp: ImmutableProp? = null
-): BaseProp {
+) {
 
     private val isDeclaringTypeGeneric: Boolean =
         (propDeclaration.parentDeclaration as? KSClassDeclaration)?.typeParameters?.isNotEmpty() == true
@@ -168,7 +167,7 @@ class ImmutableProp(
         }
     }
 
-    override val name: String = propDeclaration.name.also {
+    val name: String = propDeclaration.name.also {
         if (Keywords.ILLEGAL_PROP_NAMES.contains(it)) {
             throw MetaException(
                 propDeclaration,
@@ -179,10 +178,10 @@ class ImmutableProp(
 
     val slotName: String = "SLOT_${upper(name)}"
 
-    override val isTransient: Boolean =
+    val isTransient: Boolean =
         annotation(Transient::class) !== null
 
-    override fun hasTransientResolver(): Boolean =
+    fun hasTransientResolver(): Boolean =
         annotation(Transient::class)?.let {
             val resolverClassName = it.getClassArgument(Transient::value)?.toClassName()
             val resolverRef = it[Transient::ref] ?: ""
@@ -198,7 +197,7 @@ class ImmutableProp(
             hasValue || hasRef
         } ?: false
 
-    override val isFormula: Boolean =
+    val isFormula: Boolean =
         annotation(Formula::class) !== null
 
     val isKotlinFormula: Boolean =
@@ -207,7 +206,7 @@ class ImmutableProp(
     val isDiscriminator: Boolean =
         annotation(Discriminator::class) !== null
 
-    override val isList: Boolean
+    val isList: Boolean
         get() = if (isKotlinFormula || annotations { true }.any { isExplicitScalar(it, mutableSetOf()) }) {
             false
         } else {
@@ -235,7 +234,7 @@ class ImmutableProp(
             } ?: false
         }
 
-    override val isReference
+    val isReference
         get() = !isList && isAssociation
 
     fun isDsl(isTableEx: Boolean): Boolean =
@@ -288,7 +287,7 @@ class ImmutableProp(
 
     private val _isNullable: Boolean
 
-    override val isNullable: Boolean
+    val isNullable: Boolean
         get() = _isNullable
 
     init {
@@ -358,10 +357,10 @@ class ImmutableProp(
             }
         }
 
-    override val isEmbedded: Boolean
+    val isEmbedded: Boolean
         get() = targetType?.isEmbeddable ?: false
 
-    override fun isAssociation(entityLevel: Boolean): Boolean =
+    fun isAssociation(entityLevel: Boolean): Boolean =
         isAssociation && (!entityLevel || targetDeclaration?.annotation(Entity::class) != null || isGenericTarget)
 
     val targetClassName: ClassName =
@@ -426,19 +425,19 @@ class ImmutableProp(
 
     val isScalarList = isList && !isAssociation
 
-    override val isId: Boolean =
+    val isId: Boolean =
         primaryAnnotationType == Id::class.java
 
     val isVersion: Boolean =
         primaryAnnotationType == Version::class.java
 
-    override val isLogicalDeleted: Boolean =
+    val isLogicalDeleted: Boolean =
         annotation(LogicalDeleted::class) !== null
 
-    override val isExcludedFromAllScalars: Boolean =
+    val isExcludedFromAllScalars: Boolean =
         annotation(ExcludeFromAllScalars::class) !== null
 
-    override val isKey: Boolean =
+    val isKey: Boolean =
         annotations {
             it.fullName == KEY_FULL_NAME
         }.isNotEmpty()
@@ -501,7 +500,7 @@ class ImmutableProp(
                 ?: annotation(ManyToMany::class)
         )?.get(OneToOne::mappedBy).isNullOrEmpty()
 
-    override val isRecursive: Boolean by lazy {
+    val isRecursive: Boolean by lazy {
         !isGenericTarget && declaringType.isEntity && manyToManyViewBaseProp === null && !isRemote &&
             declaringType.classDeclaration.asStarProjectedType().isAssignableFrom(
                 targetDeclaration!!.asStarProjectedType()
@@ -613,10 +612,10 @@ class ImmutableProp(
     val baseProp: ImmutableProp?
         get() = _idViewBaseProp ?: _manyToManyViewBaseProp
 
-    override val idViewBaseProp: ImmutableProp?
+    val idViewBaseProp: ImmutableProp?
         get() = _idViewBaseProp
 
-    override val manyToManyViewBaseProp: ImmutableProp?
+    val manyToManyViewBaseProp: ImmutableProp?
         get() = _manyToManyViewBaseProp
 
     val manyToManyViewBaseDeeperProp: ImmutableProp?

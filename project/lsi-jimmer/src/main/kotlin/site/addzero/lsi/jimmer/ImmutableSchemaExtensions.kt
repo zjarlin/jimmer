@@ -35,10 +35,21 @@ fun ImmutableProp.hasAnnotation(annotationTypeId: LsiSymbolId): Boolean {
     return annotations.any { annotation -> annotation.type == annotationTypeId }
 }
 
+/** 返回主键视图关联的基属性，其他属性返回空。 */
+fun ImmutableSchema.idViewBasePropOf(prop: ImmutableProp): ImmutableProp? {
+    val view = prop.view as? ImmutableView.Id ?: return null
+    return propsById.getValue(view.basePropId)
+}
+
+/** 返回多对多视图关联的基属性，其他属性返回空。 */
+fun ImmutableSchema.manyToManyViewBasePropOf(prop: ImmutableProp): ImmutableProp? {
+    val view = prop.view as? ImmutableView.ManyToMany ?: return null
+    return propsById.getValue(view.basePropId)
+}
+
 /** 对主键视图返回其关联基属性，其他属性原样返回。 */
 fun ImmutableSchema.idViewBasePropOrSelf(prop: ImmutableProp): ImmutableProp {
-    val view = prop.view as? ImmutableView.Id ?: return prop
-    return propsById.getValue(view.basePropId)
+    return idViewBasePropOf(prop) ?: prop
 }
 
 /** 返回沿主继承链严格派生自指定实体的全部子类型。 */

@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.*;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -10,7 +9,7 @@ import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-public abstract class DtoCompiler<T, P extends BaseProp> {
+public abstract class DtoCompiler<T, P> {
 
     private final DtoFile dtoFile;
 
@@ -133,7 +132,7 @@ public abstract class DtoCompiler<T, P extends BaseProp> {
 
     public static <
             T,
-            P extends BaseProp,
+            P,
             C extends DtoCompiler<T, P>
             > Map<C, List<DtoType<T, P>>> compileAll(Map<C, T> compilerMap) {
         return compileAll(compilerMap.keySet(), compilerMap, it -> true);
@@ -141,7 +140,7 @@ public abstract class DtoCompiler<T, P extends BaseProp> {
 
     public static <
             T,
-            P extends BaseProp,
+            P,
             C extends DtoCompiler<T, P>
             > Map<C, List<DtoType<T, P>>> compileAll(
             Collection<C> compilers,
@@ -152,7 +151,7 @@ public abstract class DtoCompiler<T, P extends BaseProp> {
 
     private static <
             T,
-            P extends BaseProp,
+            P,
             C extends DtoCompiler<T, P>
             > Map<C, List<DtoType<T, P>>> compileAll(
             Collection<C> compilers,
@@ -270,7 +269,7 @@ public abstract class DtoCompiler<T, P extends BaseProp> {
         return Collections.emptyList();
     }
 
-    protected boolean isSameType(T baseType1, T baseType2) {
+    protected boolean isSameBaseType(T baseType1, T baseType2) {
         return getBaseTypeQualifiedName(baseType1).equals(getBaseTypeQualifiedName(baseType2));
     }
 
@@ -281,6 +280,40 @@ public abstract class DtoCompiler<T, P extends BaseProp> {
     protected abstract Map<String, P> getDeclaredProps(T baseType);
 
     protected abstract Map<String, P> getProps(T baseType);
+
+    protected abstract String getBasePropName(P baseProp);
+
+    protected String getBasePropDisplayName(P baseProp) {
+        return String.valueOf(baseProp);
+    }
+
+    protected abstract boolean isBasePropNullable(P baseProp);
+
+    protected abstract boolean isBasePropList(P baseProp);
+
+    protected abstract boolean isBasePropFormula(P baseProp);
+
+    protected abstract boolean isBasePropTransient(P baseProp);
+
+    @Nullable
+    protected abstract P getIdViewBaseProp(P baseProp);
+
+    @Nullable
+    protected abstract P getManyToManyViewBaseProp(P baseProp);
+
+    protected abstract boolean isBasePropId(P baseProp);
+
+    protected abstract boolean isBasePropRecursive(P baseProp);
+
+    protected abstract boolean isBasePropEmbedded(P baseProp);
+
+    protected abstract boolean isBasePropLogicalDeleted(P baseProp);
+
+    protected abstract boolean isBasePropExcludedFromAllScalars(P baseProp);
+
+    protected abstract boolean isBasePropAssociation(P baseProp, boolean entityLevel);
+
+    protected abstract boolean hasBasePropTransientResolver(P baseProp);
 
     protected abstract T getTargetType(P baseProp);
 
@@ -295,7 +328,7 @@ public abstract class DtoCompiler<T, P extends BaseProp> {
 
     protected abstract SimplePropType getSimplePropType(PropConfig.PathNode<P> pathNode);
 
-    protected abstract boolean isSameType(P baseProp1, P baseProp2);
+    protected abstract boolean isSameBasePropType(P baseProp1, P baseProp2);
 
     protected abstract Integer getGenericTypeCount(String qualifiedName);
 

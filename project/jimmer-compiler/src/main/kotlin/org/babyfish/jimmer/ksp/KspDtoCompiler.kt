@@ -46,7 +46,7 @@ class KspDtoCompiler(
             .filter { it.primarySuperType?.qualifiedName == baseType.qualifiedName }
             .sortedBy { it.qualifiedName }
 
-    override fun isSameType(baseType1: ImmutableType, baseType2: ImmutableType): Boolean =
+    override fun isSameBaseType(baseType1: ImmutableType, baseType2: ImmutableType): Boolean =
         baseType1.qualifiedName == baseType2.qualifiedName
 
     override fun isInstantiable(baseType: ImmutableType): Boolean =
@@ -57,6 +57,48 @@ class KspDtoCompiler(
 
     override fun getProps(baseType: ImmutableType): Map<String, ImmutableProp> =
         baseType.properties
+
+    override fun getBasePropName(baseProp: ImmutableProp): String =
+        baseProp.name
+
+    override fun isBasePropNullable(baseProp: ImmutableProp): Boolean =
+        baseProp.isNullable
+
+    override fun isBasePropList(baseProp: ImmutableProp): Boolean =
+        baseProp.isList
+
+    override fun isBasePropFormula(baseProp: ImmutableProp): Boolean =
+        baseProp.isFormula
+
+    override fun isBasePropTransient(baseProp: ImmutableProp): Boolean =
+        baseProp.isTransient
+
+    override fun getIdViewBaseProp(baseProp: ImmutableProp): ImmutableProp? =
+        baseProp.idViewBaseProp
+
+    override fun getManyToManyViewBaseProp(baseProp: ImmutableProp): ImmutableProp? =
+        baseProp.manyToManyViewBaseProp
+
+    override fun isBasePropId(baseProp: ImmutableProp): Boolean =
+        baseProp.isId
+
+    override fun isBasePropRecursive(baseProp: ImmutableProp): Boolean =
+        baseProp.isRecursive
+
+    override fun isBasePropEmbedded(baseProp: ImmutableProp): Boolean =
+        baseProp.isEmbedded
+
+    override fun isBasePropLogicalDeleted(baseProp: ImmutableProp): Boolean =
+        baseProp.isLogicalDeleted
+
+    override fun isBasePropExcludedFromAllScalars(baseProp: ImmutableProp): Boolean =
+        baseProp.isExcludedFromAllScalars
+
+    override fun isBasePropAssociation(baseProp: ImmutableProp, entityLevel: Boolean): Boolean =
+        baseProp.isAssociation(entityLevel)
+
+    override fun hasBasePropTransientResolver(baseProp: ImmutableProp): Boolean =
+        baseProp.hasTransientResolver()
 
     override fun getTargetType(baseProp: ImmutableProp): ImmutableType? =
         baseProp.targetType
@@ -80,7 +122,7 @@ class KspDtoCompiler(
             }
         }
 
-    override fun isSameType(baseProp1: ImmutableProp, baseProp2: ImmutableProp): Boolean =
+    override fun isSameBasePropType(baseProp1: ImmutableProp, baseProp2: ImmutableProp): Boolean =
         immutableSchema.haveSameDtoClientType(
             baseProp1.declaringType.qualifiedName,
             baseProp1.name,

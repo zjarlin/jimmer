@@ -1,15 +1,18 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 
-interface DtoPropImplementor extends AbstractProp {
+interface DtoPropImplementor<P> extends AbstractProp {
 
-    BaseProp getBaseProp();
+    P getBaseProp();
 
-    Map<String, ?> getBasePropMap();
+    Map<String, P> getBasePropMap();
+
+    default String getBasePropName() {
+        return getBasePropMap().keySet().iterator().next();
+    }
 
     int getBaseLine();
 

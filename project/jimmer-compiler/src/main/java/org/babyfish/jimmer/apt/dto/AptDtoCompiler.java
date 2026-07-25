@@ -100,7 +100,7 @@ public class AptDtoCompiler extends DtoCompiler<ImmutableType, ImmutableProp> {
     }
 
     @Override
-    protected boolean isSameType(ImmutableType baseType1, ImmutableType baseType2) {
+    protected boolean isSameBaseType(ImmutableType baseType1, ImmutableType baseType2) {
         return baseType1.getQualifiedName().equals(baseType2.getQualifiedName());
     }
 
@@ -117,6 +117,78 @@ public class AptDtoCompiler extends DtoCompiler<ImmutableType, ImmutableProp> {
     @Override
     protected Map<String, ImmutableProp> getProps(ImmutableType baseType) {
         return baseType.getProps();
+    }
+
+    @Override
+    protected String getBasePropName(ImmutableProp baseProp) {
+        return baseProp.getName();
+    }
+
+    @Override
+    protected boolean isBasePropNullable(ImmutableProp baseProp) {
+        return baseProp.isNullable();
+    }
+
+    @Override
+    protected boolean isBasePropList(ImmutableProp baseProp) {
+        return baseProp.isList();
+    }
+
+    @Override
+    protected boolean isBasePropFormula(ImmutableProp baseProp) {
+        return baseProp.isFormula();
+    }
+
+    @Override
+    protected boolean isBasePropTransient(ImmutableProp baseProp) {
+        return baseProp.isTransient();
+    }
+
+    @Nullable
+    @Override
+    protected ImmutableProp getIdViewBaseProp(ImmutableProp baseProp) {
+        return baseProp.getIdViewBaseProp();
+    }
+
+    @Nullable
+    @Override
+    protected ImmutableProp getManyToManyViewBaseProp(ImmutableProp baseProp) {
+        return baseProp.getManyToManyViewBaseProp();
+    }
+
+    @Override
+    protected boolean isBasePropId(ImmutableProp baseProp) {
+        return baseProp.isId();
+    }
+
+    @Override
+    protected boolean isBasePropRecursive(ImmutableProp baseProp) {
+        return baseProp.isRecursive();
+    }
+
+    @Override
+    protected boolean isBasePropEmbedded(ImmutableProp baseProp) {
+        return baseProp.isEmbedded();
+    }
+
+    @Override
+    protected boolean isBasePropLogicalDeleted(ImmutableProp baseProp) {
+        return baseProp.isLogicalDeleted();
+    }
+
+    @Override
+    protected boolean isBasePropExcludedFromAllScalars(ImmutableProp baseProp) {
+        return baseProp.isExcludedFromAllScalars();
+    }
+
+    @Override
+    protected boolean isBasePropAssociation(ImmutableProp baseProp, boolean entityLevel) {
+        return baseProp.isAssociation(entityLevel);
+    }
+
+    @Override
+    protected boolean hasBasePropTransientResolver(ImmutableProp baseProp) {
+        return baseProp.hasTransientResolver();
     }
 
     @Override
@@ -158,7 +230,7 @@ public class AptDtoCompiler extends DtoCompiler<ImmutableType, ImmutableProp> {
     }
 
     @Override
-    protected boolean isSameType(ImmutableProp baseProp1, ImmutableProp baseProp2) {
+    protected boolean isSameBasePropType(ImmutableProp baseProp1, ImmutableProp baseProp2) {
         return DtoConverterExtensionsKt.haveSameDtoClientType(
                 immutableSchema,
                 baseProp1.getDeclaringType().getQualifiedName(),

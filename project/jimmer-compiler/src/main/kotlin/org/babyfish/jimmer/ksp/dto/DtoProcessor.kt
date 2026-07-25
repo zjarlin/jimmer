@@ -17,7 +17,6 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.resolveDtoTypeInfo
 import site.addzero.lsi.jimmer.dto.rootType
-import site.addzero.lsi.jimmer.dto.toLsiDtoTypeRegistry
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 
@@ -41,8 +40,6 @@ internal class DtoProcessor(
 
     private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName> =
         JimmerDtoPoetTypeNames.roots(graphs)
-
-    private val dtoTypeRegistry = immutableSchema.toLsiDtoTypeRegistry(workspace)
 
     fun process(): Boolean {
         val dtoTypes = findDtoTypes()
@@ -81,7 +78,7 @@ internal class DtoProcessor(
     }
 
     private fun resolveDtoType(qualifiedName: String): DtoTypeInfo? =
-        dtoTypeRegistry.resolveDtoTypeInfo(qualifiedName, LsiLanguage.KOTLIN)
+        workspace.resolveDtoTypeInfo(immutableSchema, qualifiedName, LsiLanguage.KOTLIN)
 
     private fun generateDtoTypes(
         dtoTypes: List<DtoType<ImmutableType, ImmutableProp>>

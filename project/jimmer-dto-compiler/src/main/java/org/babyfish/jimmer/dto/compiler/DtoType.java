@@ -1,12 +1,11 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class DtoType<T, P extends BaseProp> implements DtoPropTarget<T, P> {
+public class DtoType<T, P> implements DtoPropTarget<T, P> {
 
     @Nullable
     private final T baseType;
@@ -341,7 +340,7 @@ public class DtoType<T, P extends BaseProp> implements DtoPropTarget<T, P> {
         }
     }
 
-    private class FlatDtoBuilder<T, P extends BaseProp> {
+    private class FlatDtoBuilder<T, P> {
 
         private final String packageName;
 
@@ -360,7 +359,7 @@ public class DtoType<T, P extends BaseProp> implements DtoPropTarget<T, P> {
 
         @SuppressWarnings("unchecked")
         public void add(DtoProp<T, P> prop) {
-            String baseName = prop.getBaseProp().getName();
+            String baseName = prop.getBasePropName();
             if (prop.getNextProp() == null) {
                 childNodes.put(baseName, prop);
             } else {
@@ -419,7 +418,7 @@ public class DtoType<T, P extends BaseProp> implements DtoPropTarget<T, P> {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T, P extends BaseProp> List<AbstractProp> standardProps(List<AbstractProp> props) {
+    private static <T, P> List<AbstractProp> standardProps(List<AbstractProp> props) {
         List<DtoProp<T, P>> recursiveProps = new ArrayList<>();
         for (AbstractProp prop : props) {
             if (prop instanceof DtoProp<?, ?>) {

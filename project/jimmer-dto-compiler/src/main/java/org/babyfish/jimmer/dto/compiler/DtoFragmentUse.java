@@ -1,8 +1,6 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-
-class DtoFragmentUse<T, P extends BaseProp> {
+class DtoFragmentUse<T, P> {
 
     final DtoFragment<T, P> fragment;
 

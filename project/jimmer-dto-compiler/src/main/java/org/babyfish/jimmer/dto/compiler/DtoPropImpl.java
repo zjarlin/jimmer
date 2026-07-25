@@ -1,12 +1,11 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
+class DtoPropImpl<T, P> implements DtoProp<T, P> {
 
     private final DtoFile declaringFile;
 
@@ -46,6 +45,8 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
 
     private final boolean recursive;
 
+    private final boolean baseNullable;
+
     private final String basePath;
 
     private final Set<LikeOption> likeOptions;
@@ -69,6 +70,7 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
             DtoModifier inputModifier,
             String funcName,
             boolean recursive,
+            boolean baseNullable,
             Set<LikeOption> likeOptions
     ) {
         if (inputModifier == null || !inputModifier.isInputStrategy()) {
@@ -91,14 +93,14 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
         this.inputModifier = inputModifier;
         this.funcName = funcName;
         this.recursive = recursive;
+        this.baseNullable = baseNullable;
         if (basePropMap.size() == 1) {
-            this.basePath = getBaseProp().getName();
+            this.basePath = getBasePropName();
         } else {
             this.basePath = '(' +
                     basePropMap
-                            .values()
+                            .keySet()
                             .stream()
-                            .map(BaseProp::getName)
                             .collect(Collectors.joining("|")) +
                     ')';
         }
@@ -130,13 +132,14 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
         this.inputModifier = next.getInputModifier();
         this.funcName = next.getFuncName();
         this.recursive = false;
+        this.baseNullable = head.isBaseNullable() || next.isBaseNullable();
         StringBuilder builder = new StringBuilder();
         if (basePropMap.size() == 1) {
-            builder.append(basePropMap.values().iterator().next().getName());
+            builder.append(getBasePropName());
         } else {
             builder
                     .append('(')
-                    .append(basePropMap.values().stream().map(BaseProp::getName).collect(Collectors.joining(", ")))
+                    .append(String.join(", ", basePropMap.keySet()))
                     .append(')');
         }
         DtoProp<T, P> tail = this;
@@ -157,7 +160,7 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
         this.baseCol = original.getBaseColumn();
         this.annotations = original.getAnnotations();
         this.doc = original.getDoc();
-        this.alias = getBaseProp().getName();
+        this.alias = original.getBasePropName();
         this.aliasLine = original.getAliasLine();
         this.aliasCol = original.getAliasColumn();
         this.config = original.getConfig();
@@ -167,7 +170,8 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
         this.inputModifier = original.getInputModifier();
         this.funcName = "flat";
         this.recursive = false;
-        this.basePath = getBaseProp().getName();
+        this.baseNullable = original.isBaseNullable();
+        this.basePath = original.getBasePropName();
         this.likeOptions = original.getLikeOptions();
         this.tail = this;
     }
@@ -183,7 +187,7 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
         this.baseCol = original.getBaseColumn();
         this.annotations = original.getAnnotations();
         this.doc = original.getDoc();
-        this.alias = getBaseProp().getName();
+        this.alias = original.getBasePropName();
         this.aliasLine = original.getAliasLine();
         this.aliasCol = original.getAliasColumn();
         this.config = original.getConfig();
@@ -197,7 +201,8 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
         this.inputModifier = original.getInputModifier();
         this.funcName = original.getFuncName();
         this.recursive = original.isRecursive();
-        this.basePath = getBaseProp().getName();
+        this.baseNullable = original.isBaseNullable();
+        this.basePath = original.getBasePropName();
         this.likeOptions = original.getLikeOptions();
         this.tail = this;
     }
@@ -254,7 +259,7 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
 
     @Override
     public String getName() {
-        return alias != null ? alias : getBaseProp().getName();
+        return alias != null ? alias : getBasePropName();
     }
 
     @Override
@@ -281,12 +286,7 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
 
     @Override
     public boolean isBaseNullable() {
-        for (DtoProp<T, P> p = this; p != null; p = p.getNextProp()) {
-            if (p.getBaseProp().isNullable()) {
-                return true;
-            }
-        }
-        return false;
+        return baseNullable;
     }
 
     @Override
@@ -391,7 +391,7 @@ class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
         } else {
             builder.append(basePath);
         }
-        if (alias != null && !alias.equals(tail.getBaseProp().getName())) {
+        if (alias != null && !alias.equals(tail.getBasePropName())) {
             builder.append(" as ").append(alias);
         }
         DtoType<T, P> targetType = getTargetType();

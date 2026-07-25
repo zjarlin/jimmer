@@ -1,11 +1,10 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public final class DtoTypeRef<T, P extends BaseProp> implements DtoPropTarget<T, P> {
+public final class DtoTypeRef<T, P> implements DtoPropTarget<T, P> {
 
     private final String qualifiedName;
 

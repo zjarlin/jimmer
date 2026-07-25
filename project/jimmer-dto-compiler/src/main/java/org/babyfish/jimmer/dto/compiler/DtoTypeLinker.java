@@ -1,7 +1,5 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-
 import java.util.*;
 
 public final class DtoTypeLinker {
@@ -9,13 +7,13 @@ public final class DtoTypeLinker {
     private DtoTypeLinker() {
     }
 
-    public static <T, P extends BaseProp> void link(
+    public static <T, P> void link(
             Collection<DtoType<T, P>> dtoTypes
     ) {
         link(dtoTypes, qualifiedName -> null);
     }
 
-    public static <T, P extends BaseProp> void link(
+    public static <T, P> void link(
             Collection<DtoType<T, P>> dtoTypes,
             DtoTypeResolver resolver
     ) {
@@ -53,7 +51,7 @@ public final class DtoTypeLinker {
         detectCycles(dtoTypes, graph);
     }
 
-    private static <T, P extends BaseProp> void collectEdges(
+    private static <T, P> void collectEdges(
             DtoType<T, P> ownerType,
             DtoTypeKind ownerKind,
             DtoType<T, P> shape,
@@ -143,7 +141,7 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static <T, P extends BaseProp> void validate(
+    private static <T, P> void validate(
             DtoType<T, P> ownerType,
             DtoTypeKind ownerKind,
             DtoTypeRef<T, P> ref,
@@ -176,7 +174,7 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static <T, P extends BaseProp> DtoTypeInfo typeInfo(
+    private static <T, P> DtoTypeInfo typeInfo(
             DtoType<T, P> dtoType
     ) {
         return new DtoTypeInfo(
@@ -217,7 +215,7 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static <T, P extends BaseProp> void detectCycles(
+    private static <T, P> void detectCycles(
             Collection<DtoType<T, P>> dtoTypes,
             Map<DtoType<T, P>, List<Edge<T, P>>> graph
     ) {
@@ -230,7 +228,7 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static <T, P extends BaseProp> void detectCycles(
+    private static <T, P> void detectCycles(
             DtoType<T, P> type,
             Map<DtoType<T, P>, List<Edge<T, P>>> graph,
             Set<DtoType<T, P>> completed,
@@ -275,7 +273,7 @@ public final class DtoTypeLinker {
         return new DtoAstException(ownerType.getDtoFile(), ref.getLine(), ref.getColumn(), message);
     }
 
-    private static class Edge<T, P extends BaseProp> {
+    private static class Edge<T, P> {
 
         final DtoProp<T, P> prop;
 
@@ -290,7 +288,7 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static class LinkContext<T, P extends BaseProp> {
+    private static class LinkContext<T, P> {
 
         final DtoTypeResolver resolver;
 

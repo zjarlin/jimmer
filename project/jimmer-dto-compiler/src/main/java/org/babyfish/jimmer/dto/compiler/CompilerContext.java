@@ -1,12 +1,11 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-class CompilerContext<T, P extends BaseProp> {
+class CompilerContext<T, P> {
 
     private final DtoCompiler<T, P> compiler;
 
@@ -273,9 +272,75 @@ class CompilerContext<T, P extends BaseProp> {
 
     public boolean isImplicitId(P baseProp, Set<DtoModifier> modifiers) {
         if (modifiers.contains(DtoModifier.INPUT) || modifiers.contains(DtoModifier.SPECIFICATION)) {
-            return baseProp.isId() && compiler.isGeneratedValue(baseProp);
+            return compiler.isBasePropId(baseProp) && compiler.isGeneratedValue(baseProp);
         }
         return false;
+    }
+
+    public String getBasePropName(P baseProp) {
+        return compiler.getBasePropName(baseProp);
+    }
+
+    public String getBasePropDisplayName(P baseProp) {
+        return compiler.getBasePropDisplayName(baseProp);
+    }
+
+    public boolean isBasePropNullable(P baseProp) {
+        return compiler.isBasePropNullable(baseProp);
+    }
+
+    public boolean isBasePropList(P baseProp) {
+        return compiler.isBasePropList(baseProp);
+    }
+
+    public boolean isBasePropReference(P baseProp) {
+        return !compiler.isBasePropList(baseProp) && compiler.isBasePropAssociation(baseProp, false);
+    }
+
+    public boolean isBasePropFormula(P baseProp) {
+        return compiler.isBasePropFormula(baseProp);
+    }
+
+    public boolean isBasePropTransient(P baseProp) {
+        return compiler.isBasePropTransient(baseProp);
+    }
+
+    @Nullable
+    public P getIdViewBaseProp(P baseProp) {
+        return compiler.getIdViewBaseProp(baseProp);
+    }
+
+    @Nullable
+    public P getManyToManyViewBaseProp(P baseProp) {
+        return compiler.getManyToManyViewBaseProp(baseProp);
+    }
+
+    public boolean isBasePropId(P baseProp) {
+        return compiler.isBasePropId(baseProp);
+    }
+
+    public boolean isBasePropRecursive(P baseProp) {
+        return compiler.isBasePropRecursive(baseProp);
+    }
+
+    public boolean isBasePropEmbedded(P baseProp) {
+        return compiler.isBasePropEmbedded(baseProp);
+    }
+
+    public boolean isBasePropLogicalDeleted(P baseProp) {
+        return compiler.isBasePropLogicalDeleted(baseProp);
+    }
+
+    public boolean isBasePropExcludedFromAllScalars(P baseProp) {
+        return compiler.isBasePropExcludedFromAllScalars(baseProp);
+    }
+
+    public boolean isBasePropAssociation(P baseProp, boolean entityLevel) {
+        return compiler.isBasePropAssociation(baseProp, entityLevel);
+    }
+
+    public boolean hasBasePropTransientResolver(P baseProp) {
+        return compiler.hasBasePropTransientResolver(baseProp);
     }
 
     public T getTargetType(P baseProp) {
@@ -287,8 +352,8 @@ class CompilerContext<T, P extends BaseProp> {
         return compiler.getIdProp(baseType);
     }
 
-    public boolean isSameType(P baseProp1, P baseProp2) {
-        return compiler.isSameType(baseProp1, baseProp2);
+    public boolean isSameBasePropType(P baseProp1, P baseProp2) {
+        return compiler.isSameBasePropType(baseProp1, baseProp2);
     }
 
     public SimplePropType getSimpleType(P baseProp) {
@@ -343,8 +408,8 @@ class CompilerContext<T, P extends BaseProp> {
         return compiler.getDirectSubTypes(baseType);
     }
 
-    public boolean isSameType(T baseType1, T baseType2) {
-        return compiler.isSameType(baseType1, baseType2);
+    public boolean isSameBaseType(T baseType1, T baseType2) {
+        return compiler.isSameBaseType(baseType1, baseType2);
     }
 
     public boolean isInstantiable(T baseType) {

@@ -4,7 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.dto.compiler.DtoFile
 import org.babyfish.jimmer.dto.compiler.DtoModifier as AstDtoModifier
 import org.babyfish.jimmer.dto.compiler.DtoTypeKind
@@ -23,6 +25,8 @@ import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.idViewBasePropOf
+import site.addzero.lsi.jimmer.manyToManyViewBasePropOf
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -41,9 +45,9 @@ class DtoCompilerExtensionsTest {
     fun `non inherited DTO compiler places id before other scalar properties`() {
         val nameProp = prop(BOOK_TYPE_ID, "name", STRING_TYPE)
         val idProp = idProp(BOOK_TYPE_ID)
-        val registry = ImmutableSchema(
+        val schema = ImmutableSchema(
             listOf(immutableEntity(BOOK_TYPE_ID, listOf(nameProp, idProp)))
-        ).toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
+        )
         val source = LsiSource.of(
             path = "src/main/dto/demo/Book.dto",
             language = LsiLanguage.KOTLIN,
@@ -62,17 +66,19 @@ class DtoCompilerExtensionsTest {
                 }
             """.trimIndent(),
         ).toLsiDtoCompiler(
-            registry = registry,
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
             defaultNullableInputModifier = AstDtoModifier.STATIC,
-        ).compile(requireNotNull(registry[BOOK_TYPE_ID]))
+        ).compile(schema.typesById.getValue(BOOK_TYPE_ID))
 
-        val props = registry.props(requireNotNull(registry[BOOK_TYPE_ID]))
+        val compiledMacroType = compiledTypes.single { type -> type.name == "BookView" }
         val graph = compiledTypes.toLsiDtoGraph(source)
         val rootTypes = graph.rootTypeIds.map(graph.typesById::getValue)
         val macroType = rootTypes.single { type -> type.name == "BookView" }
         val explicitType = rootTypes.single { type -> type.name == "ExplicitBookView" }
 
-        assertEquals(listOf("id", "name"), props.keys.toList())
+        assertSame(idProp, compiledMacroType.dtoProps[0].baseProp)
+        assertSame(nameProp, compiledMacroType.dtoProps[1].baseProp)
         assertEquals(
             listOf("id", "name"),
             macroType.propIds.map { propId -> graph.propsById.getValue(propId).name },
@@ -84,11 +90,38 @@ class DtoCompilerExtensionsTest {
     }
 
     @Test
+    fun `DTO compiler diagnostics use stable immutable property display names`() {
+        val idProp = idProp(BOOK_TYPE_ID)
+        val nameProp = prop(BOOK_TYPE_ID, "name", STRING_TYPE)
+        val schema = ImmutableSchema(
+            listOf(immutableEntity(BOOK_TYPE_ID, listOf(idProp, nameProp)))
+        )
+        val dtoFile = DtoFile(
+            "src/main/dto/demo/Book.dto",
+            "demo/Book.dto",
+            "BookView { id(name) }",
+        )
+        val compiler = dtoFile.toLsiDtoCompiler(
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
+            defaultNullableInputModifier = AstDtoModifier.STATIC,
+        )
+
+        val exception = assertFailsWith<DtoAstException> {
+            compiler.compile(schema.typesById.getValue(BOOK_TYPE_ID))
+        }
+        val message = requireNotNull(exception.message)
+
+        assertTrue("\"demo.Book.name\"" in message, message)
+        assertTrue("ImmutableProp(" !in message, message)
+    }
+
+    @Test
     fun `resolves inherited generic input for Java target`() {
         val bridgeTypeId = typeId("contract.BaseInput")
         val bridgeParameterId = LsiSymbolId.typeParameter(bridgeTypeId, "T")
         val reusableTypeId = typeId("contract.BookInput")
-        val registry = registry(
+        val (schema, workspace) = schemaAndWorkspace(
             declarations = listOf(
                 declaration(
                     id = bridgeTypeId,
@@ -104,7 +137,8 @@ class DtoCompilerExtensionsTest {
             ),
         )
 
-        val typeInfo = registry.resolveDtoTypeInfo(
+        val typeInfo = workspace.resolveDtoTypeInfo(
+            schema,
             reusableTypeId.requireTypeQualifiedName(),
             LsiLanguage.JAVA,
         )
@@ -116,7 +150,7 @@ class DtoCompilerExtensionsTest {
     @Test
     fun `resolves view entity for Kotlin target`() {
         val reusableTypeId = typeId("contract.BookView")
-        val registry = registry(
+        val (schema, workspace) = schemaAndWorkspace(
             declarations = listOf(
                 declaration(
                     id = reusableTypeId,
@@ -125,7 +159,8 @@ class DtoCompilerExtensionsTest {
             ),
         )
 
-        val typeInfo = registry.resolveDtoTypeInfo(
+        val typeInfo = workspace.resolveDtoTypeInfo(
+            schema,
             reusableTypeId.requireTypeQualifiedName(),
             LsiLanguage.KOTLIN,
         )
@@ -138,7 +173,7 @@ class DtoCompilerExtensionsTest {
     fun `uses target language specification marker`() {
         val javaSpecificationId = typeId("contract.BookJavaSpecification")
         val kotlinSpecificationId = typeId("contract.BookKotlinSpecification")
-        val registry = registry(
+        val (schema, workspace) = schemaAndWorkspace(
             declarations = listOf(
                 declaration(
                     id = javaSpecificationId,
@@ -161,26 +196,30 @@ class DtoCompilerExtensionsTest {
 
         assertEquals(
             DtoTypeKind.SPECIFICATION,
-            registry.resolveDtoTypeInfo(
+            workspace.resolveDtoTypeInfo(
+                schema,
                 javaSpecificationId.requireTypeQualifiedName(),
                 LsiLanguage.JAVA,
             )?.kind,
         )
         assertNull(
-            registry.resolveDtoTypeInfo(
+            workspace.resolveDtoTypeInfo(
+                schema,
                 kotlinSpecificationId.requireTypeQualifiedName(),
                 LsiLanguage.JAVA,
             )
         )
         assertEquals(
             DtoTypeKind.SPECIFICATION,
-            registry.resolveDtoTypeInfo(
+            workspace.resolveDtoTypeInfo(
+                schema,
                 kotlinSpecificationId.requireTypeQualifiedName(),
                 LsiLanguage.KOTLIN,
             )?.kind,
         )
         assertNull(
-            registry.resolveDtoTypeInfo(
+            workspace.resolveDtoTypeInfo(
+                schema,
                 javaSpecificationId.requireTypeQualifiedName(),
                 LsiLanguage.KOTLIN,
             )
@@ -190,16 +229,18 @@ class DtoCompilerExtensionsTest {
     @Test
     fun `returns null for non DTO type`() {
         val otherTypeId = typeId("contract.Other")
-        val registry = registry(listOf(declaration(otherTypeId)))
+        val (schema, workspace) = schemaAndWorkspace(listOf(declaration(otherTypeId)))
 
-        assertNull(registry.resolveDtoTypeInfo(otherTypeId.requireTypeQualifiedName(), LsiLanguage.JAVA))
-        assertNull(registry.resolveDtoTypeInfo("contract.Missing", LsiLanguage.KOTLIN))
+        assertNull(
+            workspace.resolveDtoTypeInfo(schema, otherTypeId.requireTypeQualifiedName(), LsiLanguage.JAVA)
+        )
+        assertNull(workspace.resolveDtoTypeInfo(schema, "contract.Missing", LsiLanguage.KOTLIN))
     }
 
     @Test
     fun `rejects DTO whose entity argument is not immutable`() {
         val reusableTypeId = typeId("contract.InvalidView")
-        val registry = registry(
+        val (schema, workspace) = schemaAndWorkspace(
             declarations = listOf(
                 declaration(
                     id = reusableTypeId,
@@ -211,7 +252,8 @@ class DtoCompilerExtensionsTest {
         )
 
         val exception = assertFailsWith<IllegalArgumentException> {
-            registry.resolveDtoTypeInfo(
+            workspace.resolveDtoTypeInfo(
+                schema,
                 reusableTypeId.requireTypeQualifiedName(),
                 LsiLanguage.JAVA,
             )
@@ -227,7 +269,7 @@ class DtoCompilerExtensionsTest {
     fun `rejects reusable DTO declarations with type parameters`() {
         val reusableTypeId = typeId("contract.GenericBookInput")
         val parameterId = LsiSymbolId.typeParameter(reusableTypeId, "T")
-        val registry = registry(
+        val (schema, workspace) = schemaAndWorkspace(
             declarations = listOf(
                 declaration(
                     id = reusableTypeId,
@@ -238,7 +280,8 @@ class DtoCompilerExtensionsTest {
         )
 
         val exception = assertFailsWith<IllegalArgumentException> {
-            registry.resolveDtoTypeInfo(
+            workspace.resolveDtoTypeInfo(
+                schema,
                 reusableTypeId.requireTypeQualifiedName(),
                 LsiLanguage.JAVA,
             )
@@ -252,10 +295,10 @@ class DtoCompilerExtensionsTest {
 
     @Test
     fun `rejects unknown target language`() {
-        val registry = registry(emptyList())
+        val (schema, workspace) = schemaAndWorkspace(emptyList())
 
         val exception = assertFailsWith<IllegalArgumentException> {
-            registry.resolveDtoTypeInfo("contract.Missing", LsiLanguage.UNKNOWN)
+            workspace.resolveDtoTypeInfo(schema, "contract.Missing", LsiLanguage.UNKNOWN)
         }
 
         assertEquals(
@@ -326,11 +369,8 @@ class DtoCompilerExtensionsTest {
                 ),
             )
         )
-        val registry = schema.toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
-        val bookProps = registry.props(requireNotNull(registry[BOOK_TYPE_ID]))
-
-        assertEquals(storeProp.id, bookProps.getValue("storeId").idViewBaseProp?.id)
-        assertEquals(linksProp.id, bookProps.getValue("authors").manyToManyViewBaseProp?.id)
+        assertSame(storeProp, schema.idViewBasePropOf(storeIdViewProp))
+        assertSame(linksProp, schema.manyToManyViewBasePropOf(authorsViewProp))
     }
 
     @Test
@@ -363,7 +403,6 @@ class DtoCompilerExtensionsTest {
                 )
             )
         )
-        val registry = schema.toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
         val dtoFile = DtoFile(
             rawSourcePath,
             "demo/Book.dto",
@@ -380,10 +419,11 @@ class DtoCompilerExtensionsTest {
             """.trimIndent(),
         )
         val compiler = dtoFile.toLsiDtoCompiler(
-            registry = registry,
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
             defaultNullableInputModifier = AstDtoModifier.STATIC,
         )
-        val compiledTypes = compiler.compile(requireNotNull(registry[BOOK_TYPE_ID]))
+        val compiledTypes = compiler.compile(schema.typesById.getValue(BOOK_TYPE_ID))
 
         val graph = compiledTypes.toLsiDtoGraph(source)
         val rootTypeId = DtoTypeId("${source.path}#root:00000000:BookView")
@@ -476,8 +516,7 @@ class DtoCompilerExtensionsTest {
             path = "src/main/dto/demo/Administrator.dto",
             language = LsiLanguage.KOTLIN,
         )
-        val registry = ImmutableSchema(listOf(baseType, administratorType))
-            .toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
+        val schema = ImmutableSchema(listOf(baseType, administratorType))
         val dtoFile = DtoFile(
             source.path,
             "demo/Administrator.dto",
@@ -488,9 +527,10 @@ class DtoCompilerExtensionsTest {
             """.trimIndent(),
         )
         val compiledTypes = dtoFile.toLsiDtoCompiler(
-            registry = registry,
+            immutableSchema = schema,
+            workspace = LsiWorkspace.EMPTY,
             defaultNullableInputModifier = AstDtoModifier.STATIC,
-        ).compile(requireNotNull(registry[administratorTypeId]))
+        ).compile(schema.typesById.getValue(administratorTypeId))
 
         val graph = compiledTypes.toLsiDtoGraph(source)
         val rootType = graph.typesById.getValue(graph.rootTypeIds.single())
@@ -501,12 +541,12 @@ class DtoCompilerExtensionsTest {
         )
     }
 
-    private fun registry(
+    private fun schemaAndWorkspace(
         declarations: List<LsiTypeDeclaration>,
-    ): LsiDtoTypeRegistry {
+    ): Pair<ImmutableSchema, LsiWorkspace> {
         val workspace = LsiWorkspace(declarations = declarations)
         val book = immutableEntity(BOOK_TYPE_ID, listOf(idProp(BOOK_TYPE_ID)))
-        return ImmutableSchema(listOf(book)).toLsiDtoTypeRegistry(workspace)
+        return ImmutableSchema(listOf(book)) to workspace
     }
 
     private fun declaration(

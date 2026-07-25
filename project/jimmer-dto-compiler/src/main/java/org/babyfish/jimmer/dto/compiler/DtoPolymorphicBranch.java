@@ -1,10 +1,9 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class DtoPolymorphicBranch<T, P extends BaseProp> {
+public class DtoPolymorphicBranch<T, P> {
 
     public enum Kind {
         DEFAULT,

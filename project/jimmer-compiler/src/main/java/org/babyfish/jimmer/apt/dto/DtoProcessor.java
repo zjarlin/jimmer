@@ -10,13 +10,11 @@ import site.addzero.lsi.core.LsiLanguage;
 import site.addzero.lsi.core.LsiSource;
 import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
-import site.addzero.lsi.jimmer.dto.DtoCompilerExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoTypeInfoExtensionsKt;
-import site.addzero.lsi.jimmer.dto.LsiDtoTypeRegistry;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
@@ -50,8 +48,6 @@ public class DtoProcessor {
     private final ImmutableSchema immutableSchema;
 
     private final LsiWorkspace lsiWorkspace;
-
-    private final LsiDtoTypeRegistry dtoTypeRegistry;
 
     private final Map<site.addzero.lsi.jimmer.dto.DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames;
 
@@ -97,7 +93,6 @@ public class DtoProcessor {
         );
         this.immutableSchema = immutableSchema;
         this.lsiWorkspace = lsiWorkspace;
-        this.dtoTypeRegistry = DtoCompilerExtensionsKt.toLsiDtoTypeRegistry(immutableSchema, lsiWorkspace);
         this.batchRootDtoTypeNames = JimmerDtoPoetTypeNames.roots(graphs);
         this.jacksonVersion = jacksonVersion;
         this.hibernateValidatorEnhancement = hibernateValidatorEnhancement;
@@ -151,7 +146,8 @@ public class DtoProcessor {
 
     private DtoTypeInfo resolveDtoType(String qualifiedName) {
         return DtoTypeInfoExtensionsKt.resolveDtoTypeInfo(
-                dtoTypeRegistry,
+                lsiWorkspace,
+                immutableSchema,
                 qualifiedName,
                 LsiLanguage.JAVA
         );

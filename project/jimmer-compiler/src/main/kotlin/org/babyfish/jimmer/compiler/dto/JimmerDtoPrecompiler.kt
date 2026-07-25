@@ -9,6 +9,7 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelection
 import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
+import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -34,11 +35,9 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
-import site.addzero.lsi.jimmer.dto.LsiDtoBaseProp
 import site.addzero.lsi.jimmer.dto.resolveDtoTypeInfo
 import site.addzero.lsi.jimmer.dto.toLsiDtoCompiler
 import site.addzero.lsi.jimmer.dto.toLsiDtoGraph
-import site.addzero.lsi.jimmer.dto.toLsiDtoTypeRegistry
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -59,7 +58,6 @@ internal class JimmerDtoPrecompiler {
             "DTO precompilation requires APT or KSP platform"
         }
         val targetLanguage = platform.dtoTargetLanguage()
-        val registry = immutableSchema.toLsiDtoTypeRegistry(workspace)
         val failures = mutableListOf<JimmerDtoCompilerFailure>()
         val entries = inputDocumentSnapshots
             .filter { snapshot -> snapshot.document.kind == CompilerInputDocumentKind.DTO }
@@ -68,7 +66,8 @@ internal class JimmerDtoPrecompiler {
                 val inputDocument = snapshot.document
                 val compiler = try {
                     inputDocument.toDtoFile().toLsiDtoCompiler(
-                        registry = registry,
+                        immutableSchema = immutableSchema,
+                        workspace = workspace,
                         defaultNullableInputModifier = defaultNullableInputModifier,
                     )
                 } catch (exception: DtoAstException) {
@@ -140,7 +139,7 @@ internal class JimmerDtoPrecompiler {
                 entry.targetTypeIds.filterTo(this) { targetTypeId ->
                     val workspaceType = workspace[targetTypeId] as? LsiTypeDeclaration
                     workspaceType == null ||
-                        workspaceType.isJimmerImmutableType() && registry[targetTypeId] == null
+                        workspaceType.isJimmerImmutableType() && targetTypeId !in immutableSchema.typesById
                 }
                 snapshot.references
                     .asSequence()
@@ -159,7 +158,7 @@ internal class JimmerDtoPrecompiler {
                         when (reference.kind) {
                             CompilerInputDocumentReferenceKind.MODEL_TYPE ->
                                 declaration == null ||
-                                    declaration.isJimmerImmutableType() && registry[typeId] == null
+                                    declaration.isJimmerImmutableType() && typeId !in immutableSchema.typesById
 
                             else -> declaration == null
                         }
@@ -270,7 +269,7 @@ internal class JimmerDtoPrecompiler {
         }
         try {
             DtoTypeLinker.link(compiledTypes) { qualifiedName ->
-                registry.resolveDtoTypeInfo(qualifiedName, targetLanguage)
+                workspace.resolveDtoTypeInfo(immutableSchema, qualifiedName, targetLanguage)
             }
         } catch (exception: DtoAstException) {
             failures += exception.toFailure(entries)
@@ -403,7 +402,7 @@ private fun LsiDiagnostic.toCompilerFailure(
 
 private data class JimmerDtoCompilerEntry(
     val inputSnapshot: CompilerInputDocumentSnapshot,
-    val compiler: DtoCompiler<ImmutableType, LsiDtoBaseProp>,
+    val compiler: DtoCompiler<ImmutableType, ImmutableProp>,
     val targetTypeIds: List<LsiSymbolId>,
     val referenceResolution: JimmerDtoStaticReferenceResolution,
 ) {

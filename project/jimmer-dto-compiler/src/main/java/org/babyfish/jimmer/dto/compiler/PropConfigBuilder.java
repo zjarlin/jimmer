@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
-import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -11,7 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-class PropConfigBuilder<T, P extends BaseProp> {
+class PropConfigBuilder<T, P> {
 
     private final CompilerContext<T, P> ctx;
 
@@ -59,14 +58,14 @@ class PropConfigBuilder<T, P extends BaseProp> {
                     "Cannot specify \"!where\" when \"!filter\" exists"
             );
         }
-        if (!baseProp.isAssociation(true)) {
+        if (!ctx.isBasePropAssociation(baseProp, true)) {
             throw ctx.exception(
                     where.start.getLine(),
                     where.start.getCharPositionInLine(),
                     "Cannot be specify \"!where\" when the property is not association"
             );
         }
-        if (baseProp.isReference() && !baseProp.isNullable()) {
+        if (ctx.isBasePropReference(baseProp) && !ctx.isBasePropNullable(baseProp)) {
             throw ctx.exception(
                     where.start.getLine(),
                     where.start.getCharPositionInLine(),
@@ -85,7 +84,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
                     "Cannot specify \"!orderBy\" when \"!filter\" exists"
             );
         }
-        if (!baseProp.isAssociation(true) || !baseProp.isList()) {
+        if (!ctx.isBasePropAssociation(baseProp, true) || !ctx.isBasePropList(baseProp)) {
             throw ctx.exception(
                     orderBy.start.getLine(),
                     orderBy.start.getCharPositionInLine(),
@@ -130,7 +129,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
                     "Cannot specify \"!filter\" when \"!orderBy\" exists"
             );
         }
-        if (!baseProp.isAssociation(true) || !baseProp.isList()) {
+        if (!ctx.isBasePropAssociation(baseProp, true) || !ctx.isBasePropList(baseProp)) {
             throw ctx.exception(
                     filter.start.getLine(),
                     filter.start.getCharPositionInLine(),
@@ -191,7 +190,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
     }
 
     void setFetchType(DtoParser.FetchTypeContext fetchType) {
-        if (!baseProp.isAssociation(true) || baseProp.isList()) {
+        if (!ctx.isBasePropAssociation(baseProp, true) || ctx.isBasePropList(baseProp)) {
             throw ctx.exception(
                     fetchType.start.getLine(),
                     fetchType.start.getCharPositionInLine(),
@@ -215,7 +214,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
     }
 
     void setLimit(DtoParser.LimitContext limit) {
-        if (!baseProp.isAssociation(true) || !baseProp.isList()) {
+        if (!ctx.isBasePropAssociation(baseProp, true) || !ctx.isBasePropList(baseProp)) {
             throw ctx.exception(
                     limit.start.getLine(),
                     limit.start.getCharPositionInLine(),
@@ -390,11 +389,18 @@ class PropConfigBuilder<T, P extends BaseProp> {
                 if (part.getText().endsWith("Id")) {
                     String referenceName = part.getText().substring(0, part.getText().length() - 2);
                     P referenceProp = ctx.getProps(baseType).get(referenceName);
-                    if (referenceProp != null && referenceProp.isReference() && referenceProp.isAssociation(true)) {
+                    if (referenceProp != null &&
+                            ctx.isBasePropReference(referenceProp) &&
+                            ctx.isBasePropAssociation(referenceProp, true)) {
+                        String idPropName = ctx.getBasePropName(
+                                ctx.getIdProp(ctx.getTargetType(referenceProp))
+                        );
                         pathNodes.add(
                                 new AssociatedIdPathNodeImpl<>(
                                         referenceProp,
-                                        ctx.getIdProp(ctx.getTargetType(referenceProp)).getName()
+                                        ctx.getBasePropName(referenceProp),
+                                        ctx.getBasePropDisplayName(referenceProp),
+                                        idPropName
                                 )
                         );
                         T targetType = ctx.getTargetType(referenceProp);
@@ -413,13 +419,18 @@ class PropConfigBuilder<T, P extends BaseProp> {
                                 "\""
                 );
             }
-            if (prop.getIdViewBaseProp() != null) {
-                P referenceProp = (P) prop.getIdViewBaseProp();
-                if (!referenceProp.isList()) {
+            P referenceProp = ctx.getIdViewBaseProp(prop);
+            if (referenceProp != null) {
+                if (!ctx.isBasePropList(referenceProp)) {
+                    String idPropName = ctx.getBasePropName(
+                            ctx.getIdProp(ctx.getTargetType(referenceProp))
+                    );
                     pathNodes.add(
                             new AssociatedIdPathNodeImpl<>(
                                     referenceProp,
-                                    ctx.getIdProp(ctx.getTargetType(referenceProp)).getName()
+                                    ctx.getBasePropName(referenceProp),
+                                    ctx.getBasePropDisplayName(referenceProp),
+                                    idPropName
                             )
                     );
                     T targetType = ctx.getTargetType(referenceProp);
@@ -428,20 +439,20 @@ class PropConfigBuilder<T, P extends BaseProp> {
                     continue;
                 }
             }
-            if (prop.isAssociation(true)) {
-                if (prop.isReference()) {
+            if (ctx.isBasePropAssociation(prop, true)) {
+                if (ctx.isBasePropReference(prop)) {
                     if (i + 1 < size) {
-                        String idPropName = ctx.getIdProp(ctx.getTargetType(prop)).getName();
+                        String idPropName = ctx.getBasePropName(ctx.getIdProp(ctx.getTargetType(prop)));
                         if (propPath.parts.get(i + 1).getText().equals(idPropName)) {
                             throw ctx.exception(
                                     part.getLine(),
                                     part.getCharPositionInLine(),
                                     "Please replace \"" +
-                                            prop.getName() +
+                                            ctx.getBasePropName(prop) +
                                             "." +
                                             idPropName +
                                             "\" to \"" +
-                                            prop.getName() +
+                                            ctx.getBasePropName(prop) +
                                             "Id\""
                             );
                         }
@@ -450,31 +461,37 @@ class PropConfigBuilder<T, P extends BaseProp> {
                                 part.getLine(),
                                 part.getCharPositionInLine(),
                                 "Please replace \"" +
-                                        prop.getName() +
+                                        ctx.getBasePropName(prop) +
                                         "\" to \"" +
-                                        prop.getName() +
+                                        ctx.getBasePropName(prop) +
                                         "Id\""
                         );
                     }
                 } else {
                     throw ctx.exception(
                             part.getLine(),
-                            part.getCharPositionInLine(),
-                            "There property \"" +
-                                    prop +
+                        part.getCharPositionInLine(),
+                        "There property \"" +
+                                    ctx.getBasePropDisplayName(prop) +
                                     "\" cannot be supported because join is forbidden by fetcher field predicate"
                     );
                 }
-            } else if (i + 1 < size && !prop.isEmbedded()) {
+            } else if (i + 1 < size && !ctx.isBasePropEmbedded(prop)) {
                 throw ctx.exception(
                         part.getLine(),
                         part.getCharPositionInLine(),
                         "There property \"" +
-                                prop +
+                                ctx.getBasePropDisplayName(prop) +
                                 "\" is not last property but it is not embedded object"
                 );
             }
-            pathNodes.add(new SimplePathNodeImpl<>(prop));
+            pathNodes.add(
+                    new SimplePathNodeImpl<>(
+                            prop,
+                            ctx.getBasePropName(prop),
+                            ctx.getBasePropDisplayName(prop)
+                    )
+            );
             baseType = ctx.getTargetType(prop);
         }
         return pathNodes;
@@ -630,7 +647,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
         }
     }
 
-    private static abstract class PathHolder<P extends BaseProp> {
+    private static abstract class PathHolder<P> {
 
         final List<PropConfig.PathNode<P>> path;
 
@@ -653,7 +670,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
                 } else {
                     addComma = true;
                 }
-                builder.append(pathNode.getProp().getName());
+                builder.append(pathNode.getPropName());
                 if (pathNode.isAssociatedId()) {
                     builder.append("Id");
                 }
@@ -662,7 +679,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
         }
     }
 
-    private static class OrderItemImpl<P extends BaseProp> extends PathHolder<P> implements PropConfig.OrderItem<P> {
+    private static class OrderItemImpl<P> extends PathHolder<P> implements PropConfig.OrderItem<P> {
 
         private final boolean desc;
 
@@ -682,7 +699,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
         }
     }
 
-    private static class NullityPredicate<P extends BaseProp>
+    private static class NullityPredicate<P>
             extends PathHolder<P>
             implements PropConfig.Predicate.Nullity<P> {
 
@@ -704,7 +721,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
         }
     }
 
-    private static class CmpPredicate<P extends BaseProp> extends PathHolder<P> implements PropConfig.Predicate.Cmp<P> {
+    private static class CmpPredicate<P> extends PathHolder<P> implements PropConfig.Predicate.Cmp<P> {
 
         private final String operator;
 
@@ -755,7 +772,7 @@ class PropConfigBuilder<T, P extends BaseProp> {
         }
     }
 
-    private static class PropConfigImpl<P extends BaseProp> implements PropConfig<P> {
+    private static class PropConfigImpl<P> implements PropConfig<P> {
 
         private final PropConfig.Predicate predicate;
 
@@ -889,17 +906,28 @@ class PropConfigBuilder<T, P extends BaseProp> {
         }
     }
 
-    private static class SimplePathNodeImpl<P extends BaseProp> implements PropConfig.PathNode<P> {
+    private static class SimplePathNodeImpl<P> implements PropConfig.PathNode<P> {
 
         private final P prop;
 
-        SimplePathNodeImpl(P prop) {
+        private final String propName;
+
+        private final String propDisplayName;
+
+        SimplePathNodeImpl(P prop, String propName, String propDisplayName) {
             this.prop = prop;
+            this.propName = propName;
+            this.propDisplayName = propDisplayName;
         }
 
         @Override
         public P getProp() {
             return prop;
+        }
+
+        @Override
+        public String getPropName() {
+            return propName;
         }
 
         @Override
@@ -909,18 +937,24 @@ class PropConfigBuilder<T, P extends BaseProp> {
 
         @Override
         public String toString() {
-            return prop.toString();
+            return propDisplayName;
         }
     }
 
-    private static class AssociatedIdPathNodeImpl<P extends BaseProp> implements PropConfig.PathNode<P> {
+    private static class AssociatedIdPathNodeImpl<P> implements PropConfig.PathNode<P> {
 
         private final P prop;
 
+        private final String propName;
+
+        private final String propDisplayName;
+
         private final String idPropName;
 
-        AssociatedIdPathNodeImpl(P prop, String idPropName) {
+        AssociatedIdPathNodeImpl(P prop, String propName, String propDisplayName, String idPropName) {
             this.prop = prop;
+            this.propName = propName;
+            this.propDisplayName = propDisplayName;
             this.idPropName = idPropName;
         }
 
@@ -930,13 +964,18 @@ class PropConfigBuilder<T, P extends BaseProp> {
         }
 
         @Override
+        public String getPropName() {
+            return propName;
+        }
+
+        @Override
         public boolean isAssociatedId() {
             return true;
         }
 
         @Override
         public String toString() {
-            return prop + "." + idPropName;
+            return propDisplayName + "." + idPropName;
         }
     }
 }
