@@ -3,6 +3,7 @@ package site.addzero.lsi.jimmer.dto
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
@@ -60,18 +61,29 @@ fun DtoType.requiresHibernateValidatorEnhancement(
     }
 }
 
+/** 返回 Specification 的冻结基础不可变类型。 */
+fun DtoType.specificationBaseType(immutableSchema: ImmutableSchema): ImmutableType {
+    require(DtoModifier.SPECIFICATION in modifiers) {
+        "DTO type is not a specification: ${id.value}"
+    }
+    return semanticBaseType(immutableSchema)
+}
+
 /** 判断 DTO 是否为嵌套在实体 Specification 中的非实体过滤片段。 */
 fun DtoType.isNestedSpecificationFragment(
     immutableSchema: ImmutableSchema,
 ): Boolean {
+    val baseType = semanticBaseType(immutableSchema)
+    return DtoModifier.SPECIFICATION in modifiers && baseType.kind != ImmutableTypeKind.ENTITY
+}
+
+private fun DtoType.semanticBaseType(immutableSchema: ImmutableSchema): ImmutableType {
     val baseTypeId = requireNotNull(baseTypeId) {
         "DTO semantic classification requires a base immutable type: ${id.value}"
     }
-    val baseType = requireNotNull(immutableSchema.typesById[baseTypeId]) {
+    return requireNotNull(immutableSchema.typesById[baseTypeId]) {
         "No immutable base type '${baseTypeId.value}' for DTO type: ${id.value}"
     }
-    return DtoModifier.SPECIFICATION in modifiers &&
-        baseType.kind != ImmutableTypeKind.ENTITY
 }
 
 /** DTO 生成类需要实现的 Jimmer 基础契约。 */

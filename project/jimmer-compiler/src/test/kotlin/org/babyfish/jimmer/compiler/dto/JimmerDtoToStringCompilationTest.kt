@@ -220,6 +220,12 @@ class JimmerDtoToStringCompilationTest {
     private fun assertEqualityAndHashContracts(classesDir: File) {
         val urls = arrayOf(classesDir.toURI().toURL())
         URLClassLoader(urls, javaClass.classLoader).use { classLoader ->
+            val specification = newDto(classLoader, "SampleSpecification")
+            assertEquals(
+                classLoader.loadClass("demo.Sample"),
+                specification.javaClass.getMethod("entityType").invoke(specification),
+            )
+
             val arrays = List(3) {
                 newPlainArrayInput(
                     classLoader = classLoader,
@@ -493,6 +499,7 @@ class JimmerDtoToStringCompilationTest {
             "FuzzyShadowInput",
             "FloatingInput",
             "EmptyInput",
+            "SampleSpecification",
         )
 
         val EXPECTED_SNAPSHOTS = listOf(
@@ -637,6 +644,10 @@ class JimmerDtoToStringCompilationTest {
             }
 
             input EmptyInput {
+            }
+
+            specification SampleSpecification {
+                name
             }
         """.trimIndent()
 

@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoSpecificationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoToStringRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeRefRenderer;
@@ -2036,20 +2037,13 @@ public class DtoGenerator {
     }
 
     private void addEntityType() {
-        MethodSpec.Builder builder = MethodSpec
-                .methodBuilder("entityType")
-                .returns(
-                        ParameterizedTypeName.get(
-                                org.babyfish.jimmer.apt.immutable.generator.Constants.CLASS_CLASS_NAME,
-                                dtoType.getBaseType().getClassName()
-                        )
+        typeBuilder.addMethod(
+                AptDtoSpecificationRenderer.renderEntityType(
+                        lsiDtoType,
+                        immutableSchema,
+                        lsiWorkspace
                 )
-                .addModifiers(Modifier.PUBLIC)
-                .addStatement("return $T.class", dtoType.getBaseType().getClassName());
-        if (!isNestedSpecificationFragment()) {
-            builder.addAnnotation(Override.class);
-        }
-        typeBuilder.addMethod(builder.build());
+        );
     }
 
     private void addApplyTo() {

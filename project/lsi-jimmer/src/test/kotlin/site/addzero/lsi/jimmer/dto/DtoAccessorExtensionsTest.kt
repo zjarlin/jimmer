@@ -174,11 +174,11 @@ class DtoAccessorExtensionsTest {
             kind = ImmutableTypeKind.ENTITY,
             idPropId = idProp.id,
         )
+        val entitySchema = ImmutableSchema(listOf(entityType))
 
+        assertEquals(entityType, specification.specificationBaseType(entitySchema))
         assertFalse(
-            specification.isNestedSpecificationFragment(
-                ImmutableSchema(listOf(entityType)),
-            ),
+            specification.isNestedSpecificationFragment(entitySchema),
         )
         assertTrue(
             specification.isNestedSpecificationFragment(
@@ -201,6 +201,9 @@ class DtoAccessorExtensionsTest {
                 ),
             ),
         )
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.specificationBaseType(entitySchema)
+        }
         assertFailsWith<IllegalArgumentException> {
             dtoType.isNestedSpecificationFragment(ImmutableSchema(emptyList()))
         }

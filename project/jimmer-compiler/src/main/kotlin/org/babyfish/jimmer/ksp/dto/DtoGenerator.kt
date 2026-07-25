@@ -12,6 +12,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoSpecificationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeRefRenderer
 import org.babyfish.jimmer.dto.compiler.*
@@ -1765,20 +1766,11 @@ internal class DtoGenerator private constructor(
 
     private fun addEntityType() {
         typeBuilder.addFunction(
-            FunSpec
-                .builder("entityType")
-                .apply {
-                    if (!isNestedSpecificationFragment) {
-                        addModifiers(KModifier.OVERRIDE)
-                    }
-                }
-                .returns(
-                    CLASS_CLASS_NAME.parameterizedBy(
-                        dtoType.baseType.className
-                    )
-                )
-                .addStatement("return %T::class.java", dtoType.baseType.className)
-                .build()
+            KspDtoSpecificationRenderer.renderEntityType(
+                dtoType = lsiDtoType,
+                immutableSchema = immutableSchema,
+                workspace = workspace,
+            ),
         )
     }
 
