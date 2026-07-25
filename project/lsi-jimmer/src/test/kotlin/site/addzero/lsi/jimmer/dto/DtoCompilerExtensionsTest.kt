@@ -38,16 +38,49 @@ import site.addzero.lsi.model.LsiWorkspace
 class DtoCompilerExtensionsTest {
 
     @Test
-    fun `non inherited DTO compiler preserves immutable property order`() {
+    fun `non inherited DTO compiler places id before other scalar properties`() {
         val nameProp = prop(BOOK_TYPE_ID, "name", STRING_TYPE)
         val idProp = idProp(BOOK_TYPE_ID)
         val registry = ImmutableSchema(
             listOf(immutableEntity(BOOK_TYPE_ID, listOf(nameProp, idProp)))
         ).toLsiDtoTypeRegistry(LsiWorkspace.EMPTY)
+        val source = LsiSource.of(
+            path = "src/main/dto/demo/Book.dto",
+            language = LsiLanguage.KOTLIN,
+        )
+        val compiledTypes = DtoFile(
+            source.path,
+            "demo/Book.dto",
+            """
+                BookView {
+                    #allScalars
+                }
+
+                ExplicitBookView {
+                    name
+                    id
+                }
+            """.trimIndent(),
+        ).toLsiDtoCompiler(
+            registry = registry,
+            defaultNullableInputModifier = AstDtoModifier.STATIC,
+        ).compile(requireNotNull(registry[BOOK_TYPE_ID]))
 
         val props = registry.props(requireNotNull(registry[BOOK_TYPE_ID]))
+        val graph = compiledTypes.toLsiDtoGraph(source)
+        val rootTypes = graph.rootTypeIds.map(graph.typesById::getValue)
+        val macroType = rootTypes.single { type -> type.name == "BookView" }
+        val explicitType = rootTypes.single { type -> type.name == "ExplicitBookView" }
 
-        assertEquals(listOf("name", "id"), props.keys.toList())
+        assertEquals(listOf("id", "name"), props.keys.toList())
+        assertEquals(
+            listOf("id", "name"),
+            macroType.propIds.map { propId -> graph.propsById.getValue(propId).name },
+        )
+        assertEquals(
+            listOf("name", "id"),
+            explicitType.propIds.map { propId -> graph.propsById.getValue(propId).name },
+        )
     }
 
     @Test

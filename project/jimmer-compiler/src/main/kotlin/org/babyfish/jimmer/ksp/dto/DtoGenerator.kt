@@ -58,6 +58,7 @@ import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.polymorphicRootDiscriminatorPropNameOrNull
 import site.addzero.lsi.jimmer.dto.prop
+import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
@@ -2648,17 +2649,15 @@ internal class DtoGenerator private constructor(
                     CodeBlock
                         .builder()
                         .apply {
-                            val hasConditionalProps = dtoType.props.any { prop ->
-                                lsiDtoType
-                                    .prop(lsiGraph, prop.name)
-                                    .toStringInclusion(lsiGraph) != DtoToStringInclusion.ALWAYS
+                            val toStringProps = lsiDtoType.propsInDeclarationOrder(lsiGraph)
+                            val hasConditionalProps = toStringProps.any { prop ->
+                                prop.toStringInclusion(lsiGraph) != DtoToStringInclusion.ALWAYS
                             }
                             if (hasConditionalProps) {
                                 addStatement("val builder = StringBuilder()")
                                 addStatement("var separator = \"\"")
                                 addStatement("builder.append(%S).append('(')", simpleNamePart())
-                                for (prop in dtoType.props) {
-                                    val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
+                                for (lsiProp in toStringProps) {
                                     val inclusion = lsiProp.toStringInclusion(lsiGraph)
                                     if (inclusion == DtoToStringInclusion.WHEN_LOADED) {
                                         val stateFieldName = checkNotNull(
@@ -2669,20 +2668,20 @@ internal class DtoGenerator private constructor(
                                         )
                                         beginControlFlow("if (%L)", stateFieldName)
                                     } else if (inclusion == DtoToStringInclusion.WHEN_NON_NULL) {
-                                        beginControlFlow("if (%L != null)", prop.name)
+                                        beginControlFlow("if (%L != null)", lsiProp.name)
                                     }
-                                    if (prop.name == "builder") {
+                                    if (lsiProp.name == "builder") {
                                         addStatement(
                                             "builder.append(separator).append(%S).append(this.%L)",
-                                            prop.name + '=',
-                                            prop.name,
+                                            lsiProp.name + '=',
+                                            lsiProp.name,
                                         )
                                         addStatement("separator = \", \"")
                                     } else {
                                         addStatement(
                                             "builder.append(separator).append(%S).append(%L)",
-                                            prop.name + '=',
-                                            prop.name,
+                                            lsiProp.name + '=',
+                                            lsiProp.name,
                                         )
                                         addStatement("separator = \", \"")
                                     }
@@ -2694,7 +2693,7 @@ internal class DtoGenerator private constructor(
                                 addStatement("return builder.toString()")
                             } else {
                                 add("return %S +\n", simpleNamePart() + "(")
-                                dtoType.props.forEachIndexed { index, prop ->
+                                toStringProps.forEachIndexed { index, prop ->
                                     add(
                                         "    %S + %L + \n",
                                         (if (index == 0) "" else ", ") + prop.name + '=',

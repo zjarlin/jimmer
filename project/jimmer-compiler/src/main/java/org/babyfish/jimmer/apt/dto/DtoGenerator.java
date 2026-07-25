@@ -2524,18 +2524,15 @@ public class DtoGenerator {
         builder.addStatement("StringBuilder builder = new StringBuilder()");
         builder.addStatement("builder.append($S).append('(')", simpleNamePath());
         String separator = "\"\"";
-        boolean dynamicSeparator = dtoType.getProps().stream().anyMatch(prop ->
-                DtoToStringExtensionsKt.toStringInclusion(
-                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
-                        lsiGraph
-                ) != DtoToStringInclusion.ALWAYS
+        List<site.addzero.lsi.jimmer.dto.DtoProp> toStringProps =
+                DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph);
+        boolean dynamicSeparator = toStringProps.stream().anyMatch(prop ->
+                DtoToStringExtensionsKt.toStringInclusion(prop, lsiGraph) != DtoToStringInclusion.ALWAYS
         );
         if (dynamicSeparator) {
             builder.addStatement("String _sp = \"\"");
         }
-        for (AbstractProp prop : dtoType.getProps()) {
-            site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
-                    DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
+        for (site.addzero.lsi.jimmer.dto.DtoProp lsiProp : toStringProps) {
             DtoToStringInclusion inclusion =
                     DtoToStringExtensionsKt.toStringInclusion(lsiProp, lsiGraph);
             if (inclusion == DtoToStringInclusion.WHEN_LOADED) {
@@ -2548,12 +2545,12 @@ public class DtoGenerator {
                 );
                 builder.beginControlFlow("if ($L)", stateFieldName);
             } else if (inclusion == DtoToStringInclusion.WHEN_NON_NULL) {
-                builder.beginControlFlow("if ($L != null)", prop.getName());
+                builder.beginControlFlow("if ($L != null)", lsiProp.getName());
             }
-            if (prop.getName().equals("builder")) {
-                builder.addStatement("builder.append($L).append($S).append(this.$L)", separator, prop.getName() + '=', prop.getName());
+            if (lsiProp.getName().equals("builder")) {
+                builder.addStatement("builder.append($L).append($S).append(this.$L)", separator, lsiProp.getName() + '=', lsiProp.getName());
             } else {
-                builder.addStatement("builder.append($L).append($S).append($L)", separator, prop.getName() + '=', prop.getName());
+                builder.addStatement("builder.append($L).append($S).append($L)", separator, lsiProp.getName() + '=', lsiProp.getName());
             }
             if (dynamicSeparator) {
                 builder.addStatement("_sp = \", \"");

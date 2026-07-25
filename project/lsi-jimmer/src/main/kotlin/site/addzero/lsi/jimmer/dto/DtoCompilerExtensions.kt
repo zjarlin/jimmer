@@ -111,13 +111,8 @@ class LsiDtoTypeRegistry internal constructor(
     ): LsiDeclaredType? = typeSystem.resolveSuperType(typeId, superTypeId)
 }
 
-/**
- * 继承类型的 DTO 属性沿用 Jimmer 的 ID 前置规则，其余属性保持结构声明顺序。
- */
+/** DTO 属性沿用 Jimmer 的 ID 前置规则，其余属性保持结构声明顺序。 */
 private fun ImmutableType.dtoCompilerPropsInOrder(): List<ImmutableProp> {
-    if (superTypeIds.isEmpty()) {
-        return props
-    }
     val (idProps, remainingProps) = props.partition { prop ->
         prop.primaryMapping == PrimaryMapping.ID
     }
