@@ -18,6 +18,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoLoadedStateRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicBranchRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicMetadataConverterRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSpecificationRenderer
@@ -678,7 +679,7 @@ internal class DtoGenerator private constructor(
                 .companionObjectBuilder()
                 .addAnnotation(generatedAnnotation())
                 .apply {
-                    addPolymorphicMetadata(polymorphism)
+                    addPolymorphicMetadata()
                 }
                 .build()
         )
@@ -768,9 +769,7 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    private fun TypeSpec.Builder.addPolymorphicMetadata(
-        polymorphism: DtoPolymorphism<ImmutableType, ImmutableProp>
-    ) {
+    private fun TypeSpec.Builder.addPolymorphicMetadata() {
         addProperty(
             PropertySpec
                 .builder(
@@ -797,7 +796,14 @@ internal class DtoGenerator private constructor(
                             add("%T::class.java,\n", getDtoClassName())
                             metadataFetcherExpr()
                             add(",\n")
-                            polymorphicConverterExpr(polymorphism)
+                            KspDtoPolymorphicMetadataConverterRenderer.appendTo(
+                                builder = this,
+                                dtoType = lsiDtoType,
+                                graph = lsiGraph,
+                                workspace = workspace,
+                                generatedPackageName = generatedDtoPackageName,
+                                generatedRootSimpleNames = generatedDtoSimpleNames,
+                            )
                             add("\n")
                             unindent()
                             add(")")
@@ -873,41 +879,6 @@ internal class DtoGenerator private constructor(
         addFetcherFields(branch.dtoType, branchLsiType)
         unindent()
         add("}\n")
-    }
-
-    private fun CodeBlock.Builder.polymorphicConverterExpr(
-        polymorphism: DtoPolymorphism<ImmutableType, ImmutableProp>,
-    ) {
-        add("{ base ->\n")
-        indent()
-        addStatement("val actualType = (base as %T).__type().javaClass", IMMUTABLE_SPI_CLASS_NAME)
-        beginControlFlow("when (actualType)")
-        for (branch in polymorphism.typeBranches) {
-            val targetType =
-                branch.targetType ?: error("Internal bug: default branch cannot be rendered as type branch")
-            addStatement(
-                "%T::class.java -> %T(base as %T)",
-                targetType.className,
-                getDtoClassName(branch.className),
-                targetType.className
-            )
-        }
-        val defaultBranch = polymorphism.defaultBranch
-        if (defaultBranch !== null) {
-            addStatement("else -> %T(base)", getDtoClassName(defaultBranch.className))
-        } else {
-            addStatement(
-                "else -> throw %T(%S + actualType.name + %S)",
-                IllegalArgumentException::class,
-                "Cannot convert entity object to polymorphic DTO \"" +
-                        getDtoClassName().canonicalName +
-                        "\" because there is no branch for actual entity type \"",
-                "\""
-            )
-        }
-        endControlFlow()
-        unindent()
-        add("}")
     }
 
     private fun CodeBlock.Builder.addFoldFetcherFields(

@@ -20,6 +20,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoLoadedStateRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicBranchRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicMetadataConverterRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSpecificationRenderer;
@@ -834,7 +835,16 @@ public class DtoGenerator {
             addPolymorphicTypeFetcherBranch(branch, cb);
         }
         cb.add(",\n");
-        addPolymorphicConverter(polymorphism, cb);
+        cb.add(
+                "$L",
+                AptDtoPolymorphicMetadataConverterRenderer.render(
+                        lsiDtoType,
+                        lsiGraph,
+                        lsiWorkspace,
+                        getGeneratedDtoPackageName(),
+                        getGeneratedDtoSimpleNames()
+                )
+        );
         cb
                 .unindent()
                 .unindent()
@@ -860,39 +870,6 @@ public class DtoGenerator {
         cb.add("\n.forType($T.$L", targetType.getFetcherClassName(), "$").indent();
         addFetcherFields(branch.getDtoType(), branchLsiType, cb);
         cb.unindent().add("\n)");
-    }
-
-    private void addPolymorphicConverter(
-            DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism,
-            CodeBlock.Builder cb
-    ) {
-        cb.beginControlFlow("base ->");
-        cb.addStatement("$T<?> actualType = (($T)base).__type().getJavaClass()", Class.class, ImmutableSpi.class);
-        for (DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch : polymorphism.getTypeBranches()) {
-            ImmutableType targetType = branch.getTargetType();
-            assert targetType != null;
-            cb.beginControlFlow("if (actualType == $T.class)", targetType.getClassName());
-            cb.addStatement(
-                    "return new $T(($T)base)",
-                    getDtoClassName(branch.getClassName()),
-                    targetType.getClassName()
-            );
-            cb.endControlFlow();
-        }
-        DtoPolymorphicBranch<ImmutableType, ImmutableProp> defaultBranch = polymorphism.getDefaultBranch();
-        if (defaultBranch != null) {
-            cb.addStatement("return new $T(base)", getDtoClassName(defaultBranch.getClassName()));
-        } else {
-            cb.addStatement(
-                    "throw new $T($S + actualType.getName() + $S)",
-                    IllegalArgumentException.class,
-                    "Cannot convert entity object to polymorphic DTO \"" +
-                            getDtoClassName().canonicalName() +
-                            "\" because there is no branch for actual entity type \"",
-                    "\""
-            );
-        }
-        cb.endControlFlow();
     }
 
     private void addFetcherFields(
