@@ -15,7 +15,6 @@ import com.squareup.kotlinpoet.ksp.toTypeParameterResolver
 import com.squareup.kotlinpoet.ksp.toTypeVariableName
 import org.babyfish.jimmer.Formula
 import org.babyfish.jimmer.Immutable
-import org.babyfish.jimmer.dto.compiler.spi.BaseType
 import org.babyfish.jimmer.ksp.*
 import org.babyfish.jimmer.ksp.immutable.generator.DRAFT
 import org.babyfish.jimmer.ksp.immutable.generator.FETCHER_DSL
@@ -28,7 +27,7 @@ import kotlin.reflect.KClass
 class ImmutableType(
     ctx: Context,
     val classDeclaration: KSClassDeclaration
-) : BaseType {
+) {
     private val immutableAnnoTypeName: String =
         listOf(
             classDeclaration.annotation(Entity::class),
@@ -46,7 +45,7 @@ class ImmutableType(
             }
         }.first()
 
-    override val isEntity: Boolean = immutableAnnoTypeName == Entity::class.qualifiedName
+    val isEntity: Boolean = immutableAnnoTypeName == Entity::class.qualifiedName
 
     val isMappedSuperclass: Boolean = immutableAnnoTypeName == MappedSuperclass::class.qualifiedName
 
@@ -103,13 +102,13 @@ class ImmutableType(
         annotationType
     }
 
-    override val name: String
+    val name: String
         get() = classDeclaration.simpleName.asString()
 
-    override val packageName: String
+    val packageName: String
         get() = classDeclaration.packageName.asString()
 
-    override val qualifiedName: String
+    val qualifiedName: String
         get() = classDeclaration.qualifiedName!!.asString()
 
     val isAcrossMicroServices: Boolean =

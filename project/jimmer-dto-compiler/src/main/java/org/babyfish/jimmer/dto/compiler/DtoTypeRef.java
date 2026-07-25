@@ -1,14 +1,17 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
-public final class DtoTypeRef<T extends BaseType, P extends BaseProp> implements DtoPropTarget<T, P> {
+import java.util.Objects;
+
+public final class DtoTypeRef<T, P extends BaseProp> implements DtoPropTarget<T, P> {
 
     private final String qualifiedName;
 
     private final T targetBaseType;
+
+    private final String targetBaseTypeQualifiedName;
 
     private final int line;
 
@@ -18,11 +21,21 @@ public final class DtoTypeRef<T extends BaseType, P extends BaseProp> implements
     private DtoType<T, P> sourceType;
 
     @Nullable
-    private DtoTypeInfo<T> typeInfo;
+    private DtoTypeInfo typeInfo;
 
-    DtoTypeRef(String qualifiedName, T baseType, int line, int col) {
-        this.qualifiedName = qualifiedName;
-        this.targetBaseType = baseType;
+    DtoTypeRef(
+            String qualifiedName,
+            T targetBaseType,
+            String targetBaseTypeQualifiedName,
+            int line,
+            int col
+    ) {
+        this.qualifiedName = Objects.requireNonNull(qualifiedName, "qualifiedName cannot be null");
+        this.targetBaseType = Objects.requireNonNull(targetBaseType, "targetBaseType cannot be null");
+        this.targetBaseTypeQualifiedName = Objects.requireNonNull(
+                targetBaseTypeQualifiedName,
+                "targetBaseTypeQualifiedName cannot be null"
+        );
         this.line = line;
         this.col = col;
     }
@@ -33,6 +46,10 @@ public final class DtoTypeRef<T extends BaseType, P extends BaseProp> implements
 
     public T getTargetBaseType() {
         return targetBaseType;
+    }
+
+    public String getTargetBaseTypeQualifiedName() {
+        return targetBaseTypeQualifiedName;
     }
 
     public int getLine() {
@@ -49,11 +66,11 @@ public final class DtoTypeRef<T extends BaseType, P extends BaseProp> implements
     }
 
     @Nullable
-    public DtoTypeInfo<T> getTypeInfo() {
+    public DtoTypeInfo getTypeInfo() {
         return typeInfo;
     }
 
-    void resolve(DtoTypeInfo<T> typeInfo, @Nullable DtoType<T, P> sourceType) {
+    void resolve(DtoTypeInfo typeInfo, @Nullable DtoType<T, P> sourceType) {
         this.typeInfo = typeInfo;
         this.sourceType = sourceType;
     }

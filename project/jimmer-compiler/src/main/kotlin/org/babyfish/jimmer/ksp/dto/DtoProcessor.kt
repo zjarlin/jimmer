@@ -80,18 +80,8 @@ internal class DtoProcessor(
         return dtoTypes
     }
 
-    private fun resolveDtoType(qualifiedName: String): DtoTypeInfo<ImmutableType>? {
-        val frozenTypeInfo = dtoTypeRegistry.resolveDtoTypeInfo(qualifiedName, LsiLanguage.KOTLIN)
-            ?: return null
-        val baseType = ctx.immutableTypeOf(frozenTypeInfo.baseType.qualifiedName)
-        if (baseType == null) {
-            throw DtoException(
-                "The entity type argument of reusable DTO type \"$qualifiedName\" " +
-                        "is not an immutable type"
-            )
-        }
-        return DtoTypeInfo(baseType, frozenTypeInfo.kind)
-    }
+    private fun resolveDtoType(qualifiedName: String): DtoTypeInfo? =
+        dtoTypeRegistry.resolveDtoTypeInfo(qualifiedName, LsiLanguage.KOTLIN)
 
     private fun generateDtoTypes(
         dtoTypes: List<DtoType<ImmutableType, ImmutableProp>>

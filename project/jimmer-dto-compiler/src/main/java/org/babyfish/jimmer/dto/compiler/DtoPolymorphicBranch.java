@@ -1,11 +1,10 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class DtoPolymorphicBranch<T extends BaseType, P extends BaseProp> {
+public class DtoPolymorphicBranch<T, P extends BaseProp> {
 
     public enum Kind {
         DEFAULT,
@@ -65,7 +64,7 @@ public class DtoPolymorphicBranch<T extends BaseType, P extends BaseProp> {
         if (declaredClassName != null) {
             return declaredClassName;
         }
-        return kind == Kind.DEFAULT ? "Default" : targetType.getName();
+        return kind == Kind.DEFAULT ? "Default" : dtoType.getBaseTypeName();
     }
 
     public DtoType<T, P> getDtoType() {
@@ -93,7 +92,7 @@ public class DtoPolymorphicBranch<T extends BaseType, P extends BaseProp> {
         if (kind == Kind.DEFAULT) {
             builder.append("default");
         } else {
-            builder.append(targetType.getQualifiedName());
+            builder.append(dtoType.getBaseTypeQualifiedName());
         }
         if (declaredClassName != null) {
             builder.append(" class ").append(declaredClassName);

@@ -1,15 +1,21 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropTarget<T, P> {
+public class DtoType<T, P extends BaseProp> implements DtoPropTarget<T, P> {
 
+    @Nullable
     private final T baseType;
+
+    @Nullable
+    private final String baseTypeName;
+
+    @Nullable
+    private final String baseTypeQualifiedName;
 
     private final String packageName;
 
@@ -44,8 +50,10 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
     private DtoPolymorphism<T, P> polymorphism;
 
     DtoType(
-            T baseType,
-            @Nullable String packageName,
+            @Nullable T baseType,
+            @Nullable String baseTypeName,
+            @Nullable String baseTypeQualifiedName,
+            @NotNull String packageName,
             Set<DtoModifier> modifiers,
             List<Anno> annotations,
             List<TypeRef> superInterfaces,
@@ -53,8 +61,13 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
             @NotNull DtoFile dtoFile,
             @Nullable String doc
     ) {
+        if ((baseType == null) != (baseTypeName == null) || (baseType == null) != (baseTypeQualifiedName == null)) {
+            throw new IllegalArgumentException("Base type and its frozen names must be null or non-null together");
+        }
         this.baseType = baseType;
-        this.packageName = packageName != null ? packageName : defaultPackageName(baseType.getPackageName());
+        this.baseTypeName = baseTypeName;
+        this.baseTypeQualifiedName = baseTypeQualifiedName;
+        this.packageName = Objects.requireNonNull(packageName, "packageName cannot be null");
         this.modifiers = modifiers;
         this.annotations = annotations;
         this.superInterfaces = superInterfaces;
@@ -70,6 +83,8 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
             DtoProp<T, P> recursionProp
     ) {
         this.baseType = original.baseType;
+        this.baseTypeName = original.baseTypeName;
+        this.baseTypeQualifiedName = original.baseTypeQualifiedName;
         this.packageName = original.packageName;
         this.modifiers = original.modifiers;
         this.annotations = original.annotations;
@@ -92,8 +107,19 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
         this.props = Collections.unmodifiableList(props);
     }
 
+    @Nullable
     public T getBaseType() {
         return baseType;
+    }
+
+    @Nullable
+    public String getBaseTypeName() {
+        return baseTypeName;
+    }
+
+    @Nullable
+    public String getBaseTypeQualifiedName() {
+        return baseTypeQualifiedName;
     }
 
     public String getPackageName() {
@@ -210,6 +236,8 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
         mergedProps.addAll(branchType.props);
         DtoType<T, P> mergedType = new DtoType<>(
                 branchType.baseType,
+                branchType.baseTypeName,
+                branchType.baseTypeQualifiedName,
                 branchType.packageName,
                 branchType.modifiers,
                 branchType.annotations,
@@ -313,7 +341,7 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
         }
     }
 
-    private class FlatDtoBuilder<T extends BaseType, P extends BaseProp> {
+    private class FlatDtoBuilder<T, P extends BaseProp> {
 
         private final String packageName;
 
@@ -368,6 +396,8 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
             }
             DtoType<T, P> dtoType = new DtoType<>(
                     null,
+                    null,
+                    null,
                     packageName,
                     modifiers,
                     annotations,
@@ -389,7 +419,7 @@ public class DtoType<T extends BaseType, P extends BaseProp> implements DtoPropT
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends BaseType, P extends BaseProp> List<AbstractProp> standardProps(List<AbstractProp> props) {
+    private static <T, P extends BaseProp> List<AbstractProp> standardProps(List<AbstractProp> props) {
         List<DtoProp<T, P>> recursiveProps = new ArrayList<>();
         for (AbstractProp prop : props) {
             if (prop instanceof DtoProp<?, ?>) {

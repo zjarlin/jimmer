@@ -6,7 +6,6 @@ import org.babyfish.jimmer.dto.compiler.DtoModifier as AstDtoModifier
 import org.babyfish.jimmer.dto.compiler.PropConfig
 import org.babyfish.jimmer.dto.compiler.SimplePropType
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp
-import org.babyfish.jimmer.dto.compiler.spi.BaseType
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.FormulaKind
 import site.addzero.lsi.jimmer.ImmutableProp
@@ -40,7 +39,7 @@ fun ImmutableSchema.toLsiDtoTypeRegistry(
 fun DtoFile.toLsiDtoCompiler(
     registry: LsiDtoTypeRegistry,
     defaultNullableInputModifier: AstDtoModifier,
-): DtoCompiler<LsiDtoBaseType, LsiDtoBaseProp> {
+): DtoCompiler<ImmutableType, LsiDtoBaseProp> {
     return LsiDtoCompiler(
         dtoFile = this,
         registry = registry,
@@ -50,45 +49,41 @@ fun DtoFile.toLsiDtoCompiler(
 
 /** 在多个 DTO 文档之间共享不可变类型与属性身份。 */
 class LsiDtoTypeRegistry internal constructor(
-    immutableSchema: ImmutableSchema,
+    internal val immutableSchema: ImmutableSchema,
     internal val workspace: LsiWorkspace,
 ) {
     private val typeSystem = LsiTypeSystem(workspace)
 
-    private val typesById: Map<LsiSymbolId, LsiDtoBaseType>
+    private val typesById: Map<LsiSymbolId, ImmutableType> = immutableSchema.typesById
 
-    private val typesByQualifiedName: Map<String, LsiDtoBaseType>
+    private val typesByQualifiedName: Map<String, ImmutableType> =
+        immutableSchema.types.associateBy(ImmutableType::qualifiedName)
 
-    init {
-        typesById = immutableSchema.types
-            .sortedBy(ImmutableType::id)
-            .associate { immutableType ->
-                immutableType.id to LsiDtoBaseType(immutableType, this)
-            }
-        typesByQualifiedName = typesById.values.associateBy(LsiDtoBaseType::qualifiedName)
+    private val propsByTypeId = mutableMapOf<LsiSymbolId, Map<String, LsiDtoBaseProp>>()
+
+    operator fun get(typeId: LsiSymbolId): ImmutableType? = typesById[typeId]
+
+    internal fun type(qualifiedName: String): ImmutableType? = typesByQualifiedName[qualifiedName]
+
+    internal fun superTypes(type: ImmutableType): List<ImmutableType> {
+        return type.superTypeIds.mapNotNull(typesById::get)
     }
 
-    operator fun get(typeId: LsiSymbolId): LsiDtoBaseType? = typesById[typeId]
-
-    internal fun type(qualifiedName: String): LsiDtoBaseType? = typesByQualifiedName[qualifiedName]
-
-    internal fun superTypes(type: LsiDtoBaseType): List<LsiDtoBaseType> {
-        return type.immutableType.superTypeIds.mapNotNull(typesById::get)
-    }
-
-    internal fun directSubTypes(type: LsiDtoBaseType): List<LsiDtoBaseType> {
+    internal fun directSubTypes(type: ImmutableType): List<ImmutableType> {
         return typesById.values
-            .filter { candidate -> candidate.immutableType.primarySuperTypeId == type.id }
-            .sortedBy(LsiDtoBaseType::id)
+            .filter { candidate -> candidate.primarySuperTypeId == type.id }
+            .sortedBy(ImmutableType::id)
     }
 
-    internal fun props(type: LsiDtoBaseType): Map<String, LsiDtoBaseProp> {
-        return type.immutableType.dtoCompilerPropsInOrder().associateTo(linkedMapOf()) { immutableProp ->
-            immutableProp.name to LsiDtoBaseProp(type, immutableProp, this)
+    internal fun props(type: ImmutableType): Map<String, LsiDtoBaseProp> {
+        return propsByTypeId.getOrPut(type.id) {
+            type.dtoCompilerPropsInOrder().associateTo(linkedMapOf()) { immutableProp ->
+                immutableProp.name to LsiDtoBaseProp(type, immutableProp, this)
+            }
         }
     }
 
-    internal fun targetType(prop: LsiDtoBaseProp): LsiDtoBaseType? {
+    internal fun targetType(prop: LsiDtoBaseProp): ImmutableType? {
         return prop.immutableProp.targetTypeId?.let(typesById::get)
     }
 
@@ -100,7 +95,7 @@ class LsiDtoTypeRegistry internal constructor(
         }
         val immutableType = typesById[typeId]
         if (immutableType != null) {
-            return immutableType.immutableType.typeParameterIds.size
+            return immutableType.typeParameterIds.size
         }
         return STANDARD_GENERIC_TYPE_COUNTS[qualifiedName]
     }
@@ -119,41 +114,9 @@ private fun ImmutableType.dtoCompilerPropsInOrder(): List<ImmutableProp> {
     return idProps + remainingProps
 }
 
-/** DTO compiler SPI 使用的不可变类型投影。 */
-class LsiDtoBaseType internal constructor(
-    val immutableType: ImmutableType,
-    private val registry: LsiDtoTypeRegistry,
-) : BaseType {
-    val id: LsiSymbolId
-        get() = immutableType.id
-
-    override val name: String = immutableType.qualifiedName.substringAfterLast('.')
-
-    override val packageName: String = immutableType.qualifiedName.substringBeforeLast('.', "")
-
-    override val qualifiedName: String = immutableType.qualifiedName
-
-    override val isEntity: Boolean = immutableType.kind == ImmutableTypeKind.ENTITY
-
-    internal val props: Map<String, LsiDtoBaseProp> by lazy {
-        registry.props(this)
-    }
-
-    internal val declaredProps: Map<String, LsiDtoBaseProp> by lazy {
-        props.filterValues { prop -> prop.immutableProp.declaringTypeId == id }
-    }
-
-    internal val idProp: LsiDtoBaseProp?
-        get() = immutableType.idPropId?.let { idPropId ->
-            props.values.single { prop -> prop.id == idPropId }
-        }
-
-    override fun toString(): String = qualifiedName
-}
-
 /** DTO compiler SPI 使用的不可变属性投影。 */
 class LsiDtoBaseProp internal constructor(
-    private val ownerType: LsiDtoBaseType,
+    private val ownerType: ImmutableType,
     val immutableProp: ImmutableProp,
     private val registry: LsiDtoTypeRegistry,
 ) : BaseProp {
@@ -208,7 +171,7 @@ class LsiDtoBaseProp internal constructor(
             return true
         }
         val targetType = registry.targetType(this)
-        return immutableProp.association && (targetType == null || targetType.isEntity)
+        return immutableProp.association && (targetType == null || targetType.kind == ImmutableTypeKind.ENTITY)
     }
 
     override fun hasTransientResolver(): Boolean {
@@ -216,7 +179,7 @@ class LsiDtoBaseProp internal constructor(
     }
 
     private fun ownerProp(propId: LsiSymbolId): LsiDtoBaseProp? {
-        return ownerType.props.values.firstOrNull { candidate -> candidate.id == propId }
+        return registry.props(ownerType).values.firstOrNull { candidate -> candidate.id == propId }
     }
 
     override fun toString(): String = "${ownerType.qualifiedName}.$name"
@@ -226,14 +189,21 @@ private class LsiDtoCompiler(
     dtoFile: DtoFile,
     private val registry: LsiDtoTypeRegistry,
     private val defaultNullableInputModifier: AstDtoModifier,
-) : DtoCompiler<LsiDtoBaseType, LsiDtoBaseProp>(dtoFile) {
+) : DtoCompiler<ImmutableType, LsiDtoBaseProp>(dtoFile) {
     override fun getDefaultNullableInputModifier(): AstDtoModifier = defaultNullableInputModifier
 
-    override fun getSuperTypes(baseType: LsiDtoBaseType): Collection<LsiDtoBaseType> {
+    override fun getSuperTypes(baseType: ImmutableType): Collection<ImmutableType> {
         return registry.superTypes(baseType)
     }
 
-    override fun getType(qualifiedName: String): LsiDtoBaseType? {
+    override fun getBaseTypeName(baseType: ImmutableType): String =
+        baseType.qualifiedName.substringAfterLast('.')
+
+    override fun getBaseTypeQualifiedName(baseType: ImmutableType): String = baseType.qualifiedName
+
+    override fun isEntity(baseType: ImmutableType): Boolean = baseType.kind == ImmutableTypeKind.ENTITY
+
+    override fun getType(qualifiedName: String): ImmutableType? {
         return registry.type(qualifiedName)
     }
 
@@ -242,32 +212,35 @@ private class LsiDtoCompiler(
         return (registry.workspace[typeId] as? LsiTypeDeclaration)?.isJimmerImmutableType() == true
     }
 
-    override fun getDirectSubTypes(baseType: LsiDtoBaseType): Collection<LsiDtoBaseType> {
+    override fun getDirectSubTypes(baseType: ImmutableType): Collection<ImmutableType> {
         return registry.directSubTypes(baseType)
     }
 
-    override fun isSameType(baseType1: LsiDtoBaseType, baseType2: LsiDtoBaseType): Boolean {
+    override fun isSameType(baseType1: ImmutableType, baseType2: ImmutableType): Boolean {
         return baseType1.id == baseType2.id
     }
 
-    override fun isInstantiable(baseType: LsiDtoBaseType): Boolean {
-        return baseType.immutableType.instantiable
+    override fun isInstantiable(baseType: ImmutableType): Boolean {
+        return baseType.instantiable
     }
 
-    override fun getDeclaredProps(baseType: LsiDtoBaseType): Map<String, LsiDtoBaseProp> {
-        return baseType.declaredProps
+    override fun getDeclaredProps(baseType: ImmutableType): Map<String, LsiDtoBaseProp> {
+        return registry.props(baseType).filterValues { prop ->
+            prop.immutableProp.declaringTypeId == baseType.id
+        }
     }
 
-    override fun getProps(baseType: LsiDtoBaseType): Map<String, LsiDtoBaseProp> {
-        return baseType.props
+    override fun getProps(baseType: ImmutableType): Map<String, LsiDtoBaseProp> {
+        return registry.props(baseType)
     }
 
-    override fun getTargetType(baseProp: LsiDtoBaseProp): LsiDtoBaseType? {
+    override fun getTargetType(baseProp: LsiDtoBaseProp): ImmutableType? {
         return registry.targetType(baseProp)
     }
 
-    override fun getIdProp(baseType: LsiDtoBaseType): LsiDtoBaseProp? {
-        return baseType.idProp
+    override fun getIdProp(baseType: ImmutableType): LsiDtoBaseProp? {
+        val idPropId = baseType.idPropId ?: return null
+        return registry.props(baseType).values.single { prop -> prop.id == idPropId }
     }
 
     override fun isGeneratedValue(baseProp: LsiDtoBaseProp): Boolean {
@@ -295,21 +268,24 @@ private class LsiDtoCompiler(
             return pathNode.prop.immutableProp.type.toSimplePropType()
         }
         val targetType = registry.targetType(pathNode.prop) ?: return SimplePropType.NONE
-        return targetType.idProp?.immutableProp?.type?.toSimplePropType() ?: SimplePropType.NONE
+        val idPropId = targetType.idPropId ?: return SimplePropType.NONE
+        return registry.props(targetType).values
+            .single { prop -> prop.id == idPropId }
+            .immutableProp
+            .type
+            .toSimplePropType()
     }
 
     override fun isSameType(baseProp1: LsiDtoBaseProp, baseProp2: LsiDtoBaseProp): Boolean {
-        return baseProp1.clientType().jimmerTypeSignature(ignoreRootNullability = true) ==
-            baseProp2.clientType().jimmerTypeSignature(ignoreRootNullability = true)
+        return baseProp1.immutableProp.dtoClientType(registry.immutableSchema)
+            .jimmerTypeSignature(ignoreRootNullability = true) ==
+            baseProp2.immutableProp.dtoClientType(registry.immutableSchema)
+                .jimmerTypeSignature(ignoreRootNullability = true)
     }
 
     override fun getGenericTypeCount(qualifiedName: String): Int? {
         return registry.genericTypeCount(qualifiedName)
     }
-}
-
-private fun LsiDtoBaseProp.clientType(): LsiTypeRef {
-    return immutableProp.converter?.targetType ?: immutableProp.type
 }
 
 private fun LsiTypeRef.toSimplePropType(): SimplePropType {

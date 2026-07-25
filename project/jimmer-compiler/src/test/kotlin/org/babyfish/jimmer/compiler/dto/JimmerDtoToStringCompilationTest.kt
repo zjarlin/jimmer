@@ -57,7 +57,10 @@ class JimmerDtoToStringCompilationTest {
         val projectDir = fixtureProject("jimmer-dto-to-string-apt")
         val sourceFiles = writeSources(
             projectDir.resolve("src/main/java"),
-            mapOf("demo/Sample.java" to JAVA_SOURCE),
+            mapOf(
+                "demo/Sample.java" to JAVA_SOURCE,
+                "demo/ExternalSampleView.java" to JAVA_EXTERNAL_VIEW_SOURCE,
+            ),
         )
         writeDtoSource(projectDir)
         val processingClassesDir = projectDir.resolve("build/processing-classes").apply(File::mkdirs)
@@ -105,7 +108,10 @@ class JimmerDtoToStringCompilationTest {
         val projectDir = fixtureProject("jimmer-dto-to-string-ksp")
         val sourceFiles = writeSources(
             projectDir.resolve("src/main/kotlin"),
-            mapOf("demo/Sample.kt" to KOTLIN_SOURCE),
+            mapOf(
+                "demo/Sample.kt" to KOTLIN_SOURCE,
+                "demo/ExternalSampleView.kt" to KOTLIN_EXTERNAL_VIEW_SOURCE,
+            ),
         )
         writeDtoSource(projectDir)
         val outputDir = projectDir.resolve("build/ksp").apply(File::mkdirs)
@@ -710,6 +716,7 @@ class JimmerDtoToStringCompilationTest {
             "FuzzyShadowInput",
             "FloatingInput",
             "EmptyInput",
+            "SampleWithExternalParentView",
             "SampleSpecification",
             "ValidatorInput",
         )
@@ -854,6 +861,58 @@ class JimmerDtoToStringCompilationTest {
             }
         """.trimIndent()
 
+        val JAVA_EXTERNAL_VIEW_SOURCE = """
+            package demo;
+
+            import org.babyfish.jimmer.View;
+            import org.babyfish.jimmer.sql.fetcher.DtoMetadata;
+            import org.babyfish.jimmer.sql.fetcher.impl.FetcherImpl;
+
+            public class ExternalSampleView implements View<Sample> {
+
+                public static final DtoMetadata<Sample, ExternalSampleView> METADATA =
+                    new DtoMetadata<>(
+                        ExternalSampleView.class,
+                        new FetcherImpl<>(Sample.class).add("parent"),
+                        ExternalSampleView::new
+                    );
+
+                private final Sample entity;
+
+                public ExternalSampleView(Sample entity) {
+                    this.entity = entity;
+                }
+
+                @Override
+                public Sample toEntity() {
+                    return entity;
+                }
+            }
+        """.trimIndent()
+
+        val KOTLIN_EXTERNAL_VIEW_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.View
+            import org.babyfish.jimmer.sql.fetcher.DtoMetadata
+            import org.babyfish.jimmer.sql.fetcher.impl.FetcherImpl
+
+            class ExternalSampleView(
+                private val entity: Sample,
+            ) : View<Sample> {
+                override fun toEntity(): Sample = entity
+
+                companion object {
+                    @JvmField
+                    val METADATA: DtoMetadata<Sample, ExternalSampleView> = DtoMetadata(
+                        ExternalSampleView::class.java,
+                        FetcherImpl(Sample::class.java).add("parent"),
+                        ::ExternalSampleView,
+                    )
+                }
+            }
+        """.trimIndent()
+
         val DTO_SOURCE = """
             package demo.dto
 
@@ -905,6 +964,10 @@ class JimmerDtoToStringCompilationTest {
             }
 
             input EmptyInput {
+            }
+
+            SampleWithExternalParentView {
+                parent -> demo.ExternalSampleView
             }
 
             dynamic input ValidatorInput {

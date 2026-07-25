@@ -1,13 +1,12 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoPropImpl<T extends BaseType, P extends BaseProp> implements DtoProp<T, P> {
+class DtoPropImpl<T, P extends BaseProp> implements DtoProp<T, P> {
 
     private final DtoFile declaringFile;
 

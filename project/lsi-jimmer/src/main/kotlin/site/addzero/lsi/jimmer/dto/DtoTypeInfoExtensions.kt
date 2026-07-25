@@ -11,7 +11,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 fun LsiDtoTypeRegistry.resolveDtoTypeInfo(
     qualifiedName: String,
     targetLanguage: LsiLanguage,
-): DtoTypeInfo<LsiDtoBaseType>? {
+): DtoTypeInfo? {
     val specificationTypeId = targetLanguage.specificationTypeId()
     val typeId = LsiSymbolId.type(qualifiedName)
     val declaration = workspace[typeId] as? LsiTypeDeclaration ?: return null
@@ -31,7 +31,7 @@ fun LsiDtoTypeRegistry.resolveDtoTypeInfo(
         ?: throw IllegalArgumentException(
             "The entity type argument of reusable DTO type \"$qualifiedName\" is not an immutable type",
         )
-    return DtoTypeInfo(baseType, kind)
+    return DtoTypeInfo(baseType.qualifiedName, kind)
 }
 
 private fun LsiLanguage.specificationTypeId(): LsiSymbolId {

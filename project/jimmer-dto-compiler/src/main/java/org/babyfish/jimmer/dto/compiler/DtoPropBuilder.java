@@ -2,13 +2,12 @@ package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropImplementor, AbstractPropBuilder {
+class DtoPropBuilder<T, P extends BaseProp> implements DtoPropImplementor, AbstractPropBuilder {
 
     private final DtoTypeBuilder<T, P> parent;
 
@@ -748,9 +747,11 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
                                 "\", reusable DTO type cannot be specified for a recursive property"
                 );
             }
+            T targetBaseType = ctx.getTargetType(baseProp);
             targetTypeRef = new DtoTypeRef<>(
                     ctx.resolveDtoType(prop.referencedType),
-                    ctx.getTargetType(baseProp),
+                    targetBaseType,
+                    ctx.getBaseTypeQualifiedName(targetBaseType),
                     prop.referencedType.start.getLine(),
                     prop.referencedType.start.getCharPositionInLine()
             );
@@ -951,7 +952,7 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
         return recursive;
     }
 
-    private static <T extends BaseType, P extends BaseProp > P getBaseProp(DtoTypeBuilder<T, P> parent, Token token) {
+    private static <T, P extends BaseProp > P getBaseProp(DtoTypeBuilder<T, P> parent, Token token) {
 
         T baseType = parent.baseType;
         CompilerContext<T, P> ctx = parent.ctx;
@@ -962,8 +963,8 @@ class DtoPropBuilder<T extends BaseType, P extends BaseProp> implements DtoPropI
             throw ctx.exception(
                     token.getLine(),
                     token.getCharPositionInLine(),
-                    "There is no property \"" + baseName + "\" in \"" +
-                            baseType.getQualifiedName() +
+                            "There is no property \"" + baseName + "\" in \"" +
+                            ctx.getBaseTypeQualifiedName(baseType) +
                             "\" or its super types"
             );
         }

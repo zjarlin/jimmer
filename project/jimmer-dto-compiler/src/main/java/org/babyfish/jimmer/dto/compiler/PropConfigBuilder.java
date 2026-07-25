@@ -2,7 +2,6 @@ package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -12,7 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
+class PropConfigBuilder<T, P extends BaseProp> {
 
     private final CompilerContext<T, P> ctx;
 
@@ -410,7 +409,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
                         "There is no property \"" +
                                 part.getText() +
                                 "\" in type \"" +
-                                baseType.getQualifiedName() +
+                                ctx.getBaseTypeQualifiedName(baseType) +
                                 "\""
                 );
             }

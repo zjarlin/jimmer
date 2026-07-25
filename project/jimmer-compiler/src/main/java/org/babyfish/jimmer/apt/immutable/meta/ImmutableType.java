@@ -7,7 +7,6 @@ import com.squareup.javapoet.TypeVariableName;
 import org.babyfish.jimmer.Formula;
 import org.babyfish.jimmer.apt.Context;
 import org.babyfish.jimmer.apt.MetaException;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.babyfish.jimmer.sql.*;
 
 import javax.lang.model.element.*;
@@ -18,7 +17,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class ImmutableType implements BaseType {
+public class ImmutableType {
 
     public static final String PROP_EXPRESSION_SUFFIX = "PropExpression";
 
@@ -768,17 +767,14 @@ public class ImmutableType implements BaseType {
         return acrossMicroServices;
     }
 
-    @Override
     public String getPackageName() {
         return packageName;
     }
 
-    @Override
     public String getName() {
         return name;
     }
 
-    @Override
     public String getQualifiedName() {
         return qualifiedName;
     }

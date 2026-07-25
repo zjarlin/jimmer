@@ -1189,7 +1189,7 @@ class DtoGraphTest {
 
         val FORBIDDEN_RENDER_STATE_TYPE_NAMES = setOf(
             "org.babyfish.jimmer.dto.compiler.DtoType",
-            "site.addzero.lsi.jimmer.dto.LsiDtoBaseType",
+            "site.addzero.lsi.jimmer.ImmutableType",
             "site.addzero.lsi.jimmer.dto.LsiDtoBaseProp",
             "site.addzero.lsi.model.LsiWorkspace",
         )

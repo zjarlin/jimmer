@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Assertions;
@@ -58,11 +57,11 @@ public class DtoCompilerTest {
                 "IgnoredBookView { illegalProp }\n" +
                         "AuthorView for Author { id firstName }"
         );
-        Map<MyDtoCompiler, List<DtoType<BaseType, BaseProp>>> resultMap = DtoCompiler.compileAll(
+        Map<MyDtoCompiler, List<DtoType<TestType, BaseProp>>> resultMap = DtoCompiler.compileAll(
                 Collections.singletonList(compiler),
                 targetTypeName -> targetTypeName.equals(MyDtoCompiler.AUTHOR_TYPE.getQualifiedName())
         );
-        List<DtoType<BaseType, BaseProp>> dtoTypes = resultMap.get(compiler);
+        List<DtoType<TestType, BaseProp>> dtoTypes = resultMap.get(compiler);
         Assertions.assertEquals(1, dtoTypes.size());
         Assertions.assertSame(MyDtoCompiler.AUTHOR_TYPE, dtoTypes.get(0).getBaseType());
         Assertions.assertEquals("AuthorView", dtoTypes.get(0).getName());
@@ -74,7 +73,7 @@ public class DtoCompilerTest {
                 "Book.dto",
                 "IgnoredBookView { illegalProp }"
         );
-        Map<MyDtoCompiler, List<DtoType<BaseType, BaseProp>>> resultMap = DtoCompiler.compileAll(
+        Map<MyDtoCompiler, List<DtoType<TestType, BaseProp>>> resultMap = DtoCompiler.compileAll(
                 Collections.singletonList(compiler),
                 targetTypeName -> false
         );
@@ -91,11 +90,11 @@ public class DtoCompilerTest {
                         "AuthorView for Author { id firstName }",
                 Arrays.asList("org", "example", "source")
         );
-        Map<MyDtoCompiler, List<DtoType<BaseType, BaseProp>>> resultMap = DtoCompiler.compileAll(
+        Map<MyDtoCompiler, List<DtoType<TestType, BaseProp>>> resultMap = DtoCompiler.compileAll(
                 Collections.singletonList(compiler),
                 targetTypeName -> targetTypeName.equals(MyDtoCompiler.AUTHOR_TYPE.getQualifiedName())
         );
-        List<DtoType<BaseType, BaseProp>> dtoTypes = resultMap.get(compiler);
+        List<DtoType<TestType, BaseProp>> dtoTypes = resultMap.get(compiler);
         Assertions.assertEquals(1, dtoTypes.size());
         Assertions.assertEquals("org.example.api.AuthorView", dtoTypes.get(0).getQualifiedName());
     }
@@ -142,7 +141,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testDeclarationTargetOverride() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView { id name }\n" +
                         "StoreView for BookStore { id name website }"
         );
@@ -161,7 +160,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testUnboundDtoFile() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler
                 .compilerInPackage(
                         "Shared.dto",
                         "package org.example.api\n" +
@@ -209,7 +208,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFragments() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "fragment Identified { id }\n" +
                         "fragment Summary { #include(Identified) name }\n" +
                         "BookView { #include(Summary) edition price -name }"
@@ -222,7 +221,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFragmentMacroAliasNegativeAndCustomProperty() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "fragment Summary {\n" +
                         "    #allScalars\n" +
                         "    -tenant\n" +
@@ -245,7 +244,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testBodyContributorsCanBeInterleaved() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "fragment Extra { rank: Int }\n" +
                         "BookView {\n" +
                         "    name\n" +
@@ -268,7 +267,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFragmentFlatAndFold() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "fragment StoreKey {\n" +
                         "    flat(store) {\n" +
                         "        fold(key) { name }\n" +
@@ -288,7 +287,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFragmentRecursiveAssociationConfiguration() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "fragment Children {\n" +
                         "    !batch(4)\n" +
                         "    !orderBy(name desc)\n" +
@@ -307,7 +306,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFragmentDeclaredForSuperTypeCanBeIncludedBySubtype() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.client(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.client(
                 "fragment ClientName { name }\n" +
                         "OrganizationView for Organization { #include(ClientName) taxCode }"
         );
@@ -319,7 +318,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFragmentReusableAssociation() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "fragment Authors {\n" +
                         "    !batch(8)\n" +
                         "    authors as contributors -> AuthorView\n" +
@@ -328,7 +327,7 @@ public class DtoCompilerTest {
                         "AuthorView for Author { id firstName }"
         );
         DtoTypeLinker.link(dtoTypes);
-        DtoProp<BaseType, BaseProp> prop = dtoTypes.get(0).getDtoProps().get(0);
+        DtoProp<TestType, BaseProp> prop = dtoTypes.get(0).getDtoProps().get(0);
         Assertions.assertEquals("contributors", prop.getName());
         Assertions.assertSame(dtoTypes.get(1), prop.getTargetTypeRef().getSourceType());
         Assertions.assertEquals(Integer.valueOf(8), prop.getConfig().getBatch());
@@ -336,7 +335,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testSpecificationFragment() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.book(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.book(
                 "fragment Filters { like/i(name) ge(price) }\n" +
                         "specification BookSpecification { #include(Filters) }"
         ).get(0);
@@ -386,11 +385,11 @@ public class DtoCompilerTest {
                 "Book.dto",
                 "BookView { #include(Summary) edition }"
         );
-        Map<MyDtoCompiler, BaseType> compilerMap = new LinkedHashMap<>();
+        Map<MyDtoCompiler, TestType> compilerMap = new LinkedHashMap<>();
         compilerMap.put(identifiers, null);
         compilerMap.put(summaries, null);
         compilerMap.put(views, MyDtoCompiler.BOOK_TYPE);
-        List<DtoType<BaseType, BaseProp>> dtoTypes = DtoCompiler.compileAll(compilerMap).get(views);
+        List<DtoType<TestType, BaseProp>> dtoTypes = DtoCompiler.compileAll(compilerMap).get(views);
         assertContentEquals(
                 "BookView {--->id, --->name, --->edition}",
                 dtoTypes.get(0).toString()
@@ -466,7 +465,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testSimpleByAlias() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "import org.babyfish.jimmer.sql.model.{Book as B}" +
                         "input BookInput {\n" +
                         "    #allScalars\n" +
@@ -515,7 +514,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testSimpleByThis() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allScalars\n" +
                         "    -tenant\n" +
@@ -563,7 +562,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testOptionalAllScalars() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allScalars?" +
                         "}\n"
@@ -582,7 +581,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testRequiredAllScalars() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allScalars!" +
                         "}\n"
@@ -601,7 +600,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testOptionalAllReferences() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allReferences?" +
                         "}\n"
@@ -618,7 +617,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testRequiredAllReferences() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allReferences!\n" +
                         "}\n"
@@ -635,7 +634,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testAllReferencesWithNegative() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allReferences!\n" +
                         "    -storeId\n" +
@@ -652,7 +651,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testAllReferencesWithOverride() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allReferences!\n" +
                         "    id(store) as parentId\n" +
@@ -670,7 +669,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testMixedMacro() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    #allScalars(this)" +
                         "    #allReferences(this)" +
@@ -693,7 +692,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testInputRequired() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "input BookInput {\n" +
                         "    id!\n" +
                         "    id(store)\n" +
@@ -710,7 +709,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testSpecificationRequired() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "specification BookInput {\n" +
                         "    id!\n" +
                         "    associatedIdEq(store)!\n" +
@@ -724,7 +723,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testRecursive() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "input TreeNodeInput {" +
                         "    name" +
                         "    childNodes*" +
@@ -743,7 +742,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testRecursive2() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "input TreeNodeInput {\n" +
                         "    name\n" +
                         "    childNodes {\n" +
@@ -768,7 +767,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testMultipleRecursions() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "input TreeNodeInput {" +
                         "    name" +
                         "    parent*" +
@@ -795,7 +794,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlat1() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookFlatView {\n" +
                         "    id\n" +
                         "    name?\n" +
@@ -832,7 +831,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFold() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    id\n" +
                         "    fold(summary) {\n" +
@@ -880,7 +879,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlatInsideFold() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    fold(storeInfo) {\n" +
                         "        flat(store) {\n" +
@@ -903,7 +902,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFoldInsideFlat() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    flat(store) {\n" +
                         "        fold(key) {\n" +
@@ -924,7 +923,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlat2() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "FlatTreeNode {\n" +
                         "    #allScalars\n" +
                         "    flat(parent) {\n" +
@@ -947,7 +946,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlat3() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookFlatView {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -983,7 +982,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlat4() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookFlatView {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -1035,7 +1034,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlat5() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "FlatTree {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -1061,7 +1060,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlat6() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "specification BookSpecification {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -1085,7 +1084,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testFlat7() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "TreeFlatView {\n" +
                         "    #allScalars(this)\n" +
                         "    flat(parent) {\n" +
@@ -1115,7 +1114,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testUserProp() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "import com.company.pkg.data.User\n" +
                         "import com.company.pkg.data.Configuration as Cfg\n" +
                         "import com.company.pkg.data.{\n" +
@@ -1154,7 +1153,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testAnnotation() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "import org.framework.annotations.{A, B, C, D}\n" +
                         "import org.framework.annotations.{Shallow, Deep}\n" +
                         "import org.framework.enums.{A as EnumA, B as EnumB}\n" +
@@ -1232,7 +1231,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testQbeSpecification() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.book(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.book(
                 "specification BookSpecification {\n" +
                         "    gt(price)\n" +
                         "    lt(price)\n" +
@@ -1261,7 +1260,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testDoc() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "/**\n" +
                         " * The recursive tree input\n" +
                         " */\n" +
@@ -1293,7 +1292,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testInterfaceImplementation() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "import com.company.project.model.common.Named\n" +
                         "input BookInput implements Named {\n" +
                         "    id\n" +
@@ -1325,7 +1324,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testInputModifier() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "dynamic input BookInput {\n" +
                         "    fixed id?\n" +
                         "    static name?\n" +
@@ -1354,7 +1353,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testIssue705() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "specification BookSpecification {\n" +
                         "    flat(store) {\n" +
                         "        eq(id)! as storeId" +
@@ -1371,7 +1370,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testConfig() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    #allScalars\n" +
                         "    -tenant\n" +
@@ -1414,7 +1413,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testZeroOffsetConfig() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    #allScalars\n" +
                         "    -tenant\n" +
@@ -1457,13 +1456,13 @@ public class DtoCompilerTest {
 
     @Test
     public void testMaxLimitWithOffsetConfig() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    !limit(2147483647, 1)\n" +
                         "    authors { id }\n" +
                         "}"
         );
-        DtoProp<BaseType, BaseProp> authors = dtoTypes
+        DtoProp<TestType, BaseProp> authors = dtoTypes
                 .get(0)
                 .getDtoProps()
                 .stream()
@@ -1480,13 +1479,13 @@ public class DtoCompilerTest {
 
     @Test
     public void testMaxDepthConfig() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "TreeNodeView {\n" +
                         "    !depth(2147483647)\n" +
                         "    childNodes*\n" +
                         "}"
         );
-        DtoProp<BaseType, BaseProp> childNodes = dtoTypes
+        DtoProp<TestType, BaseProp> childNodes = dtoTypes
                 .get(0)
                 .getDtoProps()
                 .stream()
@@ -1500,7 +1499,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testRecursiveConfig() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "TreeNode {\n" +
                         "    name\n" +
                         "    !fetchType(JOIN_IF_NO_CACHE)\n" +
@@ -1541,7 +1540,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testWhereBook() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    #allScalars\n" +
                         "    !where(uncivilized = true)\n" +
@@ -1570,7 +1569,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testIssue1036() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "TreeNodeView {\n" +
                         "    #allScalars\n" +
                         "    !orderBy(name asc)\n" +
@@ -1593,19 +1592,19 @@ public class DtoCompilerTest {
 
     @Test
     public void testConfigTypeLocation() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "TreeNodeView {\n" +
                         "    #allScalars\n" +
                         "    !recursion(TreeNodeRecursiveStrategy)\n" +
                         "    childNodes*\n" +
                         "}"
         );
-        DtoProp<BaseType, BaseProp> childNodes = dtoTypes
+        DtoProp<TestType, BaseProp> childNodes = dtoTypes
                 .get(0)
                 .getProps()
                 .stream()
                 .filter(prop -> prop.getName().equals("childNodes"))
-                .map(prop -> (DtoProp<BaseType, BaseProp>) prop)
+                .map(prop -> (DtoProp<TestType, BaseProp>) prop)
                 .findFirst()
                 .orElseThrow(AssertionError::new);
         ConfigTypeRef recursionType = childNodes.getConfig().getRecursionType();
@@ -1656,7 +1655,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testPolymorphicDtoWithImplicitDefault() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.client(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.client(
                 "ClientView {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -1667,14 +1666,14 @@ public class DtoCompilerTest {
                         "    }\n" +
                         "}"
         ).get(0);
-        DtoPolymorphism<BaseType, BaseProp> polymorphism = dtoType.getPolymorphism();
+        DtoPolymorphism<TestType, BaseProp> polymorphism = dtoType.getPolymorphism();
         Assertions.assertNotNull(polymorphism);
         Assertions.assertFalse(polymorphism.isExhaustive());
         Assertions.assertNotNull(polymorphism.getDefaultBranch());
         Assertions.assertTrue(polymorphism.getDefaultBranch().isImplicit());
         Assertions.assertEquals("Default", polymorphism.getDefaultBranch().getClassName());
         Assertions.assertEquals(1, polymorphism.getTypeBranches().size());
-        DtoPolymorphicBranch<BaseType, BaseProp> branch = polymorphism.getTypeBranches().get(0);
+        DtoPolymorphicBranch<TestType, BaseProp> branch = polymorphism.getTypeBranches().get(0);
         Assertions.assertEquals("org.babyfish.jimmer.sql.model.Organization", branch.getTargetType().getQualifiedName());
         Assertions.assertEquals("Org", branch.getClassName());
         Assertions.assertEquals(
@@ -1689,7 +1688,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testAllScalarsInPolymorphicBranch() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.client(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.client(
                 "ClientView {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -1712,7 +1711,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testAllScalarsInPolymorphicBranchWithRedundantNegativeProps() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.client(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.client(
                 "ClientView {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -1736,7 +1735,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testSealedPolymorphicDto() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.client(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.client(
                 "sealed ClientView {\n" +
                         "    id\n" +
                         "    name\n" +
@@ -1775,7 +1774,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testPolymorphicDtoWithExplicitDefault() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.client(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.client(
                 "ClientView {\n" +
                         "    name\n" +
                         "    #types {\n" +
@@ -1787,7 +1786,7 @@ public class DtoCompilerTest {
                         "    }\n" +
                         "}"
         ).get(0);
-        DtoPolymorphicBranch<BaseType, BaseProp> defaultBranch = dtoType.getPolymorphism().getDefaultBranch();
+        DtoPolymorphicBranch<TestType, BaseProp> defaultBranch = dtoType.getPolymorphism().getDefaultBranch();
         Assertions.assertFalse(defaultBranch.isImplicit());
         Assertions.assertEquals("Other", defaultBranch.getClassName());
         Assertions.assertEquals(
@@ -1799,7 +1798,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testExhaustivePolymorphicDto() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.client(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.client(
                 "ClientView {\n" +
                         "    name\n" +
                         "    #types {\n" +
@@ -1810,7 +1809,7 @@ public class DtoCompilerTest {
                         "    }\n" +
                         "}"
         ).get(0);
-        DtoPolymorphism<BaseType, BaseProp> polymorphism = dtoType.getPolymorphism();
+        DtoPolymorphism<TestType, BaseProp> polymorphism = dtoType.getPolymorphism();
         Assertions.assertTrue(polymorphism.isExhaustive());
         Assertions.assertNull(polymorphism.getDefaultBranch());
         Assertions.assertEquals(
@@ -1823,7 +1822,7 @@ public class DtoCompilerTest {
                         .map(it -> it.getTargetType().getQualifiedName())
                         .collect(Collectors.toCollection(LinkedHashSet::new))
         );
-        DtoPolymorphicBranch<BaseType, BaseProp> personBranch = polymorphism.getTypeBranches()
+        DtoPolymorphicBranch<TestType, BaseProp> personBranch = polymorphism.getTypeBranches()
                 .stream()
                 .filter(it -> it.getTargetType().getName().equals("Person"))
                 .findFirst()
@@ -1833,7 +1832,7 @@ public class DtoCompilerTest {
                 Collections.singletonList("firstName"),
                 personBranch.getDtoType().getProps().stream().map(AbstractProp::getAlias).collect(Collectors.toList())
         );
-        DtoPolymorphicBranch<BaseType, BaseProp> organizationBranch = polymorphism.getTypeBranches()
+        DtoPolymorphicBranch<TestType, BaseProp> organizationBranch = polymorphism.getTypeBranches()
                 .stream()
                 .filter(it -> it.getTargetType().getName().equals("Organization"))
                 .findFirst()
@@ -1845,7 +1844,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testExhaustivePolymorphicDtoWithInstantiableRoot() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.payment(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.payment(
                 "PaymentView {\n" +
                         "    amount\n" +
                         "    #types {\n" +
@@ -1855,7 +1854,7 @@ public class DtoCompilerTest {
                         "    }\n" +
                         "}"
         ).get(0);
-        DtoPolymorphism<BaseType, BaseProp> polymorphism = dtoType.getPolymorphism();
+        DtoPolymorphism<TestType, BaseProp> polymorphism = dtoType.getPolymorphism();
         Assertions.assertTrue(polymorphism.isExhaustive());
         Assertions.assertNull(polymorphism.getDefaultBranch());
         Assertions.assertEquals(
@@ -1916,7 +1915,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testDefaultBranchCanDeclareFields() {
-        DtoType<BaseType, BaseProp> dtoType = MyDtoCompiler.client(
+        DtoType<TestType, BaseProp> dtoType = MyDtoCompiler.client(
                 "ClientView {\n" +
                         "    id\n" +
                         "    #types {\n" +
@@ -1929,15 +1928,15 @@ public class DtoCompilerTest {
                         "    }\n" +
                         "}"
         ).get(0);
-        DtoPolymorphism<BaseType, BaseProp> polymorphism = dtoType.getPolymorphism();
+        DtoPolymorphism<TestType, BaseProp> polymorphism = dtoType.getPolymorphism();
         Assertions.assertNotNull(polymorphism);
-        DtoPolymorphicBranch<BaseType, BaseProp> defaultBranch = polymorphism.getDefaultBranch();
+        DtoPolymorphicBranch<TestType, BaseProp> defaultBranch = polymorphism.getDefaultBranch();
         Assertions.assertNotNull(defaultBranch);
         Assertions.assertEquals(
                 Collections.singletonList("name"),
                 defaultBranch.getDtoType().getProps().stream().map(AbstractProp::getAlias).collect(Collectors.toList())
         );
-        DtoPolymorphicBranch<BaseType, BaseProp> organizationBranch = polymorphism.getTypeBranches().get(0);
+        DtoPolymorphicBranch<TestType, BaseProp> organizationBranch = polymorphism.getTypeBranches().get(0);
         Assertions.assertEquals(
                 Collections.singletonList("taxCode"),
                 organizationBranch.getDtoType().getProps().stream().map(AbstractProp::getAlias).collect(Collectors.toList())
@@ -2383,7 +2382,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testReusableViewInSameFile() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "TreeNodeSummary { id name }\n" +
                         "TreeNodeView { id parent -> TreeNodeSummary }"
         );
@@ -2393,23 +2392,23 @@ public class DtoCompilerTest {
                         "org.babyfish.jimmer.sql.model.dto.TreeNodeSummary}]",
                 dtoTypes.toString()
         );
-        DtoTypeRef<BaseType, BaseProp> ref = dtoTypes.get(1).getDtoProps().get(1).getTargetTypeRef();
+        DtoTypeRef<TestType, BaseProp> ref = dtoTypes.get(1).getDtoProps().get(1).getTargetTypeRef();
         Assertions.assertSame(dtoTypes.get(0), ref.getSourceType());
     }
 
     @Test
     public void testReusableViewAcrossFiles() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = new ArrayList<>();
+        List<DtoType<TestType, BaseProp>> dtoTypes = new ArrayList<>();
         dtoTypes.addAll(MyDtoCompiler.book("BookView { id store -> BookStoreView }"));
         dtoTypes.addAll(MyDtoCompiler.bookStore("BookStoreView { id name }"));
         DtoTypeLinker.link(dtoTypes);
-        DtoTypeRef<BaseType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
+        DtoTypeRef<TestType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
         Assertions.assertSame(dtoTypes.get(1), ref.getSourceType());
     }
 
     @Test
     public void testUnresolvedReusableView() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView { store -> MissingStoreView }"
         );
         DtoAstException ex = Assertions.assertThrows(
@@ -2432,10 +2431,10 @@ public class DtoCompilerTest {
                 "Second.dto",
                 "package org.example.dto\nBookView for Book { name }"
         );
-        Map<MyDtoCompiler, BaseType> compilerMap = new LinkedHashMap<>();
+        Map<MyDtoCompiler, TestType> compilerMap = new LinkedHashMap<>();
         compilerMap.put(firstCompiler, null);
         compilerMap.put(secondCompiler, null);
-        List<DtoType<BaseType, BaseProp>> dtoTypes = DtoCompiler
+        List<DtoType<TestType, BaseProp>> dtoTypes = DtoCompiler
                 .compileAll(compilerMap)
                 .values()
                 .stream()
@@ -2467,7 +2466,7 @@ public class DtoCompilerTest {
                         "import org.example.second.*\n" +
                         "BookView for Book { store -> StoreView }"
         );
-        Map<MyDtoCompiler, BaseType> compilerMap = new LinkedHashMap<>();
+        Map<MyDtoCompiler, TestType> compilerMap = new LinkedHashMap<>();
         compilerMap.put(firstCompiler, null);
         compilerMap.put(secondCompiler, null);
         compilerMap.put(bookCompiler, null);
@@ -2480,7 +2479,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testReusableAssociationNullability() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView {\n" +
                         "    store -> StoreView\n" +
                         "    authors -> AuthorView\n" +
@@ -2505,18 +2504,18 @@ public class DtoCompilerTest {
                         "import org.example.store.dto.*\n" +
                         "BookView for Book { id store -> StoreView }"
         );
-        Map<MyDtoCompiler, BaseType> compilerMap = new LinkedHashMap<>();
+        Map<MyDtoCompiler, TestType> compilerMap = new LinkedHashMap<>();
         compilerMap.put(storeCompiler, null);
         compilerMap.put(bookCompiler, null);
-        Map<MyDtoCompiler, List<DtoType<BaseType, BaseProp>>> resultMap =
+        Map<MyDtoCompiler, List<DtoType<TestType, BaseProp>>> resultMap =
                 DtoCompiler.compileAll(compilerMap);
-        List<DtoType<BaseType, BaseProp>> dtoTypes = resultMap
+        List<DtoType<TestType, BaseProp>> dtoTypes = resultMap
                 .values()
                 .stream()
                 .flatMap(Collection::stream)
                 .collect(Collectors.toList());
         DtoTypeLinker.link(dtoTypes);
-        DtoTypeRef<BaseType, BaseProp> ref = resultMap
+        DtoTypeRef<TestType, BaseProp> ref = resultMap
                 .get(bookCompiler)
                 .get(0)
                 .getDtoProps()
@@ -2527,26 +2526,26 @@ public class DtoCompilerTest {
 
     @Test
     public void testReusableViewFromDependency() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView { id store -> dependency.BookStoreView }"
         );
-        BaseType storeType = MyDtoCompiler.bookStore("BookStoreView { id }").get(0).getBaseType();
+        TestType storeType = MyDtoCompiler.bookStore("BookStoreView { id }").get(0).getBaseType();
         DtoTypeLinker.link(
                 dtoTypes,
                 qualifiedName ->
                         qualifiedName.equals("dependency.BookStoreView") ?
-                                new DtoTypeInfo<>(storeType, DtoTypeKind.VIEW) :
+                                new DtoTypeInfo(storeType.getQualifiedName(), DtoTypeKind.VIEW) :
                                 null
         );
-        DtoTypeRef<BaseType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
+        DtoTypeRef<TestType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
         Assertions.assertNull(ref.getSourceType());
         Assertions.assertEquals(DtoTypeKind.VIEW, ref.getTypeInfo().getKind());
-        Assertions.assertSame(storeType, ref.getTypeInfo().getBaseType());
+        Assertions.assertEquals(storeType.getQualifiedName(), ref.getTypeInfo().getBaseTypeQualifiedName());
     }
 
     @Test
     public void testReusableViewFromDependencyIsResolvedOnce() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "BookView { " +
                         "creator -> dependency.UserView " +
                         "editor -> dependency.UserView " +
@@ -2557,7 +2556,10 @@ public class DtoCompilerTest {
                 dtoTypes,
                 qualifiedName -> {
                     resolveCount[0]++;
-                    return new DtoTypeInfo<>(MyDtoCompiler.USER_TYPE, DtoTypeKind.VIEW);
+                    return new DtoTypeInfo(
+                            MyDtoCompiler.USER_TYPE.getQualifiedName(),
+                            DtoTypeKind.VIEW
+                    );
                 }
         );
         Assertions.assertEquals(1, resolveCount[0]);
@@ -2565,18 +2567,18 @@ public class DtoCompilerTest {
 
     @Test
     public void testReusableInputAcrossFiles() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = new ArrayList<>();
+        List<DtoType<TestType, BaseProp>> dtoTypes = new ArrayList<>();
         dtoTypes.addAll(MyDtoCompiler.book("input BookInput { id store -> BookStoreInput }"));
         dtoTypes.addAll(MyDtoCompiler.bookStore("input BookStoreInput { id name }"));
         DtoTypeLinker.link(dtoTypes);
-        DtoTypeRef<BaseType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
+        DtoTypeRef<TestType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
         Assertions.assertSame(dtoTypes.get(1), ref.getSourceType());
         Assertions.assertEquals(DtoTypeKind.INPUT, ref.getTypeInfo().getKind());
     }
 
     @Test
     public void testReusableSpecificationAcrossFiles() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = new ArrayList<>();
+        List<DtoType<TestType, BaseProp>> dtoTypes = new ArrayList<>();
         dtoTypes.addAll(MyDtoCompiler.book(
                 "specification BookSpecification for Book { name store -> BookStoreSpecification }"
         ));
@@ -2584,35 +2586,35 @@ public class DtoCompilerTest {
                 "specification BookStoreSpecification for BookStore { like/i(name) }"
         ));
         DtoTypeLinker.link(dtoTypes);
-        DtoTypeRef<BaseType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
+        DtoTypeRef<TestType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(1).getTargetTypeRef();
         Assertions.assertSame(dtoTypes.get(1), ref.getSourceType());
         Assertions.assertEquals(DtoTypeKind.SPECIFICATION, ref.getTypeInfo().getKind());
     }
 
     @Test
     public void testReusableSpecificationFromDependency() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "specification BookSpecification { store -> dependency.BookStoreSpecification }"
         );
-        BaseType storeType = MyDtoCompiler.bookStore(
+        TestType storeType = MyDtoCompiler.bookStore(
                 "specification BookStoreSpecification { name }"
         ).get(0).getBaseType();
         DtoTypeLinker.link(
                 dtoTypes,
                 qualifiedName ->
                         qualifiedName.equals("dependency.BookStoreSpecification") ?
-                                new DtoTypeInfo<>(storeType, DtoTypeKind.SPECIFICATION) :
+                                new DtoTypeInfo(storeType.getQualifiedName(), DtoTypeKind.SPECIFICATION) :
                                 null
         );
-        DtoTypeRef<BaseType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(0).getTargetTypeRef();
+        DtoTypeRef<TestType, BaseProp> ref = dtoTypes.get(0).getDtoProps().get(0).getTargetTypeRef();
         Assertions.assertNull(ref.getSourceType());
         Assertions.assertEquals(DtoTypeKind.SPECIFICATION, ref.getTypeInfo().getKind());
-        Assertions.assertSame(storeType, ref.getTypeInfo().getBaseType());
+        Assertions.assertEquals(storeType.getQualifiedName(), ref.getTypeInfo().getBaseTypeQualifiedName());
     }
 
     @Test
     public void testIllegalReusableSpecificationKind() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = new ArrayList<>();
+        List<DtoType<TestType, BaseProp>> dtoTypes = new ArrayList<>();
         dtoTypes.addAll(MyDtoCompiler.book(
                 "specification BookSpecification { store -> BookStoreView }"
         ));
@@ -2629,7 +2631,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testIllegalReusableInputKind() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = new ArrayList<>();
+        List<DtoType<TestType, BaseProp>> dtoTypes = new ArrayList<>();
         dtoTypes.addAll(MyDtoCompiler.book("input BookInput { id store -> BookStoreView }"));
         dtoTypes.addAll(MyDtoCompiler.bookStore("BookStoreView { id name }"));
         DtoAstException ex = Assertions.assertThrows(
@@ -2644,7 +2646,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testIllegalReusableViewEntityType() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.book(
                 "WrongView { id }\n" +
                         "BookView { id store -> WrongView }"
         );
@@ -2660,7 +2662,7 @@ public class DtoCompilerTest {
 
     @Test
     public void testReusableViewCycle() {
-        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+        List<DtoType<TestType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
                 "TreeNodeViewA { id parent -> TreeNodeViewB }\n" +
                         "TreeNodeViewB { id parent -> TreeNodeViewA }"
         );
@@ -2683,23 +2685,23 @@ public class DtoCompilerTest {
         );
     }
 
-    private static class BaseTypeImpl implements BaseType {
+    private static class TestType {
 
         private final String qualifiedName;
 
         final Map<String, BaseProp> propMap;
 
-        final List<BaseType> superTypes = new ArrayList<>();
+        final List<TestType> superTypes = new ArrayList<>();
 
-        final List<BaseType> directSubTypes = new ArrayList<>();
+        final List<TestType> directSubTypes = new ArrayList<>();
 
         final boolean instantiable;
 
-        BaseTypeImpl(String qualifiedName, BaseProp... baseProps) {
+        TestType(String qualifiedName, BaseProp... baseProps) {
             this(qualifiedName, true, baseProps);
         }
 
-        BaseTypeImpl(String qualifiedName, boolean instantiable, BaseProp... baseProps) {
+        TestType(String qualifiedName, boolean instantiable, BaseProp... baseProps) {
             this.qualifiedName = qualifiedName;
             this.instantiable = instantiable;
             this.propMap = Arrays.stream(baseProps).collect(
@@ -2712,25 +2714,15 @@ public class DtoCompilerTest {
             );
         }
 
-        @NotNull
-        @Override
-        public String getPackageName() {
-            int index = qualifiedName.lastIndexOf('.');
-            return qualifiedName.substring(0, index);
-        }
-
-        @Override
         public String getName() {
             int index = qualifiedName.lastIndexOf('.');
             return qualifiedName.substring(index + 1);
         }
 
-        @Override
         public String getQualifiedName() {
             return qualifiedName;
         }
 
-        @Override
         public boolean isEntity() {
             return true;
         }
@@ -2745,7 +2737,7 @@ public class DtoCompilerTest {
 
         private final String name;
 
-        private final Supplier<BaseType> targetTypeSupplier;
+        private final Supplier<TestType> targetTypeSupplier;
 
         private final boolean isNullable;
 
@@ -2755,7 +2747,7 @@ public class DtoCompilerTest {
             this(name, null, false, false);
         }
 
-        BasePropImpl(String name, Supplier<BaseType> targetTypeSupplier, boolean isNullable, boolean isList) {
+        BasePropImpl(String name, Supplier<TestType> targetTypeSupplier, boolean isNullable, boolean isList) {
             this.name = name;
             this.targetTypeSupplier = targetTypeSupplier;
             this.isNullable = isNullable;
@@ -2772,11 +2764,11 @@ public class DtoCompilerTest {
             return isNullable;
         }
 
-        public BaseType getTargetType() {
+        public TestType getTargetType() {
             if (targetTypeSupplier == null) {
                 return null;
             }
-            BaseType targetType = targetTypeSupplier.get();
+            TestType targetType = targetTypeSupplier.get();
             if (targetType == null) {
                 throw new IllegalStateException("targetTypeSupplier returns nothing");
             }
@@ -2860,11 +2852,11 @@ public class DtoCompilerTest {
         }
     }
 
-    private static class MyDtoCompiler extends DtoCompiler<BaseType, BaseProp> {
+    private static class MyDtoCompiler extends DtoCompiler<TestType, BaseProp> {
 
-        private static final Map<String, BaseType> TYPE_MAP = new HashMap<>();
+        private static final Map<String, TestType> TYPE_MAP = new HashMap<>();
 
-        private static final BaseTypeImpl BOOK_TYPE = new BaseTypeImpl(
+        private static final TestType BOOK_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.Book",
                 new BasePropImpl("id"),
                 new BasePropImpl("name"),
@@ -2878,7 +2870,7 @@ public class DtoCompilerTest {
                 new BasePropImpl("editor", () -> TYPE_MAP.get("User"), false, false)
         );
 
-        private static final BaseTypeImpl BOOK_STORE_TYPE = new BaseTypeImpl(
+        private static final TestType BOOK_STORE_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.BookStore",
                 new BasePropImpl("id"),
                 new BasePropImpl("name"),
@@ -2886,12 +2878,12 @@ public class DtoCompilerTest {
                 new BasePropImpl("books", () -> TYPE_MAP.get("Book"), false, true)
         );
 
-        private static final BaseTypeImpl ALT_BOOK_TYPE = new BaseTypeImpl(
+        private static final TestType ALT_BOOK_TYPE = new TestType(
                 "org.example.alt.Book",
                 new BasePropImpl("id")
         );
 
-        private static final BaseTypeImpl AUTHOR_TYPE = new BaseTypeImpl(
+        private static final TestType AUTHOR_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.Author",
                 new BasePropImpl("id"),
                 new BasePropImpl("firstName"),
@@ -2900,7 +2892,7 @@ public class DtoCompilerTest {
                 new BasePropImpl("books", () -> TYPE_MAP.get("Author"), false, true)
         );
 
-        private static final BaseTypeImpl CHAPTER_TYPE = new BaseTypeImpl(
+        private static final TestType CHAPTER_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.Chapter",
                 new BasePropImpl("id"),
                 new BasePropImpl("index"),
@@ -2909,7 +2901,7 @@ public class DtoCompilerTest {
                 new BasePropImpl("book", () -> TYPE_MAP.get("Author"), false, false)
         );
 
-        private static final BaseTypeImpl TREE_NODE_TYPE = new BaseTypeImpl(
+        private static final TestType TREE_NODE_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.TreeNode",
                 new BasePropImpl("id"),
                 new BasePropImpl("name"),
@@ -2917,14 +2909,14 @@ public class DtoCompilerTest {
                 new BasePropImpl("parent", () -> TYPE_MAP.get("TreeNode"), true, false)
         );
 
-        private static final BaseTypeImpl USER_TYPE = new BaseTypeImpl(
+        private static final TestType USER_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.User",
                 new BasePropImpl("id"),
                 new BasePropImpl("name"),
                 new BasePropImpl("gender")
         );
 
-        private static final BaseTypeImpl CLIENT_TYPE = new BaseTypeImpl(
+        private static final TestType CLIENT_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.Client",
                 false,
                 new BasePropImpl("id"),
@@ -2932,18 +2924,18 @@ public class DtoCompilerTest {
                 new BasePropImpl("name")
         );
 
-        private static final BaseTypeImpl ORGANIZATION_TYPE = new BaseTypeImpl(
+        private static final TestType ORGANIZATION_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.Organization",
                 new BasePropImpl("taxCode")
         );
 
-        private static final BaseTypeImpl PERSON_TYPE = new BaseTypeImpl(
+        private static final TestType PERSON_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.Person",
                 new BasePropImpl("firstName"),
                 new BasePropImpl("lastName")
         );
 
-        private static final BaseTypeImpl PAYMENT_TYPE = new BaseTypeImpl(
+        private static final TestType PAYMENT_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.Payment",
                 true,
                 new BasePropImpl("id"),
@@ -2951,7 +2943,7 @@ public class DtoCompilerTest {
                 new BasePropImpl("amount")
         );
 
-        private static final BaseTypeImpl WIRE_PAYMENT_TYPE = new BaseTypeImpl(
+        private static final TestType WIRE_PAYMENT_TYPE = new TestType(
                 "org.babyfish.jimmer.sql.model.WirePayment",
                 new BasePropImpl("swiftCode")
         );
@@ -3012,7 +3004,7 @@ public class DtoCompilerTest {
             }
         }
 
-        static List<DtoType<BaseType, BaseProp>> book(String code) {
+        static List<DtoType<TestType, BaseProp>> book(String code) {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
@@ -3027,7 +3019,7 @@ public class DtoCompilerTest {
             }
         }
 
-        static List<DtoType<BaseType, BaseProp>> treeNode(String code) {
+        static List<DtoType<TestType, BaseProp>> treeNode(String code) {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
@@ -3042,7 +3034,7 @@ public class DtoCompilerTest {
             }
         }
 
-        static List<DtoType<BaseType, BaseProp>> bookStore(String code) {
+        static List<DtoType<TestType, BaseProp>> bookStore(String code) {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
@@ -3057,7 +3049,7 @@ public class DtoCompilerTest {
             }
         }
 
-        static List<DtoType<BaseType, BaseProp>> client(String code) {
+        static List<DtoType<TestType, BaseProp>> client(String code) {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
@@ -3072,7 +3064,7 @@ public class DtoCompilerTest {
             }
         }
 
-        static List<DtoType<BaseType, BaseProp>> payment(String code) {
+        static List<DtoType<TestType, BaseProp>> payment(String code) {
             try {
                 return new MyDtoCompiler(
                         new DtoFile(
@@ -3088,15 +3080,30 @@ public class DtoCompilerTest {
         }
 
         @Override
-        protected Collection<BaseType> getSuperTypes(BaseType baseType) {
-            return ((BaseTypeImpl) baseType).superTypes;
+        protected Collection<TestType> getSuperTypes(TestType baseType) {
+            return ((TestType) baseType).superTypes;
+        }
+
+        @Override
+        protected String getBaseTypeName(TestType baseType) {
+            return baseType.getName();
+        }
+
+        @Override
+        protected String getBaseTypeQualifiedName(TestType baseType) {
+            return baseType.getQualifiedName();
+        }
+
+        @Override
+        protected boolean isEntity(TestType baseType) {
+            return baseType.isEntity();
         }
 
         @Nullable
         @Override
-        protected BaseType getType(String qualifiedName) {
+        protected TestType getType(String qualifiedName) {
             typeLookupCount++;
-            for (BaseType type : TYPE_MAP.values()) {
+            for (TestType type : TYPE_MAP.values()) {
                 if (type.getQualifiedName().equals(qualifiedName)) {
                     return type;
                 }
@@ -3107,7 +3114,7 @@ public class DtoCompilerTest {
         @Override
         protected boolean isImmutableType(String qualifiedName) {
             immutableTypeLookupCount++;
-            for (BaseType type : TYPE_MAP.values()) {
+            for (TestType type : TYPE_MAP.values()) {
                 if (type.getQualifiedName().equals(qualifiedName)) {
                     return true;
                 }
@@ -3116,38 +3123,38 @@ public class DtoCompilerTest {
         }
 
         @Override
-        protected Collection<BaseType> getDirectSubTypes(BaseType baseType) {
-            return ((BaseTypeImpl) baseType).directSubTypes;
+        protected Collection<TestType> getDirectSubTypes(TestType baseType) {
+            return ((TestType) baseType).directSubTypes;
         }
 
         @Override
-        protected boolean isSameType(BaseType baseType1, BaseType baseType2) {
+        protected boolean isSameType(TestType baseType1, TestType baseType2) {
             return baseType1.getQualifiedName().equals(baseType2.getQualifiedName());
         }
 
         @Override
-        protected boolean isInstantiable(BaseType baseType) {
-            return ((BaseTypeImpl) baseType).instantiable;
+        protected boolean isInstantiable(TestType baseType) {
+            return ((TestType) baseType).instantiable;
         }
 
         @Override
-        protected Map<String, BaseProp> getDeclaredProps(BaseType baseType) {
-            return ((BaseTypeImpl) baseType).propMap;
+        protected Map<String, BaseProp> getDeclaredProps(TestType baseType) {
+            return ((TestType) baseType).propMap;
         }
 
         @Override
-        protected Map<String, BaseProp> getProps(BaseType baseType) {
-            return ((BaseTypeImpl) baseType).propMap;
+        protected Map<String, BaseProp> getProps(TestType baseType) {
+            return ((TestType) baseType).propMap;
         }
 
         @Override
-        protected BaseType getTargetType(BaseProp baseProp) {
+        protected TestType getTargetType(BaseProp baseProp) {
             return ((BasePropImpl) baseProp).getTargetType();
         }
 
         @Override
-        protected @Nullable BaseProp getIdProp(BaseType baseType) {
-            return ((BaseTypeImpl) baseType).getIdProp();
+        protected @Nullable BaseProp getIdProp(TestType baseType) {
+            return ((TestType) baseType).getIdProp();
         }
 
         @Override
@@ -3218,11 +3225,11 @@ public class DtoCompilerTest {
             inherit(WIRE_PAYMENT_TYPE, PAYMENT_TYPE);
         }
 
-        private static void inherit(BaseTypeImpl subType, BaseTypeImpl superType) {
+        private static void inherit(TestType subType, TestType superType) {
             subType.superTypes.add(superType);
             subType.propMap.putAll(superType.propMap);
             superType.directSubTypes.add(subType);
-            superType.directSubTypes.sort(Comparator.comparing(BaseType::getQualifiedName));
+            superType.directSubTypes.sort(Comparator.comparing(TestType::getQualifiedName));
         }
     }
 

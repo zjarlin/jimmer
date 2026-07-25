@@ -1,13 +1,12 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-class DtoFragment<T extends BaseType, P extends BaseProp> {
+class DtoFragment<T, P extends BaseProp> {
 
     final CompilerContext<T, P> ctx;
 

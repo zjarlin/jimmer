@@ -1,11 +1,10 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 
 import java.util.*;
 
-class DtoFragmentRegistry<T extends BaseType, P extends BaseProp> {
+class DtoFragmentRegistry<T, P extends BaseProp> {
 
     private final Map<String, DtoFragment<T, P>> fragmentMap = new LinkedHashMap<>();
 
@@ -60,9 +59,9 @@ class DtoFragmentRegistry<T extends BaseType, P extends BaseProp> {
                     "Fragment \"" +
                             qualifiedName +
                             "\" targets immutable type \"" +
-                            fragment.baseType.getQualifiedName() +
+                            ctx.getBaseTypeQualifiedName(fragment.baseType) +
                             "\" which is not the same as or a supertype of \"" +
-                            baseType.getQualifiedName() +
+                            ctx.getBaseTypeQualifiedName(baseType) +
                             "\""
             );
         }
@@ -150,18 +149,19 @@ class DtoFragmentRegistry<T extends BaseType, P extends BaseProp> {
         if (ctx.isSameType(superType, type)) {
             return true;
         }
-        Set<String> superTypeNames = superTypeNameMap.get(type.getQualifiedName());
+        String typeQualifiedName = ctx.getBaseTypeQualifiedName(type);
+        Set<String> superTypeNames = superTypeNameMap.get(typeQualifiedName);
         if (superTypeNames == null) {
             superTypeNames = new HashSet<>();
             Deque<T> stack = new ArrayDeque<>(ctx.getSuperTypes(type));
             while (!stack.isEmpty()) {
                 T currentType = stack.removeLast();
-                if (superTypeNames.add(currentType.getQualifiedName())) {
+                if (superTypeNames.add(ctx.getBaseTypeQualifiedName(currentType))) {
                     stack.addAll(ctx.getSuperTypes(currentType));
                 }
             }
-            superTypeNameMap.put(type.getQualifiedName(), superTypeNames);
+            superTypeNameMap.put(typeQualifiedName, superTypeNames);
         }
-        return superTypeNames.contains(superType.getQualifiedName());
+        return superTypeNames.contains(ctx.getBaseTypeQualifiedName(superType));
     }
 }

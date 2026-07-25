@@ -2,12 +2,11 @@ package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-class CompilerContext<T extends BaseType, P extends BaseProp> {
+class CompilerContext<T, P extends BaseProp> {
 
     private final DtoCompiler<T, P> compiler;
 
@@ -132,7 +131,7 @@ class CompilerContext<T extends BaseType, P extends BaseProp> {
                     "The modifier 'unsafe' cannot be used with specification"
             );
         }
-        if (modifiers.contains(DtoModifier.SPECIFICATION) && !baseType.isEntity()) {
+        if (modifiers.contains(DtoModifier.SPECIFICATION) && !compiler.isEntity(baseType)) {
             throw exception(
                     type.name.getLine(),
                     type.name.getCharPositionInLine(),
@@ -207,7 +206,7 @@ class CompilerContext<T extends BaseType, P extends BaseProp> {
     ) {
         T baseType = null;
         if (targetType == null && compiler.baseTypeOrNull() != null &&
-                compiler.baseTypeOrNull().getQualifiedName().equals(qualifiedName)) {
+                compiler.getBaseTypeQualifiedName(compiler.baseTypeOrNull()).equals(qualifiedName)) {
             baseType = compiler.baseTypeOrNull();
         }
         if (baseType == null) {
@@ -262,6 +261,14 @@ class CompilerContext<T extends BaseType, P extends BaseProp> {
 
     public Map<String, P> getDeclaredProps(T baseType) {
         return compiler.getDeclaredProps(baseType);
+    }
+
+    public String getBaseTypeName(T baseType) {
+        return compiler.getBaseTypeName(baseType);
+    }
+
+    public String getBaseTypeQualifiedName(T baseType) {
+        return compiler.getBaseTypeQualifiedName(baseType);
     }
 
     public boolean isImplicitId(P baseProp, Set<DtoModifier> modifiers) {

@@ -1,13 +1,12 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-class FoldPropBuilder<T extends BaseType, P extends BaseProp> implements AbstractPropBuilder {
+class FoldPropBuilder<T, P extends BaseProp> implements AbstractPropBuilder {
 
     private final String name;
 

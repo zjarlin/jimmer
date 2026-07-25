@@ -1,20 +1,23 @@
 package org.babyfish.jimmer.dto.compiler;
 
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
+import java.util.Objects;
 
-public final class DtoTypeInfo<T extends BaseType> {
+public final class DtoTypeInfo {
 
-    private final T baseType;
+    private final String baseTypeQualifiedName;
 
     private final DtoTypeKind kind;
 
-    public DtoTypeInfo(T baseType, DtoTypeKind kind) {
-        this.baseType = baseType;
-        this.kind = kind;
+    public DtoTypeInfo(String baseTypeQualifiedName, DtoTypeKind kind) {
+        this.baseTypeQualifiedName = Objects.requireNonNull(
+                baseTypeQualifiedName,
+                "baseTypeQualifiedName cannot be null"
+        );
+        this.kind = Objects.requireNonNull(kind, "kind cannot be null");
     }
 
-    public T getBaseType() {
-        return baseType;
+    public String getBaseTypeQualifiedName() {
+        return baseTypeQualifiedName;
     }
 
     public DtoTypeKind getKind() {

@@ -104,6 +104,10 @@ internal class DtoGenerator private constructor(
 ) {
     private val root: DtoGenerator = parent?.root ?: this
 
+    private val baseType: ImmutableType = requireNotNull(dtoType.baseType) {
+        "Generated DTO '${dtoType.qualifiedName ?: dtoType.name ?: "<anonymous>"}' has no immutable base type"
+    }
+
     private val polymorphicBranch: Boolean
         get() = lsiPolymorphicBranch != null
 
@@ -407,7 +411,11 @@ internal class DtoGenerator private constructor(
         dtoType: DtoType<ImmutableType, ImmutableProp>,
         packages: SortedSet<String>,
     ) {
-        packages += dtoType.baseType.className.packageName
+        val dtoBaseType = requireNotNull(dtoType.baseType) {
+            "Generated DTO '${dtoType.qualifiedName ?: dtoType.name ?: "<anonymous>"}' " +
+                "has no immutable base type"
+        }
+        packages += dtoBaseType.className.packageName
         for (prop in dtoType.dtoProps) {
             val targetType = prop.targetType
             if (targetType !== null && (!prop.isRecursive || targetType.isFocusedRecursion)) {
@@ -590,7 +598,7 @@ internal class DtoGenerator private constructor(
             DtoGeneratedBaseContractKind.ENTITY_SPECIFICATION -> K_SPECIFICATION_CLASS_NAME
             DtoGeneratedBaseContractKind.EMBEDDABLE -> EMBEDDED_DTO_CLASS_NAME
         }
-        return rawType.parameterizedBy(dtoType.baseType.className)
+        return rawType.parameterizedBy(baseType.className)
     }
 
     private fun generateNestedDtoTypes() {
@@ -730,7 +738,7 @@ internal class DtoGenerator private constructor(
                 .builder(
                     "METADATA",
                     DTO_METADATA_CLASS_NAME.parameterizedBy(
-                        dtoType.baseType.className,
+                        baseType.className,
                         getDtoClassName()
                     )
                 )
@@ -744,7 +752,7 @@ internal class DtoGenerator private constructor(
                             add(
                                 "%T<%T, %T>(\n",
                                 DTO_METADATA_CLASS_NAME,
-                                dtoType.baseType.className, getDtoClassName()
+                                baseType.className, getDtoClassName()
                             )
                             indent()
                             add("%T::class.java,\n", getDtoClassName())
@@ -768,7 +776,7 @@ internal class DtoGenerator private constructor(
                 .builder(
                     "METADATA",
                     DTO_METADATA_CLASS_NAME.parameterizedBy(
-                        dtoType.baseType.className,
+                        baseType.className,
                         getDtoClassName()
                     )
                 )
@@ -782,7 +790,7 @@ internal class DtoGenerator private constructor(
                             add(
                                 "%T<%T, %T>(\n",
                                 DTO_METADATA_CLASS_NAME,
-                                dtoType.baseType.className,
+                                baseType.className,
                                 getDtoClassName()
                             )
                             indent()
@@ -805,10 +813,14 @@ internal class DtoGenerator private constructor(
         sourceDtoType: DtoType<ImmutableType, ImmutableProp> = dtoType,
         sourceLsiType: LsiDtoType = lsiDtoType,
     ) {
+        val sourceBaseType = requireNotNull(sourceDtoType.baseType) {
+            "Generated DTO '${sourceDtoType.qualifiedName ?: sourceDtoType.name ?: "<anonymous>"}' " +
+                "has no immutable base type"
+        }
         add(
             "%T(%T::class).by {\n",
             NEW_FETCHER_FUN_CLASS_NAME,
-            sourceDtoType.baseType.className
+            sourceBaseType.className
         )
         indent()
         addFetcherFields(sourceDtoType, sourceLsiType)
@@ -852,7 +864,7 @@ internal class DtoGenerator private constructor(
     ) {
         val targetType = branch.targetType ?: error("Internal bug: default branch cannot be rendered as type branch")
         val branchLsiType = lsiPolymorphicBranch(branch).bodyType(lsiGraph)
-        if (targetType == dtoType.baseType) {
+        if (targetType == baseType) {
             addFetcherFields(branch.dtoType, branchLsiType)
             return
         }
@@ -1175,7 +1187,7 @@ internal class DtoGenerator private constructor(
         typeBuilder.addFunction(
             FunSpec
                 .constructorBuilder()
-                .addParameter("base", dtoType.baseType.className)
+                .addParameter("base", baseType.className)
                 .apply {
                     for (userProp in dtoType.userProps) {
                         val frozenUserProp = lsiDtoType.userProp(lsiGraph, userProp.name)
@@ -1235,7 +1247,7 @@ internal class DtoGenerator private constructor(
                                     add("base,\n")
                                     add(
                                         "%S\n",
-                                        "Cannot convert \"${dtoType.baseType.className}\" to " +
+                                        "Cannot convert \"${baseType.className}\" to " +
                                                 "\"${getDtoClassName()}\" because the cannot get non-null " +
                                                 "value for \"${dtoProp.name}\""
                                     )
@@ -1267,9 +1279,9 @@ internal class DtoGenerator private constructor(
         val discriminatorProp = polymorphicInputDiscriminatorProp()
         typeBuilder.addFunction(
             FunSpec
-                .builder(if (dtoType.baseType.isEntity) "toEntity" else "toImmutable")
+                .builder(if (baseType.isEntity) "toEntity" else "toImmutable")
                 .addModifiers(KModifier.OVERRIDE)
-                .returns(dtoType.baseType.className)
+                .returns(baseType.className)
                 .apply {
                     if (discriminatorProp !== null && isDefaultPolymorphicInputBranch) {
                         addDefaultPolymorphicInputToEntityBody(discriminatorProp, null)
@@ -1277,9 +1289,9 @@ internal class DtoGenerator private constructor(
                         addStatement(
                             "return %M(%T::class).by(null, false, this@%L::%L)",
                             NEW,
-                            dtoType.baseType.className,
+                            baseType.className,
                             innerClassName ?: dtoType.name!!,
-                            if (dtoType.baseType.isEntity) "toEntityImpl" else "toImmutableImpl"
+                            if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl"
                         )
                     }
                 }
@@ -1291,14 +1303,14 @@ internal class DtoGenerator private constructor(
         val dtoClassName = getDtoClassName()
         addFunction(
             FunSpec
-                .builder(if (dtoType.baseType.isEntity) "toEntities" else "toImmutables")
-                .addAnnotation(generatedAnnotation(dtoType.baseType.className))
+                .builder(if (baseType.isEntity) "toEntities" else "toImmutables")
+                .addAnnotation(generatedAnnotation(baseType.className))
                 .receiver(ITERABLE.parameterizedBy(dtoClassName))
-                .returns(LIST.parameterizedBy(dtoType.baseType.className))
+                .returns(LIST.parameterizedBy(baseType.className))
                 .addStatement(
                     "return map(%T::%L)",
                     dtoClassName,
-                    if (dtoType.baseType.isEntity) "toEntity" else "toImmutable"
+                    if (baseType.isEntity) "toEntity" else "toImmutable"
                 )
                 .build()
         )
@@ -1307,14 +1319,14 @@ internal class DtoGenerator private constructor(
     private fun FileSpec.Builder.addToEntitiesEx() {
         addFunction(
             FunSpec
-                .builder(if (dtoType.baseType.isEntity) "toEntities" else "toImmutables")
-                .addAnnotation(generatedAnnotation(dtoType.baseType.className))
+                .builder(if (baseType.isEntity) "toEntities" else "toImmutables")
+                .addAnnotation(generatedAnnotation(baseType.className))
                 .receiver(ITERABLE.parameterizedBy(getDtoClassName()))
-                .returns(LIST.parameterizedBy(dtoType.baseType.className))
+                .returns(LIST.parameterizedBy(baseType.className))
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
-                        dtoType.baseType.draftClassName,
+                        baseType.draftClassName,
                         emptyList(),
                         UNIT
                     ),
@@ -1323,7 +1335,7 @@ internal class DtoGenerator private constructor(
                     beginControlFlow("return map")
                     addStatement(
                         "it.%L(block)",
-                        if (dtoType.baseType.isEntity) "toEntity" else "toImmutable"
+                        if (baseType.isEntity) "toEntity" else "toImmutable"
                     )
                     endControlFlow()
                 }
@@ -1335,16 +1347,16 @@ internal class DtoGenerator private constructor(
         val discriminatorProp = polymorphicInputDiscriminatorProp()
         typeBuilder.addFunction(
             FunSpec
-                .builder(if (dtoType.baseType.isEntity) "toEntity" else "toImmutable")
+                .builder(if (baseType.isEntity) "toEntity" else "toImmutable")
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
-                        dtoType.baseType.draftClassName,
+                        baseType.draftClassName,
                         emptyList(),
                         UNIT
                     ),
                 )
-                .returns(dtoType.baseType.className)
+                .returns(baseType.className)
                 .apply {
                     if (discriminatorProp !== null && isDefaultPolymorphicInputBranch) {
                         addDefaultPolymorphicInputToEntityBody(discriminatorProp, "block(this)")
@@ -1352,11 +1364,11 @@ internal class DtoGenerator private constructor(
                         beginControlFlow(
                             "return %M(%T::class).by",
                             NEW,
-                            dtoType.baseType.className
+                            baseType.className
                         )
                         addStatement(
                             "%L(this)",
-                            if (dtoType.baseType.isEntity) "toEntityImpl" else "toImmutableImpl"
+                            if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl"
                         )
                         addStatement("block(this)")
                         endControlFlow()
@@ -1370,7 +1382,7 @@ internal class DtoGenerator private constructor(
         discriminatorProp: DtoBaseProp,
         extraStatement: String?,
     ) {
-        for (concreteType in knownConcreteTypes(dtoType.baseType)) {
+        for (concreteType in knownConcreteTypes(baseType)) {
             val value = concreteType.discriminatorValue ?: continue
             beginControlFlow(
                 "if (%N == %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
@@ -1380,7 +1392,7 @@ internal class DtoGenerator private constructor(
                 value
             )
             beginControlFlow("return %M(%T::class).by", NEW, concreteType.className)
-            addStatement("%L(this)", if (dtoType.baseType.isEntity) "toEntityImpl" else "toImmutableImpl")
+            addStatement("%L(this)", if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl")
             if (extraStatement != null) {
                 addStatement(extraStatement)
             }
@@ -1400,10 +1412,10 @@ internal class DtoGenerator private constructor(
         addApplyToDraft()
         typeBuilder.addFunction(
             FunSpec
-                .builder(if (dtoType.baseType.isEntity) "toEntityImpl" else "toImmutableImpl")
+                .builder(if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl")
                 .addKdoc(DOC_EXPLICIT_FUN)
                 .addModifiers(KModifier.PRIVATE)
-                .addParameter("_draft", dtoType.baseType.draftClassName)
+                .addParameter("_draft", baseType.draftClassName)
                 .addStatement("this.__applyTo(_draft)")
                 .build()
         )
@@ -1414,7 +1426,7 @@ internal class DtoGenerator private constructor(
             FunSpec
                 .builder("__applyTo")
                 .addModifiers(KModifier.INTERNAL)
-                .addParameter("_draft", dtoType.baseType.draftClassName)
+                .addParameter("_draft", baseType.draftClassName)
                 .apply {
                     polymorphicInputDiscriminatorProp()
                         ?.takeIf { isTypedPolymorphicInputBranch }
@@ -1462,7 +1474,7 @@ internal class DtoGenerator private constructor(
     private fun FunSpec.Builder.addTypedPolymorphicInputDiscriminatorValidation(
         discriminatorProp: DtoBaseProp
     ) {
-        val value = dtoType.baseType.discriminatorValue ?: return
+        val value = baseType.discriminatorValue ?: return
         beginControlFlow(
             "if (%N != %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
             discriminatorProp.name,
@@ -1476,7 +1488,7 @@ internal class DtoGenerator private constructor(
             "Discriminator value \"",
             discriminatorProp.name,
             "\" does not match polymorphic input DTO branch \"${getDtoClassName().canonicalName}\" " +
-                    "whose entity type is \"${dtoType.baseType.qualifiedName}\""
+                    "whose entity type is \"${baseType.qualifiedName}\""
         )
         endControlFlow()
     }
@@ -1533,7 +1545,7 @@ internal class DtoGenerator private constructor(
         }
 
     private val polymorphicRootType: ImmutableType
-        get() = dtoType.baseType.inheritanceRoot ?: dtoType.baseType
+        get() = baseType.inheritanceRoot ?: baseType
 
     private fun knownConcreteTypes(baseType: ImmutableType): List<ImmutableType> {
         val types = mutableListOf<ImmutableType>()
@@ -1581,7 +1593,7 @@ internal class DtoGenerator private constructor(
                     if (!isNestedSpecificationFragment) {
                         addParameter(
                             "args",
-                            K_SPECIFICATION_ARGS_CLASS_NAME.parameterizedBy(dtoType.baseType.className)
+                            K_SPECIFICATION_ARGS_CLASS_NAME.parameterizedBy(baseType.className)
                         )
                         addModifiers(KModifier.OVERRIDE)
                         addStatement("val _applier = args.applier")
@@ -1597,13 +1609,13 @@ internal class DtoGenerator private constructor(
                             is FoldProp<*, *> -> {
                                 stack = addStackOperations(stack, emptyList())
                                 if (isGeneratedNullable(prop)) {
-                                    if (dtoType.baseType.isEntity) {
+                                    if (baseType.isEntity) {
                                         addStatement("this.%N?.applyTo(args)", prop.name)
                                     } else {
                                         addStatement("this.%N?.applyTo(_applier)", prop.name)
                                     }
                                 } else {
-                                    if (dtoType.baseType.isEntity) {
+                                    if (baseType.isEntity) {
                                         addStatement("this.%N.applyTo(args)", prop.name)
                                     } else {
                                         addStatement("this.%N.applyTo(_applier)", prop.name)
@@ -1803,7 +1815,7 @@ internal class DtoGenerator private constructor(
                     if (prop.nextProp === null) {
                         add(
                             ",\nintArrayOf(%T.%N)",
-                            dtoType.baseType.draftClassName("$"),
+                            baseType.draftClassName("$"),
                             prop.baseProp.slotName
                         )
                     } else {

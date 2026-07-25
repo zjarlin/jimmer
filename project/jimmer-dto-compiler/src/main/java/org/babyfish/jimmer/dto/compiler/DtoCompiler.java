@@ -2,7 +2,6 @@ package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.*;
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -11,7 +10,7 @@ import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
+public abstract class DtoCompiler<T, P extends BaseProp> {
 
     private final DtoFile dtoFile;
 
@@ -133,7 +132,7 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
     }
 
     public static <
-            T extends BaseType,
+            T,
             P extends BaseProp,
             C extends DtoCompiler<T, P>
             > Map<C, List<DtoType<T, P>>> compileAll(Map<C, T> compilerMap) {
@@ -141,7 +140,7 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
     }
 
     public static <
-            T extends BaseType,
+            T,
             P extends BaseProp,
             C extends DtoCompiler<T, P>
             > Map<C, List<DtoType<T, P>>> compileAll(
@@ -152,7 +151,7 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
     }
 
     private static <
-            T extends BaseType,
+            T,
             P extends BaseProp,
             C extends DtoCompiler<T, P>
             > Map<C, List<DtoType<T, P>>> compileAll(
@@ -240,6 +239,12 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
 
     protected abstract Collection<T> getSuperTypes(T baseType);
 
+    protected abstract String getBaseTypeName(T baseType);
+
+    protected abstract String getBaseTypeQualifiedName(T baseType);
+
+    protected abstract boolean isEntity(T baseType);
+
     protected boolean isImmutableType(String qualifiedName) {
         return getType(qualifiedName) != null;
     }
@@ -250,11 +255,11 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
         if (baseType == null) {
             return null;
         }
-        if (baseType.getQualifiedName().equals(qualifiedName)) {
+        if (getBaseTypeQualifiedName(baseType).equals(qualifiedName)) {
             return baseType;
         }
         for (T superType : getSuperTypes(baseType)) {
-            if (superType.getQualifiedName().equals(qualifiedName)) {
+            if (getBaseTypeQualifiedName(superType).equals(qualifiedName)) {
                 return superType;
             }
         }
@@ -266,7 +271,7 @@ public abstract class DtoCompiler<T extends BaseType, P extends BaseProp> {
     }
 
     protected boolean isSameType(T baseType1, T baseType2) {
-        return baseType1.getQualifiedName().equals(baseType2.getQualifiedName());
+        return getBaseTypeQualifiedName(baseType1).equals(getBaseTypeQualifiedName(baseType2));
     }
 
     protected boolean isInstantiable(T baseType) {

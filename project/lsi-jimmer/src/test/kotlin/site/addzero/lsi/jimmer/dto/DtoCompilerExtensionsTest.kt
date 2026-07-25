@@ -110,7 +110,7 @@ class DtoCompilerExtensionsTest {
         )
 
         assertEquals(DtoTypeKind.INPUT, typeInfo?.kind)
-        assertEquals(BOOK_TYPE_ID, typeInfo?.baseType?.id)
+        assertEquals(BOOK_TYPE_ID.requireTypeQualifiedName(), typeInfo?.baseTypeQualifiedName)
     }
 
     @Test
@@ -131,7 +131,7 @@ class DtoCompilerExtensionsTest {
         )
 
         assertEquals(DtoTypeKind.VIEW, typeInfo?.kind)
-        assertEquals(BOOK_TYPE_ID, typeInfo?.baseType?.id)
+        assertEquals(BOOK_TYPE_ID.requireTypeQualifiedName(), typeInfo?.baseTypeQualifiedName)
     }
 
     @Test

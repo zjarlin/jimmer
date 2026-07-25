@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 
 import java.util.*;
 
@@ -10,15 +9,15 @@ public final class DtoTypeLinker {
     private DtoTypeLinker() {
     }
 
-    public static <T extends BaseType, P extends BaseProp> void link(
+    public static <T, P extends BaseProp> void link(
             Collection<DtoType<T, P>> dtoTypes
     ) {
         link(dtoTypes, qualifiedName -> null);
     }
 
-    public static <T extends BaseType, P extends BaseProp> void link(
+    public static <T, P extends BaseProp> void link(
             Collection<DtoType<T, P>> dtoTypes,
-            DtoTypeResolver<T> resolver
+            DtoTypeResolver resolver
     ) {
         LinkContext<T, P> ctx = new LinkContext<>(resolver);
         for (DtoType<T, P> dtoType : dtoTypes) {
@@ -54,7 +53,7 @@ public final class DtoTypeLinker {
         detectCycles(dtoTypes, graph);
     }
 
-    private static <T extends BaseType, P extends BaseProp> void collectEdges(
+    private static <T, P extends BaseProp> void collectEdges(
             DtoType<T, P> ownerType,
             DtoTypeKind ownerKind,
             DtoType<T, P> shape,
@@ -69,7 +68,7 @@ public final class DtoTypeLinker {
             DtoTypeRef<T, P> ref = prop.getTargetTypeRef();
             if (ref != null) {
                 DtoType<T, P> targetType = ctx.typeMap.get(ref.getQualifiedName());
-                DtoTypeInfo<T> typeInfo;
+                DtoTypeInfo typeInfo;
                 try {
                     typeInfo = targetType != null ?
                             ctx.typeInfoMap.get(ref.getQualifiedName()) :
@@ -144,11 +143,11 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static <T extends BaseType, P extends BaseProp> void validate(
+    private static <T, P extends BaseProp> void validate(
             DtoType<T, P> ownerType,
             DtoTypeKind ownerKind,
             DtoTypeRef<T, P> ref,
-            DtoTypeInfo<T> typeInfo
+            DtoTypeInfo typeInfo
     ) {
         if (typeInfo.getKind() != ownerKind) {
             throw exception(
@@ -163,24 +162,27 @@ public final class DtoTypeLinker {
                             "\" is " + article(typeInfo.getKind())
             );
         }
-        T associationTargetType = ref.getTargetBaseType();
-        if (!associationTargetType.getQualifiedName().equals(typeInfo.getBaseType().getQualifiedName())) {
+        String associationTargetTypeQualifiedName = ref.getTargetBaseTypeQualifiedName();
+        if (!associationTargetTypeQualifiedName.equals(typeInfo.getBaseTypeQualifiedName())) {
             throw exception(
                     ownerType,
                     ref,
                     "The association target type \"" +
-                            associationTargetType.getQualifiedName() +
+                            associationTargetTypeQualifiedName +
                             "\" does not match the reusable DTO entity type \"" +
-                            typeInfo.getBaseType().getQualifiedName() +
+                            typeInfo.getBaseTypeQualifiedName() +
                             "\""
             );
         }
     }
 
-    private static <T extends BaseType, P extends BaseProp> DtoTypeInfo<T> typeInfo(
+    private static <T, P extends BaseProp> DtoTypeInfo typeInfo(
             DtoType<T, P> dtoType
     ) {
-        return new DtoTypeInfo<>(dtoType.getBaseType(), kind(dtoType));
+        return new DtoTypeInfo(
+                Objects.requireNonNull(dtoType.getBaseTypeQualifiedName()),
+                kind(dtoType)
+        );
     }
 
     private static DtoTypeKind kind(DtoType<?, ?> dtoType) {
@@ -215,7 +217,7 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static <T extends BaseType, P extends BaseProp> void detectCycles(
+    private static <T, P extends BaseProp> void detectCycles(
             Collection<DtoType<T, P>> dtoTypes,
             Map<DtoType<T, P>, List<Edge<T, P>>> graph
     ) {
@@ -228,7 +230,7 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static <T extends BaseType, P extends BaseProp> void detectCycles(
+    private static <T, P extends BaseProp> void detectCycles(
             DtoType<T, P> type,
             Map<DtoType<T, P>, List<Edge<T, P>>> graph,
             Set<DtoType<T, P>> completed,
@@ -273,7 +275,7 @@ public final class DtoTypeLinker {
         return new DtoAstException(ownerType.getDtoFile(), ref.getLine(), ref.getColumn(), message);
     }
 
-    private static class Edge<T extends BaseType, P extends BaseProp> {
+    private static class Edge<T, P extends BaseProp> {
 
         final DtoProp<T, P> prop;
 
@@ -288,22 +290,22 @@ public final class DtoTypeLinker {
         }
     }
 
-    private static class LinkContext<T extends BaseType, P extends BaseProp> {
+    private static class LinkContext<T, P extends BaseProp> {
 
-        final DtoTypeResolver<T> resolver;
+        final DtoTypeResolver resolver;
 
         final Map<String, DtoType<T, P>> typeMap = new LinkedHashMap<>();
 
-        final Map<String, DtoTypeInfo<T>> typeInfoMap = new HashMap<>();
+        final Map<String, DtoTypeInfo> typeInfoMap = new HashMap<>();
 
-        final Map<String, DtoTypeInfo<T>> externalTypeInfoMap = new HashMap<>();
+        final Map<String, DtoTypeInfo> externalTypeInfoMap = new HashMap<>();
 
-        LinkContext(DtoTypeResolver<T> resolver) {
+        LinkContext(DtoTypeResolver resolver) {
             this.resolver = resolver;
         }
 
-        DtoTypeInfo<T> resolveExternal(String qualifiedName) {
-            DtoTypeInfo<T> typeInfo = externalTypeInfoMap.get(qualifiedName);
+        DtoTypeInfo resolveExternal(String qualifiedName) {
+            DtoTypeInfo typeInfo = externalTypeInfoMap.get(qualifiedName);
             if (typeInfo == null) {
                 typeInfo = resolver.resolve(qualifiedName);
                 if (typeInfo != null) {

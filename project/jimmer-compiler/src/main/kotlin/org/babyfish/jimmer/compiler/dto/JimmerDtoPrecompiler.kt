@@ -10,6 +10,7 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.isJimmerImmutableType
 import site.addzero.lsi.jimmer.dto.resolveDtoAnnotationContract
@@ -34,7 +35,6 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.LsiDtoBaseProp
-import site.addzero.lsi.jimmer.dto.LsiDtoBaseType
 import site.addzero.lsi.jimmer.dto.resolveDtoTypeInfo
 import site.addzero.lsi.jimmer.dto.toLsiDtoCompiler
 import site.addzero.lsi.jimmer.dto.toLsiDtoGraph
@@ -287,11 +287,15 @@ internal class JimmerDtoPrecompiler {
         compiledByCompiler.forEach { (compiler, compiledTypes) ->
             val entry = entries.first { candidate -> candidate.compiler === compiler }
             compiledTypes
-                .map { dtoType -> dtoType.baseType }
-                .filter { baseType ->
-                    baseType.immutableType.kind == ImmutableTypeKind.MAPPED_SUPERCLASS
+                .map { dtoType ->
+                    requireNotNull(dtoType.baseType) {
+                        "Compiled root DTO type must have an immutable base type"
+                    }
                 }
-                .distinctBy(LsiDtoBaseType::id)
+                .filter { baseType ->
+                    baseType.kind == ImmutableTypeKind.MAPPED_SUPERCLASS
+                }
+                .distinctBy(ImmutableType::id)
                 .forEach { baseType ->
                     failures += JimmerDtoCompilerFailure(
                         inputSnapshot = entry.inputSnapshot,
@@ -399,7 +403,7 @@ private fun LsiDiagnostic.toCompilerFailure(
 
 private data class JimmerDtoCompilerEntry(
     val inputSnapshot: CompilerInputDocumentSnapshot,
-    val compiler: DtoCompiler<LsiDtoBaseType, LsiDtoBaseProp>,
+    val compiler: DtoCompiler<ImmutableType, LsiDtoBaseProp>,
     val targetTypeIds: List<LsiSymbolId>,
     val referenceResolution: JimmerDtoStaticReferenceResolution,
 ) {

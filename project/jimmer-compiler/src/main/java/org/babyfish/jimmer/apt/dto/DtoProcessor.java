@@ -16,12 +16,10 @@ import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoTypeInfoExtensionsKt;
-import site.addzero.lsi.jimmer.dto.LsiDtoBaseType;
 import site.addzero.lsi.jimmer.dto.LsiDtoTypeRegistry;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
-import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -151,26 +149,12 @@ public class DtoProcessor {
         return dtoTypes;
     }
 
-    private DtoTypeInfo<ImmutableType> resolveDtoType(String qualifiedName) {
-        DtoTypeInfo<LsiDtoBaseType> frozenTypeInfo = DtoTypeInfoExtensionsKt.resolveDtoTypeInfo(
+    private DtoTypeInfo resolveDtoType(String qualifiedName) {
+        return DtoTypeInfoExtensionsKt.resolveDtoTypeInfo(
                 dtoTypeRegistry,
                 qualifiedName,
                 LsiLanguage.JAVA
         );
-        if (frozenTypeInfo == null) {
-            return null;
-        }
-        String baseTypeQualifiedName = frozenTypeInfo.getBaseType().getQualifiedName();
-        TypeElement baseTypeElement = elements.getTypeElement(baseTypeQualifiedName);
-        ImmutableType baseType = baseTypeElement != null ? context.getImmutableType(baseTypeElement) : null;
-        if (baseType == null) {
-            throw new DtoException(
-                    "The entity type argument of reusable DTO type \"" +
-                            qualifiedName +
-                            "\" is not an immutable type"
-            );
-        }
-        return new DtoTypeInfo<>(baseType, frozenTypeInfo.getKind());
     }
 
     private boolean generateDtoTypes(List<DtoType<ImmutableType, ImmutableProp>> dtoTypes) {

@@ -2,12 +2,11 @@ package org.babyfish.jimmer.dto.compiler;
 
 import org.antlr.v4.runtime.Token;
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
+class DtoTypeBuilder<T, P extends BaseProp> {
 
     final DtoPropBuilder<T, P> parentProp;
 
@@ -284,7 +283,7 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
             Map<String, T> qualifiedNameTypeMap = new HashMap<>();
             Map<String, Set<T>> nameTypeMap = new HashMap<>();
             collectSuperTypes(baseType, qualifiedNameTypeMap, nameTypeMap);
-            Set<T> handledBaseTypes = new LinkedHashSet<>();
+            Set<String> handledBaseTypeNames = new LinkedHashSet<>();
             for (DtoParser.QualifiedNameContext qnCtx : macro.args) {
                 String qualifiedName = qnCtx.parts.stream().map(Token::getText).collect(Collectors.joining("."));
                 T baseType = qualifiedName.equals("this") ? this.baseType : qualifiedNameTypeMap.get(qualifiedName);
@@ -301,7 +300,7 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
                                             "it matches several types: " +
                                             baseTypes
                                                     .stream()
-                                                    .map(BaseType::getQualifiedName)
+                                                    .map(ctx::getBaseTypeQualifiedName)
                                                     .collect(Collectors.joining(", "))
                             );
                         }
@@ -324,19 +323,19 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
                                     qnCtx.start.getCharPositionInLine(),
                                     "Illegal type name \"" + qualifiedName + "\", " +
                                             "it is not super type of \"" +
-                                            this.baseType +
+                                            ctx.getBaseTypeQualifiedName(this.baseType) +
                                             "\""
                             );
                         }
                     }
                 }
-                if (!handledBaseTypes.add(baseType)) {
+                if (!handledBaseTypeNames.add(ctx.getBaseTypeQualifiedName(baseType))) {
                     throw ctx.exception(
                             qnCtx.start.getLine(),
                             qnCtx.start.getCharPositionInLine(),
                             "Illegal type name \"" + qualifiedName + "\", " +
                                     "it is not super type of \"" +
-                                    baseType.getName() +
+                                    ctx.getBaseTypeName(baseType) +
                                     "\""
                     );
                 }
@@ -622,8 +621,8 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
             Map<String, T> qualifiedNameTypeMap,
             Map<String, Set<T>> nameTypeMap
     ) {
-        qualifiedNameTypeMap.put(baseType.getQualifiedName(), baseType);
-        nameTypeMap.computeIfAbsent(baseType.getName(), it -> new LinkedHashSet<>()).add(baseType);
+        qualifiedNameTypeMap.put(ctx.getBaseTypeQualifiedName(baseType), baseType);
+        nameTypeMap.computeIfAbsent(ctx.getBaseTypeName(baseType), it -> new LinkedHashSet<>()).add(baseType);
         for (T superType : ctx.getSuperTypes(baseType)) {
             collectSuperTypes(superType, qualifiedNameTypeMap, nameTypeMap);
         }
@@ -637,6 +636,8 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
 
         dtoType = new DtoType<>(
                 baseType,
+                ctx.getBaseTypeName(baseType),
+                ctx.getBaseTypeQualifiedName(baseType),
                 ctx.getTargetPackageName(),
                 modifiers,
                 annotations,
@@ -713,7 +714,7 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
             } else {
                 DtoParser.TypeBranchContext branch = element.typeBranch();
                 T targetType = resolveTypeBranchType(branch);
-                String key = targetType.getQualifiedName();
+                String key = ctx.getBaseTypeQualifiedName(targetType);
                 DtoParser.TypeBranchContext conflict = typeBranchMap.put(key, branch);
                 if (conflict != null) {
                     throw ctx.exception(
@@ -813,7 +814,7 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
         List<DtoPolymorphicBranch<T, P>> dtoBranches = new ArrayList<>(instantiableTypes.size());
         Set<String> handledTypeNames = new LinkedHashSet<>();
         for (T instantiableType : instantiableTypes) {
-            String typeName = instantiableType.getQualifiedName();
+            String typeName = ctx.getBaseTypeQualifiedName(instantiableType);
             DtoParser.TypeBranchContext explicitBranch = explicitBranchMap.get(typeName);
             dtoBranches.add(explicitBranch != null ?
                     buildTypeBranch(explicitBranch) :
@@ -884,6 +885,8 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
     private DtoType<T, P> emptyBranchType(T targetType) {
         DtoType<T, P> branchType = new DtoType<>(
                 targetType,
+                ctx.getBaseTypeName(targetType),
+                ctx.getBaseTypeQualifiedName(targetType),
                 ctx.getTargetPackageName(),
                 modifiers,
                 Collections.emptyList(),
@@ -915,7 +918,7 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
                     "Illegal type branch \"" +
                             qualifiedName +
                             "\", it is not subtype of \"" +
-                            baseType.getQualifiedName() +
+                            ctx.getBaseTypeQualifiedName(baseType) +
                             "\""
             );
         }
@@ -1152,6 +1155,8 @@ class DtoTypeBuilder<T extends BaseType, P extends BaseProp> {
         }
         DtoType<T, P> targetType = new DtoType<>(
                 dtoType.getBaseType(),
+                dtoType.getBaseTypeName(),
+                dtoType.getBaseTypeQualifiedName(),
                 dtoType.getPackageName(),
                 dtoType.getModifiers(),
                 foldProp.getTargetType().getAnnotations(),

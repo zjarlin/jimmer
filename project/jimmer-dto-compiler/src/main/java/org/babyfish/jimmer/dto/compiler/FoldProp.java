@@ -1,13 +1,12 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
 
-public class FoldProp<T extends BaseType, P extends BaseProp> implements AbstractProp {
+public class FoldProp<T, P extends BaseProp> implements AbstractProp {
 
     private final DtoFile declaringFile;
 

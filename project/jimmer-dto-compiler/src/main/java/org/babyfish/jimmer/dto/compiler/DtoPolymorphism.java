@@ -1,13 +1,12 @@
 package org.babyfish.jimmer.dto.compiler;
 
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
-import org.babyfish.jimmer.dto.compiler.spi.BaseType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.List;
 
-public class DtoPolymorphism<T extends BaseType, P extends BaseProp> {
+public class DtoPolymorphism<T, P extends BaseProp> {
 
     private final boolean exhaustive;
 
