@@ -113,7 +113,13 @@ public class DtoProcessor {
 
         for (DtoFile dtoFile : dtoFiles) {
             try {
-                compiler = new AptDtoCompiler(dtoFile, context, elements, defaultNullableInputModifier);
+                compiler = new AptDtoCompiler(
+                        dtoFile,
+                        context,
+                        elements,
+                        defaultNullableInputModifier,
+                        immutableSchema
+                );
             } catch (DtoAstException ex) {
                 throw new DtoException(
                         "Failed to parse \"" +

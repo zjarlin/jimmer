@@ -1,5 +1,6 @@
 package site.addzero.lsi.jimmer.dto
 
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableView
@@ -25,6 +26,19 @@ fun ImmutableProp.dtoClientType(immutableSchema: ImmutableSchema): LsiTypeRef {
     val targetType = targetIdProp?.declaredConverterTargetTypeOrNull()
         ?: return type.withoutDtoTypeAnnotations()
     return if (list) targetType.toDtoConverterListType() else targetType
+}
+
+/** 判断两个不可变属性暴露给 DTO 的冻结客户端类型是否一致。 */
+fun ImmutableSchema.haveSameDtoClientType(
+    firstOwnerTypeQualifiedName: String,
+    firstPropName: String,
+    secondOwnerTypeQualifiedName: String,
+    secondPropName: String,
+): Boolean {
+    val firstProp = requireDtoClientProp(firstOwnerTypeQualifiedName, firstPropName)
+    val secondProp = requireDtoClientProp(secondOwnerTypeQualifiedName, secondPropName)
+    return firstProp.dtoClientType(this).jimmerTypeSignature(ignoreRootNullability = true) ==
+        secondProp.dtoClientType(this).jimmerTypeSignature(ignoreRootNullability = true)
 }
 
 /** 返回 DTO 基础属性绑定的唯一不可变属性语义。 */
@@ -118,6 +132,16 @@ private fun DtoBaseProp.boundImmutableProps(immutableSchema: ImmutableSchema): L
                 "DTO base property references a missing immutable property: ${propId.value}"
             }
         }
+}
+
+private fun ImmutableSchema.requireDtoClientProp(
+    ownerTypeQualifiedName: String,
+    propName: String,
+): ImmutableProp {
+    val propId = LsiSymbolId.property(LsiSymbolId.type(ownerTypeQualifiedName), propName)
+    return requireNotNull(propsById[propId]) {
+        "Immutable DTO client property does not exist: ${propId.value}"
+    }
 }
 
 private fun ImmutableProp.dtoConverterTargetTypeOrNull(

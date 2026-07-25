@@ -389,6 +389,28 @@ class DtoInputBuilderExtensionsTest {
         }
     }
 
+    @Test
+    fun `compares frozen dto client types by stable immutable property id`() {
+        val fixture = complexFixture()
+
+        assertTrue(
+            fixture.schema.haveSameDtoClientType(
+                "demo.Complex",
+                "convertedValues",
+                "demo.Complex",
+                "convertedValues",
+            ),
+        )
+        assertFalse(
+            fixture.schema.haveSameDtoClientType(
+                "demo.Complex",
+                "convertedValues",
+                "demo.Complex",
+                "targetIds",
+            ),
+        )
+    }
+
     private fun fixture(): Fixture {
         val dynamic = baseProp(DYNAMIC_PROP_ID, "dynamicName", DtoModifier.DYNAMIC, nullable = true)
         val enabled = DtoUserProp(

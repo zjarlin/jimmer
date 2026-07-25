@@ -9,13 +9,16 @@ import org.babyfish.jimmer.dto.compiler.*
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableProp
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import org.babyfish.jimmer.sql.GeneratedValue
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.haveSameDtoClientType
 import java.math.BigDecimal
 import java.math.BigInteger
 
 class KspDtoCompiler(
     dtoFile: DtoFile,
     private val ctx: Context,
-    private val defaultNullableInputModifier: DtoModifier
+    private val defaultNullableInputModifier: DtoModifier,
+    private val immutableSchema: ImmutableSchema,
 ) : DtoCompiler<ImmutableType, ImmutableProp>(dtoFile) {
 
     private val resolver: Resolver = ctx.resolver
@@ -72,7 +75,12 @@ class KspDtoCompiler(
         }
 
     override fun isSameType(baseProp1: ImmutableProp, baseProp2: ImmutableProp): Boolean =
-        baseProp1.clientClassName.copy(nullable = false) == baseProp2.clientClassName.copy(nullable = false)
+        immutableSchema.haveSameDtoClientType(
+            baseProp1.declaringType.qualifiedName,
+            baseProp1.name,
+            baseProp2.declaringType.qualifiedName,
+            baseProp2.name,
+        )
 
     override fun getSimplePropType(baseProp: ImmutableProp): SimplePropType =
         SIMPLE_PROP_TYPE_MAP[baseProp.typeName().copy(nullable = false)] ?: SimplePropType.NONE

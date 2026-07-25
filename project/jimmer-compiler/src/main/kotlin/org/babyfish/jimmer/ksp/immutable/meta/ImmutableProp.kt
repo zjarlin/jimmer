@@ -12,14 +12,11 @@ import org.babyfish.jimmer.Immutable
 import org.babyfish.jimmer.Scalar
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp
 import org.babyfish.jimmer.impl.util.Keywords
-import org.babyfish.jimmer.jackson.JsonConverter
 import org.babyfish.jimmer.ksp.*
 import org.babyfish.jimmer.ksp.immutable.generator.DRAFT
 import org.babyfish.jimmer.ksp.immutable.generator.KEY_FULL_NAME
 import org.babyfish.jimmer.ksp.immutable.generator.parseValidationMessages
 import org.babyfish.jimmer.ksp.immutable.generator.upper
-import org.babyfish.jimmer.ksp.util.ConverterMetadata
-import org.babyfish.jimmer.ksp.util.converterMetadataOf
 import org.babyfish.jimmer.ksp.util.fastResolve
 import org.babyfish.jimmer.ksp.util.recursiveAnnotationOf
 import org.babyfish.jimmer.meta.impl.PropDescriptor
@@ -419,9 +416,6 @@ class ImmutableProp(
             }
         }
 
-    val clientClassName: TypeName
-        get() = converterMetadata?.targetTypeName?.copy(nullable = isNullable) ?: typeName()
-
     val targetType: ImmutableType? by lazy {
         targetDeclaration
             ?.takeIf { isAssociation }
@@ -527,50 +521,6 @@ class ImmutableProp(
         } else {
             null
         }
-
-    val converterMetadata: ConverterMetadata? by lazy {
-        var jsonConverter = recursiveAnnotationOf(JsonConverter::class.qualifiedName!!)
-        val jsonFormat = recursiveAnnotationOf(ctx.jacksonTypes.jsonFormat.reflectionName())
-
-        var autoApply = false
-        if (jsonConverter === null) {
-            resolveIdViewBaseProp()
-            if (idViewBaseProp !== null) {
-                autoApply = true
-                jsonConverter =
-                    idViewBaseProp?.declaringType?.idProp?.recursiveAnnotationOf(JsonConverter::class.qualifiedName!!)
-            }
-        }
-
-        if (jsonConverter !== null && jsonFormat !== null) {
-            throw MetaException(
-                propDeclaration,
-                "it cannot be decorated both \"@${JsonConverter::class.qualifiedName}\" " +
-                        "and \"${ctx.jacksonTypes.jsonFormat.reflectionName()}\""
-            )
-        }
-        if (jsonConverter === null) {
-            null
-        } else {
-            val declaration = jsonConverter.getClassArgument(JsonConverter::value)!!
-            ctx.resolver.converterMetadataOf(declaration).let {
-                if (autoApply && isList) {
-                    it.toListMetadata(ctx.resolver)
-                } else {
-                    it
-                }
-            }.also {
-                if (it.sourceTypeName != typeName(overrideNullable = false)) {
-                    throw MetaException(
-                        propDeclaration,
-                        "the source type of converter " +
-                                "\"${declaration.qualifiedName!!.asString()}\" is \"" +
-                                "${it.sourceTypeName}\" does not match the return type of current property"
-                    )
-                }
-            }
-        }
-    }
 
     fun annotation(annotationType: KClass<out Annotation>): KSAnnotation? =
         propDeclaration.annotation(annotationType) ?: overriddenProp?.annotation(annotationType)

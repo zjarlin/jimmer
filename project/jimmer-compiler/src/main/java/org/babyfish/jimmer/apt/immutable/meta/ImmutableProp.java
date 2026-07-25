@@ -9,11 +9,9 @@ import org.babyfish.jimmer.apt.Context;
 import org.babyfish.jimmer.apt.MetaException;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.generator.Strings;
-import org.babyfish.jimmer.apt.util.ConverterMetadata;
 import org.babyfish.jimmer.apt.util.RecursiveAnnotations;
 import org.babyfish.jimmer.dto.compiler.spi.BaseProp;
 import org.babyfish.jimmer.impl.util.Keywords;
-import org.babyfish.jimmer.jackson.JsonConverter;
 import org.babyfish.jimmer.meta.impl.PropDescriptor;
 import org.babyfish.jimmer.meta.impl.Utils;
 import org.babyfish.jimmer.sql.*;
@@ -133,10 +131,6 @@ public class ImmutableProp implements BaseProp {
     private boolean isBasePropResolved;
 
     private Boolean remote;
-
-    private ConverterMetadata converterMetadata;
-
-    private boolean converterMetadataResolved;
 
     public ImmutableProp(
             Context context,
@@ -584,80 +578,6 @@ public class ImmutableProp implements BaseProp {
 
     public TypeName getDraftElementTypeName() {
         return draftElementTypeName;
-    }
-
-    public ConverterMetadata getConverterMetadata() {
-        if (converterMetadataResolved) {
-            return converterMetadata;
-        }
-        converterMetadata = determineConverterMetadata();
-        converterMetadataResolved = true;
-        return converterMetadata;
-    }
-
-    private ConverterMetadata determineConverterMetadata() {
-        AnnotationMirror jsonConverter = recursiveAnnotation(JsonConverter.class.getName());
-
-        boolean autoApply = false;
-        if (jsonConverter == null) {
-            final ImmutableProp idViewBaseProp = getIdViewBaseProp();
-            if (idViewBaseProp != null) {
-                ImmutableProp idProp = idViewBaseProp.declaringType.getIdProp();
-                if (idProp != null) {
-                    autoApply = true;
-                    jsonConverter = idProp.recursiveAnnotation(JsonConverter.class.getName());
-                }
-            }
-        }
-
-        if (jsonConverter != null) {
-            if (isEntityAssociation) {
-                throw new MetaException(
-                        executableElement,
-                        "it cannot be decorated by \"@" +
-                                JsonConverter.class.getName() +
-                                "\" because it is association"
-                );
-            }
-            if (recursiveAnnotation(context.getJacksonTypes().jsonFormat.reflectionName()) != null) {
-                throw new MetaException(
-                        executableElement,
-                        "it cannot be decorated by both \"@" +
-                                JsonConverter.class.getName() +
-                                "\" and \"@" +
-                                "com.fasterxml.jackson.annotation.JsonFormat" +
-                                "\""
-                );
-            }
-            for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> e : jsonConverter.getElementValues().entrySet()) {
-                if (e.getKey().getSimpleName().contentEquals("value")) {
-                    TypeElement converterElement = context.getElements().getTypeElement(e.getValue().getValue().toString());
-                    ConverterMetadata metadata = ConverterMetadata.of(converterElement);
-                    if (autoApply && isList) {
-                        metadata = metadata.toListMetadata(context);
-                    }
-                    if (!metadata.getSourceTypeName().equals(getTypeName().box())) {
-                        throw new MetaException(
-                                executableElement,
-                                "The source type of converter \"" +
-                                        converterElement.getQualifiedName().toString() +
-                                        "\" is \"" +
-                                        metadata.getSourceTypeName() +
-                                        "\" which is not the return type of property"
-                        );
-                    }
-                    return metadata;
-                }
-            }
-        }
-        return null;
-    }
-
-    public TypeName getClientTypeName() {
-        if (converterMetadata != null) {
-            return converterMetadata.getTargetTypeName();
-        }
-        return getTypeName();
     }
 
     @Override

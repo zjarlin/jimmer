@@ -8,6 +8,8 @@ import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.dto.compiler.*;
 import org.babyfish.jimmer.sql.GeneratedValue;
 import org.jetbrains.annotations.Nullable;
+import site.addzero.lsi.jimmer.ImmutableSchema;
+import site.addzero.lsi.jimmer.dto.DtoConverterExtensionsKt;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -29,16 +31,20 @@ public class AptDtoCompiler extends DtoCompiler<ImmutableType, ImmutableProp> {
 
     private final DtoModifier defaultNullableInputModifier;
 
+    private final ImmutableSchema immutableSchema;
+
     public AptDtoCompiler(
             DtoFile dtoFile,
             Context context,
             Elements elements,
-            DtoModifier defaultNullableInputModifier
+            DtoModifier defaultNullableInputModifier,
+            ImmutableSchema immutableSchema
     ) throws IOException {
         super(dtoFile);
         this.context = context;
         this.elements = elements;
         this.defaultNullableInputModifier = defaultNullableInputModifier;
+        this.immutableSchema = immutableSchema;
     }
 
     @Override
@@ -138,7 +144,13 @@ public class AptDtoCompiler extends DtoCompiler<ImmutableType, ImmutableProp> {
 
     @Override
     protected boolean isSameType(ImmutableProp baseProp1, ImmutableProp baseProp2) {
-        return baseProp1.getClientTypeName().equals(baseProp2.getClientTypeName());
+        return DtoConverterExtensionsKt.haveSameDtoClientType(
+                immutableSchema,
+                baseProp1.getDeclaringType().getQualifiedName(),
+                baseProp1.getName(),
+                baseProp2.getDeclaringType().getQualifiedName(),
+                baseProp2.getName()
+        );
     }
 
     @Override

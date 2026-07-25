@@ -56,7 +56,7 @@ internal class DtoProcessor(
         val compilers = mutableListOf<KspDtoCompiler>()
         for (dtoFile in dtoFiles) {
             val compiler = try {
-                KspDtoCompiler(dtoFile, ctx, defaultNullableInputModifier)
+                KspDtoCompiler(dtoFile, ctx, defaultNullableInputModifier, immutableSchema)
             } catch (ex: DtoAstException) {
                 throw DtoException(
                     "Failed to parse \"" +
