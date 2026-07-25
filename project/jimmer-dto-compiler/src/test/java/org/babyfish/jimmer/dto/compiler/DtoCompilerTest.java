@@ -331,7 +331,7 @@ public class DtoCompilerTest {
         DtoProp<BaseType, BaseProp> prop = dtoTypes.get(0).getDtoProps().get(0);
         Assertions.assertEquals("contributors", prop.getName());
         Assertions.assertSame(dtoTypes.get(1), prop.getTargetTypeRef().getSourceType());
-        Assertions.assertEquals(8, prop.getConfig().getBatch());
+        Assertions.assertEquals(Integer.valueOf(8), prop.getConfig().getBatch());
     }
 
     @Test
@@ -1453,6 +1453,49 @@ public class DtoCompilerTest {
                         "}]",
                 dtoTypes.toString()
         );
+    }
+
+    @Test
+    public void testMaxLimitWithOffsetConfig() {
+        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.book(
+                "BookView {\n" +
+                        "    !limit(2147483647, 1)\n" +
+                        "    authors { id }\n" +
+                        "}"
+        );
+        DtoProp<BaseType, BaseProp> authors = dtoTypes
+                .get(0)
+                .getDtoProps()
+                .stream()
+                .filter(prop -> prop.getName().equals("authors"))
+                .findFirst()
+                .orElseThrow(AssertionError::new);
+        PropConfig.Limit limit = authors.getConfig().getLimit();
+
+        Assertions.assertNotNull(limit);
+        Assertions.assertEquals(Integer.MAX_VALUE, limit.getValue());
+        Assertions.assertEquals(1, limit.getOffset());
+        Assertions.assertTrue(dtoTypes.toString().contains("!limit(2147483647, 1)"));
+    }
+
+    @Test
+    public void testMaxDepthConfig() {
+        List<DtoType<BaseType, BaseProp>> dtoTypes = MyDtoCompiler.treeNode(
+                "TreeNodeView {\n" +
+                        "    !depth(2147483647)\n" +
+                        "    childNodes*\n" +
+                        "}"
+        );
+        DtoProp<BaseType, BaseProp> childNodes = dtoTypes
+                .get(0)
+                .getDtoProps()
+                .stream()
+                .filter(prop -> prop.getName().equals("childNodes"))
+                .findFirst()
+                .orElseThrow(AssertionError::new);
+
+        Assertions.assertEquals(Integer.valueOf(Integer.MAX_VALUE), childNodes.getConfig().getDepth());
+        Assertions.assertTrue(dtoTypes.toString().contains("!depth(2147483647)"));
     }
 
     @Test

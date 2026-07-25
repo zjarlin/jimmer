@@ -1,0 +1,47 @@
+public val METADATA: DtoMetadata<Book, BookView> = |
+                    DtoMetadata<Book, BookView>(|
+                        BookView::class.java,|
+                        newFetcher(Book::class).by {|
+                            authors(TargetOf_authors.METADATA.fetcher) {|
+                                filter {|
+                                    where(|
+                                        or(|
+                                            and(|
+                                                table.inheritedName eq "BASE",|
+                                                table.active eq true,|
+                                                table.rank gt 1,|
+                                                table.rank ge 2,|
+                                                table.rank lt 10,|
+                                                table.rank le 9|
+                                            ),|
+                                            and(|
+                                                table.name ne "NONE",|
+                                                table.name like "A%",|
+                                                table.name ilike "a%",|
+                                                table.score eq 2L,|
+                                                table.ratio eq 1.5F,|
+                                                table.rating eq 2.5D,|
+                                                table.serial eq BigInteger("12345678901234567890"),|
+                                                table.amount eq BigDecimal("49.99"),|
+                                                table.publisherId eq 7L,|
+                                                table.nickname.isNull()|
+                                            )|
+                                        )|
+                                    )|
+                                    orderBy(|
+                                        table.name.asc(), |
+                                        table.score.desc()|
+                                    )|
+                                }|
+                                limit(20, 5)|
+                                batch(16)|
+                            }|
+                            reviewers(TargetOf_reviewers.METADATA.fetcher) {|
+                                filter(demo.Configurations.AuthorFilter())|
+                            }|
+                            `childBooks*` {|
+                                recursive(demo.Configurations.BookRecursionStrategy())|
+                            }|
+                        },|
+                        ::BookView|
+                    )|

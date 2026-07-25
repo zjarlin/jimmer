@@ -446,16 +446,29 @@ data class DtoPropConfig(
     val filter: DtoConfigTypeRef?,
     val recursion: DtoConfigTypeRef?,
     val fetchType: DtoFetchType,
-    val limit: Int,
-    val offset: Int,
-    val batch: Int,
-    val depth: Int,
+    val limit: DtoLimit?,
+    val batch: Int?,
+    val depth: Int?,
 ) {
     init {
-        require(limit >= 0) { "DTO property config limit cannot be negative" }
+        require(batch == null || batch > 0) { "DTO property config batch must be positive" }
+        require(depth == null || depth >= 0) { "DTO property config depth cannot be negative" }
+        require(filter == null || predicate == null && orderItems.isEmpty()) {
+            "DTO property config filter cannot be combined with inline predicates or ordering"
+        }
+        require(recursion == null || depth == null) {
+            "DTO property config recursion strategy cannot be combined with an explicit depth"
+        }
+    }
+}
+
+data class DtoLimit(
+    val value: Int,
+    val offset: Int,
+) {
+    init {
+        require(value > 0) { "DTO property config limit must be positive" }
         require(offset >= 0) { "DTO property config offset cannot be negative" }
-        require(batch >= 0) { "DTO property config batch cannot be negative" }
-        require(depth >= 0) { "DTO property config depth cannot be negative" }
     }
 }
 
@@ -490,12 +503,11 @@ sealed interface DtoPredicate {
 
     data class Comparison(
         val path: List<DtoPropPathNode>,
-        val operator: String,
+        val operator: DtoComparisonOperator,
         val value: DtoConfigValue,
     ) : DtoPredicate {
         init {
             require(path.isNotEmpty()) { "DTO comparison path cannot be empty" }
-            require(operator.isNotBlank()) { "DTO comparison operator cannot be blank" }
         }
     }
 
@@ -505,6 +517,27 @@ sealed interface DtoPredicate {
     ) : DtoPredicate {
         init {
             require(path.isNotEmpty()) { "DTO nullity path cannot be empty" }
+        }
+    }
+}
+
+enum class DtoComparisonOperator(
+    val token: String,
+) {
+    EQ("="),
+    NE("<>"),
+    LT("<"),
+    LE("<="),
+    GT(">"),
+    GE(">="),
+    LIKE("like"),
+    ILIKE("ilike"),
+    ;
+
+    companion object {
+        fun fromToken(token: String): DtoComparisonOperator {
+            return entries.singleOrNull { operator -> operator.token == token }
+                ?: throw IllegalArgumentException("Unsupported DTO comparison operator: '$token'")
         }
     }
 }

@@ -9,6 +9,7 @@ import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoConfigRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
@@ -20,9 +21,6 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoSpecificationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeRefRenderer
 import org.babyfish.jimmer.dto.compiler.*
-import org.babyfish.jimmer.dto.compiler.PropConfig.PathNode
-import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate
-import org.babyfish.jimmer.dto.compiler.PropConfig.Predicate.*
 import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.impl.util.StringUtil.SnakeCase
 import org.babyfish.jimmer.ksp.Context
@@ -37,7 +35,6 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
-import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind
 import site.addzero.lsi.jimmer.dto.DtoGraph
@@ -50,7 +47,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
 import site.addzero.lsi.jimmer.dto.baseProp
-import site.addzero.lsi.jimmer.dto.configImplementationTypeOrNull
+import site.addzero.lsi.jimmer.dto.bodyType
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
@@ -59,6 +56,7 @@ import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedTargetTypeOrNull
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
+import site.addzero.lsi.jimmer.dto.hiddenFlatPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
@@ -799,6 +797,7 @@ internal class DtoGenerator private constructor(
 
     private fun CodeBlock.Builder.metadataFetcherExpr(
         sourceDtoType: DtoType<ImmutableType, ImmutableProp> = dtoType,
+        sourceLsiType: LsiDtoType = lsiDtoType,
     ) {
         add(
             "%T(%T::class).by {\n",
@@ -806,7 +805,7 @@ internal class DtoGenerator private constructor(
             sourceDtoType.baseType.className
         )
         indent()
-        addFetcherFields(sourceDtoType)
+        addFetcherFields(sourceDtoType, sourceLsiType)
         if (sourceDtoType === dtoType) {
             dtoType.polymorphism?.let { polymorphism ->
                 for (branch in polymorphism.typeBranches) {
@@ -820,19 +819,25 @@ internal class DtoGenerator private constructor(
 
     private fun CodeBlock.Builder.addFetcherFields(
         sourceDtoType: DtoType<ImmutableType, ImmutableProp>,
+        sourceLsiType: LsiDtoType,
     ) {
         for (prop in sourceDtoType.dtoProps) {
             if (prop.nextProp === null) {
-                addFetcherField(prop)
+                addFetcherField(prop, sourceLsiType.baseProp(lsiGraph, prop.name))
             }
         }
+        val hiddenLsiProps = sourceLsiType.hiddenFlatPropsInDeclarationOrder(lsiGraph)
         for (hiddenFlatProp in sourceDtoType.hiddenFlatProps) {
             if (!hiddenFlatProp.baseProp.isId) {
-                addHiddenFetcherField(hiddenFlatProp)
+                addHiddenFetcherField(
+                    hiddenFlatProp,
+                    hiddenLsiProps.single { prop -> prop.name == hiddenFlatProp.name },
+                )
             }
         }
         for (foldProp in sourceDtoType.foldProps) {
-            addFoldFetcherFields(foldProp.targetType)
+            val lsiFoldProp = sourceLsiType.foldProp(lsiGraph, foldProp.name)
+            addFoldFetcherFields(foldProp.targetType, lsiFoldProp.generatedTargetType(lsiGraph))
         }
     }
 
@@ -840,13 +845,14 @@ internal class DtoGenerator private constructor(
         branch: DtoPolymorphicBranch<ImmutableType, ImmutableProp>,
     ) {
         val targetType = branch.targetType ?: error("Internal bug: default branch cannot be rendered as type branch")
+        val branchLsiType = lsiPolymorphicBranch(branch).bodyType(lsiGraph)
         if (targetType == dtoType.baseType) {
-            addFetcherFields(branch.dtoType)
+            addFetcherFields(branch.dtoType, branchLsiType)
             return
         }
         add("forType(%T::class) {\n", targetType.className)
         indent()
-        addFetcherFields(branch.dtoType)
+        addFetcherFields(branch.dtoType, branchLsiType)
         unindent()
         add("}\n")
     }
@@ -886,28 +892,40 @@ internal class DtoGenerator private constructor(
         add("}")
     }
 
-    private fun CodeBlock.Builder.addFoldFetcherFields(dtoType: DtoType<ImmutableType, ImmutableProp>) {
+    private fun CodeBlock.Builder.addFoldFetcherFields(
+        dtoType: DtoType<ImmutableType, ImmutableProp>,
+        lsiType: LsiDtoType,
+    ) {
         for (prop in dtoType.dtoProps) {
             if (prop.nextProp === null) {
-                addFetcherField(prop)
+                addFetcherField(prop, lsiType.baseProp(lsiGraph, prop.name))
             }
         }
+        val hiddenLsiProps = lsiType.hiddenFlatPropsInDeclarationOrder(lsiGraph)
         for (hiddenFlatProp in dtoType.hiddenFlatProps) {
             if (!hiddenFlatProp.baseProp.isId) {
-                addHiddenFetcherField(hiddenFlatProp)
+                addHiddenFetcherField(
+                    hiddenFlatProp,
+                    hiddenLsiProps.single { prop -> prop.name == hiddenFlatProp.name },
+                )
             }
         }
         for (foldProp in dtoType.foldProps) {
-            addFoldFetcherFields(foldProp.targetType)
+            val lsiFoldProp = lsiType.foldProp(lsiGraph, foldProp.name)
+            addFoldFetcherFields(foldProp.targetType, lsiFoldProp.generatedTargetType(lsiGraph))
         }
     }
 
-    private fun CodeBlock.Builder.addFetcherField(prop: DtoProp<ImmutableType, ImmutableProp>) {
+    private fun CodeBlock.Builder.addFetcherField(
+        prop: DtoProp<ImmutableType, ImmutableProp>,
+        lsiProp: DtoBaseProp,
+    ) {
         if (!prop.baseProp.isId) {
+            val configured = lsiProp.config != null
             if (prop.target !== null) {
                 if (prop.isRecursive) {
                     add("%N", "${prop.baseProp.name}*")
-                    if (prop.config == null) {
+                    if (!configured) {
                         add("()")
                     }
                 } else {
@@ -919,216 +937,62 @@ internal class DtoGenerator private constructor(
                 }
             } else {
                 add("%N", prop.baseProp.name)
-                if (prop.config == null) {
+                if (!configured) {
                     add("()")
                 }
             }
-            addConfigLambda(prop)
+            addConfigLambda(lsiProp)
             add("\n")
         }
     }
 
     private fun CodeBlock.Builder.addConfigLambda(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
+        prop: DtoBaseProp,
     ) {
-        val cfg = prop.getConfig() ?: return
-        val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
-        val filterType = lsiProp.configImplementationTypeOrNull(
-            graph = lsiGraph,
-            resolution = configContractResolution,
-            kind = DtoConfigContractKind.FILTER,
+        if (prop.config == null) {
+            return
+        }
+        add(
+            "%L",
+            KspDtoConfigRenderer.render(
+                prop = prop,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                workspace = workspace,
+                configContractResolution = configContractResolution,
+            )
         )
-        val recursionType = lsiProp.configImplementationTypeOrNull(
-            graph = lsiGraph,
-            resolution = configContractResolution,
-            kind = DtoConfigContractKind.RECURSION,
-        )
-        add(" {")
-        indent()
-        when {
-            cfg.predicate != null || cfg.orderItems.isNotEmpty() -> {
-                add("\nfilter {")
-                indent()
-                cfg.predicate?.let {
-                    val realPredicates = if (it is And) {
-                        it.predicates
-                    } else {
-                        listOf(it)
-                    }
-                    for (realPredicate in realPredicates) {
-                        add("\nwhere(\n")
-                        indent()
-                        addPredicate(realPredicate)
-                        unindent()
-                        add("\n)")
-                    }
-                }
-                cfg.orderItems.takeIf { it.isNotEmpty() }?.let {
-                    add("\norderBy(")
-                    indent()
-                    for (i in it.indices) {
-                        if (i != 0) {
-                            add(", ")
-                        }
-                        add("\n")
-                        addPropPath(it[i].path)
-                        if (it[i].isDesc) {
-                            add(".%M()", MemberName(EXPRESSION_PACKAGE, "desc"))
-                        } else {
-                            add(".%M()", MemberName(EXPRESSION_PACKAGE, "asc"))
-                        }
-                    }
-                    unindent()
-                    add("\n)")
-                }
-                unindent()
-                add("\n}")
-            }
-
-            filterType != null -> {
-                val filterTypeName = KspDtoTypeRefRenderer.render(filterType, workspace)
-                add("\nfilter(%L())", filterTypeName.toString())
-            }
-        }
-        if (recursionType != null) {
-            val recursionTypeName = KspDtoTypeRefRenderer.render(recursionType, workspace)
-            add("\nrecursive(%L())", recursionTypeName.toString())
-        }
-        if (cfg.fetchType !== "AUTO") {
-            add("\nfetchType(%T.%L)", REFERENCE_FETCH_TYPE_CLASS_NAME, cfg.fetchType)
-        }
-        if (cfg.limit != Int.MAX_VALUE) {
-            if (cfg.offset != 0) {
-                add("\nlimit(%L, %L)", cfg.limit, cfg.offset)
-            } else {
-                add("\nlimit(%L)", cfg.limit)
-            }
-        }
-        if (cfg.batch != 0) {
-            add("\nbatch(%L)", cfg.batch)
-        }
-        if (cfg.depth != Int.MAX_VALUE) {
-            add("\ndepth(%L)", cfg.depth)
-        }
-        unindent()
-        add("\n}")
     }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun CodeBlock.Builder.addPredicate(predicate: Predicate) {
-        when (predicate) {
-            is And -> {
-                add("%M(\n", MemberName(EXPRESSION_PACKAGE, "and"))
-                indent()
-                for (i in predicate.predicates.indices) {
-                    if (i != 0) {
-                        add(",\n")
-                    }
-                    addPredicate(predicate.predicates[i])
-                }
-                unindent()
-                add("\n)")
-            }
-
-            is Or -> {
-                add("%M(\n", MemberName(EXPRESSION_PACKAGE, "or"))
-                indent()
-                for (i in predicate.predicates.indices) {
-                    if (i != 0) {
-                        add(",\n")
-                    }
-                    addPredicate(predicate.predicates[i])
-                }
-                unindent()
-                add("\n)")
-            }
-
-            is Cmp<*> -> {
-                addPropPath(predicate.path as List<PathNode<ImmutableProp>>)
-                val ktOp = MemberName(
-                    EXPRESSION_PACKAGE,
-                    when (predicate.operator) {
-                        "=" -> "eq"
-                        "<>" -> "ne"
-                        "<" -> "lt"
-                        "<=" -> "le"
-                        ">" -> "gt"
-                        ">=" -> "ge"
-                        else -> predicate.operator
-                    }
-                )
-                if (predicate.value is String) {
-                    add(" %M %S", ktOp, predicate.value)
-                } else {
-                    val prop = predicate.path[predicate.path.size - 1].prop as ImmutableProp
-                    when (prop.typeName(overrideNullable = false)) {
-                        LONG -> add(" %M %LL", ktOp, predicate.value)
-                        FLOAT -> add(" %M %LF", ktOp, predicate.value)
-                        DOUBLE -> add(" %M %LD", ktOp, predicate.value)
-                        BIG_INTEGER_CLASS_NAME -> add(
-                            " %M %T(%S)",
-                            ktOp,
-                            BIG_INTEGER_CLASS_NAME,
-                            predicate.value
-                        )
-
-                        BIG_DECIMAL_CLASS_NAME -> add(
-                            " %M %T(%S)",
-                            ktOp,
-                            BIG_DECIMAL_CLASS_NAME,
-                            predicate.value
-                        )
-
-                        else -> add(" %M %L", ktOp, predicate.value)
-                    }
-                }
-            }
-
-            is Nullity<*> -> {
-                addPropPath(predicate.path as List<PathNode<ImmutableProp>>)
-                if (predicate.isNegative) {
-                    add(".%M()", MemberName(EXPRESSION_PACKAGE, "isNotNull"))
-                } else {
-                    add(".%M()", MemberName(EXPRESSION_PACKAGE, "isNull"))
-                }
-            }
-
-            else -> throw DtoException("Illegal predicate type: ${predicate::class.qualifiedName}")
-        }
-    }
-
-    private fun CodeBlock.Builder.addPropPath(pathNodes: List<PathNode<ImmutableProp>>) {
-        add("table")
-        for (pathNode in pathNodes) {
-            val prop = pathNode.prop
-            val packageName = prop.declaringType.packageName
-            val name = if (pathNode.isAssociatedId) {
-                "${prop.name}Id"
-            } else {
-                prop.name
-            }
-            add(".%M", MemberName(packageName, name))
-        }
-    }
-
-    private fun CodeBlock.Builder.addHiddenFetcherField(prop: DtoProp<ImmutableType, ImmutableProp>) {
+    private fun CodeBlock.Builder.addHiddenFetcherField(
+        prop: DtoProp<ImmutableType, ImmutableProp>,
+        lsiProp: DtoBaseProp,
+    ) {
         if ("flat" != prop.getFuncName()) {
-            addFetcherField(prop)
+            addFetcherField(prop, lsiProp)
             return
         }
         val targetDtoType = prop.getTargetType()!!
+        val targetLsiType = requireNotNull(lsiProp.generatedTargetType(lsiGraph)) {
+            "Frozen flat DTO property '${lsiProp.id.value}' has no generated target type"
+        }
         add("%N {\n", prop.baseProp.name)
         indent()
         for (childProp in targetDtoType.dtoProps) {
-            addHiddenFetcherField(childProp)
+            addHiddenFetcherField(childProp, targetLsiType.baseProp(lsiGraph, childProp.name))
         }
+        val hiddenLsiProps = targetLsiType.hiddenFlatPropsInDeclarationOrder(lsiGraph)
         for (hiddenFlatProp in targetDtoType.hiddenFlatProps) {
             if (!hiddenFlatProp.baseProp.isId) {
-                addHiddenFetcherField(hiddenFlatProp)
+                addHiddenFetcherField(
+                    hiddenFlatProp,
+                    hiddenLsiProps.single { child -> child.name == hiddenFlatProp.name },
+                )
             }
         }
         for (foldProp in targetDtoType.foldProps) {
-            addFoldFetcherFields(foldProp.targetType)
+            val lsiFoldProp = targetLsiType.foldProp(lsiGraph, foldProp.name)
+            addFoldFetcherFields(foldProp.targetType, lsiFoldProp.generatedTargetType(lsiGraph))
         }
         unindent()
         add("\n}\n")
@@ -2539,7 +2403,6 @@ internal class DtoGenerator private constructor(
 
         val DOC_EXPLICIT_FUN = "Avoid anonymous lambda affects coverage of non-kotlin-friendly tools such as jacoco"
 
-        private val EXPRESSION_PACKAGE = "org.babyfish.jimmer.sql.kt.ast.expression"
 
     }
 }

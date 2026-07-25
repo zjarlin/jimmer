@@ -51,6 +51,14 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
         return type.toJavaTypeName(typeNames)
     }
 
+    /** 将任意 LSI Poet 代码块渲染为可嵌入现有 JavaPoet 声明的代码块。 */
+    fun renderCodeBlock(
+        codeBlock: LsiPoetCodeBlock,
+        typeNames: List<LsiPoetTypeName>,
+    ): CodeBlock {
+        return codeBlock.toJavaCodeBlock(typeNames)
+    }
+
     /** 将单个 LSI 类型渲染为可嵌入现有 JavaPoet 声明的结构。 */
     fun renderType(
         type: LsiPoetType,

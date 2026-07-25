@@ -12,6 +12,7 @@ import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoConfigRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
@@ -34,8 +35,6 @@ import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
-import site.addzero.lsi.jimmer.dto.DtoConfigContractKind;
-import site.addzero.lsi.jimmer.dto.DtoConfigContractKt;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind;
@@ -45,7 +44,6 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchAnnotationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoTypeId;
-import site.addzero.lsi.model.LsiDeclaredType;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
@@ -790,7 +788,7 @@ public class DtoGenerator {
                 .add("$T.class,\n", getDtoClassName())
                 .add("$T.$L", dtoType.getBaseType().getFetcherClassName(), "$")
                 .indent();
-        addFetcherFields(dtoType, cb);
+        addFetcherFields(dtoType, lsiDtoType, cb);
         cb
                 .add(",\n")
                 .unindent()
@@ -827,7 +825,7 @@ public class DtoGenerator {
                 .add("$T.class,\n", getDtoClassName())
                 .add("$T.$L", dtoType.getBaseType().getFetcherClassName(), "$")
                 .indent();
-        addFetcherFields(dtoType, cb);
+        addFetcherFields(dtoType, lsiDtoType, cb);
         for (DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch : polymorphism.getTypeBranches()) {
             addPolymorphicTypeFetcherBranch(branch, cb);
         }
@@ -847,12 +845,16 @@ public class DtoGenerator {
     ) {
         ImmutableType targetType = branch.getTargetType();
         assert targetType != null;
+        site.addzero.lsi.jimmer.dto.DtoType branchLsiType = DtoGenerationExtensionsKt.bodyType(
+                lsiPolymorphicBranch(branch),
+                lsiGraph
+        );
         if (targetType.equals(dtoType.getBaseType())) {
-            addFetcherFields(branch.getDtoType(), cb);
+            addFetcherFields(branch.getDtoType(), branchLsiType, cb);
             return;
         }
         cb.add("\n.forType($T.$L", targetType.getFetcherClassName(), "$").indent();
-        addFetcherFields(branch.getDtoType(), cb);
+        addFetcherFields(branch.getDtoType(), branchLsiType, cb);
         cb.unindent().add("\n)");
     }
 
@@ -891,46 +893,77 @@ public class DtoGenerator {
 
     private void addFetcherFields(
             DtoType<ImmutableType, ImmutableProp> dtoType,
+            site.addzero.lsi.jimmer.dto.DtoType lsiType,
             CodeBlock.Builder cb
     ) {
         for (DtoProp<ImmutableType, ImmutableProp> prop : dtoType.getDtoProps()) {
             if (prop.getNextProp() == null) {
-                addFetcherField(prop, cb);
+                addFetcherField(
+                        prop,
+                        DtoGenerationExtensionsKt.baseProp(lsiType, lsiGraph, prop.getName()),
+                        cb
+                );
             }
         }
+        List<DtoBaseProp> hiddenLsiProps = DtoGenerationExtensionsKt.hiddenFlatPropsInDeclarationOrder(
+                lsiType,
+                lsiGraph
+        );
         for (DtoProp<ImmutableType, ImmutableProp> hiddenProp : dtoType.getHiddenFlatProps()) {
             if (!hiddenProp.getBaseProp().isId()) {
-                addHiddenFetcherField(hiddenProp, cb);
+                addHiddenFetcherField(
+                        hiddenProp,
+                        hiddenLsiProps.stream()
+                                .filter(prop -> prop.getName().equals(hiddenProp.getName()))
+                                .findFirst()
+                                .orElseThrow(() -> new DtoException(
+                                        "No frozen hidden flat property \"" + hiddenProp.getName() + "\""
+                                )),
+                        cb
+                );
             }
         }
         for (FoldProp<ImmutableType, ImmutableProp> foldProp : dtoType.getFoldProps()) {
-            addFetcherFields(foldProp.getTargetType(), cb);
+            site.addzero.lsi.jimmer.dto.DtoFoldProp lsiFoldProp = DtoGenerationExtensionsKt.foldProp(
+                    lsiType,
+                    lsiGraph,
+                    foldProp.getName()
+            );
+            addFetcherFields(
+                    foldProp.getTargetType(),
+                    DtoGenerationExtensionsKt.generatedTargetType(lsiFoldProp, lsiGraph),
+                    cb
+            );
         }
     }
 
-    private void addFetcherField(DtoProp<ImmutableType, ImmutableProp> prop, CodeBlock.Builder cb) {
+    private void addFetcherField(
+            DtoProp<ImmutableType, ImmutableProp> prop,
+            DtoBaseProp lsiProp,
+            CodeBlock.Builder cb
+    ) {
         if (prop.getBaseProp().getAnnotation(Id.class) == null) {
-            PropConfig<ImmutableProp> config = prop.getConfig();
+            boolean configured = lsiProp.getConfig() != null;
             if (prop.getTarget() != null) {
                 if (prop.isRecursive()) {
                     cb.add("\n.$N(", StringUtil.identifier("recursive", prop.getBaseProp().getName()));
                 } else {
                     cb.add("\n.$N(", prop.getBaseProp().getName());
                 }
-                if (config != null) {
+                if (configured) {
                     cb.add("\n$>");
                 }
                 if (!prop.isRecursive()) {
                     cb.add("$T.METADATA.getFetcher()", getPropElementName(prop));
-                    if (config != null) {
+                    if (configured) {
                         cb.add(", \n");
                     }
                 }
             } else {
                 cb.add("\n.$N(", prop.getBaseProp().getName());
             }
-            if (config != null) {
-                addConfigLambda(cb, prop);
+            if (configured) {
+                addConfigLambda(cb, lsiProp);
                 cb.add("$<\n");
             }
             cb.add(")");
@@ -939,195 +972,18 @@ public class DtoGenerator {
 
     private void addConfigLambda(
             CodeBlock.Builder cb,
-            DtoProp<ImmutableType, ImmutableProp> prop
+            DtoBaseProp prop
     ) {
-        PropConfig<ImmutableProp> cfg = prop.getConfig();
-        assert cfg != null;
-        DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
-                lsiDtoType,
-                lsiGraph,
-                prop.getName()
+        cb.add(
+                "$L",
+                AptDtoConfigRenderer.render(
+                        prop,
+                        lsiGraph,
+                        immutableSchema,
+                        lsiWorkspace,
+                        configContractResolution
+                )
         );
-        LsiDeclaredType filterType = DtoConfigContractKt.configImplementationTypeOrNull(
-                lsiProp,
-                lsiGraph,
-                configContractResolution,
-                DtoConfigContractKind.FILTER
-        );
-        LsiDeclaredType recursionType = DtoConfigContractKt.configImplementationTypeOrNull(
-                lsiProp,
-                lsiGraph,
-                configContractResolution,
-                DtoConfigContractKind.RECURSION
-        );
-        cb.add("cfg -> cfg$>");
-        if (cfg.getPredicate() != null || !cfg.getOrderItems().isEmpty()) {
-            cb.add("\n.filter(it -> it$>\n");
-            List<PropConfig.Predicate> realPredicates;
-            if (cfg.getPredicate() instanceof PropConfig.Predicate.And) {
-                realPredicates = ((PropConfig.Predicate.And) cfg.getPredicate()).getPredicates();
-            } else if (cfg.getPredicate() != null) {
-                realPredicates = Collections.singletonList(cfg.getPredicate());
-            } else {
-                realPredicates = Collections.emptyList();
-            }
-            for (PropConfig.Predicate realPredicate : realPredicates) {
-                cb.add(".where(\n$>");
-                addConfigPredicate(cb, realPredicate);
-                cb.add("$<\n)");
-            }
-            if (!cfg.getOrderItems().isEmpty()) {
-                cb.add(".orderBy(\n$>");
-                boolean addComma = false;
-                for (PropConfig.OrderItem<ImmutableProp> orderItem : cfg.getOrderItems()) {
-                    if (addComma) {
-                        cb.add(",\n");
-                    } else {
-                        addComma = true;
-                    }
-                    addPropPath(cb, orderItem.getPath());
-                    cb.add(orderItem.isDesc() ? ".desc()" : ".asc()");
-                }
-                cb.add("$<\n)");
-            }
-            cb.add("$<\n)");
-        }
-        if (!cfg.getFetchType().equals("AUTO")) {
-            cb.add("\n.fetchType($T.$L)", Constants.REFERENCE_FETCH_TYPE_CLASS_NAME, cfg.getFetchType());
-        }
-        if (filterType != null) {
-            cb.add("\n.filter(new $T())", AptDtoTypeRefRenderer.render(filterType, lsiWorkspace));
-        }
-        if (recursionType != null) {
-            cb.add("\n.recursive(new $T())", AptDtoTypeRefRenderer.render(recursionType, lsiWorkspace));
-        }
-        if (cfg.getLimit() != Integer.MAX_VALUE) {
-            if (cfg.getOffset() != 0) {
-                cb.add("\n.limit($L, $L)", cfg.getLimit(), cfg.getOffset());
-            } else {
-                cb.add("\n.limit($L)", cfg.getLimit());
-            }
-        }
-        if (cfg.getBatch() != 0) {
-            cb.add("\n.batch($L)", cfg.getBatch());
-        }
-        if (cfg.getDepth() != Integer.MAX_VALUE) {
-            cb.add("\n.depth($L)", cfg.getDepth());
-        }
-        cb.add("$<");
-    }
-
-    @SuppressWarnings("unchecked")
-    private void addConfigPredicate(
-            CodeBlock.Builder cb,
-            PropConfig.Predicate predicate
-    ) {
-        if (predicate instanceof PropConfig.Predicate.And) {
-            cb.add("$T.and(\n$>", Constants.PREDICATE_CLASS_NAME);
-            boolean addComma = false;
-            for (PropConfig.Predicate subPredicate : ((PropConfig.Predicate.And) predicate).getPredicates()) {
-                if (addComma) {
-                    cb.add(",\n");
-                } else {
-                    addComma = true;
-                }
-                addConfigPredicate(cb, subPredicate);
-            }
-            cb.add("$<\n)");
-        } else if (predicate instanceof PropConfig.Predicate.Or) {
-            cb.add("$T.or(\n$>", Constants.PREDICATE_CLASS_NAME);
-            boolean addComma = false;
-            for (PropConfig.Predicate subPredicate : ((PropConfig.Predicate.Or) predicate).getPredicates()) {
-                if (addComma) {
-                    cb.add(",\n");
-                } else {
-                    addComma = true;
-                }
-                addConfigPredicate(cb, subPredicate);
-            }
-            cb.add("$<\n)");
-        } else if (predicate instanceof PropConfig.Predicate.Cmp) {
-            PropConfig.Predicate.Cmp<ImmutableProp> cmp =
-                    (PropConfig.Predicate.Cmp<ImmutableProp>) predicate;
-            addPropPath(cb, cmp.getPath());
-            switch (cmp.getOperator()) {
-                case "=":
-                    cb.add(".eq(");
-                    break;
-                case "<>":
-                    cb.add(".ne(");
-                    break;
-                case "<":
-                    cb.add(".lt(");
-                    break;
-                case "<=":
-                    cb.add(".le(");
-                    break;
-                case ">":
-                    cb.add(".gt(");
-                    break;
-                case ">=":
-                    cb.add(".ge(");
-                    break;
-                case "like":
-                    cb.add(".like(");
-                    break;
-                case "ilike":
-                    cb.add(".ilike(");
-                    break;
-                default:
-                    throw new DtoException("Illegal operator: " + cmp.getOperator());
-            }
-            if (cmp.getValue() instanceof String) {
-                cb.add("$S)", cmp.getValue());
-            } else {
-                String value = cmp.getValue().toString();
-                TypeName typeName = cmp.getPath().get(cmp.getPath().size() - 1).getProp().getTypeName();
-                if (typeName.isBoxedPrimitive()) {
-                    typeName = typeName.unbox();
-                }
-                if (typeName.equals(TypeName.LONG)) {
-                    cb.add("$LL", value);
-                } else if (typeName.equals(TypeName.FLOAT)) {
-                    cb.add("$LF", value);
-                } else if (typeName.equals(TypeName.DOUBLE)) {
-                    cb.add("$LD", value);
-                } else if (typeName.equals(Constants.BIG_INTEGER_CLASS_NAME)) {
-                    cb.add(
-                            "new $T($S)",
-                            Constants.BIG_INTEGER_CLASS_NAME,
-                            cmp.getValue().toString()
-                    );
-                } else if (typeName.equals(Constants.BIG_DECIMAL_CLASS_NAME)) {
-                    cb.add(
-                            "new $T($S)",
-                            Constants.BIG_DECIMAL_CLASS_NAME,
-                            cmp.getValue().toString()
-                    );
-                } else {
-                    cb.add("$L", value);
-                }
-                cb.add(")");
-            }
-        } else if (predicate instanceof PropConfig.Predicate.Nullity) {
-            PropConfig.Predicate.Nullity<ImmutableProp> nullity =
-                    (PropConfig.Predicate.Nullity<ImmutableProp>) predicate;
-            addPropPath(cb, nullity.getPath());
-            cb.add(nullity.isNegative() ? ".isNotNull()" : ".isNull()");
-        } else {
-            throw new DtoException("Illegal predicate: " + predicate.getClass().getName());
-        }
-    }
-
-    private void addPropPath(CodeBlock.Builder cb, List<PropConfig.PathNode<ImmutableProp>> pathNodes) {
-        cb.add("it.getTable()");
-        for (PropConfig.PathNode<ImmutableProp> pathNode : pathNodes) {
-            if (pathNode.isAssociatedId()) {
-                cb.add(".$LId()", pathNode.getProp().getName());
-            } else {
-                cb.add(".$L()", pathNode.getProp().getName());
-            }
-        }
     }
 
     private void addAccessorField(DtoProp<ImmutableType, ImmutableProp> prop) {
@@ -1348,17 +1204,35 @@ public class DtoGenerator {
         return getPropTypeName(prop).equals(prop.getBaseProp().getTypeName());
     }
 
-    private void addHiddenFetcherField(DtoProp<ImmutableType, ImmutableProp> prop, CodeBlock.Builder cb) {
+    private void addHiddenFetcherField(
+            DtoProp<ImmutableType, ImmutableProp> prop,
+            DtoBaseProp lsiProp,
+            CodeBlock.Builder cb
+    ) {
         if (!"flat".equals(prop.getFuncName())) {
-            addFetcherField(prop, cb);
+            addFetcherField(prop, lsiProp, cb);
             return;
         }
         DtoType<ImmutableType, ImmutableProp> targetDtoType = prop.getTargetType();
         assert targetDtoType != null;
+        site.addzero.lsi.jimmer.dto.DtoType targetLsiType = DtoGenerationExtensionsKt.generatedTargetType(
+                lsiProp,
+                lsiGraph
+        );
+        if (targetLsiType == null) {
+            throw new DtoException(
+                    "Frozen flat DTO property \"" + lsiProp.getName() +
+                            "\" has no generated target type"
+            );
+        }
         cb.add("\n.$N($>", prop.getBaseProp().getName());
         cb.add("$T.$L$>", prop.getBaseProp().getTargetType().getFetcherClassName(), "$");
         for (DtoProp<ImmutableType, ImmutableProp> childProp : targetDtoType.getDtoProps()) {
-            addHiddenFetcherField(childProp, cb);
+            addHiddenFetcherField(
+                    childProp,
+                    DtoGenerationExtensionsKt.baseProp(targetLsiType, lsiGraph, childProp.getName()),
+                    cb
+            );
         }
         cb.add("$<$<\n)");
     }

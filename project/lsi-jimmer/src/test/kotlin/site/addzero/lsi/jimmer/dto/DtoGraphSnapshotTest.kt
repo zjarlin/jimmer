@@ -207,6 +207,56 @@ class DtoGraphSnapshotTest {
         assertContains(requireNotNull(wrongImplementation.message), "exactly match frozen property configs")
     }
 
+    @Test
+    fun `rejects config states that cannot be expressed by the DTO grammar`() {
+        val location = location(LsiSource.of("demo/config.dto", LsiLanguage.UNKNOWN), 1)
+        val predicate = DtoPredicate.Nullity(
+            path = listOf(DtoPropPathNode(LsiSymbolId.property(STORE_TYPE_ID, "name"), false)),
+            negative = false,
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            defaultConfig().copy(
+                predicate = predicate,
+                filter = DtoConfigTypeRef(FILTER_TYPE_ID, location),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            defaultConfig().copy(
+                recursion = DtoConfigTypeRef(FILTER_TYPE_ID, location),
+                depth = 2,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DtoLimit(value = 1, offset = -1)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DtoLimit(value = 0, offset = 0)
+        }
+    }
+
+    @Test
+    fun `normalizes only the supported comparison operators`() {
+        assertEquals(
+            listOf("=", "<>", "<", "<=", ">", ">=", "like", "ilike"),
+            DtoComparisonOperator.entries.map(DtoComparisonOperator::token),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            DtoComparisonOperator.fromToken("!=")
+        }
+    }
+
+    private fun defaultConfig(): DtoPropConfig = DtoPropConfig(
+        predicate = null,
+        orderItems = emptyList(),
+        filter = null,
+        recursion = null,
+        fetchType = DtoFetchType.AUTO,
+        limit = null,
+        batch = null,
+        depth = null,
+    )
+
     private fun graph(): DtoGraph {
         val source = LsiSource.of(
             "demo/src/main/dto/Book.dto",
@@ -305,16 +355,12 @@ class DtoGraphSnapshotTest {
             targetTypeId = NESTED_TYPE_ID,
             enumType = null,
             config = DtoPropConfig(
-                predicate = DtoPredicate.Nullity(
-                    path = listOf(DtoPropPathNode(LsiSymbolId.property(STORE_TYPE_ID, "name"), false)),
-                    negative = true,
-                ),
+                predicate = null,
                 orderItems = emptyList(),
                 filter = DtoConfigTypeRef(FILTER_TYPE_ID, location(source, 6)),
                 recursion = null,
                 fetchType = DtoFetchType.AUTO,
-                limit = 10,
-                offset = 0,
+                limit = DtoLimit(10, 0),
                 batch = 4,
                 depth = 1,
             ),

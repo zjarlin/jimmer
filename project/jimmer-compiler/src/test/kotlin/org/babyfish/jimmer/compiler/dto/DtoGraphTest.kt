@@ -63,6 +63,7 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoConfigValue
+import site.addzero.lsi.jimmer.dto.DtoComparisonOperator
 import site.addzero.lsi.jimmer.dto.DtoEnumMapping
 import site.addzero.lsi.jimmer.dto.DtoEnumType
 import site.addzero.lsi.jimmer.dto.DtoFetchType
@@ -71,6 +72,7 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoLikeOption
+import site.addzero.lsi.jimmer.dto.DtoLimit
 import site.addzero.lsi.jimmer.dto.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoOrderItem
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
@@ -115,10 +117,10 @@ class DtoGraphTest {
 
         assertEquals(NESTED_TYPE_ID, storeProp.targetTypeId)
         assertEquals(listOf("DRAFT", "PUBLISHED"), statusProp.enumType?.mappings?.map { mapping -> mapping.constant })
-        assertEquals(FILTER_TYPE_ID, storeProp.config?.filter?.typeId)
-        assertEquals(RECURSION_TYPE_ID, storeProp.config?.recursion?.typeId)
         assertEquals(ROOT_TYPE_ID, childrenProp.targetTypeId)
         assertTrue(childrenProp.recursive)
+        assertEquals(FILTER_TYPE_ID, childrenProp.config?.filter?.typeId)
+        assertEquals(RECURSION_TYPE_ID, childrenProp.config?.recursion?.typeId)
         assertFalse(polymorphism.exhaustive)
         assertEquals(
             listOf(DtoPolymorphicBranchKind.DEFAULT, DtoPolymorphicBranchKind.TYPE),
@@ -484,7 +486,7 @@ class DtoGraphTest {
                                         associatedId = false,
                                     )
                                 ),
-                                operator = "like",
+                                operator = DtoComparisonOperator.LIKE,
                                 value = DtoConfigValue.StringValue("MANNING"),
                             ),
                             DtoPredicate.Nullity(
@@ -509,11 +511,10 @@ class DtoGraphTest {
                             descending = true,
                         )
                     ),
-                    filter = DtoConfigTypeRef(FILTER_TYPE_ID, location(source, 10, 14)),
-                    recursion = DtoConfigTypeRef(RECURSION_TYPE_ID, location(source, 10, 32)),
+                    filter = null,
+                    recursion = null,
                     fetchType = DtoFetchType.JOIN_ALWAYS,
-                    limit = 20,
-                    offset = 5,
+                    limit = DtoLimit(20, 5),
                     batch = 16,
                     depth = 3,
                 ),
@@ -547,13 +548,12 @@ class DtoGraphTest {
                 config = DtoPropConfig(
                     predicate = null,
                     orderItems = emptyList(),
-                    filter = null,
+                    filter = DtoConfigTypeRef(FILTER_TYPE_ID, location(source, 12, 12)),
                     recursion = DtoConfigTypeRef(RECURSION_TYPE_ID, location(source, 12, 18)),
                     fetchType = DtoFetchType.AUTO,
-                    limit = 0,
-                    offset = 0,
+                    limit = null,
                     batch = 8,
-                    depth = 4,
+                    depth = null,
                 ),
                 recursive = true,
                 likeOptions = emptySet(),
@@ -917,16 +917,10 @@ class DtoGraphTest {
                 graph.source to DtoConfigContractResolution(
                     contracts = listOf(
                         configContract(
-                            STORE_PROP_ID,
+                            CHILDREN_PROP_ID,
                             DtoConfigContractKind.FILTER,
                             FILTER_TYPE_ID,
-                            STORE_TYPE_ID,
-                        ),
-                        configContract(
-                            STORE_PROP_ID,
-                            DtoConfigContractKind.RECURSION,
-                            RECURSION_TYPE_ID,
-                            STORE_TYPE_ID,
+                            BOOK_TYPE_ID,
                         ),
                         configContract(
                             CHILDREN_PROP_ID,

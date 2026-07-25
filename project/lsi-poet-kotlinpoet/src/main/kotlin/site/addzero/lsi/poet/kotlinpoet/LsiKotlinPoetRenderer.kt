@@ -50,6 +50,14 @@ class LsiKotlinPoetRenderer : LsiPoetRenderer {
         return type.toKotlinTypeName(typeNames)
     }
 
+    /** 将任意 LSI Poet 代码块渲染为可嵌入现有 KotlinPoet 声明的代码块。 */
+    fun renderCodeBlock(
+        codeBlock: LsiPoetCodeBlock,
+        typeNames: List<LsiPoetTypeName>,
+    ): CodeBlock {
+        return codeBlock.toKotlinCodeBlock(typeNames)
+    }
+
     /** 将单个 LSI 类型渲染为可嵌入现有 KotlinPoet 声明的结构。 */
     fun renderType(
         type: LsiPoetType,

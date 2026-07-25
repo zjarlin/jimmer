@@ -20,13 +20,19 @@ public interface PropConfig<P extends BaseProp> {
 
     String getFetchType();
 
-    int getLimit();
+    @Nullable
+    Limit getLimit();
 
-    int getOffset();
+    @Nullable
+    Integer getBatch();
 
-    int getBatch();
+    @Nullable
+    Integer getDepth();
 
-    int getDepth();
+    interface Limit {
+        int getValue();
+        int getOffset();
+    }
 
     interface Predicate {
         interface And extends Predicate {

@@ -1,0 +1,50 @@
+public static final DtoMetadata<Book, BookView> METADATA = |
+        new DtoMetadata<Book, BookView>(|
+            BookView.class,|
+            BookFetcher.$|
+                .authors(|
+                    TargetOf_authors.METADATA.getFetcher(), |
+                    cfg -> cfg|
+                        .filter(it -> it|
+                            .where(|
+                                Predicate.or(|
+                                    Predicate.and(|
+                                        it.getTable().inheritedName().eq("BASE"),|
+                                        it.getTable().active().eq(true),|
+                                        it.getTable().rank().gt(1),|
+                                        it.getTable().rank().ge(2),|
+                                        it.getTable().rank().lt(10),|
+                                        it.getTable().rank().le(9)|
+                                    ),|
+                                    Predicate.and(|
+                                        it.getTable().name().ne("NONE"),|
+                                        it.getTable().name().like("A%"),|
+                                        it.getTable().name().ilike("a%"),|
+                                        it.getTable().score().eq(2L),|
+                                        it.getTable().ratio().eq(1.5F),|
+                                        it.getTable().rating().eq(2.5D),|
+                                        it.getTable().serial().eq(new BigInteger("12345678901234567890")),|
+                                        it.getTable().amount().eq(new BigDecimal("49.99")),|
+                                        it.getTable().publisherId().eq(7L),|
+                                        it.getTable().nickname().isNull()|
+                                    )|
+                                )|
+                            ).orderBy(|
+                                it.getTable().name().asc(),|
+                                it.getTable().score().desc()|
+                            )|
+                        )|
+                        .limit(20, 5)|
+                        .batch(16)|
+                )|
+                .reviewers(|
+                    TargetOf_reviewers.METADATA.getFetcher(), |
+                    cfg -> cfg|
+                        .filter(new Configurations.AuthorFilter())|
+                )|
+                .recursiveChildBooks(|
+                    cfg -> cfg|
+                        .recursive(new Configurations.BookRecursionStrategy())|
+                ),|
+            BookView::new|
+    );|

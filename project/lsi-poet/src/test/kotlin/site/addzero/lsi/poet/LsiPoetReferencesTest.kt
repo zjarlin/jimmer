@@ -11,6 +11,26 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 class LsiPoetReferencesTest {
 
     @Test
+    fun `collects standalone code block type references recursively`() {
+        val conditionTypeId = LsiSymbolId.type("demo.Condition")
+        val resultTypeId = LsiSymbolId.type("demo.Result")
+        val codeBlock = LsiPoetCodeBlock.build {
+            beginControlFlow {
+                type(LsiDeclaredType(conditionTypeId))
+            }
+            returnBracedExpression(
+                prefix = { text("result") },
+                body = { type(LsiDeclaredType(resultTypeId)) },
+            )
+            endControlFlow()
+        }
+
+        val expected = sortedSetOf(conditionTypeId, resultTypeId)
+        assertEquals(expected, codeBlock.referencedSymbolIds())
+        assertEquals(expected, codeBlock.referencedTypeIds)
+    }
+
+    @Test
     fun `collects declarations annotations and code types recursively`() {
         val ownerId = LsiSymbolId.type("demo.Generated")
         val parameterId = LsiSymbolId.typeParameter(ownerId, "T")

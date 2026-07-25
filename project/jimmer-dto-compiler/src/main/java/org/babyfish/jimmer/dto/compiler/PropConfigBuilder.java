@@ -32,13 +32,11 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
 
     private String fetchType = "AUTO";
 
-    private int limit = Integer.MAX_VALUE;
+    private PropConfig.Limit limit;
 
-    private int offset;
+    private Integer batch;
 
-    private int batch;
-
-    private int depth = Integer.MAX_VALUE;
+    private Integer depth;
 
     private boolean modified;
 
@@ -160,7 +158,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
     }
 
     void setRecursionType(DtoParser.RecursionContext recursion) {
-        if (depth != Integer.MAX_VALUE) {
+        if (depth != null) {
             throw ctx.exception(
                     recursion.start.getLine(),
                     recursion.start.getCharPositionInLine(),
@@ -245,8 +243,7 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
             }
         }
 
-        this.limit = limitValue;
-        this.offset = offsetValue;
+        this.limit = new LimitImpl(limitValue, offsetValue);
         this.modified = true;
     }
 
@@ -301,7 +298,6 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
                 recursionType,
                 fetchType,
                 limit,
-                offset,
                 batch,
                 depth
         );
@@ -738,6 +734,28 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
     }
 
+    private static class LimitImpl implements PropConfig.Limit {
+
+        private final int value;
+
+        private final int offset;
+
+        private LimitImpl(int value, int offset) {
+            this.value = value;
+            this.offset = offset;
+        }
+
+        @Override
+        public int getValue() {
+            return value;
+        }
+
+        @Override
+        public int getOffset() {
+            return offset;
+        }
+    }
+
     private static class PropConfigImpl<P extends BaseProp> implements PropConfig<P> {
 
         private final PropConfig.Predicate predicate;
@@ -750,13 +768,11 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
 
         private final String fetchType;
 
-        private final int limit;
+        private final PropConfig.Limit limit;
 
-        private final int offset;
+        private final Integer batch;
 
-        private final int batch;
-
-        private final int depth;
+        private final Integer depth;
 
         private PropConfigImpl(
                 Predicate predicate,
@@ -764,10 +780,9 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
                 ConfigTypeRef filterType,
                 ConfigTypeRef recursionType,
                 String fetchType,
-                int limit,
-                int offset,
-                int batch,
-                int depth
+                PropConfig.Limit limit,
+                Integer batch,
+                Integer depth
         ) {
             this.predicate = predicate;
             this.orderItems = orderItems;
@@ -775,7 +790,6 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
             this.recursionType = recursionType;
             this.fetchType = fetchType;
             this.limit = limit;
-            this.offset = offset;
             this.batch = batch;
             this.depth = depth;
         }
@@ -810,22 +824,20 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
         }
 
         @Override
-        public int getLimit() {
+        @Nullable
+        public PropConfig.Limit getLimit() {
             return limit;
         }
 
+        @Nullable
         @Override
-        public int getOffset() {
-            return offset;
-        }
-
-        @Override
-        public int getBatch() {
+        public Integer getBatch() {
             return batch;
         }
 
+        @Nullable
         @Override
-        public int getDepth() {
+        public Integer getDepth() {
             return depth;
         }
 
@@ -857,17 +869,21 @@ class PropConfigBuilder<T extends BaseType, P extends BaseProp> {
             if (!"AUTO".equals(fetchType)) {
                 builder.append("!fetchType(").append(fetchType).append(") ");
             }
-            if (limit != Integer.MAX_VALUE) {
-                if (offset != 0) {
-                    builder.append("!limit(").append(limit).append(", ").append(offset).append(") ");
+            if (limit != null) {
+                if (limit.getOffset() != 0) {
+                    builder.append("!limit(")
+                            .append(limit.getValue())
+                            .append(", ")
+                            .append(limit.getOffset())
+                            .append(") ");
                 } else {
-                    builder.append("!limit(").append(limit).append(") ");
+                    builder.append("!limit(").append(limit.getValue()).append(") ");
                 }
             }
-            if (batch != 0) {
+            if (batch != null) {
                 builder.append("!batch(").append(batch).append(") ");
             }
-            if (depth != Integer.MAX_VALUE) {
+            if (depth != null) {
                 builder.append("!depth(").append(depth).append(") ");
             }
             return builder.toString();

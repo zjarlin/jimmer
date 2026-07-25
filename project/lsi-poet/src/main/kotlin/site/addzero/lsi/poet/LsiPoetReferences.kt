@@ -33,6 +33,17 @@ fun LsiPoetMember.referencedSymbolIds(): Set<LsiSymbolId> {
 val LsiPoetMember.referencedTypeIds: Set<LsiSymbolId>
     get() = referencedSymbolIds().filterTo(sortedSetOf(), LsiSymbolId::isTypeId)
 
+/** 收集独立代码块中以结构化形式出现的全部稳定符号引用。 */
+fun LsiPoetCodeBlock.referencedSymbolIds(): Set<LsiSymbolId> {
+    return sortedSetOf<LsiSymbolId>().apply {
+        collectPoetCodeDependencies(this@referencedSymbolIds)
+    }
+}
+
+/** 收集渲染独立代码块所需的直接类型身份。 */
+val LsiPoetCodeBlock.referencedTypeIds: Set<LsiSymbolId>
+    get() = referencedSymbolIds().filterTo(sortedSetOf(), LsiSymbolId::isTypeId)
+
 /** 收集源码文件中以结构化形式出现的全部稳定符号引用。 */
 fun LsiPoetFile.referencedSymbolIds(): Set<LsiSymbolId> {
     return sortedSetOf<LsiSymbolId>().apply {

@@ -1,5 +1,6 @@
 package site.addzero.lsi.poet.javapoet
 
+import com.squareup.javapoet.CodeBlock
 import com.squareup.javapoet.TypeSpec
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -44,6 +45,30 @@ import site.addzero.lsi.poet.LsiPoetFile
 class LsiJavaPoetRendererTest {
 
     private val stringType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+
+    @Test
+    fun `renders an embeddable Java code block exactly`() {
+        val codeBlock = LsiPoetCodeBlock.build {
+            statement {
+                name("consume")
+                text("(")
+                type(stringType)
+                text(", ")
+                string("value")
+                text(")")
+            }
+        }
+
+        val rendered = LsiJavaPoetRenderer().renderCodeBlock(codeBlock, commonTypeNames)
+
+        assertEquals(
+            CodeBlock::class.java,
+            LsiJavaPoetRenderer::class.java
+                .getDeclaredMethod("renderCodeBlock", LsiPoetCodeBlock::class.java, List::class.java)
+                .returnType,
+        )
+        assertEquals("consume(java.lang.String, \"value\");\n", rendered.toString())
+    }
 
     @Test
     fun `renders an embeddable Java type structure exactly`() {

@@ -200,10 +200,15 @@ private fun DtoPropConfig.canonicalText(): String = canonicalValue(
     filter?.canonicalText().orEmpty(),
     recursion?.canonicalText().orEmpty(),
     fetchType.name,
-    limit.toString(),
+    limit?.canonicalText().orEmpty(),
+    batch?.toString().orEmpty(),
+    depth?.toString().orEmpty(),
+)
+
+private fun DtoLimit.canonicalText(): String = canonicalValue(
+    "limit",
+    value.toString(),
     offset.toString(),
-    batch.toString(),
-    depth.toString(),
 )
 
 private fun DtoConfigTypeRef.canonicalText(): String = canonicalValue(
@@ -224,7 +229,7 @@ private fun DtoPredicate.canonicalText(): String = when (this) {
     is DtoPredicate.Comparison -> canonicalValue(
         "comparison",
         path.propPathCanonicalText(),
-        operator,
+        operator.token,
         value.canonicalText(),
     )
     is DtoPredicate.Nullity -> canonicalValue(

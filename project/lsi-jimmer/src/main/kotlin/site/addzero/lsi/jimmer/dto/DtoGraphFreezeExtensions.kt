@@ -398,8 +398,7 @@ private class DtoGraphFreezer(
             filter = filterType?.toDtoConfigTypeRef(declaringFile),
             recursion = recursionType?.toDtoConfigTypeRef(declaringFile),
             fetchType = DtoFetchType.valueOf(fetchType),
-            limit = limit,
-            offset = offset,
+            limit = limit?.let { limit -> DtoLimit(limit.value, limit.offset) },
             batch = batch,
             depth = depth,
         )
@@ -427,7 +426,7 @@ private class DtoGraphFreezer(
             )
             is PropConfig.Predicate.Cmp<*> -> DtoPredicate.Comparison(
                 path = path.map { pathNode -> pathNode.castPathNode().toDtoPathNode() },
-                operator = operator,
+                operator = DtoComparisonOperator.fromToken(operator),
                 value = value.toDtoConfigValue(),
             )
             is PropConfig.Predicate.Nullity<*> -> DtoPredicate.Nullity(

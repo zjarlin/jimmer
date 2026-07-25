@@ -21,12 +21,16 @@ class JimmerDtoConfigImplementationGoldenTest {
 
     @Test
     fun `apt renders nested config implementation types from frozen contracts`() {
-        assertGolden("apt.txt", compileApt().configConstructionSnapshot(includeImports = true))
+        val generated = compileApt()
+        assertGolden("apt.txt", generated.configConstructionSnapshot(includeImports = true))
+        assertGolden("apt-full.txt", generated.configLambdaSnapshot(CompilerKind.APT))
     }
 
     @Test
     fun `ksp renders nested config implementation types from frozen contracts`() {
-        assertGolden("ksp.txt", compileKsp().configConstructionSnapshot(includeImports = false))
+        val generated = compileKsp()
+        assertGolden("ksp.txt", generated.configConstructionSnapshot(includeImports = false))
+        assertGolden("ksp-full.txt", generated.configLambdaSnapshot(CompilerKind.KSP))
     }
 
     private fun compileApt(): String {
@@ -130,6 +134,25 @@ class JimmerDtoConfigImplementationGoldenTest {
             .joinToString("\n", postfix = "\n")
     }
 
+    private fun String.configLambdaSnapshot(compilerKind: CompilerKind): String {
+        val startMarker = when (compilerKind) {
+            CompilerKind.APT -> "public static final DtoMetadata<Book, BookView> METADATA"
+            CompilerKind.KSP -> "public val METADATA: DtoMetadata<Book, BookView>"
+        }
+        val endMarker = when (compilerKind) {
+            CompilerKind.APT -> "    private static final DtoPropAccessor"
+            CompilerKind.KSP -> "        private val "
+        }
+        val start = indexOf(startMarker)
+        require(start >= 0) { "Missing config metadata start marker: $startMarker" }
+        val end = indexOf(endMarker, start)
+        require(end > start) { "Missing config metadata end marker: $endMarker" }
+        return (substring(start, end).trimEnd() + "\n")
+            .removeSuffix("\n")
+            .split('\n')
+            .joinToString(separator = "\n", postfix = "\n") { line -> "$line|" }
+    }
+
     private fun assertGolden(name: String, actual: String) {
         val resourcePath = "/dto/config-implementation/$name"
         val expected = requireNotNull(javaClass.getResource(resourcePath)) {
@@ -178,16 +201,72 @@ class JimmerDtoConfigImplementationGoldenTest {
         fun text(): String = messages.joinToString("\n")
     }
 
+    private enum class CompilerKind {
+        APT,
+        KSP,
+    }
+
     private companion object {
         val JAVA_SOURCES = linkedMapOf(
+            "AuditBase.java" to """
+                package base;
+
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                public interface AuditBase {
+                    String inheritedName();
+                }
+            """.trimIndent(),
             "Author.java" to """
+                package demo;
+
+                import base.AuditBase;
+                import java.math.BigDecimal;
+                import java.math.BigInteger;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.ManyToOne;
+                import org.jspecify.annotations.Nullable;
+
+                @Entity
+                public interface Author extends AuditBase {
+                    @Id
+                    long id();
+
+                    @Nullable
+                    String name();
+
+                    boolean active();
+
+                    int rank();
+
+                    long score();
+
+                    float ratio();
+
+                    double rating();
+
+                    BigInteger serial();
+
+                    BigDecimal amount();
+
+                    @Nullable
+                    String nickname();
+
+                    @Nullable
+                    @ManyToOne
+                    Publisher publisher();
+                }
+            """.trimIndent(),
+            "Publisher.java" to """
                 package demo;
 
                 import org.babyfish.jimmer.sql.Entity;
                 import org.babyfish.jimmer.sql.Id;
 
                 @Entity
-                public interface Author {
+                public interface Publisher {
                     @Id
                     long id();
                 }
@@ -210,6 +289,9 @@ class JimmerDtoConfigImplementationGoldenTest {
 
                     @ManyToMany
                     List<Author> authors();
+
+                    @ManyToMany
+                    List<Author> reviewers();
 
                     @Nullable
                     @ManyToOne
@@ -245,14 +327,61 @@ class JimmerDtoConfigImplementationGoldenTest {
         )
 
         val KOTLIN_SOURCES = linkedMapOf(
+            "AuditBase.kt" to """
+                package base
+
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface AuditBase {
+                    val inheritedName: String
+                }
+            """.trimIndent(),
             "Author.kt" to """
+                package demo
+
+                import base.AuditBase
+                import java.math.BigDecimal
+                import java.math.BigInteger
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.ManyToOne
+
+                @Entity
+                interface Author : AuditBase {
+                    @Id
+                    val id: Long
+
+                    val name: String?
+
+                    val active: Boolean
+
+                    val rank: Int
+
+                    val score: Long
+
+                    val ratio: Float
+
+                    val rating: Double
+
+                    val serial: BigInteger
+
+                    val amount: BigDecimal
+
+                    val nickname: String?
+
+                    @ManyToOne
+                    val publisher: Publisher?
+                }
+            """.trimIndent(),
+            "Publisher.kt" to """
                 package demo
 
                 import org.babyfish.jimmer.sql.Entity
                 import org.babyfish.jimmer.sql.Id
 
                 @Entity
-                interface Author {
+                interface Publisher {
                     @Id
                     val id: Long
                 }
@@ -273,6 +402,9 @@ class JimmerDtoConfigImplementationGoldenTest {
 
                     @ManyToMany
                     val authors: List<Author>
+
+                    @ManyToMany
+                    val reviewers: List<Author>
 
                     @ManyToOne
                     val parent: Book?
@@ -310,8 +442,22 @@ class JimmerDtoConfigImplementationGoldenTest {
             BookView {
                 id
 
-                !filter(AuthorFilter)
+                !where(
+                    (inheritedName = 'BASE' and active = true and rank > 1 and rank >= 2 and rank < 10 and rank <= 9)
+                    or
+                    (name <> 'NONE' and name like 'A%' and name ilike 'a%' and score = 2 and
+                    ratio = 1.5 and rating = 2.5 and serial = 12345678901234567890 and
+                    amount = 49.99 and publisherId = 7 and nickname is null)
+                )
+                !orderBy(name asc, score desc)
+                !limit(20, 5)
+                !batch(16)
                 authors {
+                    id
+                }
+
+                !filter(AuthorFilter)
+                reviewers {
                     id
                 }
 

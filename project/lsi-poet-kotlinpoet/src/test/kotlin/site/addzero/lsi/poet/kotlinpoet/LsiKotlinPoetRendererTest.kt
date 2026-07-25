@@ -1,5 +1,6 @@
 package site.addzero.lsi.poet.kotlinpoet
 
+import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.TypeSpec
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -68,6 +69,30 @@ class LsiKotlinPoetRendererTest {
         LsiPoetTypeName(LsiSymbolId.type("demo.Order"), "demo", listOf("Order")),
         LsiPoetTypeName(LsiSymbolId.type("demo.Source"), "demo", listOf("Source")),
     )
+
+    @Test
+    fun `renders an embeddable Kotlin code block exactly`() {
+        val codeBlock = LsiPoetCodeBlock.build {
+            statement {
+                name("consume")
+                text("(")
+                type(stringType)
+                text(", ")
+                string("value")
+                text(")")
+            }
+        }
+
+        val rendered = LsiKotlinPoetRenderer().renderCodeBlock(codeBlock, typeNames)
+
+        assertEquals(
+            CodeBlock::class.java,
+            LsiKotlinPoetRenderer::class.java
+                .getDeclaredMethod("renderCodeBlock", LsiPoetCodeBlock::class.java, List::class.java)
+                .returnType,
+        )
+        assertEquals("consume(kotlin.String, \"value\")\n", rendered.toString())
+    }
 
     @Test
     fun `renders an embeddable Kotlin type structure exactly`() {
