@@ -96,6 +96,7 @@ class ClientWorkspaceExtensionsTest {
             ),
             thrownTypes = listOf(LsiDeclaredType(exceptionId)),
             documentation = "查找图书。\r\n  返回完整视图。  ",
+            origin = sourceOrigin(LsiLanguage.JAVA),
         )
         val workspace = LsiWorkspace(
             declarations = listOf(
@@ -148,12 +149,11 @@ class ClientWorkspaceExtensionsTest {
         assertEquals(1, compiledOperation.ignoredParameters.single().originalIndex)
         val returnType = assertIs<ClientDeclaredTypeRef>(compiledOperation.returnType)
         assertEquals(bookId, returnType.typeId)
-        assertFalse(returnType.nullable)
+        assertTrue(returnType.nullable)
         val fetchBy = requireNotNull(returnType.fetchBy)
         assertEquals("DETAIL_FETCHER", fetchBy.value)
         assertEquals(LsiSymbolId.type("demo.BookFetchers"), fetchBy.ownerTypeId)
         assertEquals(bookId, fetchBy.targetEntityTypeId)
-        assertTrue(fetchBy.nullable)
         assertEquals(64, schema.fingerprint().length)
     }
 
@@ -843,6 +843,29 @@ class ClientWorkspaceExtensionsTest {
     }
 
     @Test
+    fun `validates fetch by nullability source language and non-null conflict`() {
+        val nonNull = annotation(LsiSymbolId.type("demo.NonNull"))
+        val conflict = assertFailsWith<ClientValidationException> {
+            languageWorkspace(
+                language = LsiLanguage.JAVA,
+                javaGetter = false,
+                fetchByNullable = true,
+                typeAnnotations = listOf(nonNull),
+            ).toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
+        }
+        assertTrue(conflict.message.orEmpty().contains("conflicting nullability annotations"))
+
+        val unknownLanguage = assertFailsWith<ClientValidationException> {
+            languageWorkspace(
+                language = LsiLanguage.UNKNOWN,
+                javaGetter = false,
+                fetchByNullable = true,
+            ).toClientSchema(EMPTY_ERROR_SCHEMA.clientDependencies())
+        }
+        assertTrue(unknownLanguage.message.orEmpty().contains("known source language"))
+    }
+
+    @Test
     fun `json value types are replaced before definitions are collected`() {
         val levelId = LsiSymbolId.type("demo.Level")
         val serviceId = LsiSymbolId.type("demo.LevelService")
@@ -1133,11 +1156,13 @@ class ClientWorkspaceExtensionsTest {
     private fun languageWorkspace(
         language: LsiLanguage,
         javaGetter: Boolean,
+        fetchByNullable: Boolean = false,
+        typeAnnotations: List<LsiAnnotation> = emptyList(),
     ): LsiWorkspace {
         val origin = sourceOrigin(language)
         val bookId = LsiSymbolId.type("demo.Book")
         val serviceId = LsiSymbolId.type("demo.LanguageService")
-        val annotations = listOf(api(), fetchBy("BOOK_FETCHER"))
+        val annotations = listOf(api(), fetchBy("BOOK_FETCHER", nullable = fetchByNullable))
         val bookFetcher = fetcher(
             ownerId = serviceId,
             name = "BOOK_FETCHER",
@@ -1149,7 +1174,11 @@ class ClientWorkspaceExtensionsTest {
                 ownerId = serviceId,
                 name = "findBook",
                 getterName = "findBook",
-                type = LsiDeclaredType(bookId, nullability = LsiNullability.PLATFORM),
+                type = LsiDeclaredType(
+                    bookId,
+                    nullability = LsiNullability.PLATFORM,
+                    annotations = typeAnnotations,
+                ),
                 annotations = annotations,
                 documentation = "查找图书。",
                 origin = origin,
@@ -1158,7 +1187,11 @@ class ClientWorkspaceExtensionsTest {
             function(
                 ownerId = serviceId,
                 name = "findBook",
-                returnType = LsiDeclaredType(bookId, nullability = LsiNullability.NON_NULL),
+                returnType = LsiDeclaredType(
+                    bookId,
+                    nullability = LsiNullability.NON_NULL,
+                    annotations = typeAnnotations,
+                ),
                 annotations = annotations,
                 documentation = "查找图书。",
                 origin = origin,

@@ -180,7 +180,6 @@ private fun ClientTypeRef.canonicalText(): String {
                     fetchBy.ownerTypeId.value,
                     fetchBy.ownerTypeName.canonicalText(),
                     fetchBy.targetEntityTypeId.value,
-                    fetchBy.nullable.toString(),
                     fetchBy.documentation.orEmpty(),
                 ).canonicalListText()
             )

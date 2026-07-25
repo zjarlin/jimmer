@@ -472,6 +472,7 @@ private class ClientSchemaBuilder(
                         serviceId = service.id,
                         defaultFetcherOwnerId = defaultFetcherOwnerId,
                         sourceId = parameter.id,
+                        sourceLanguage = parameter.origin.language,
                         workspace = workspace,
                     ),
                 )
@@ -488,6 +489,7 @@ private class ClientSchemaBuilder(
                 serviceId = service.id,
                 defaultFetcherOwnerId = defaultFetcherOwnerId,
                 sourceId = declaration.id,
+                sourceLanguage = declaration.origin.language,
                 workspace = workspace,
             )
         val operationId = LsiSymbolId.function(
@@ -499,6 +501,7 @@ private class ClientSchemaBuilder(
                     serviceId = service.id,
                     defaultFetcherOwnerId = defaultFetcherOwnerId,
                     sourceId = parameter.id,
+                    sourceLanguage = parameter.origin.language,
                     workspace = workspace,
                 ).stableTypeSignature()
             },
@@ -617,6 +620,7 @@ private class ClientSchemaBuilder(
                     serviceId = rootServiceId,
                     defaultFetcherOwnerId = null,
                     sourceId = typeId,
+                    sourceLanguage = LsiLanguage.UNKNOWN,
                     workspace = workspace,
                 ).requireResolvedDefinitionType(rootServiceId, typeId),
                 doc = field.documentation,
@@ -705,6 +709,7 @@ private class ClientSchemaBuilder(
                     serviceId = type.id,
                     defaultFetcherOwnerId = type.defaultFetcherOwnerId(),
                     sourceId = type.id,
+                    sourceLanguage = type.origin.language,
                     workspace = workspace,
                 ).requireResolvedDefinitionType(rootServiceId, type.id)
             }
@@ -792,6 +797,7 @@ private class ClientSchemaBuilder(
                             serviceId = type.id,
                             defaultFetcherOwnerId = defaultFetcherOwnerId,
                             sourceId = member.id,
+                            sourceLanguage = member.origin.language,
                             workspace = workspace,
                         ).requireResolvedDefinitionType(rootServiceId, member.id),
                         doc = member.clientDoc()
@@ -814,6 +820,7 @@ private class ClientSchemaBuilder(
                             serviceId = type.id,
                             defaultFetcherOwnerId = defaultFetcherOwnerId,
                             sourceId = member.id,
+                            sourceLanguage = member.origin.language,
                             workspace = workspace,
                         ).requireResolvedDefinitionType(rootServiceId, member.id),
                         doc = member.clientDoc()
@@ -918,18 +925,33 @@ private class ClientSchemaBuilder(
         serviceId: LsiSymbolId,
         defaultFetcherOwnerId: LsiSymbolId?,
         sourceId: LsiSymbolId,
+        sourceLanguage: LsiLanguage,
         workspace: LsiWorkspace,
         jsonValueTypeIds: Set<LsiSymbolId> = emptySet(),
         nestedType: Boolean = false,
     ): ClientTypeRef {
         val effectiveAnnotations = (this.annotations + annotations).distinctBy(LsiAnnotation::type)
+        val fetchByAnnotation = effectiveAnnotations.annotation(FETCH_BY_ANNOTATION)
+        val fetchByNullable = fetchByAnnotation?.booleanValue("nullable") == true
+        val javaFetchByNullable = when {
+            !fetchByNullable -> false
+            sourceLanguage == LsiLanguage.JAVA -> true
+            sourceLanguage == LsiLanguage.KOTLIN -> false
+            else -> throw ClientValidationException(
+                declarationId = sourceId,
+                message = "FetchBy nullable on '${sourceId.value}' requires a known source language",
+            )
+        }
         val nullableAnnotations = effectiveAnnotations.filter(LsiAnnotation::isClientNullableAnnotation)
         val nonNullAnnotations = effectiveAnnotations.filter(LsiAnnotation::isClientNonNullAnnotation)
-        if (nullableAnnotations.isNotEmpty() && nonNullAnnotations.isNotEmpty()) {
+        if ((nullableAnnotations.isNotEmpty() || javaFetchByNullable) && nonNullAnnotations.isNotEmpty()) {
+            val nullableAnnotationText = nullableAnnotations.firstOrNull()?.let { annotation ->
+                "'@${annotation.type.value}'"
+            } ?: "'@FetchBy(nullable = true)'"
             throw ClientValidationException(
                 declarationId = sourceId,
                 message = "Client type '${sourceId.value}' has conflicting nullability annotations " +
-                    "'@${nullableAnnotations.first().type.value}' and '@${nonNullAnnotations.first().type.value}'",
+                    "$nullableAnnotationText and '@${nonNullAnnotations.first().type.value}'",
             )
         }
         val primitiveType = this as? LsiPrimitiveType
@@ -947,7 +969,7 @@ private class ClientSchemaBuilder(
                     "boxed primitive type '${primitiveType.kind.name.lowercase()}'; use the unboxed primitive type",
             )
         }
-        val fetchBy = effectiveAnnotations.annotation(FETCH_BY_ANNOTATION)?.toClientFetchBy(
+        val fetchBy = fetchByAnnotation?.toClientFetchBy(
             decoratedType = this,
             serviceId = serviceId,
             defaultFetcherOwnerId = defaultFetcherOwnerId,
@@ -956,7 +978,8 @@ private class ClientSchemaBuilder(
         )
         val nullable = nullability == LsiNullability.NULLABLE ||
             !nestedType && primitiveType?.boxed == true ||
-            nullableAnnotations.isNotEmpty()
+            nullableAnnotations.isNotEmpty() ||
+            javaFetchByNullable
         if (this is LsiDeclaredType) {
             workspace.jsonValueType(declarationId)?.let { jsonValueType ->
                 if (declarationId in jsonValueTypeIds) {
@@ -971,6 +994,7 @@ private class ClientSchemaBuilder(
                     serviceId = serviceId,
                     defaultFetcherOwnerId = defaultFetcherOwnerId,
                     sourceId = sourceId,
+                    sourceLanguage = sourceLanguage,
                     workspace = workspace,
                     jsonValueTypeIds = jsonValueTypeIds + declarationId,
                     nestedType = true,
@@ -1018,6 +1042,7 @@ private class ClientSchemaBuilder(
                             serviceId = serviceId,
                             defaultFetcherOwnerId = defaultFetcherOwnerId,
                             sourceId = sourceId,
+                            sourceLanguage = sourceLanguage,
                             workspace = workspace,
                             jsonValueTypeIds = jsonValueTypeIds,
                             nestedType = true,
@@ -1034,6 +1059,7 @@ private class ClientSchemaBuilder(
                     serviceId = serviceId,
                     defaultFetcherOwnerId = defaultFetcherOwnerId,
                     sourceId = sourceId,
+                    sourceLanguage = sourceLanguage,
                     workspace = workspace,
                     jsonValueTypeIds = jsonValueTypeIds,
                     nestedType = true,
@@ -1069,6 +1095,7 @@ private class ClientSchemaBuilder(
         serviceId: LsiSymbolId,
         defaultFetcherOwnerId: LsiSymbolId?,
         sourceId: LsiSymbolId,
+        sourceLanguage: LsiLanguage,
         workspace: LsiWorkspace,
         jsonValueTypeIds: Set<LsiSymbolId> = emptySet(),
         nestedType: Boolean = true,
@@ -1086,6 +1113,7 @@ private class ClientSchemaBuilder(
                 serviceId = serviceId,
                 defaultFetcherOwnerId = defaultFetcherOwnerId,
                 sourceId = sourceId,
+                sourceLanguage = sourceLanguage,
                 workspace = workspace,
                 jsonValueTypeIds = jsonValueTypeIds,
                 nestedType = nestedType,
@@ -1147,7 +1175,6 @@ private class ClientSchemaBuilder(
             ownerTypeId = ownerTypeId,
             ownerTypeName = workspace.clientTypeName(ownerTypeId),
             targetEntityTypeId = targetEntityTypeId,
-            nullable = booleanValue("nullable"),
             documentation = fetcherMember.clientDoc(),
         )
     }

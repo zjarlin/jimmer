@@ -309,7 +309,6 @@ data class ClientFetchBy(
     val ownerTypeId: LsiSymbolId,
     val ownerTypeName: ClientTypeName,
     val targetEntityTypeId: LsiSymbolId,
-    val nullable: Boolean,
     val documentation: String?,
 ) {
     init {

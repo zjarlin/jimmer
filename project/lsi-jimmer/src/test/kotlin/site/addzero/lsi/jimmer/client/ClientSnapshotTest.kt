@@ -44,7 +44,6 @@ class ClientSnapshotTest {
                     ownerTypeId = LsiSymbolId.type("demo.Fetchers"),
                     ownerTypeName = ClientTypeName.parse("demo.Fetchers"),
                     targetEntityTypeId = LsiSymbolId.type("demo.Entity"),
-                    nullable = true,
                     documentation = "Detail fetcher.",
                 )
             ),

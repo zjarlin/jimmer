@@ -92,7 +92,6 @@ class ClientResourceRendererTest {
             ownerTypeId = LsiSymbolId.type("demo.BookFetchers"),
             ownerTypeName = ClientTypeName("demo", listOf("BookFetchers")),
             targetEntityTypeId = bookId,
-            nullable = false,
             documentation = "Book fetcher.",
         )
         val optionalType = ClientDeclaredTypeRef(
@@ -171,7 +170,6 @@ class ClientResourceRendererTest {
                                     ownerTypeId = LsiSymbolId.type("demo.BookFetchers"),
                                     ownerTypeName = ClientTypeName("demo", listOf("BookFetchers")),
                                     targetEntityTypeId = bookId,
-                                    nullable = false,
                                     documentation = "Book fetcher.",
                                 ),
                             ),

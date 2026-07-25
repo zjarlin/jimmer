@@ -34,6 +34,12 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.client.ClientDeclaredTypeRef
+import site.addzero.lsi.jimmer.client.ClientOperation
+import site.addzero.lsi.jimmer.client.ClientSchemaDependencies
+import site.addzero.lsi.jimmer.client.toClientSchema
+import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
@@ -85,6 +91,12 @@ class LsiTypeUseAnnotationFrontendParityTest {
                 kspAnnotation.arguments.getValue("nullable").value,
             ).value,
         )
+        assertTrue(aptWorkspace.clientFetchByElementType("findBooks").nullable)
+        assertFalse(kspWorkspace.clientFetchByElementType("findBooks").nullable)
+        assertTrue(kspWorkspace.clientFetchByElementType("findNullableBooks").nullable)
+        assertTrue(aptWorkspace.clientFetchByParameterType("save").nullable)
+        assertFalse(kspWorkspace.clientFetchByParameterType("save").nullable)
+        assertTrue(kspWorkspace.clientFetchByParameterType("saveNullable").nullable)
         assertEquals(
             aptElementType.copy(annotations = emptyList()).stableSignature(),
             aptElementType.stableSignature(),
@@ -153,7 +165,11 @@ class LsiTypeUseAnnotationFrontendParityTest {
                 import java.lang.annotation.RetentionPolicy;
                 import java.lang.annotation.Target;
                 import org.babyfish.jimmer.client.FetchBy;
+                import org.babyfish.jimmer.client.meta.Api;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.fetcher.Fetcher;
 
+                @Entity
                 interface Book {}
 
                 interface Box<T> {}
@@ -164,8 +180,21 @@ class LsiTypeUseAnnotationFrontendParityTest {
                 @Target(ElementType.TYPE_USE)
                 @interface TypeMarker {}
 
+                @Api
                 public interface BookService {
+                    Fetcher<Book> DETAIL = null;
+
+                    @Api
                     List<@FetchBy(value = "DETAIL", nullable = true) Book> findBooks(int page);
+
+                    @Api
+                    List<@FetchBy(value = "DETAIL", nullable = true) Book> findNullableBooks(int page);
+
+                    @Api
+                    int save(@FetchBy(value = "DETAIL", nullable = true) Book book);
+
+                    @Api
+                    int saveNullable(@FetchBy(value = "DETAIL", nullable = true) Book book);
                 }
 
                 interface ProjectionService {
@@ -213,7 +242,11 @@ class LsiTypeUseAnnotationFrontendParityTest {
                 package demo
 
                 import org.babyfish.jimmer.client.FetchBy
+                import org.babyfish.jimmer.client.meta.Api
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.fetcher.Fetcher
 
+                @Entity
                 interface Book
 
                 interface Box<T>
@@ -224,8 +257,24 @@ class LsiTypeUseAnnotationFrontendParityTest {
                 @Retention(AnnotationRetention.RUNTIME)
                 annotation class TypeMarker
 
+                @Api
                 interface BookService {
+                    @Api
                     fun findBooks(page: Int): List<@FetchBy(value = "DETAIL", nullable = true) Book>
+
+                    @Api
+                    fun findNullableBooks(page: Int): List<@FetchBy(value = "DETAIL", nullable = true) Book?>
+
+                    @Api
+                    fun save(book: @FetchBy(value = "DETAIL", nullable = true) Book): Int
+
+                    @Api
+                    fun saveNullable(book: @FetchBy(value = "DETAIL", nullable = true) Book?): Int
+
+                    companion object {
+                        val DETAIL: Fetcher<Book>
+                            get() = error("unused")
+                    }
                 }
 
                 interface ProjectionService {
@@ -271,6 +320,30 @@ class LsiTypeUseAnnotationFrontendParityTest {
         return declarationsOfType<LsiFunction>().single { function ->
             function.ownerId == PROJECTION_SERVICE && function.name == "findProjectedFoos"
         }
+    }
+
+    private fun LsiWorkspace.clientFetchByElementType(functionName: String): ClientDeclaredTypeRef {
+        val listType = assertIs<ClientDeclaredTypeRef>(clientOperation(functionName).returnType)
+        return assertIs<ClientDeclaredTypeRef>(requireNotNull(listType.arguments.single().type))
+    }
+
+    private fun LsiWorkspace.clientFetchByParameterType(functionName: String): ClientDeclaredTypeRef {
+        return assertIs<ClientDeclaredTypeRef>(clientOperation(functionName).parameters.single().type)
+    }
+
+    private fun LsiWorkspace.clientOperation(functionName: String): ClientOperation {
+        val schema = toClientSchema(
+            ClientSchemaDependencies(
+                immutableSchema = ImmutableSchema(emptyList()),
+                errorSchema = ErrorSchema(emptyList()),
+                definitionDocumentationByTypeId = emptyMap(),
+            ),
+        )
+        val operation = schema.services
+            .single { service -> service.id == BOOK_SERVICE }
+            .operations
+            .single { operation -> operation.name == functionName }
+        return operation
     }
 
     private fun assertJavaProjectionRules(workspace: LsiWorkspace) {
