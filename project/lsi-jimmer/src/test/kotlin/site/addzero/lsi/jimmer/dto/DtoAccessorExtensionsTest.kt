@@ -1275,6 +1275,261 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `resolves frozen accessor paths including hidden next properties`() {
+        val store = immutableProp(
+            name = "store",
+            type = LsiDeclaredType(TARGET_TYPE_ID),
+            primaryMapping = PrimaryMapping.ASSOCIATION,
+            associationKind = AssociationKind.MANY_TO_ONE,
+            targetTypeId = TARGET_TYPE_ID,
+        )
+        val storeName = immutableProp(
+            name = "name",
+            type = STRING_TYPE,
+            ownerTypeId = TARGET_TYPE_ID,
+        )
+        val schema = ImmutableSchema(
+            listOf(
+                immutableType(BASE_TYPE_ID, listOf(store)),
+                immutableType(TARGET_TYPE_ID, listOf(storeName)),
+            ),
+        )
+        val tailProp = baseProp(
+            name = "name",
+            idSuffix = "store-name-tail",
+            baseName = "name",
+        ).copy(
+            baseProps = listOf(DtoBasePropBinding("name", storeName.id)),
+        )
+        val pathProp = baseProp(
+            name = "storeName",
+            idSuffix = "store-name",
+            baseName = "store",
+        ).copy(
+            nextPropId = tailProp.id,
+            tailPropId = tailProp.id,
+        )
+        val ownerType = singlePropType(pathProp)
+        val graph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(ownerType),
+            props = listOf(pathProp, tailProp).sortedBy(DtoProp::id),
+        )
+
+        assertEquals(
+            listOf(store.id, storeName.id),
+            pathProp.accessorPath(graph, schema).map(ImmutableProp::id),
+        )
+        assertEquals(
+            listOf(storeName.id),
+            tailProp.accessorPath(graph, schema).map(ImmutableProp::id),
+        )
+
+        val cyclicTailProp = tailProp.copy(nextPropId = pathProp.id)
+        val cyclicGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(ownerType),
+            props = listOf(pathProp, cyclicTailProp).sortedBy(DtoProp::id),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            pathProp.accessorPath(cyclicGraph, schema)
+        }
+
+        val wrongTailPathProp = pathProp.copy(tailPropId = pathProp.id)
+        val wrongTailGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(ownerType.copy(propIds = listOf(wrongTailPathProp.id))),
+            props = listOf(wrongTailPathProp, tailProp).sortedBy(DtoProp::id),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            wrongTailPathProp.accessorPath(wrongTailGraph, schema)
+        }
+    }
+
+    @Test
+    fun `requires every accessor binding to resolve the same Draft slot`() {
+        val name = immutableProp("name", STRING_TYPE)
+        val inheritedName = immutableProp(
+            name = "name",
+            type = STRING_TYPE,
+            ownerTypeId = TARGET_TYPE_ID,
+        ).copy(
+            declarationId = name.declarationId,
+            declaringTypeId = name.declaringTypeId,
+            inherited = true,
+            overrideChain = listOf(name.declarationId),
+        )
+        val label = immutableProp("label", STRING_TYPE)
+        val schema = ImmutableSchema(
+            listOf(
+                immutableType(BASE_TYPE_ID, listOf(name, label)),
+                immutableType(TARGET_TYPE_ID, listOf(inheritedName)),
+            ),
+        )
+        val sameSlotProp = baseProp("displayName", baseName = "name").copy(
+            baseProps = listOf(
+                DtoBasePropBinding("name", name.id),
+                DtoBasePropBinding("inheritedName", inheritedName.id),
+            ),
+        )
+        val sameSlotGraph = singlePropGraph(sameSlotProp)
+        assertEquals(
+            listOf(name.id),
+            sameSlotProp.accessorPath(sameSlotGraph, schema).map(ImmutableProp::id),
+        )
+
+        val differentSlotProp = sameSlotProp.copy(
+            baseProps = listOf(
+                DtoBasePropBinding("name", name.id),
+                DtoBasePropBinding("label", label.id),
+            ),
+        )
+        val differentSlotGraph = singlePropGraph(differentSlotProp)
+        val exception = assertFailsWith<IllegalArgumentException> {
+            differentSlotProp.accessorPath(differentSlotGraph, schema)
+        }
+        assertEquals(
+            "DTO base property bindings must resolve one Draft slot: ${differentSlotProp.id.value}",
+            exception.message,
+        )
+
+        val missingPropId = LsiSymbolId.property(BASE_TYPE_ID, "missing")
+        val missingProp = baseProp("missing").copy(
+            baseProps = listOf(DtoBasePropBinding("missing", missingPropId)),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            missingProp.accessorPath(singlePropGraph(missingProp), schema)
+        }
+    }
+
+    @Test
+    fun `classifies accessor conversion directly from frozen DTO semantics`() {
+        val targetId = immutableProp(
+            name = "id",
+            type = STRING_TYPE,
+            ownerTypeId = TARGET_TYPE_ID,
+            primaryMapping = PrimaryMapping.ID,
+        )
+        val target = immutableProp(
+            name = "target",
+            type = LsiDeclaredType(TARGET_TYPE_ID),
+            primaryMapping = PrimaryMapping.ASSOCIATION,
+            associationKind = AssociationKind.MANY_TO_ONE,
+            targetTypeId = TARGET_TYPE_ID,
+        )
+        val plain = immutableProp("plain", STRING_TYPE)
+        val status = immutableProp("status", STRING_TYPE)
+        val converted = immutableProp(
+            name = "converted",
+            type = BOOLEAN_TYPE,
+            converter = converter(STRING_TYPE),
+        )
+        val schema = ImmutableSchema(
+            listOf(
+                immutableType(BASE_TYPE_ID, listOf(converted, plain, status, target)),
+                immutableType(
+                    id = TARGET_TYPE_ID,
+                    props = listOf(targetId),
+                    kind = ImmutableTypeKind.ENTITY,
+                    idPropId = targetId.id,
+                ),
+            ),
+        )
+
+        fun kind(prop: DtoBaseProp, graph: DtoGraph = singlePropGraph(prop)) =
+            prop.accessorConversionKind(graph, schema)
+
+        val plainProp = baseProp("plain")
+        assertEquals(DtoAccessorConversionKind.NONE, kind(plainProp))
+
+        val idProp = baseProp("targetId", baseName = "target").copy(functionName = "id")
+        assertEquals(DtoAccessorConversionKind.ASSOCIATED_ID, kind(idProp))
+
+        val enumProp = baseProp("status").copy(
+            enumType = DtoEnumType(
+                numeric = false,
+                mappings = listOf(DtoEnumMapping("ENABLED", "enabled")),
+            ),
+        )
+        assertEquals(DtoAccessorConversionKind.ENUM, kind(enumProp))
+
+        val converterProp = baseProp("converted")
+        assertEquals(DtoAccessorConversionKind.CONVERTER, kind(converterProp))
+
+        val constructorProp = baseProp("target").copy(targetTypeId = TARGET_DTO_TYPE_ID)
+        val constructorGraph = graphWithTarget(constructorProp)
+        assertEquals(
+            DtoAccessorConversionKind.OBJECT_CONSTRUCTOR,
+            kind(constructorProp, constructorGraph),
+        )
+
+        val reusableProp = baseProp("target").copy(
+            targetTypeReference = DtoReusableTypeReference(
+                qualifiedName = "demo.dto.TargetView",
+                targetBaseTypeId = TARGET_TYPE_ID,
+                kind = DtoReusableTypeKind.VIEW,
+                location = LOCATION,
+            ),
+        )
+        assertEquals(DtoAccessorConversionKind.OBJECT_METADATA, kind(reusableProp))
+
+        val polymorphicProp = baseProp("target").copy(targetTypeId = TARGET_DTO_TYPE_ID)
+        val polymorphicGraph = graphWithTarget(polymorphicProp, polymorphic = true)
+        assertEquals(
+            DtoAccessorConversionKind.OBJECT_METADATA,
+            kind(polymorphicProp, polymorphicGraph),
+        )
+    }
+
+    @Test
+    fun `rejects inconsistent frozen conversion fields across accessor path`() {
+        val name = immutableProp("name", STRING_TYPE)
+        val schema = immutableSchema(name)
+        val tailProp = baseProp(
+            name = "name",
+            idSuffix = "conversion-tail",
+        )
+        val headProp = baseProp(
+            name = "displayName",
+            idSuffix = "conversion-head",
+            baseName = "name",
+        ).copy(
+            nextPropId = tailProp.id,
+            tailPropId = tailProp.id,
+            functionName = "id",
+        )
+        val ownerType = singlePropType(headProp)
+        val graph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(ownerType),
+            props = listOf(headProp, tailProp).sortedBy(DtoProp::id),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            headProp.accessorConversionKind(graph, schema)
+        }
+
+        val enumType = DtoEnumType(
+            numeric = false,
+            mappings = listOf(DtoEnumMapping("A", "a")),
+        )
+        val enumHead = headProp.copy(functionName = null, enumType = enumType)
+        val enumGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(ownerType),
+            props = listOf(enumHead, tailProp).sortedBy(DtoProp::id),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            enumHead.accessorConversionKind(enumGraph, schema)
+        }
+    }
+
+    @Test
     fun `rejects a DTO type from another graph`() {
         val graph = graph(visibleDynamic = true)
         val foreignType = graph.types.single().copy(name = "ForeignInput")
@@ -1404,7 +1659,15 @@ class DtoAccessorExtensionsTest {
         prop: DtoProp,
         input: Boolean = true,
     ): DtoGraph {
-        val type = DtoType(
+        val type = singlePropType(prop, input)
+        return DtoGraph(SOURCE, listOf(TYPE_ID), listOf(type), listOf(prop))
+    }
+
+    private fun singlePropType(
+        prop: DtoProp,
+        input: Boolean = true,
+    ): DtoType {
+        return DtoType(
             id = TYPE_ID,
             baseTypeId = BASE_TYPE_ID,
             packageName = "demo.dto",
@@ -1419,7 +1682,61 @@ class DtoAccessorExtensionsTest {
             hiddenFlatPropIds = emptyList(),
             polymorphism = null,
         )
-        return DtoGraph(SOURCE, listOf(TYPE_ID), listOf(type), listOf(prop))
+    }
+
+    private fun graphWithTarget(
+        prop: DtoBaseProp,
+        polymorphic: Boolean = false,
+    ): DtoGraph {
+        val ownerType = singlePropType(prop)
+        val targetType = ownerType.copy(
+            id = TARGET_DTO_TYPE_ID,
+            baseTypeId = TARGET_TYPE_ID,
+            name = "TargetView",
+            propIds = emptyList(),
+            hiddenFlatPropIds = emptyList(),
+            polymorphism = if (polymorphic) {
+                DtoPolymorphism(
+                    exhaustive = true,
+                    branches = listOf(
+                        DtoPolymorphicBranch(
+                            kind = DtoPolymorphicBranchKind.DEFAULT,
+                            targetBaseTypeId = null,
+                            declaredClassName = null,
+                            className = "DefaultTargetView",
+                            bodyTypeId = TARGET_BODY_DTO_TYPE_ID,
+                            mergedTypeId = TARGET_MERGED_DTO_TYPE_ID,
+                            implicit = false,
+                            location = LOCATION,
+                        ),
+                    ),
+                )
+            } else {
+                null
+            },
+        )
+        val branchTypes = if (polymorphic) {
+            listOf(
+                targetType.copy(
+                    id = TARGET_BODY_DTO_TYPE_ID,
+                    name = null,
+                    polymorphism = null,
+                ),
+                targetType.copy(
+                    id = TARGET_MERGED_DTO_TYPE_ID,
+                    name = null,
+                    polymorphism = null,
+                ),
+            )
+        } else {
+            emptyList()
+        }
+        return DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = (listOf(ownerType, targetType) + branchTypes).sortedBy(DtoType::id),
+            props = listOf(prop),
+        )
     }
 
     private fun immutableSchema(vararg props: ImmutableProp): ImmutableSchema {
@@ -1565,6 +1882,9 @@ class DtoAccessorExtensionsTest {
         val SOURCE = LsiSource.of("demo/src/main/dto/Book.dto")
         val LOCATION = LsiLocation(SOURCE, LsiPosition(1, 1))
         val TYPE_ID = DtoTypeId("dto#book-input")
+        val TARGET_DTO_TYPE_ID = DtoTypeId("dto#target-view")
+        val TARGET_BODY_DTO_TYPE_ID = DtoTypeId("dto#target-view-body")
+        val TARGET_MERGED_DTO_TYPE_ID = DtoTypeId("dto#target-view-merged")
         val USER_PROP_ID = DtoPropId("dto#c-user")
         val FOLD_PROP_ID = DtoPropId("dto#d-fold")
         val BASE_TYPE_ID = LsiSymbolId.type("demo.Book")

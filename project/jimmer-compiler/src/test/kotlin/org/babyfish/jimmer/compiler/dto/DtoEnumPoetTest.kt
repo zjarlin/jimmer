@@ -2,8 +2,6 @@ package org.babyfish.jimmer.compiler.dto
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import org.babyfish.jimmer.compiler.render.apt.AptDtoEnumRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoEnumRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiOrigin
@@ -28,10 +26,14 @@ import site.addzero.lsi.jimmer.dto.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.scalarType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.LsiPoetCodeBlock
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class DtoEnumPoetTest {
 
@@ -58,12 +60,13 @@ class DtoEnumPoetTest {
                   }
                 }
             """.trimIndent(),
-            AptDtoEnumRenderer.renderEnumToScalarLambda(
-                fixture.prop,
-                fixture.graph,
-                fixture.schema,
-                WORKSPACE,
-            ).toString(),
+            renderJava(
+                fixture.prop.toEnumToScalarLambdaPoetCodeBlock(
+                    LsiLanguage.JAVA,
+                    fixture.graph,
+                    fixture.schema,
+                ),
+            ),
         )
         assertEquals(
             """
@@ -78,12 +81,13 @@ class DtoEnumPoetTest {
                   }
                 }
             """.trimIndent(),
-            AptDtoEnumRenderer.renderScalarToEnumLambda(
-                fixture.prop,
-                fixture.graph,
-                fixture.schema,
-                WORKSPACE,
-            ).toString(),
+            renderJava(
+                fixture.prop.toScalarToEnumLambdaPoetCodeBlock(
+                    LsiLanguage.JAVA,
+                    fixture.graph,
+                    fixture.schema,
+                ),
+            ),
         )
         assertEquals(
             """
@@ -94,12 +98,13 @@ class DtoEnumPoetTest {
                   }
                 }
             """.trimIndent(),
-            KspDtoEnumRenderer.renderEnumToScalarLambda(
-                fixture.prop,
-                fixture.graph,
-                fixture.schema,
-                WORKSPACE,
-            ).toString(),
+            renderKotlin(
+                fixture.prop.toEnumToScalarLambdaPoetCodeBlock(
+                    LsiLanguage.KOTLIN,
+                    fixture.graph,
+                    fixture.schema,
+                ),
+            ),
         )
         assertEquals(
             """
@@ -113,12 +118,13 @@ class DtoEnumPoetTest {
                   }
                 }
             """.trimIndent(),
-            KspDtoEnumRenderer.renderScalarToEnumLambda(
-                fixture.prop,
-                fixture.graph,
-                fixture.schema,
-                WORKSPACE,
-            ).toString(),
+            renderKotlin(
+                fixture.prop.toScalarToEnumLambdaPoetCodeBlock(
+                    LsiLanguage.KOTLIN,
+                    fixture.graph,
+                    fixture.schema,
+                ),
+            ),
         )
     }
 
@@ -145,13 +151,14 @@ class DtoEnumPoetTest {
                 }
 
             """.trimIndent(),
-            AptDtoEnumRenderer.renderScalarToEnumConversion(
-                fixture.prop,
-                fixture.graph,
-                fixture.schema,
-                WORKSPACE,
-                "value",
-            ).toString(),
+            renderJava(
+                fixture.prop.toScalarToEnumPoetCodeBlock(
+                    LsiLanguage.JAVA,
+                    fixture.graph,
+                    fixture.schema,
+                    "value",
+                ),
+            ),
         )
         assertEquals(
             """
@@ -164,16 +171,42 @@ class DtoEnumPoetTest {
                 }
 
             """.trimIndent(),
-            KspDtoEnumRenderer.renderScalarToEnumConversion(
-                fixture.prop,
-                fixture.graph,
-                fixture.schema,
-                WORKSPACE,
-                "value",
-            ).toString(),
+            renderKotlin(
+                fixture.prop.toScalarToEnumPoetCodeBlock(
+                    LsiLanguage.KOTLIN,
+                    fixture.graph,
+                    fixture.schema,
+                    "value",
+                ),
+            ),
         )
-        assertEquals("java.lang.Integer", AptDtoEnumRenderer.renderScalarType(fixture.prop, WORKSPACE).toString())
-        assertEquals("kotlin.Int?", KspDtoEnumRenderer.renderScalarType(fixture.prop, WORKSPACE).toString())
+        val enumType = requireNotNull(fixture.prop.enumType)
+        val javaScalarType = enumType.scalarType(LsiLanguage.JAVA)
+        val renderedJavaScalarType = LsiJavaPoetRenderer().renderTypeName(
+            type = javaScalarType,
+            typeNames = WORKSPACE.dtoTypeRefPoetTypeNames(javaScalarType, emptyList()),
+        )
+        val kotlinScalarType = enumType.scalarType(LsiLanguage.KOTLIN)
+        val renderedKotlinScalarType = LsiKotlinPoetRenderer().renderTypeName(
+            type = kotlinScalarType,
+            typeNames = WORKSPACE.dtoTypeRefPoetTypeNames(kotlinScalarType, emptyList()),
+        )
+        assertEquals("java.lang.Integer", renderedJavaScalarType.box().toString())
+        assertEquals("kotlin.Int?", renderedKotlinScalarType.copy(nullable = fixture.prop.nullable).toString())
+    }
+
+    private fun renderJava(codeBlock: LsiPoetCodeBlock): String {
+        return LsiJavaPoetRenderer().renderCodeBlock(
+            codeBlock = codeBlock,
+            typeNames = WORKSPACE.dtoEnumPoetTypeNames(codeBlock),
+        ).toString()
+    }
+
+    private fun renderKotlin(codeBlock: LsiPoetCodeBlock): String {
+        return LsiKotlinPoetRenderer().renderCodeBlock(
+            codeBlock = codeBlock,
+            typeNames = WORKSPACE.dtoEnumPoetTypeNames(codeBlock),
+        ).toString()
     }
 
     private fun fixture(

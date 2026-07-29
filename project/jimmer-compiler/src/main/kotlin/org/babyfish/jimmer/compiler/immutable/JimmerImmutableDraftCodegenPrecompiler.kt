@@ -14,6 +14,8 @@ import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.classTypeIds
 import site.addzero.lsi.jimmer.elementTypeOrSelf
+import site.addzero.lsi.jimmer.generatedDraftCodegenName
+import site.addzero.lsi.jimmer.generatedDraftSlotName
 import site.addzero.lsi.jimmer.isImmutableReference
 import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.jimmer.toDraftAnnotationProjection
@@ -233,7 +235,7 @@ private data class JimmerImmutableDraftSlotAssignment(
             ?.let(schema.typesById::get)
             ?.idPropId
         val immutableReference = schema.isImmutableReference(prop)
-        val codegenName = declaration.codegenName(prop)
+        val codegenName = prop.generatedDraftCodegenName(workspace)
         val associatedIdName = StringUtil.identifier(codegenName, "Id")
         val associatedId = if (
             prop.association &&
@@ -241,7 +243,9 @@ private data class JimmerImmutableDraftSlotAssignment(
             prop.targetTypeId?.let(schema.typesById::get)?.kind == ImmutableTypeKind.ENTITY &&
             targetIdPropId != null &&
             schema.idViewPropIdsByBasePropId[prop.id].isNullOrEmpty() &&
-            ownerType.props.none { candidate -> candidate.codegenName(workspace) == associatedIdName }
+            ownerType.props.none { candidate ->
+                candidate.generatedDraftCodegenName(workspace) == associatedIdName
+            }
         ) {
             JimmerImmutableAssociatedIdContract(associatedIdName, targetIdPropId)
         } else {
@@ -251,7 +255,7 @@ private data class JimmerImmutableDraftSlotAssignment(
         val javaMethodSuffix = declaration.javaMethodSuffix(accessorStyle)
         val javaSetterName = "set$javaMethodSuffix"
         val javaBeanGetterName = declaration.javaBeanGetterName(accessorStyle, primitive)
-        val slotName = "SLOT_${codegenName.legacyUpper()}"
+        val slotName = prop.generatedDraftSlotName(workspace)
         val elementType = prop.elementTypeOrSelf()
         val annotationPlan = prop.toDraftAnnotationProjection(
             workspace = workspace,
@@ -383,33 +387,6 @@ private fun LsiProperty.accessorStyle(propName: String): JimmerImmutableDraftAcc
         }
         LsiLanguage.UNKNOWN -> JimmerImmutableDraftAccessorStyle.UNKNOWN
     }
-}
-
-private fun LsiProperty.codegenName(prop: ImmutableProp): String {
-    if (origin.language != LsiLanguage.JAVA) {
-        return prop.name
-    }
-    if (getterName.startsWith("get") && getterName.length > 3 && getterName[3].isUpperCase()) {
-        return getterName.substring(3).replaceFirstChar(Char::lowercaseChar)
-    }
-    val propType = prop.type
-    if (
-        propType is LsiPrimitiveType &&
-        !propType.boxed &&
-        propType.kind == LsiPrimitiveKind.BOOLEAN &&
-        getterName != prop.name &&
-        getterName.startsWith("is") &&
-        getterName.length > 2 &&
-        getterName[2].isUpperCase()
-    ) {
-        return getterName.substring(2).replaceFirstChar(Char::lowercaseChar)
-    }
-    return getterName
-}
-
-private fun ImmutableProp.codegenName(workspace: LsiWorkspace): String {
-    val declaration = workspace[declarationId] as? LsiProperty ?: return name
-    return declaration.codegenName(this)
 }
 
 private fun LsiProperty.javaMethodSuffix(style: JimmerImmutableDraftAccessorStyle): String {

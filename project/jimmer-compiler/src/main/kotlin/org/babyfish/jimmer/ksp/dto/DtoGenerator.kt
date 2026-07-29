@@ -7,11 +7,10 @@ import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoConverterLoadingRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoAccessorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoEnumRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
@@ -52,16 +51,15 @@ import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
 import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.boundImmutableProp
 import site.addzero.lsi.jimmer.dto.contractFor
-import site.addzero.lsi.jimmer.dto.dtoConverterTargetTypeOrNull
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
-import site.addzero.lsi.jimmer.dto.generatedElementValueType
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
+import site.addzero.lsi.jimmer.dto.nullGuardProp
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
@@ -70,7 +68,6 @@ import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiresNonNullDraftWriteGuard
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
-import site.addzero.lsi.jimmer.dto.tailProp
 import site.addzero.lsi.jimmer.dto.userProp
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
@@ -1457,11 +1454,10 @@ internal class DtoGenerator private constructor(
         }
         val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
         addAccessorField(
-            prop,
+            lsiProp,
             accessorFieldName(prop.name),
             lsiProp.acceptsNullInAccessor(lsiGraph),
             true,
-            lsiProp,
         )
     }
 
@@ -1475,219 +1471,36 @@ internal class DtoGenerator private constructor(
     }
 
     private fun TypeSpec.Builder.addFoldNullGuardAccessorField(prop: FoldProp<ImmutableType, ImmutableProp>) {
-        val nullGuardProp = prop.nullGuardProp ?: return
+        val nullGuardProp = lsiDtoType.foldProp(lsiGraph, prop.name).nullGuardProp(lsiGraph) ?: return
         addAccessorField(
             nullGuardProp,
             foldNullGuardAccessorFieldName(prop),
             true,
             false,
-            null,
         )
     }
 
     private fun TypeSpec.Builder.addAccessorField(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
+        prop: DtoBaseProp,
         fieldName: String,
         acceptNull: Boolean,
         withConverters: Boolean,
-        lsiProp: DtoBaseProp?,
     ) {
         val builder = PropertySpec.builder(
             fieldName,
             DTO_PROP_ACCESSOR,
             KModifier.PRIVATE
         ).initializer(
-            CodeBlock
-                .builder()
-                .apply {
-                    add("%T(", DTO_PROP_ACCESSOR)
-                    indent()
-
-                    add("\n%L", acceptNull)
-
-                    if (prop.nextProp === null) {
-                        add(
-                            ",\nintArrayOf(%T.%N)",
-                            baseType.draftClassName("$"),
-                            prop.baseProp.slotName
-                        )
-                    } else {
-                        add(",\nintArrayOf(")
-                        indent()
-                        var p: DtoProp<ImmutableType, ImmutableProp>? = prop
-                        while (p !== null) {
-                            if (p !== prop) {
-                                add(",")
-                            }
-                            add(
-                                "\n%T.%N",
-                                p.baseProp.declaringType.draftClassName("$"),
-                                p.baseProp.slotName
-                            )
-                            p = p.nextProp
-                        }
-                        unindent()
-                        add("\n)")
-                    }
-
-                    val tailProp = prop.toTailProp()
-                    val converterLsiProp = if (withConverters) {
-                        requireNotNull(lsiProp) {
-                            "Frozen DTO property is required for converter accessors"
-                        }
-                    } else {
-                        null
-                    }
-                    val tailBaseProp = tailProp.baseProp
-                    if (withConverters && prop.isIdOnly) {
-                        if (dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
-                            add(",\nnull")
-                        } else {
-                            add(
-                                ",\n%T.%N(%T::class.java, ",
-                                DTO_PROP_ACCESSOR,
-                                if (tailBaseProp.isList) "idListGetter" else "idReferenceGetter",
-                                tailBaseProp.targetTypeName(overrideNullable = false)
-                            )
-                            add(
-                                "%L",
-                                KspDtoConverterLoadingRenderer.render(
-                                    prop = lsiProp(prop),
-                                    graph = lsiGraph,
-                                    immutableSchema = immutableSchema,
-                                    forList = false,
-                                ),
-                            )
-                            add(")")
-                            add(
-                                ",\n%T.%N(%T::class.java, ",
-                                DTO_PROP_ACCESSOR,
-                                if (tailBaseProp.isList) "idListSetter" else "idReferenceSetter",
-                                tailBaseProp.targetTypeName(overrideNullable = false)
-                            )
-                            add(
-                                "%L",
-                                KspDtoConverterLoadingRenderer.render(
-                                    prop = lsiProp(prop),
-                                    graph = lsiGraph,
-                                    immutableSchema = immutableSchema,
-                                    forList = false,
-                                ),
-                            )
-                            add(")")
-                        }
-                    } else if (withConverters && tailProp.target != null) {
-                        if (dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
-                            add(",\nnull")
-                        } else {
-                            val reusableTargetType = lsiTailProp(prop).targetTypeReference != null
-                            val elementTypeName = KspDtoTypeRefRenderer.render(
-                                type = requireNotNull(converterLsiProp).generatedElementValueType(
-                                    graph = lsiGraph,
-                                    immutableSchema = immutableSchema,
-                                    targetLanguage = LsiLanguage.KOTLIN,
-                                    generatedTargetType = ::generatedTargetType,
-                                ),
-                                workspace = workspace,
-                                generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
-                            )
-                            if (reusableTargetType || tailProp.targetType!!.polymorphism !== null) {
-                                add(
-                                    ",\n%T.%N<%T, %L>(%T.METADATA.converter)",
-                                    DTO_PROP_ACCESSOR,
-                                    if (tailBaseProp.isList) "objectListGetter" else "objectReferenceGetter",
-                                    tailBaseProp.targetTypeName(overrideNullable = false),
-                                    elementTypeName,
-                                    elementTypeName
-                                )
-                            } else {
-                                add(
-                                    ",\n%T.%N<%T, %L> {",
-                                    DTO_PROP_ACCESSOR,
-                                    if (tailBaseProp.isList) "objectListGetter" else "objectReferenceGetter",
-                                    tailBaseProp.targetTypeName(overrideNullable = false),
-                                    elementTypeName
-                                )
-                                indent()
-                                add("\n%L(it)", elementTypeName)
-                                unindent()
-                                add("\n}")
-                            }
-
-                            add(
-                                ",\n%T.%N<%T, %L> {",
-                                DTO_PROP_ACCESSOR,
-                                if (tailBaseProp.isList) "objectListSetter" else "objectReferenceSetter",
-                                tailBaseProp.targetTypeName(overrideNullable = false),
-                                elementTypeName
-                            )
-                            indent()
-                            add(
-                                "\nit.%N()",
-                                if (reusableTargetType) {
-                                    "toImmutable"
-                                } else if (tailBaseProp.targetType!!.isEntity) {
-                                    "toEntity"
-                                } else {
-                                    "toImmutable"
-                                }
-                            )
-                            unindent()
-                            add("\n}")
-                        }
-                    } else if (converterLsiProp?.enumType != null) {
-                        if (dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
-                            add(",\nnull")
-                        } else {
-                            add(",\n")
-                            KspDtoEnumRenderer.appendEnumToScalarLambda(
-                                this,
-                                converterLsiProp,
-                                lsiGraph,
-                                immutableSchema,
-                                workspace,
-                            )
-                        }
-                        add(",\n")
-                        KspDtoEnumRenderer.appendScalarToEnumLambda(
-                            this,
-                            converterLsiProp,
-                            lsiGraph,
-                            immutableSchema,
-                            workspace,
-                        )
-                    } else if (
-                        withConverters &&
-                        lsiProp(prop).dtoConverterTargetTypeOrNull(lsiGraph, immutableSchema) != null
-                    ) {
-                        add(",\n{ ")
-                        add(
-                            "%L",
-                            KspDtoConverterLoadingRenderer.render(
-                                prop = lsiProp(prop),
-                                graph = lsiGraph,
-                                immutableSchema = immutableSchema,
-                                forList = true,
-                            ),
-                        )
-                        add(".output(it) }")
-                        add(",\n{ ")
-                        add(
-                            "%L",
-                            KspDtoConverterLoadingRenderer.render(
-                                prop = lsiProp(prop),
-                                graph = lsiGraph,
-                                immutableSchema = immutableSchema,
-                                forList = true,
-                            ),
-                        )
-                        add(".input(it) }")
-                    }
-
-                    unindent()
-                    add("\n)")
-                }
-                .build()
+            KspDtoAccessorRenderer.render(
+                prop = prop,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                workspace = workspace,
+                acceptNull = acceptNull,
+                withConverters = withConverters,
+                generatedTargetType = ::generatedTargetType,
+                generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
+            )
         )
         addProperty(builder.build())
     }
@@ -1716,9 +1529,6 @@ internal class DtoGenerator private constructor(
 
     private fun lsiProp(prop: DtoProp<ImmutableType, ImmutableProp>) =
         lsiDtoType.prop(lsiGraph, prop.name) as site.addzero.lsi.jimmer.dto.DtoBaseProp
-
-    private fun lsiTailProp(prop: DtoProp<ImmutableType, ImmutableProp>) =
-        lsiProp(prop).tailProp(lsiGraph)
 
     private fun collectNames(list: MutableList<String>) {
         if (parent == null) {

@@ -200,6 +200,88 @@ fun DtoType.selectedPolymorphicInputDiscriminatorPropOrNull(
     return result
 }
 
+/** DTO 属性访问器需要执行的值转换语义。 */
+enum class DtoAccessorConversionKind {
+    NONE,
+    ASSOCIATED_ID,
+    OBJECT_CONSTRUCTOR,
+    OBJECT_METADATA,
+    ENUM,
+    CONVERTER,
+}
+
+/** 按展开顺序返回 DTO 属性访问器需要读取的冻结不可变属性。 */
+fun DtoBaseProp.accessorPath(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): List<ImmutableProp> {
+    require(graph.propsById[id] == this) {
+        "DTO property does not belong to this graph: ${id.value}"
+    }
+    val path = mutableListOf<ImmutableProp>()
+    val visitedPropIds = mutableSetOf<DtoPropId>()
+    var current: DtoBaseProp? = this
+    var tailDtoProp: DtoBaseProp? = null
+    while (current != null) {
+        require(visitedPropIds.add(current.id)) {
+            "DTO accessor path cannot contain a cycle: ${id.value}"
+        }
+        val immutableProp = current.boundImmutableProp(graph, immutableSchema)
+        val slotIdentities = current.baseProps.map { binding ->
+            val boundProp = requireNotNull(immutableSchema.propsById[binding.propId]) {
+                "DTO base property references a missing immutable property: ${binding.propId.value}"
+            }
+            Triple(boundProp.declaringTypeId, boundProp.declarationId, boundProp.name)
+        }.distinct()
+        require(slotIdentities.size == 1) {
+            "DTO base property bindings must resolve one Draft slot: ${current.id.value}"
+        }
+        path += immutableProp
+        tailDtoProp = current
+        current = current.nextProp(graph)
+    }
+    require(tailDtoProp?.id == tailPropId) {
+        "DTO accessor path tail does not match frozen tail property: ${id.value}"
+    }
+    return path
+}
+
+/** 返回 DTO 属性访问器需要执行的值转换语义。 */
+fun DtoBaseProp.accessorConversionKind(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): DtoAccessorConversionKind {
+    accessorPath(graph, immutableSchema)
+    val tailProp = tailProp(graph)
+    require(functionName == tailProp.functionName) {
+        "DTO accessor head and tail must use the same function: ${id.value}"
+    }
+    require(enumType == tailProp.enumType) {
+        "DTO accessor head and tail must use the same enum mapping: ${id.value}"
+    }
+    if (functionName == "id") {
+        return DtoAccessorConversionKind.ASSOCIATED_ID
+    }
+    if (tailProp.targetTypeReference != null) {
+        return DtoAccessorConversionKind.OBJECT_METADATA
+    }
+    val targetDtoType = tailProp.targetTypeId?.let(graph.typesById::getValue)
+    if (targetDtoType != null) {
+        return if (targetDtoType.polymorphism != null) {
+            DtoAccessorConversionKind.OBJECT_METADATA
+        } else {
+            DtoAccessorConversionKind.OBJECT_CONSTRUCTOR
+        }
+    }
+    if (enumType != null) {
+        return DtoAccessorConversionKind.ENUM
+    }
+    if (dtoConverterTargetTypeOrNull(graph, immutableSchema) != null) {
+        return DtoAccessorConversionKind.CONVERTER
+    }
+    return DtoAccessorConversionKind.NONE
+}
+
 /** 判断 DTO 属性访问器是否接受 null 作为可写入值。 */
 fun DtoBaseProp.acceptsNullInAccessor(graph: DtoGraph): Boolean {
     require(graph.propsById[id] == this) {

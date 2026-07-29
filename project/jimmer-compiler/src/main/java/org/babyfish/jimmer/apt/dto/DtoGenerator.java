@@ -10,10 +10,9 @@ import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
-import org.babyfish.jimmer.compiler.render.apt.AptDtoConverterLoadingRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoAccessorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
-import org.babyfish.jimmer.compiler.render.apt.AptDtoEnumRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
@@ -927,33 +926,33 @@ public class DtoGenerator {
             return;
         }
         addAccessorField(
-                prop,
+                lsiProp,
                 accessorFieldName(prop.getName()),
                 DtoAccessorExtensionsKt.acceptsNullInAccessor(lsiProp, lsiGraph),
-                true,
-                lsiProp
+                true
         );
     }
 
     private void addFoldNullGuardAccessorField(FoldProp<ImmutableType, ImmutableProp> prop) {
-        DtoProp<ImmutableType, ImmutableProp> nullGuardProp = prop.getNullGuardProp();
+        DtoBaseProp nullGuardProp = DtoGenerationExtensionsKt.nullGuardProp(
+                DtoGenerationExtensionsKt.foldProp(lsiDtoType, lsiGraph, prop.getName()),
+                lsiGraph
+        );
         if (nullGuardProp != null) {
             addAccessorField(
                     nullGuardProp,
                     foldNullGuardAccessorFieldName(prop),
                     true,
-                    false,
-                    null
+                    false
             );
         }
     }
 
     private void addAccessorField(
-            DtoProp<ImmutableType, ImmutableProp> prop,
+            DtoBaseProp prop,
             String fieldName,
             boolean acceptNull,
-            boolean withConverters,
-            @Nullable DtoBaseProp lsiProp
+            boolean withConverters
     ) {
         FieldSpec.Builder builder = FieldSpec.builder(
                 org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
@@ -962,172 +961,18 @@ public class DtoGenerator {
                 Modifier.STATIC,
                 Modifier.FINAL
         );
-        CodeBlock.Builder cb = CodeBlock.builder();
-        cb.add("new $T(", org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME);
-        cb.indent();
-
-        DtoProp<ImmutableType, ImmutableProp> tailProp = prop.toTailProp();
-        if (withConverters) {
-            Objects.requireNonNull(lsiProp, "Frozen DTO property is required for converter accessors");
-        }
-        cb.add("\n$L", acceptNull);
-
-        if (prop.getNextProp() == null) {
-            cb.add(",\nnew int[] { $T.$L }", dtoType.getBaseType().getProducerClassName(), prop.getBaseProp().getSlotName());
-        } else {
-            cb.add(",\nnew int[] {");
-            cb.indent();
-            boolean addComma = false;
-            for (DtoProp<ImmutableType, ImmutableProp> p = prop; p != null; p = p.getNextProp()) {
-                if (addComma) {
-                    cb.add(",");
-                } else {
-                    addComma = true;
-                }
-                cb.add("\n$T.$L", p.getBaseProp().getDeclaringType().getProducerClassName(), p.getBaseProp().getSlotName());
-            }
-            cb.unindent();
-            cb.add("\n}");
-        }
-
-        if (withConverters && prop.isIdOnly()) {
-            if (dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
-                cb.add(",\nnull");
-            } else {
-                cb.add(
-                        ",\n$T.$L($T.class, ",
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
-                        tailProp.getBaseProp().isList() ? "idListGetter" : "idReferenceGetter",
-                        tailProp.getBaseProp().getTargetType().getClassName()
-                );
-                cb.add(
-                        "$L",
-                        AptDtoConverterLoadingRenderer.render(
-                                lsiProp(prop),
-                                lsiGraph,
-                                immutableSchema,
-                                false
-                        )
-                );
-                cb.add(")");
-
-                cb.add(
-                        ",\n$T.$L($T.class, ",
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
-                        tailProp.getBaseProp().isList() ? "idListSetter" : "idReferenceSetter",
-                        tailProp.getBaseProp().getTargetType().getClassName()
-                );
-                cb.add(
-                        "$L",
-                        AptDtoConverterLoadingRenderer.render(
-                                lsiProp(prop),
-                                lsiGraph,
-                                immutableSchema,
-                                false
-                        )
-                );
-                cb.add(")");
-            }
-        } else if (withConverters && tailProp.getTarget() != null) {
-            if (dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
-                cb.add(",\nnull");
-            } else {
-                boolean reusableTargetType = lsiTailProp(prop).getTargetTypeReference() != null;
-                TypeName elementTypeName = AptDtoTypeRefRenderer.render(
-                        DtoGeneratedValueTypeExtensionsKt.generatedElementValueType(
-                                Objects.requireNonNull(lsiProp),
-                                lsiGraph,
-                                immutableSchema,
-                                LsiLanguage.JAVA,
-                                this::generatedTargetType
-                        ),
+        builder.initializer(
+                AptDtoAccessorRenderer.render(
+                        prop,
+                        lsiGraph,
+                        immutableSchema,
                         lsiWorkspace,
+                        acceptNull,
+                        withConverters,
+                        this::generatedTargetType,
                         generatedDtoTypeIdsByTypeName.keySet()
-                );
-                if (reusableTargetType || tailProp.getTargetType().getPolymorphism() != null) {
-                    cb.add(
-                            ",\n$T.<$T, $T>$L($T.METADATA.getConverter())",
-                            org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
-                            tailProp.getBaseProp().getTargetType().getClassName(),
-                            elementTypeName,
-                            tailProp.getBaseProp().isList() ? "objectListGetter" : "objectReferenceGetter",
-                            elementTypeName
-                    );
-                } else {
-                    cb.add(
-                            ",\n$T.<$T, $T>$L($T::new)",
-                            org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
-                            tailProp.getBaseProp().getTargetType().getClassName(),
-                            elementTypeName,
-                            tailProp.getBaseProp().isList() ? "objectListGetter" : "objectReferenceGetter",
-                            elementTypeName
-                    );
-                }
-                cb.add(
-                        ",\n$T.$L($T::$L)",
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
-                        tailProp.getBaseProp().isList() ? "objectListSetter" : "objectReferenceSetter",
-                        elementTypeName,
-                        reusableTargetType ?
-                                "toImmutable" :
-                                tailProp.getTargetType().getBaseType().isEntity() ? "toEntity" : "toImmutable"
-                );
-            }
-        } else if (withConverters && lsiProp.getEnumType() != null) {
-            if (dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
-                cb.add(",\nnull");
-            } else {
-                cb.add(
-                        ",\n$L",
-                        AptDtoEnumRenderer.renderEnumToScalarLambda(
-                                lsiProp,
-                                lsiGraph,
-                                immutableSchema,
-                                lsiWorkspace
-                        )
-                );
-            }
-            cb.add(
-                    ",\n$L",
-                    AptDtoEnumRenderer.renderScalarToEnumLambda(
-                            lsiProp,
-                            lsiGraph,
-                            immutableSchema,
-                            lsiWorkspace
-                    )
-            );
-        } else if (withConverters && DtoConverterExtensionsKt.dtoConverterTargetTypeOrNull(
-                lsiProp(prop),
-                lsiGraph,
-                immutableSchema
-        ) != null) {
-            cb.add(",\narg -> ");
-            cb.add(
-                    "$L",
-                    AptDtoConverterLoadingRenderer.render(
-                            lsiProp(prop),
-                            lsiGraph,
-                            immutableSchema,
-                            true
-                    )
-            );
-            cb.add(".output(arg)");
-            cb.add(",\narg -> ");
-            cb.add(
-                    "$L",
-                    AptDtoConverterLoadingRenderer.render(
-                            lsiProp(prop),
-                            lsiGraph,
-                            immutableSchema,
-                            true
-                    )
-            );
-            cb.add(".input(arg)");
-        }
-
-        cb.unindent();
-        cb.add("\n)");
-        builder.initializer(cb.build());
+                )
+        );
         typeBuilder.addField(builder.build());
     }
 
@@ -1822,13 +1667,6 @@ public class DtoGenerator {
 
     private DtoBaseProp lsiProp(DtoProp<ImmutableType, ImmutableProp> prop) {
         return (DtoBaseProp) DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
-    }
-
-    private DtoBaseProp lsiTailProp(DtoProp<ImmutableType, ImmutableProp> prop) {
-        return DtoGenerationExtensionsKt.tailProp(
-                lsiProp(prop),
-                lsiGraph
-        );
     }
 
     private site.addzero.lsi.jimmer.dto.DtoProp polymorphicRootPropOrNull(AbstractProp prop) {
