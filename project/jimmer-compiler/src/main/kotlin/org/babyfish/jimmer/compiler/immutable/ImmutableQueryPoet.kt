@@ -58,7 +58,6 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
-import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
 
@@ -1513,7 +1512,7 @@ private fun QueryArtifactDependencies.artifact(
         file = file,
         typeNames = workspace.toLsiPoetTypeNames(
             file.referencedTypeIds,
-            additional = schema.generatedQueryPoetTypeNames() + QUERY_RUNTIME_TYPE_NAMES,
+            additional = schema.toLsiGeneratedQueryPoetTypeNames() + QUERY_RUNTIME_TYPE_NAMES,
         ),
         aggregationMode = if (branchDependent) {
             ArtifactAggregationMode.AGGREGATING
@@ -1534,23 +1533,6 @@ private fun QueryArtifactDependencies.artifact(
         dependencySymbols = dependencySymbols,
         dependencySources = dependencySources,
     )
-}
-
-private fun ImmutableSchema.generatedQueryPoetTypeNames(): List<site.addzero.lsi.poet.LsiPoetTypeName> {
-    return types.flatMap { type ->
-        listOf(
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Props"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Table"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}TableEx"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}FetcherDsl"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Draft"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}PropExpression"),
-            generatedNestedPoetTypeName(
-                type.packageName,
-                listOf("${type.simpleName}Table", "Remote"),
-            ),
-        )
-    }.distinctBy { typeName -> typeName.typeId }
 }
 
 private data class QueryArtifactDependencies(

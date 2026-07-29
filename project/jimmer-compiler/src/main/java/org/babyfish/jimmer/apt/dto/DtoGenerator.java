@@ -10,6 +10,7 @@ import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoConverterLoadingRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEnumRenderer;
@@ -987,7 +988,15 @@ public class DtoGenerator {
                         tailProp.getBaseProp().isList() ? "idListGetter" : "idReferenceGetter",
                         tailProp.getBaseProp().getTargetType().getClassName()
                 );
-                addConverterLoading(cb, prop, false);
+                cb.add(
+                        "$L",
+                        AptDtoConverterLoadingRenderer.render(
+                                lsiProp(prop),
+                                lsiGraph,
+                                immutableSchema,
+                                false
+                        )
+                );
                 cb.add(")");
 
                 cb.add(
@@ -996,7 +1005,15 @@ public class DtoGenerator {
                         tailProp.getBaseProp().isList() ? "idListSetter" : "idReferenceSetter",
                         tailProp.getBaseProp().getTargetType().getClassName()
                 );
-                addConverterLoading(cb, prop, false);
+                cb.add(
+                        "$L",
+                        AptDtoConverterLoadingRenderer.render(
+                                lsiProp(prop),
+                                lsiGraph,
+                                immutableSchema,
+                                false
+                        )
+                );
                 cb.add(")");
             }
         } else if (withConverters && tailProp.getTarget() != null) {
@@ -1062,10 +1079,26 @@ public class DtoGenerator {
                 immutableSchema
         ) != null) {
             cb.add(",\narg -> ");
-            addConverterLoading(cb, prop, true);
+            cb.add(
+                    "$L",
+                    AptDtoConverterLoadingRenderer.render(
+                            lsiProp(prop),
+                            lsiGraph,
+                            immutableSchema,
+                            true
+                    )
+            );
             cb.add(".output(arg)");
             cb.add(",\narg -> ");
-            addConverterLoading(cb, prop, true);
+            cb.add(
+                    "$L",
+                    AptDtoConverterLoadingRenderer.render(
+                            lsiProp(prop),
+                            lsiGraph,
+                            immutableSchema,
+                            true
+                    )
+            );
             cb.add(".input(arg)");
         }
 
@@ -1073,18 +1106,6 @@ public class DtoGenerator {
         cb.add("\n)");
         builder.initializer(cb.build());
         typeBuilder.addField(builder.build());
-    }
-
-    private void addConverterLoading(CodeBlock.Builder cb, DtoProp<ImmutableType, ImmutableProp> prop, boolean forList) {
-        ImmutableProp baseProp = prop.toTailProp().getBaseProp();
-        cb.add(
-                "$T.$L.unwrap().$L",
-                baseProp.getDeclaringType().getPropsClassName(),
-                StringUtil.snake(baseProp.getName(), StringUtil.SnakeCase.UPPER),
-                prop.toTailProp().getBaseProp().isAssociation(true) ?
-                        "getAssociatedIdConverter(" + forList + ")" :
-                        "getConverter()"
-        );
     }
 
     private boolean isSimpleProp(DtoProp<ImmutableType, ImmutableProp> prop) {

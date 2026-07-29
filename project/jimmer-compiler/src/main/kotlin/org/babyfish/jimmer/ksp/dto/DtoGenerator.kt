@@ -7,6 +7,7 @@ import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoConverterLoadingRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
@@ -1537,7 +1538,15 @@ internal class DtoGenerator private constructor(
                                 if (tailBaseProp.isList) "idListGetter" else "idReferenceGetter",
                                 tailBaseProp.targetTypeName(overrideNullable = false)
                             )
-                            addConverterLoading(prop, false)
+                            add(
+                                "%L",
+                                KspDtoConverterLoadingRenderer.render(
+                                    prop = lsiProp(prop),
+                                    graph = lsiGraph,
+                                    immutableSchema = immutableSchema,
+                                    forList = false,
+                                ),
+                            )
                             add(")")
                             add(
                                 ",\n%T.%N(%T::class.java, ",
@@ -1545,7 +1554,15 @@ internal class DtoGenerator private constructor(
                                 if (tailBaseProp.isList) "idListSetter" else "idReferenceSetter",
                                 tailBaseProp.targetTypeName(overrideNullable = false)
                             )
-                            addConverterLoading(prop, false)
+                            add(
+                                "%L",
+                                KspDtoConverterLoadingRenderer.render(
+                                    prop = lsiProp(prop),
+                                    graph = lsiGraph,
+                                    immutableSchema = immutableSchema,
+                                    forList = false,
+                                ),
+                            )
                             add(")")
                         }
                     } else if (withConverters && tailProp.target != null) {
@@ -1623,10 +1640,26 @@ internal class DtoGenerator private constructor(
                         lsiProp(prop).dtoConverterTargetTypeOrNull(lsiGraph, immutableSchema) != null
                     ) {
                         add(",\n{ ")
-                        addConverterLoading(prop, true)
+                        add(
+                            "%L",
+                            KspDtoConverterLoadingRenderer.render(
+                                prop = lsiProp(prop),
+                                graph = lsiGraph,
+                                immutableSchema = immutableSchema,
+                                forList = true,
+                            ),
+                        )
                         add(".output(it) }")
                         add(",\n{ ")
-                        addConverterLoading(prop, true)
+                        add(
+                            "%L",
+                            KspDtoConverterLoadingRenderer.render(
+                                prop = lsiProp(prop),
+                                graph = lsiGraph,
+                                immutableSchema = immutableSchema,
+                                forList = true,
+                            ),
+                        )
                         add(".input(it) }")
                     }
 
@@ -1930,25 +1963,6 @@ internal class DtoGenerator private constructor(
             }
         }
         throw AssertionError("Dto is too deep")
-    }
-
-    private fun CodeBlock.Builder.addConverterLoading(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
-        forList: Boolean,
-    ) {
-        val baseProp: ImmutableProp = prop.toTailProp().getBaseProp()
-        add(
-            "%T.%N.unwrap().%L",
-            baseProp.declaringType.propsClassName,
-            StringUtil.snake(baseProp.name, SnakeCase.UPPER),
-            if (prop.toTailProp().getBaseProp()
-                    .isAssociation(true)
-            ) {
-                "getAssociatedIdConverter<Any, Any>($forList)"
-            } else {
-                "getConverter<Any, Any>()"
-            }
-        )
     }
 
     private fun isSpecificationConverterRequired(prop: DtoProp<ImmutableType, ImmutableProp>): Boolean {

@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
+import org.babyfish.jimmer.compiler.immutable.toLsiGeneratedQueryPoetTypeNames
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableProp
@@ -8,8 +9,6 @@ import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.generatedPropsConstantName
 import site.addzero.lsi.jimmer.generatedPropsTypeOf
 import site.addzero.lsi.jimmer.generatedTableType
-import site.addzero.lsi.jimmer.packageName
-import site.addzero.lsi.jimmer.simpleName
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
@@ -40,7 +39,6 @@ import site.addzero.lsi.poet.LsiPoetFunction
 import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
 
@@ -164,18 +162,12 @@ internal fun LsiWorkspace.dtoSpecificationPoetTypeNames(
     function: LsiPoetFunction,
     immutableSchema: ImmutableSchema,
 ): List<LsiPoetTypeName> {
-    val generatedTypeNames = immutableSchema.types.flatMap { type ->
-        listOf(
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Props"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Table"),
-        )
-    }
     return toLsiPoetTypeNames(
         typeIds = function.referencedTypeIds,
         additional = (
             DTO_COMMON_POET_TYPE_NAMES +
                 SPECIFICATION_POET_TYPE_NAMES +
-                generatedTypeNames
+                immutableSchema.toLsiGeneratedQueryPoetTypeNames()
             ).distinctBy(LsiPoetTypeName::typeId),
     )
 }
