@@ -21,9 +21,13 @@ import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
+import site.addzero.lsi.jimmer.dto.DtoReusableTypeKind
+import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.jimmer.dto.generatedTargetType
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.poet.LsiPoetTypeName
 
 class JimmerDtoPoetTypeNamesTest {
@@ -201,6 +205,191 @@ class JimmerDtoPoetTypeNamesTest {
     }
 
     @Test
+    fun `resolves direct fold reusable and promoted targets from owner occurrence`() {
+        val fixture = fixture()
+        val batchRootTypeNames = JimmerDtoPoetTypeNames.roots(listOf(fixture.graph))
+        val generatedTypes = JimmerDtoPoetTypeNames.forRoot(
+            graph = fixture.graph,
+            rootType = fixture.rootType,
+            batchRootTypeNames = batchRootTypeNames,
+        )
+        val rootOccurrence = batchRootTypeNames.getValue(ROOT_TYPE_ID)
+        val branchOccurrence = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView", "TargetOf_children"),
+        )
+        assertEquals(BRANCH_MERGED_TYPE_ID, generatedTypes[branchOccurrence])
+
+        fun resolve(propId: DtoPropId, ownerOccurrence: LsiPoetTypeName): LsiPoetTypeName? {
+            return JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
+                graph = fixture.graph,
+                prop = fixture.graph.propsById.getValue(propId),
+                generatedOwnerTypeName = ownerOccurrence,
+                generatedDtoTypeIdsByTypeName = generatedTypes,
+                batchRootDtoTypeNames = batchRootTypeNames,
+            )
+        }
+
+        assertEquals("demo.dto.RootView.TargetOf_detail", resolve(ROOT_DETAIL_PROP_ID, rootOccurrence)?.canonicalName)
+        assertEquals("demo.dto.RootView.TargetOf_summary", resolve(ROOT_FOLD_PROP_ID, rootOccurrence)?.canonicalName)
+        assertEquals("other.dto.OtherView", resolve(ROOT_REUSABLE_PROP_ID, rootOccurrence)?.canonicalName)
+        assertEquals("demo.dto.RootView.TargetOf_detail", resolve(MERGED_DETAIL_PROP_ID, branchOccurrence)?.canonicalName)
+        assertEquals("demo.dto.RootView.TargetOf_summary", resolve(MERGED_FOLD_PROP_ID, branchOccurrence)?.canonicalName)
+        assertEquals(
+            "demo.dto.RootView.TargetOf_children.TargetOf_children_2",
+            resolve(MERGED_CHILDREN_PROP_ID, branchOccurrence)?.canonicalName,
+        )
+        assertNull(resolve(ROOT_EXTERNAL_REUSABLE_PROP_ID, rootOccurrence))
+        assertEquals(
+            LsiDeclaredType(LsiSymbolId.type("contract.ExternalView")),
+            JimmerDtoPoetTypeNames.toLsiGeneratedTargetType(
+                graph = fixture.graph,
+                prop = fixture.graph.propsById.getValue(ROOT_EXTERNAL_REUSABLE_PROP_ID),
+                generatedOwnerTypeName = rootOccurrence,
+                generatedDtoTypeIdsByTypeName = generatedTypes,
+                batchRootDtoTypeNames = batchRootTypeNames,
+            ),
+        )
+    }
+
+    @Test
+    fun `rejects conflicting owner and duplicate target occurrences`() {
+        val fixture = fixture()
+        val batchRootTypeNames = JimmerDtoPoetTypeNames.roots(listOf(fixture.graph))
+        val generatedTypes = JimmerDtoPoetTypeNames.forRoot(
+            graph = fixture.graph,
+            rootType = fixture.rootType,
+            batchRootTypeNames = batchRootTypeNames,
+        )
+        val rootOccurrence = batchRootTypeNames.getValue(ROOT_TYPE_ID)
+        val branchOccurrence = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView", "TargetOf_children"),
+        )
+        assertEquals(BRANCH_MERGED_TYPE_ID, generatedTypes[branchOccurrence])
+        val rootDetailProp = fixture.graph.propsById.getValue(ROOT_DETAIL_PROP_ID)
+
+        assertFailsWith<IllegalArgumentException> {
+            JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
+                graph = fixture.graph,
+                prop = rootDetailProp,
+                generatedOwnerTypeName = branchOccurrence,
+                generatedDtoTypeIdsByTypeName = generatedTypes,
+                batchRootDtoTypeNames = batchRootTypeNames,
+            )
+        }
+
+        val conflictingGeneratedTypes = generatedTypes + (
+            JimmerDtoPoetTypeNames.create(
+                packageName = rootOccurrence.packageName,
+                simpleNames = rootOccurrence.simpleNames + "TargetOf_detail_2",
+            ) to DETAIL_TARGET_TYPE_ID
+        )
+        assertFailsWith<IllegalArgumentException> {
+            JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
+                graph = fixture.graph,
+                prop = rootDetailProp,
+                generatedOwnerTypeName = rootOccurrence,
+                generatedDtoTypeIdsByTypeName = conflictingGeneratedTypes,
+                batchRootDtoTypeNames = batchRootTypeNames,
+            )
+        }
+    }
+
+    @Test
+    fun `resolves flattened targets from tail semantics and head occurrence name`() {
+        val directTail = baseProp(
+            id = FLAT_DIRECT_TAIL_PROP_ID,
+            ownerTypeId = FLAT_ROOT_TYPE_ID,
+            name = "directTail",
+            targetTypeId = FLAT_TARGET_TYPE_ID,
+        )
+        val reusableTail = baseProp(
+            id = FLAT_REUSABLE_TAIL_PROP_ID,
+            ownerTypeId = FLAT_ROOT_TYPE_ID,
+            name = "reusableTail",
+            targetTypeId = FLAT_REUSABLE_ROOT_TYPE_ID,
+            targetTypeReference = DtoReusableTypeReference(
+                qualifiedName = "other.dto.ReusableView",
+                targetBaseTypeId = ENTITY_TYPE_ID,
+                kind = DtoReusableTypeKind.VIEW,
+                location = LOCATION,
+            ),
+        )
+        val directHead = baseProp(
+            id = FLAT_DIRECT_HEAD_PROP_ID,
+            ownerTypeId = FLAT_ROOT_TYPE_ID,
+            name = "direct",
+            targetTypeId = directTail.targetTypeId,
+            nextPropId = directTail.id,
+            tailPropId = directTail.id,
+        )
+        val reusableHead = baseProp(
+            id = FLAT_REUSABLE_HEAD_PROP_ID,
+            ownerTypeId = FLAT_ROOT_TYPE_ID,
+            name = "reusable",
+            targetTypeId = reusableTail.targetTypeId,
+            targetTypeReference = reusableTail.targetTypeReference,
+            nextPropId = reusableTail.id,
+            tailPropId = reusableTail.id,
+        )
+        val rootType = dtoType(
+            id = FLAT_ROOT_TYPE_ID,
+            name = "FlatView",
+            propIds = listOf(directHead.id, reusableHead.id),
+            hiddenFlatPropIds = listOf(directTail.id, reusableTail.id),
+        )
+        val reusableRootType = dtoType(
+            id = FLAT_REUSABLE_ROOT_TYPE_ID,
+            packageName = "other.dto",
+            name = "ReusableView",
+        )
+        val graph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(rootType.id, reusableRootType.id),
+            types = listOf(
+                rootType,
+                reusableRootType,
+                dtoType(id = FLAT_TARGET_TYPE_ID),
+            ).sortedBy(DtoType::id),
+            props = listOf(
+                directHead,
+                reusableHead,
+                directTail,
+                reusableTail,
+            ).sortedBy(DtoProp::id),
+        )
+        val batchRootTypeNames = JimmerDtoPoetTypeNames.roots(listOf(graph))
+        val generatedTypes = JimmerDtoPoetTypeNames.forRoot(
+            graph = graph,
+            rootType = rootType,
+            batchRootTypeNames = batchRootTypeNames,
+        )
+        val rootOccurrence = batchRootTypeNames.getValue(rootType.id)
+
+        fun resolve(prop: DtoProp): LsiPoetTypeName? {
+            return JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
+                graph = graph,
+                prop = prop,
+                generatedOwnerTypeName = rootOccurrence,
+                generatedDtoTypeIdsByTypeName = generatedTypes,
+                batchRootDtoTypeNames = batchRootTypeNames,
+            )
+        }
+
+        assertEquals("demo.dto.FlatView.TargetOf_direct", resolve(directHead)?.canonicalName)
+        assertEquals("other.dto.ReusableView", resolve(reusableHead)?.canonicalName)
+        val directOccurrence = requireNotNull(resolve(directHead))
+        assertEquals(directHead.generatedTargetType(graph)?.id, directTail.generatedTargetType(graph)?.id)
+        assertEquals(directHead.generatedTargetType(graph)?.id, generatedTypes[directOccurrence])
+        assertFalse(
+            generatedTypes.keys.any { typeName ->
+                typeName.canonicalName.endsWith("TargetOf_directTail")
+            },
+        )
+    }
+
+    @Test
     fun `tracks repeated semantic target at focused recursion occurrences`() {
         val parentProp = baseProp(
             id = RECURSIVE_PARENT_PROP_ID,
@@ -234,10 +423,17 @@ class JimmerDtoPoetTypeNamesTest {
             name = "owner",
             targetTypeId = RECURSIVE_OWNER_TARGET_TYPE_ID,
         )
+        val selfProp = baseProp(
+            id = RECURSIVE_SELF_PROP_ID,
+            ownerTypeId = RECURSIVE_ROOT_TYPE_ID,
+            name = "self",
+            targetTypeId = RECURSIVE_ROOT_TYPE_ID,
+            recursive = true,
+        )
         val rootType = dtoType(
             id = RECURSIVE_ROOT_TYPE_ID,
             name = "NodeView",
-            propIds = listOf(rootOwnerProp.id, parentProp.id, childrenProp.id),
+            propIds = listOf(rootOwnerProp.id, parentProp.id, childrenProp.id, selfProp.id),
         )
         val graph = DtoGraph(
             source = SOURCE,
@@ -262,6 +458,7 @@ class JimmerDtoPoetTypeNamesTest {
                 rootOwnerProp,
                 parentOwnerProp,
                 childrenOwnerProp,
+                selfProp,
             ).sortedBy(DtoProp::id),
         )
 
@@ -282,6 +479,44 @@ class JimmerDtoPoetTypeNamesTest {
                 .keys
                 .map { typeName -> typeName.canonicalName },
         )
+        val batchRootTypeNames = JimmerDtoPoetTypeNames.roots(listOf(graph))
+        val rootOccurrence = batchRootTypeNames.getValue(rootType.id)
+        val parentOccurrence = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("NodeView", "TargetOf_parent"),
+        )
+        val childrenOccurrence = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("NodeView", "TargetOf_children"),
+        )
+        assertEquals(FOCUSED_PARENT_TYPE_ID, generatedTypes[parentOccurrence])
+        assertEquals(FOCUSED_CHILDREN_TYPE_ID, generatedTypes[childrenOccurrence])
+        assertEquals(
+            rootOccurrence,
+            JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
+                graph = graph,
+                prop = selfProp,
+                generatedOwnerTypeName = rootOccurrence,
+                generatedDtoTypeIdsByTypeName = generatedTypes,
+                batchRootDtoTypeNames = batchRootTypeNames,
+            ),
+        )
+        listOf(
+            rootOwnerProp to rootOccurrence,
+            parentOwnerProp to parentOccurrence,
+            childrenOwnerProp to childrenOccurrence,
+        ).forEach { (prop, ownerOccurrence) ->
+            assertEquals(
+                "${ownerOccurrence.canonicalName}.TargetOf_owner",
+                JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
+                    graph = graph,
+                    prop = prop,
+                    generatedOwnerTypeName = ownerOccurrence,
+                    generatedDtoTypeIdsByTypeName = generatedTypes,
+                    batchRootDtoTypeNames = batchRootTypeNames,
+                )?.canonicalName,
+            )
+        }
 
         val scopedNames = mutableMapOf(
             RECURSIVE_OWNER_TARGET_TYPE_ID to JimmerDtoPoetTypeNames.create(
@@ -336,6 +571,30 @@ class JimmerDtoPoetTypeNamesTest {
             name = "summary",
             targetTypeId = FOLD_TARGET_TYPE_ID,
         )
+        val rootReusableProp = baseProp(
+            id = ROOT_REUSABLE_PROP_ID,
+            ownerTypeId = ROOT_TYPE_ID,
+            name = "other",
+            targetTypeId = OTHER_ROOT_TYPE_ID,
+            targetTypeReference = DtoReusableTypeReference(
+                qualifiedName = "other.dto.OtherView",
+                targetBaseTypeId = ENTITY_TYPE_ID,
+                kind = DtoReusableTypeKind.VIEW,
+                location = LOCATION,
+            ),
+        )
+        val rootExternalReusableProp = baseProp(
+            id = ROOT_EXTERNAL_REUSABLE_PROP_ID,
+            ownerTypeId = ROOT_TYPE_ID,
+            name = "external",
+            targetTypeId = null,
+            targetTypeReference = DtoReusableTypeReference(
+                qualifiedName = "contract.ExternalView",
+                targetBaseTypeId = ENTITY_TYPE_ID,
+                kind = DtoReusableTypeKind.VIEW,
+                location = LOCATION,
+            ),
+        )
         val bodyChildrenProp = baseProp(
             id = BODY_CHILDREN_PROP_ID,
             ownerTypeId = BRANCH_BODY_TYPE_ID,
@@ -380,7 +639,13 @@ class JimmerDtoPoetTypeNamesTest {
             id = ROOT_TYPE_ID,
             packageName = "demo.dto",
             name = "RootView",
-            propIds = listOf(rootSharedProp.id, rootDetailProp.id, rootFoldProp.id),
+            propIds = listOf(
+                rootSharedProp.id,
+                rootDetailProp.id,
+                rootFoldProp.id,
+                rootReusableProp.id,
+                rootExternalReusableProp.id,
+            ),
             polymorphism = DtoPolymorphism(
                 exhaustive = true,
                 branches = listOf(branch),
@@ -418,6 +683,8 @@ class JimmerDtoPoetTypeNamesTest {
                 rootSharedProp,
                 rootDetailProp,
                 rootFoldProp,
+                rootReusableProp,
+                rootExternalReusableProp,
                 bodyChildrenProp,
                 mergedSharedProp,
                 mergedDetailProp,
@@ -434,6 +701,7 @@ class JimmerDtoPoetTypeNamesTest {
         name: String? = null,
         focusedRecursion: Boolean = false,
         propIds: List<DtoPropId> = emptyList(),
+        hiddenFlatPropIds: List<DtoPropId> = emptyList(),
         polymorphism: DtoPolymorphism? = null,
     ): DtoType {
         return DtoType(
@@ -448,7 +716,7 @@ class JimmerDtoPoetTypeNamesTest {
             location = LOCATION,
             focusedRecursion = focusedRecursion,
             propIds = propIds,
-            hiddenFlatPropIds = emptyList(),
+            hiddenFlatPropIds = hiddenFlatPropIds,
             polymorphism = polymorphism,
         )
     }
@@ -457,8 +725,11 @@ class JimmerDtoPoetTypeNamesTest {
         id: DtoPropId,
         ownerTypeId: DtoTypeId,
         name: String,
-        targetTypeId: DtoTypeId,
+        targetTypeId: DtoTypeId?,
         recursive: Boolean = false,
+        targetTypeReference: DtoReusableTypeReference? = null,
+        nextPropId: DtoPropId? = null,
+        tailPropId: DtoPropId = id,
     ): DtoBaseProp {
         return DtoBaseProp(
             id = id,
@@ -477,13 +748,13 @@ class JimmerDtoPoetTypeNamesTest {
                 ),
             ),
             basePath = name,
-            nextPropId = null,
-            tailPropId = id,
+            nextPropId = nextPropId,
+            tailPropId = tailPropId,
             baseNullable = false,
             inputModifier = DtoModifier.FIXED,
             functionName = null,
             targetTypeId = targetTypeId,
-            targetTypeReference = null,
+            targetTypeReference = targetTypeReference,
             enumType = null,
             config = null,
             recursive = recursive,
@@ -532,10 +803,15 @@ class JimmerDtoPoetTypeNamesTest {
         val FOCUSED_PARENT_TYPE_ID = DtoTypeId("demo/Root.dto#type:focused-parent")
         val FOCUSED_CHILDREN_TYPE_ID = DtoTypeId("demo/Root.dto#type:focused-children")
         val RECURSIVE_OWNER_TARGET_TYPE_ID = DtoTypeId("demo/Root.dto#type:recursive-owner")
+        val FLAT_ROOT_TYPE_ID = DtoTypeId("demo/Root.dto#type:flat-root")
+        val FLAT_REUSABLE_ROOT_TYPE_ID = DtoTypeId("demo/Root.dto#type:flat-reusable-root")
+        val FLAT_TARGET_TYPE_ID = DtoTypeId("demo/Root.dto#type:flat-target")
 
         val ROOT_SHARED_PROP_ID = DtoPropId("demo/Root.dto#prop:root-shared")
         val ROOT_DETAIL_PROP_ID = DtoPropId("demo/Root.dto#prop:root-detail")
         val ROOT_FOLD_PROP_ID = DtoPropId("demo/Root.dto#prop:root-fold")
+        val ROOT_REUSABLE_PROP_ID = DtoPropId("demo/Root.dto#prop:root-reusable")
+        val ROOT_EXTERNAL_REUSABLE_PROP_ID = DtoPropId("demo/Root.dto#prop:root-external-reusable")
         val BODY_CHILDREN_PROP_ID = DtoPropId("demo/Root.dto#prop:body-children")
         val MERGED_SHARED_PROP_ID = DtoPropId("demo/Root.dto#prop:merged-shared")
         val MERGED_DETAIL_PROP_ID = DtoPropId("demo/Root.dto#prop:merged-detail")
@@ -546,6 +822,11 @@ class JimmerDtoPoetTypeNamesTest {
         val RECURSIVE_ROOT_OWNER_PROP_ID = DtoPropId("demo/Root.dto#prop:recursive-root-owner")
         val FOCUSED_PARENT_OWNER_PROP_ID = DtoPropId("demo/Root.dto#prop:focused-parent-owner")
         val FOCUSED_CHILDREN_OWNER_PROP_ID = DtoPropId("demo/Root.dto#prop:focused-children-owner")
+        val RECURSIVE_SELF_PROP_ID = DtoPropId("demo/Root.dto#prop:recursive-self")
+        val FLAT_DIRECT_HEAD_PROP_ID = DtoPropId("demo/Root.dto#prop:flat-direct-head")
+        val FLAT_DIRECT_TAIL_PROP_ID = DtoPropId("demo/Root.dto#prop:flat-direct-tail")
+        val FLAT_REUSABLE_HEAD_PROP_ID = DtoPropId("demo/Root.dto#prop:flat-reusable-head")
+        val FLAT_REUSABLE_TAIL_PROP_ID = DtoPropId("demo/Root.dto#prop:flat-reusable-tail")
 
         val ENTITY_TYPE_ID = LsiSymbolId.type("demo.Entity")
         val BRANCH_ENTITY_TYPE_ID = LsiSymbolId.type("demo.BranchEntity")

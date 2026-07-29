@@ -40,7 +40,8 @@ internal object AptDtoTypeRefRenderer {
         return render(LsiDeclaredType(typeName.typeId), workspace, listOf(typeName))
     }
 
-    private fun render(
+    @JvmStatic
+    fun render(
         type: LsiTypeRef,
         workspace: LsiWorkspace,
         generatedTypeNames: Collection<LsiPoetTypeName>,

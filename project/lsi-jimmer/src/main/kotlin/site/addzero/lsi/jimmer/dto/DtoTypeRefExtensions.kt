@@ -4,11 +4,14 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiUnresolvedType
 
 /** 将冻结的 DTO 类型引用解析为目标源码语言的 LSI 类型。 */
 fun DtoTypeRef.toLsiType(targetLanguage: LsiLanguage): LsiTypeRef {
@@ -71,6 +74,118 @@ internal fun LsiTypeRef.boxedForTypeArgument(targetLanguage: LsiLanguage): LsiTy
     } else {
         this
     }
+}
+
+/** 将冻结类型递归归一化为 DTO 目标语言中的声明坐标。 */
+internal fun LsiTypeRef.toDtoTargetType(targetLanguage: LsiLanguage): LsiTypeRef {
+    val language = targetLanguage.requireDtoTargetLanguage()
+    return when (this) {
+        is LsiDeclaredType -> copy(
+            declarationId = declarationId.toDtoTargetTypeId(language),
+            arguments = arguments.map { argument ->
+                argument.copy(
+                    type = argument.type
+                        ?.toDtoTargetType(language)
+                        ?.boxedForTypeArgument(language),
+                )
+            },
+            annotations = emptyList(),
+        )
+        is LsiPrimitiveType -> copy(
+            boxed = language == LsiLanguage.JAVA &&
+                (boxed || nullability == LsiNullability.NULLABLE),
+            annotations = emptyList(),
+        )
+        is LsiArrayType -> copy(
+            elementType = elementType.toDtoTargetType(language),
+            annotations = emptyList(),
+        )
+        is LsiFunctionType -> copy(
+            returnType = returnType.toDtoTargetType(language),
+            receiverType = receiverType?.toDtoTargetType(language),
+            parameterTypes = parameterTypes.map { type -> type.toDtoTargetType(language) },
+            annotations = emptyList(),
+        )
+        is LsiTypeParameterRef -> copy(annotations = emptyList())
+        is LsiUnresolvedType -> copy(annotations = emptyList())
+    }
+}
+
+/** 覆盖 DTO 生成值类型的根可空性。 */
+internal fun LsiTypeRef.withDtoRootNullability(nullable: Boolean): LsiTypeRef {
+    val nullability = if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
+    return when (this) {
+        is LsiDeclaredType -> copy(nullability = nullability)
+        is LsiTypeParameterRef -> copy(nullability = nullability)
+        is LsiPrimitiveType -> copy(nullability = nullability)
+        is LsiArrayType -> copy(nullability = nullability)
+        is LsiFunctionType -> copy(nullability = nullability)
+        is LsiUnresolvedType -> copy(nullability = nullability)
+    }
+}
+
+/** 按 Java 源码表示规则装箱 DTO 根 primitive 类型。 */
+internal fun LsiTypeRef.withDtoJavaBoxing(
+    targetLanguage: LsiLanguage,
+    force: Boolean,
+): LsiTypeRef {
+    if (targetLanguage != LsiLanguage.JAVA || this !is LsiPrimitiveType) {
+        return this
+    }
+    return copy(boxed = boxed || force || nullability == LsiNullability.NULLABLE)
+}
+
+/** 将当前类型包装为目标语言的 DTO Collection。 */
+internal fun LsiTypeRef.toDtoCollectionType(targetLanguage: LsiLanguage): LsiDeclaredType {
+    return toDtoContainerType(targetLanguage, targetLanguage.dtoCollectionTypeId())
+}
+
+/** 将当前类型包装为目标语言的 DTO List。 */
+internal fun LsiTypeRef.toDtoListType(targetLanguage: LsiLanguage): LsiDeclaredType {
+    return toDtoContainerType(targetLanguage, targetLanguage.dtoListTypeId())
+}
+
+/** 判断当前声明是否已是 Java 或 Kotlin DTO List。 */
+internal fun LsiTypeRef.isDtoListType(): Boolean {
+    return this is LsiDeclaredType &&
+        (declarationId == JAVA_LIST_TYPE_ID || declarationId == KOTLIN_LIST_TYPE_ID)
+}
+
+private fun LsiTypeRef.toDtoContainerType(
+    targetLanguage: LsiLanguage,
+    containerTypeId: LsiSymbolId,
+): LsiDeclaredType {
+    val language = targetLanguage.requireDtoTargetLanguage()
+    return LsiDeclaredType(
+        declarationId = containerTypeId,
+        arguments = listOf(
+            LsiTypeArgument.invariant(
+                toDtoTargetType(language).boxedForTypeArgument(language),
+            ),
+        ),
+    )
+}
+
+private fun LsiSymbolId.toDtoTargetTypeId(targetLanguage: LsiLanguage): LsiSymbolId {
+    val qualifiedName = requireTypeQualifiedName()
+    val targetName = when (targetLanguage) {
+        LsiLanguage.JAVA -> JAVA_DTO_DECLARED_TYPES[qualifiedName]
+        LsiLanguage.KOTLIN -> KOTLIN_DTO_DECLARED_TYPES[qualifiedName]
+        LsiLanguage.UNKNOWN -> error("DTO target language must be Java or Kotlin")
+    }
+    return targetName?.let(LsiSymbolId::type) ?: this
+}
+
+private fun LsiLanguage.dtoCollectionTypeId(): LsiSymbolId = when (this) {
+    LsiLanguage.JAVA -> JAVA_COLLECTION_TYPE_ID
+    LsiLanguage.KOTLIN -> KOTLIN_COLLECTION_TYPE_ID
+    LsiLanguage.UNKNOWN -> error("DTO target language must be Java or Kotlin")
+}
+
+private fun LsiLanguage.dtoListTypeId(): LsiSymbolId = when (this) {
+    LsiLanguage.JAVA -> JAVA_LIST_TYPE_ID
+    LsiLanguage.KOTLIN -> KOTLIN_LIST_TYPE_ID
+    LsiLanguage.UNKNOWN -> error("DTO target language must be Java or Kotlin")
 }
 
 private fun DtoTypeArgument.toLsiTypeArgument(
@@ -313,4 +428,6 @@ internal val KOTLIN_DTO_DECLARED_TYPES = mapOf(
 
 internal val JAVA_LIST_TYPE_ID = LsiSymbolId.type("java.util.List")
 internal val KOTLIN_LIST_TYPE_ID = LsiSymbolId.type("kotlin.collections.List")
+internal val JAVA_COLLECTION_TYPE_ID = LsiSymbolId.type("java.util.Collection")
+internal val KOTLIN_COLLECTION_TYPE_ID = LsiSymbolId.type("kotlin.collections.Collection")
 private val KOTLIN_ARRAY_TYPE_ID = LsiSymbolId.type("kotlin.Array")

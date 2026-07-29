@@ -1,17 +1,24 @@
 package org.babyfish.jimmer.compiler.dto
 
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.basePropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.defaultBranch
 import site.addzero.lsi.jimmer.dto.foldPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
+import site.addzero.lsi.jimmer.dto.tailProp
+import site.addzero.lsi.jimmer.dto.toLsiType
 import site.addzero.lsi.jimmer.dto.typeBranchesInDeclarationOrder
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.poet.LsiPoetTypeName
 
 /** 使用显式包名和简单名链创建 DTO 生成声明的精确源码名称。 */
@@ -198,6 +205,168 @@ internal object JimmerDtoPoetTypeNames {
         return matches.singleOrNull()
     }
 
+    /** 将当前生成位置中的 DTO 属性目标解析为纯 LSI 声明类型。 */
+    @JvmStatic
+    fun toLsiGeneratedTargetType(
+        graph: DtoGraph,
+        prop: DtoProp,
+        generatedOwnerTypeName: LsiPoetTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
+    ): LsiDeclaredType {
+        val generatedTypeName = generatedTargetTypeNameOrNull(
+            graph = graph,
+            prop = prop,
+            generatedOwnerTypeName = generatedOwnerTypeName,
+            generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+            batchRootDtoTypeNames = batchRootDtoTypeNames,
+        )
+        if (generatedTypeName != null) {
+            return LsiDeclaredType(generatedTypeName.typeId)
+        }
+        promotedRootPropAndOwnerOccurrenceOrNull(
+            graph = graph,
+            prop = prop,
+            generatedOwnerTypeName = generatedOwnerTypeName,
+            generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+        )?.let { (promotedProp, promotedOwnerTypeName) ->
+            return toLsiGeneratedTargetType(
+                graph = graph,
+                prop = promotedProp,
+                generatedOwnerTypeName = promotedOwnerTypeName,
+                generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+                batchRootDtoTypeNames = batchRootDtoTypeNames,
+            )
+        }
+        val reference = (prop as? DtoBaseProp)?.tailProp(graph)?.targetTypeReference
+        return requireNotNull(reference) {
+            "Frozen DTO property has no generated target type: ${prop.id.value}"
+        }.toLsiType()
+    }
+
+    /** 返回当前生成位置中的精确目标名称；外部 reusable 类型交给 workspace 解析。 */
+    @JvmStatic
+    fun generatedTargetTypeNameOrNull(
+        graph: DtoGraph,
+        prop: DtoProp,
+        generatedOwnerTypeName: LsiPoetTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
+    ): LsiPoetTypeName? {
+        require(graph.propsById[prop.id] === prop) {
+            "Frozen DTO property does not belong to its graph: ${prop.id.value}"
+        }
+        require(generatedDtoTypeIdsByTypeName[generatedOwnerTypeName] == prop.ownerTypeId) {
+            "Generated DTO owner '${generatedOwnerTypeName.canonicalName}' is not an occurrence of " +
+                "'${prop.ownerTypeId.value}' for property '${prop.id.value}'"
+        }
+        promotedRootPropAndOwnerOccurrenceOrNull(
+            graph = graph,
+            prop = prop,
+            generatedOwnerTypeName = generatedOwnerTypeName,
+            generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+        )?.let { (promotedProp, promotedOwnerTypeName) ->
+            return generatedTargetTypeNameOrNull(
+                graph = graph,
+                prop = promotedProp,
+                generatedOwnerTypeName = promotedOwnerTypeName,
+                generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+                batchRootDtoTypeNames = batchRootDtoTypeNames,
+            )
+        }
+        return when (prop) {
+            is DtoBaseProp -> prop.generatedTargetTypeNameOrNull(
+                graph = graph,
+                generatedOwnerTypeName = generatedOwnerTypeName,
+                generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+                batchRootDtoTypeNames = batchRootDtoTypeNames,
+            )
+            is DtoFoldProp -> generatedTargetTypeName(
+                graph = graph,
+                targetType = graph.typesById.getValue(prop.targetTypeId),
+                generatedOwnerTypeName = generatedOwnerTypeName,
+                generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+            )
+            is DtoUserProp -> throw IllegalArgumentException(
+                "DTO user property has no generated target type: ${prop.id.value}",
+            )
+        }
+    }
+
+    private fun DtoBaseProp.generatedTargetTypeNameOrNull(
+        graph: DtoGraph,
+        generatedOwnerTypeName: LsiPoetTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
+    ): LsiPoetTypeName? {
+        val targetProp = tailProp(graph)
+        targetProp.targetTypeReference?.let { reference ->
+            return reusableTarget(reference, batchRootDtoTypeNames)
+        }
+        val targetTypeId = requireNotNull(targetProp.targetTypeId) {
+            "Frozen DTO base property has no generated target type: ${targetProp.id.value}"
+        }
+        val targetType = graph.typesById.getValue(targetTypeId)
+        if (targetProp.recursive && !targetType.focusedRecursion) {
+            return generatedOwnerTypeName
+        }
+        return generatedTargetTypeName(
+            graph = graph,
+            targetType = targetType,
+            generatedOwnerTypeName = generatedOwnerTypeName,
+            generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+        )
+    }
+
+    private fun generatedTargetTypeName(
+        graph: DtoGraph,
+        targetType: DtoType,
+        generatedOwnerTypeName: LsiPoetTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+    ): LsiPoetTypeName {
+        require(graph.typesById[targetType.id] === targetType) {
+            "Frozen DTO target type does not belong to its graph: ${targetType.id.value}"
+        }
+        require(targetType.name == null) {
+            "Generated nested DTO target must be anonymous: ${targetType.id.value}"
+        }
+        return requireDirectChildOccurrence(
+            ownerTypeName = generatedOwnerTypeName,
+            targetTypeId = targetType.id,
+            typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+        )
+    }
+
+    private fun promotedRootPropAndOwnerOccurrenceOrNull(
+        graph: DtoGraph,
+        prop: DtoProp,
+        generatedOwnerTypeName: LsiPoetTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+    ): Pair<DtoProp, LsiPoetTypeName>? {
+        val polymorphicParents = graph.types.filter { candidate ->
+            candidate.polymorphism?.branches?.any { branch ->
+                branch.mergedTypeId == prop.ownerTypeId
+            } == true
+        }
+        require(polymorphicParents.size <= 1) {
+            "Frozen DTO type '${prop.ownerTypeId.value}' has multiple polymorphic parents"
+        }
+        val polymorphicParent = polymorphicParents.singleOrNull() ?: return null
+        val promotedProp = polymorphicParent.promotedPolymorphicRootPropOrNull(graph, prop) ?: return null
+        require(generatedOwnerTypeName.simpleNames.size > 1) {
+            "Generated polymorphic DTO occurrence has no parent: ${generatedOwnerTypeName.canonicalName}"
+        }
+        val generatedParentTypeName = create(
+            packageName = generatedOwnerTypeName.packageName,
+            simpleNames = generatedOwnerTypeName.simpleNames.dropLast(1),
+        )
+        require(generatedDtoTypeIdsByTypeName[generatedParentTypeName] == polymorphicParent.id) {
+            "Generated polymorphic parent '${generatedParentTypeName.canonicalName}' is not an occurrence of " +
+                "'${polymorphicParent.id.value}'"
+        }
+        return promotedProp to generatedParentTypeName
+    }
+
     private class RootPlanner(
         private val graph: DtoGraph,
         private val typeIdsByTypeName: MutableMap<LsiPoetTypeName, DtoTypeId>,
@@ -234,7 +403,7 @@ internal object JimmerDtoPoetTypeNames {
                 if (polymorphicRoot?.promotedPolymorphicRootPropOrNull(graph, prop) != null) {
                     continue
                 }
-                val targetType = prop.generatedTargetType(graph) ?: continue
+                val targetType = prop.generatedTargetTypeForRegistration() ?: continue
                 visitTarget(targetType, typeName, prop.name)
             }
             for (prop in type.foldPropsInDeclarationOrder(graph)) {
@@ -281,6 +450,17 @@ internal object JimmerDtoPoetTypeNames {
                 ownerTypeName.simpleNames,
             )
             visit(targetType, nested(ownerTypeName, targetSimpleName), null)
+        }
+
+        private fun DtoBaseProp.generatedTargetTypeForRegistration(): DtoType? {
+            val targetType = generatedTargetType(graph)
+            if (nextPropId != null) {
+                val tailTargetType = tailProp(graph).generatedTargetType(graph)
+                require(targetType?.id == tailTargetType?.id) {
+                    "Frozen flattened DTO property '${id.value}' has different head and tail generated targets"
+                }
+            }
+            return targetType
         }
 
         private fun nested(

@@ -36,7 +36,7 @@ internal object KspDtoTypeRefRenderer {
         return render(LsiDeclaredType(typeName.typeId), workspace, listOf(typeName))
     }
 
-    private fun render(
+    fun render(
         type: LsiTypeRef,
         workspace: LsiWorkspace,
         generatedTypeNames: Collection<LsiPoetTypeName>,
