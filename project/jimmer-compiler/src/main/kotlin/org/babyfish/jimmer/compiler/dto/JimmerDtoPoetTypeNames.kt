@@ -137,6 +137,41 @@ internal object JimmerDtoPoetTypeNames {
         }
     }
 
+    /** 返回指定生成声明直属子级中的唯一目标 occurrence。 */
+    @JvmStatic
+    fun requireDirectChildOccurrence(
+        ownerTypeName: LsiPoetTypeName,
+        targetTypeId: DtoTypeId,
+        typeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+    ): LsiPoetTypeName {
+        return requireNotNull(
+            directChildOccurrenceOrNull(ownerTypeName, targetTypeId, typeIdsByTypeName)
+        ) {
+            "Generated DTO owner '${ownerTypeName.canonicalName}' must contain exactly one direct " +
+                "occurrence of frozen type '${targetTypeId.value}'"
+        }
+    }
+
+    /** 返回指定生成声明直属子级中的可选目标 occurrence。 */
+    @JvmStatic
+    fun directChildOccurrenceOrNull(
+        ownerTypeName: LsiPoetTypeName,
+        targetTypeId: DtoTypeId,
+        typeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+    ): LsiPoetTypeName? {
+        val matches = typeIdsByTypeName.entries.filter { (typeName, typeId) ->
+            typeId == targetTypeId &&
+                typeName.packageName == ownerTypeName.packageName &&
+                typeName.simpleNames.size == ownerTypeName.simpleNames.size + 1 &&
+                typeName.simpleNames.dropLast(1) == ownerTypeName.simpleNames
+        }
+        require(matches.size <= 1) {
+            "Generated DTO owner '${ownerTypeName.canonicalName}' contains multiple direct occurrences " +
+                "of frozen type '${targetTypeId.value}'"
+        }
+        return matches.singleOrNull()?.key
+    }
+
     /** 返回冻结 DTO 类型已经注册的精确生成名称。 */
     @JvmStatic
     fun requireRegistered(

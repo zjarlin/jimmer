@@ -17,6 +17,7 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetCodeBuilder
 import site.addzero.lsi.poet.LsiPoetFile
+import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedSymbolIds
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames

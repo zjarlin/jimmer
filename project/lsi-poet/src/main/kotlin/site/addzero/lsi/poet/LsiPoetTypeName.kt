@@ -37,6 +37,19 @@ data class LsiPoetTypeName(
     }
 }
 
+/** 使用显式包名和简单名创建顶层生成类型的精确源码名称。 */
+fun generatedTopLevelPoetTypeName(
+    packageName: String,
+    simpleName: String,
+): LsiPoetTypeName {
+    val qualifiedName = if (packageName.isEmpty()) simpleName else "$packageName.$simpleName"
+    return LsiPoetTypeName(
+        typeId = LsiSymbolId.type(qualifiedName),
+        packageName = packageName,
+        simpleNames = listOf(simpleName),
+    )
+}
+
 /**
  * 从冻结声明及显式生成类型中解析精确源码名称，不根据字符大小写推断包边界。
  */

@@ -11,7 +11,6 @@ import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
-import org.babyfish.jimmer.compiler.render.apt.AptDtoConfigRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEnumRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
@@ -19,6 +18,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoLoadedStateRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoMetadataFetcherRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicBranchRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicInputRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicMetadataConverterRenderer;
@@ -31,7 +31,6 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeRefRenderer;
 import org.babyfish.jimmer.dto.compiler.*;
 import org.babyfish.jimmer.impl.util.StringUtil;
 import org.babyfish.jimmer.runtime.ImmutableSpi;
-import org.babyfish.jimmer.sql.Id;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import site.addzero.lsi.core.LsiLanguage;
@@ -432,7 +431,7 @@ public class DtoGenerator {
         }
         generateNestedDtoTypes();
 
-        addPolymorphicMetadata(polymorphism);
+        addPolymorphicMetadata();
         ClassName superInterfaceName = getDtoClassName();
         DtoPolymorphicBranch<ImmutableType, ImmutableProp> defaultBranch = polymorphism.getDefaultBranch();
         if (defaultBranch != null) {
@@ -821,12 +820,22 @@ public class DtoGenerator {
                 )
                 .indent()
                 .add("$T.class,\n", getDtoClassName())
-                .add("$T.$L", dtoType.getBaseType().getFetcherClassName(), "$")
-                .indent();
-        addFetcherFields(dtoType, lsiDtoType, cb);
+                .add(
+                        "$L",
+                        AptDtoMetadataFetcherRenderer.render(
+                                lsiDtoType,
+                                lsiGraph,
+                                immutableSchema,
+                                lsiWorkspace,
+                                configContractResolution,
+                                getGeneratedDtoPackageName(),
+                                getGeneratedDtoSimpleNames(),
+                                generatedDtoTypeIdsByTypeName,
+                                batchRootDtoTypeNames
+                        )
+                );
         cb
                 .add(",\n")
-                .unindent()
                 .add("$T::new\n", getDtoClassName())
                 .unindent()
                 .unindent()
@@ -835,7 +844,7 @@ public class DtoGenerator {
         typeBuilder.addField(builder.build());
     }
 
-    private void addPolymorphicMetadata(DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism) {
+    private void addPolymorphicMetadata() {
         FieldSpec.Builder builder = FieldSpec
                 .builder(
                         ParameterizedTypeName.get(
@@ -858,13 +867,21 @@ public class DtoGenerator {
                 )
                 .indent()
                 .add("$T.class,\n", getDtoClassName())
-                .add("$T.$L", dtoType.getBaseType().getFetcherClassName(), "$")
-                .indent();
-        addFetcherFields(dtoType, lsiDtoType, cb);
-        for (DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch : polymorphism.getTypeBranches()) {
-            addPolymorphicTypeFetcherBranch(branch, cb);
-        }
-        cb.add(",\n");
+                .add(
+                        "$L",
+                        AptDtoMetadataFetcherRenderer.render(
+                                lsiDtoType,
+                                lsiGraph,
+                                immutableSchema,
+                                lsiWorkspace,
+                                configContractResolution,
+                                getGeneratedDtoPackageName(),
+                                getGeneratedDtoSimpleNames(),
+                                generatedDtoTypeIdsByTypeName,
+                                batchRootDtoTypeNames
+                        )
+                );
+        cb.add(",\n").indent();
         cb.add(
                 "$L",
                 AptDtoPolymorphicMetadataConverterRenderer.render(
@@ -881,120 +898,6 @@ public class DtoGenerator {
                 .add(")");
         builder.initializer(cb.build());
         typeBuilder.addField(builder.build());
-    }
-
-    private void addPolymorphicTypeFetcherBranch(
-            DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch,
-            CodeBlock.Builder cb
-    ) {
-        ImmutableType targetType = branch.getTargetType();
-        assert targetType != null;
-        site.addzero.lsi.jimmer.dto.DtoType branchLsiType = DtoGenerationExtensionsKt.bodyType(
-                lsiPolymorphicBranch(branch),
-                lsiGraph
-        );
-        if (targetType.equals(dtoType.getBaseType())) {
-            addFetcherFields(branch.getDtoType(), branchLsiType, cb);
-            return;
-        }
-        cb.add("\n.forType($T.$L", targetType.getFetcherClassName(), "$").indent();
-        addFetcherFields(branch.getDtoType(), branchLsiType, cb);
-        cb.unindent().add("\n)");
-    }
-
-    private void addFetcherFields(
-            DtoType<ImmutableType, ImmutableProp> dtoType,
-            site.addzero.lsi.jimmer.dto.DtoType lsiType,
-            CodeBlock.Builder cb
-    ) {
-        for (DtoProp<ImmutableType, ImmutableProp> prop : dtoType.getDtoProps()) {
-            if (prop.getNextProp() == null) {
-                addFetcherField(
-                        prop,
-                        DtoGenerationExtensionsKt.baseProp(lsiType, lsiGraph, prop.getName()),
-                        cb
-                );
-            }
-        }
-        List<DtoBaseProp> hiddenLsiProps = DtoGenerationExtensionsKt.hiddenFlatPropsInDeclarationOrder(
-                lsiType,
-                lsiGraph
-        );
-        for (DtoProp<ImmutableType, ImmutableProp> hiddenProp : dtoType.getHiddenFlatProps()) {
-            if (!hiddenProp.getBaseProp().isId()) {
-                addHiddenFetcherField(
-                        hiddenProp,
-                        hiddenLsiProps.stream()
-                                .filter(prop -> prop.getName().equals(hiddenProp.getName()))
-                                .findFirst()
-                                .orElseThrow(() -> new DtoException(
-                                        "No frozen hidden flat property \"" + hiddenProp.getName() + "\""
-                                )),
-                        cb
-                );
-            }
-        }
-        for (FoldProp<ImmutableType, ImmutableProp> foldProp : dtoType.getFoldProps()) {
-            site.addzero.lsi.jimmer.dto.DtoFoldProp lsiFoldProp = DtoGenerationExtensionsKt.foldProp(
-                    lsiType,
-                    lsiGraph,
-                    foldProp.getName()
-            );
-            addFetcherFields(
-                    foldProp.getTargetType(),
-                    DtoGenerationExtensionsKt.generatedTargetType(lsiFoldProp, lsiGraph),
-                    cb
-            );
-        }
-    }
-
-    private void addFetcherField(
-            DtoProp<ImmutableType, ImmutableProp> prop,
-            DtoBaseProp lsiProp,
-            CodeBlock.Builder cb
-    ) {
-        if (prop.getBaseProp().getAnnotation(Id.class) == null) {
-            boolean configured = lsiProp.getConfig() != null;
-            if (prop.getTarget() != null) {
-                if (prop.isRecursive()) {
-                    cb.add("\n.$N(", StringUtil.identifier("recursive", prop.getBaseProp().getName()));
-                } else {
-                    cb.add("\n.$N(", prop.getBaseProp().getName());
-                }
-                if (configured) {
-                    cb.add("\n$>");
-                }
-                if (!prop.isRecursive()) {
-                    cb.add("$T.METADATA.getFetcher()", getPropElementName(prop));
-                    if (configured) {
-                        cb.add(", \n");
-                    }
-                }
-            } else {
-                cb.add("\n.$N(", prop.getBaseProp().getName());
-            }
-            if (configured) {
-                addConfigLambda(cb, lsiProp);
-                cb.add("$<\n");
-            }
-            cb.add(")");
-        }
-    }
-
-    private void addConfigLambda(
-            CodeBlock.Builder cb,
-            DtoBaseProp prop
-    ) {
-        cb.add(
-                "$L",
-                AptDtoConfigRenderer.render(
-                        prop,
-                        lsiGraph,
-                        immutableSchema,
-                        lsiWorkspace,
-                        configContractResolution
-                )
-        );
     }
 
     private void addAccessorField(DtoProp<ImmutableType, ImmutableProp> prop) {
@@ -1203,39 +1106,6 @@ public class DtoGenerator {
             return false;
         }
         return getPropTypeName(prop).equals(prop.getBaseProp().getTypeName());
-    }
-
-    private void addHiddenFetcherField(
-            DtoProp<ImmutableType, ImmutableProp> prop,
-            DtoBaseProp lsiProp,
-            CodeBlock.Builder cb
-    ) {
-        if (!"flat".equals(prop.getFuncName())) {
-            addFetcherField(prop, lsiProp, cb);
-            return;
-        }
-        DtoType<ImmutableType, ImmutableProp> targetDtoType = prop.getTargetType();
-        assert targetDtoType != null;
-        site.addzero.lsi.jimmer.dto.DtoType targetLsiType = DtoGenerationExtensionsKt.generatedTargetType(
-                lsiProp,
-                lsiGraph
-        );
-        if (targetLsiType == null) {
-            throw new DtoException(
-                    "Frozen flat DTO property \"" + lsiProp.getName() +
-                            "\" has no generated target type"
-            );
-        }
-        cb.add("\n.$N($>", prop.getBaseProp().getName());
-        cb.add("$T.$L$>", prop.getBaseProp().getTargetType().getFetcherClassName(), "$");
-        for (DtoProp<ImmutableType, ImmutableProp> childProp : targetDtoType.getDtoProps()) {
-            addHiddenFetcherField(
-                    childProp,
-                    DtoGenerationExtensionsKt.baseProp(targetLsiType, lsiGraph, childProp.getName()),
-                    cb
-            );
-        }
-        cb.add("$<$<\n)");
     }
 
     private void addField(AbstractProp prop) {

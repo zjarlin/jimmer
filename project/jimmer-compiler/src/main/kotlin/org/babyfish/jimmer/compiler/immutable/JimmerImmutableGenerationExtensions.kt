@@ -27,12 +27,6 @@ import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
-internal val ImmutableType.packageName: String
-    get() = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
-
-internal val ImmutableType.simpleName: String
-    get() = qualifiedName.substringAfterLast('.')
-
 internal fun ImmutableSchema.generatedFetcherTypes(
     currentTypeIds: Set<LsiSymbolId>,
 ): List<ImmutableType> {

@@ -20,6 +20,8 @@ import site.addzero.lsi.jimmer.elementTypeOrSelf
 import site.addzero.lsi.jimmer.hasAnnotation
 import site.addzero.lsi.jimmer.idViewBasePropOrSelf
 import site.addzero.lsi.jimmer.isConcreteEntityAssociation
+import site.addzero.lsi.jimmer.packageName
+import site.addzero.lsi.jimmer.simpleName
 import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
 import site.addzero.lsi.jimmer.targetTypeOf
 import site.addzero.lsi.model.LsiAnnotation
@@ -57,6 +59,7 @@ import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
 

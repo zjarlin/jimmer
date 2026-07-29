@@ -4,6 +4,14 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeRef
 
+/** 返回不可变类型限定名中的包名部分。 */
+val ImmutableType.packageName: String
+    get() = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
+
+/** 返回不可变类型限定名中的简单名部分。 */
+val ImmutableType.simpleName: String
+    get() = qualifiedName.substringAfterLast('.')
+
 /** 返回属性的具体不可变目标类型，泛型目标尚未具体化时返回空。 */
 fun ImmutableSchema.targetTypeOf(prop: ImmutableProp): ImmutableType? {
     return prop.targetTypeId?.let(typesById::get)

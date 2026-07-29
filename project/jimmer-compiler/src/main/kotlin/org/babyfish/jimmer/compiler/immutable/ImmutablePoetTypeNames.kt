@@ -18,18 +18,6 @@ internal fun LsiSymbolId.topLevelPoetTypeName(): LsiPoetTypeName {
     }
 }
 
-internal fun generatedTopLevelPoetTypeName(
-    packageName: String,
-    simpleName: String,
-): LsiPoetTypeName {
-    val qualifiedName = if (packageName.isEmpty()) simpleName else "$packageName.$simpleName"
-    return LsiPoetTypeName(
-        typeId = LsiSymbolId.type(qualifiedName),
-        packageName = packageName,
-        simpleNames = listOf(simpleName),
-    )
-}
-
 internal fun generatedNestedPoetTypeName(
     packageName: String,
     simpleNames: List<String>,

@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
@@ -23,6 +24,7 @@ import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
+import site.addzero.lsi.poet.LsiPoetTypeName
 
 class JimmerDtoPoetTypeNamesTest {
 
@@ -93,6 +95,107 @@ class JimmerDtoPoetTypeNamesTest {
                 graph = fixture.graph,
                 rootType = fixture.rootType,
                 batchRootTypeNames = batchRootTypeNames,
+            )
+        }
+    }
+
+    @Test
+    fun `finds only the direct child occurrence in the owner package`() {
+        val ownerTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView"),
+        )
+        val directChildTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView", "TargetOf_detail"),
+        )
+        val crossPackageTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "other.dto",
+            simpleNames = listOf("RootView", "TargetOf_detail"),
+        )
+        val grandchildTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView", "Container", "TargetOf_detail"),
+        )
+        val typeIdsByTypeName = linkedMapOf(
+            crossPackageTypeName to DETAIL_TARGET_TYPE_ID,
+            grandchildTypeName to DETAIL_TARGET_TYPE_ID,
+            directChildTypeName to DETAIL_TARGET_TYPE_ID,
+        )
+
+        assertEquals(
+            directChildTypeName,
+            JimmerDtoPoetTypeNames.directChildOccurrenceOrNull(
+                ownerTypeName = ownerTypeName,
+                targetTypeId = DETAIL_TARGET_TYPE_ID,
+                typeIdsByTypeName = typeIdsByTypeName,
+            ),
+        )
+        assertEquals(
+            directChildTypeName,
+            JimmerDtoPoetTypeNames.requireDirectChildOccurrence(
+                ownerTypeName = ownerTypeName,
+                targetTypeId = DETAIL_TARGET_TYPE_ID,
+                typeIdsByTypeName = typeIdsByTypeName,
+            ),
+        )
+    }
+
+    @Test
+    fun `returns null for missing direct child and rejects it when required`() {
+        val ownerTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView"),
+        )
+        val typeIdsByTypeName = emptyMap<LsiPoetTypeName, DtoTypeId>()
+
+        assertNull(
+            JimmerDtoPoetTypeNames.directChildOccurrenceOrNull(
+                ownerTypeName = ownerTypeName,
+                targetTypeId = DETAIL_TARGET_TYPE_ID,
+                typeIdsByTypeName = typeIdsByTypeName,
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            JimmerDtoPoetTypeNames.requireDirectChildOccurrence(
+                ownerTypeName = ownerTypeName,
+                targetTypeId = DETAIL_TARGET_TYPE_ID,
+                typeIdsByTypeName = typeIdsByTypeName,
+            )
+        }
+    }
+
+    @Test
+    fun `rejects duplicate direct child occurrences through both APIs`() {
+        val ownerTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView"),
+        )
+        val firstDirectChildTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView", "TargetOf_detail"),
+        )
+        val secondDirectChildTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = "demo.dto",
+            simpleNames = listOf("RootView", "TargetOf_detail_2"),
+        )
+        val typeIdsByTypeName = linkedMapOf(
+            firstDirectChildTypeName to DETAIL_TARGET_TYPE_ID,
+            secondDirectChildTypeName to DETAIL_TARGET_TYPE_ID,
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            JimmerDtoPoetTypeNames.directChildOccurrenceOrNull(
+                ownerTypeName = ownerTypeName,
+                targetTypeId = DETAIL_TARGET_TYPE_ID,
+                typeIdsByTypeName = typeIdsByTypeName,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            JimmerDtoPoetTypeNames.requireDirectChildOccurrence(
+                ownerTypeName = ownerTypeName,
+                targetTypeId = DETAIL_TARGET_TYPE_ID,
+                typeIdsByTypeName = typeIdsByTypeName,
             )
         }
     }

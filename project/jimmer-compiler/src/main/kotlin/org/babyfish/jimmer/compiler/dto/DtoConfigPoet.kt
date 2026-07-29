@@ -466,7 +466,7 @@ private val BIG_INTEGER_ID = LsiSymbolId.type("java.math.BigInteger")
 
 private val BIG_DECIMAL_ID = LsiSymbolId.type("java.math.BigDecimal")
 
-private val DTO_CONFIG_RUNTIME_TYPE_NAMES = listOf(
+internal val DTO_CONFIG_RUNTIME_TYPE_NAMES = listOf(
     JimmerDtoPoetTypeNames.create("org.babyfish.jimmer.sql.fetcher", listOf("ReferenceFetchType")),
     JimmerDtoPoetTypeNames.create("org.babyfish.jimmer.sql.ast", listOf("Predicate")),
     JimmerDtoPoetTypeNames.create("java.math", listOf("BigInteger")),

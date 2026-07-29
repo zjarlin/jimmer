@@ -15,8 +15,10 @@ import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.elementTypeOrSelf
 import site.addzero.lsi.jimmer.isEntityAssociation
+import site.addzero.lsi.jimmer.packageName
 import site.addzero.lsi.jimmer.primaryLineageOwner
 import site.addzero.lsi.jimmer.semanticDependencySymbols
+import site.addzero.lsi.jimmer.simpleName
 import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
 import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.jimmer.targetTypeOf
@@ -56,6 +58,7 @@ import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
 import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
+import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
 

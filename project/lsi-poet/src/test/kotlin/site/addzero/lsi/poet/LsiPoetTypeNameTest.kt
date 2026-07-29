@@ -16,6 +16,26 @@ import site.addzero.lsi.model.LsiWorkspace
 class LsiPoetTypeNameTest {
 
     @Test
+    fun `使用显式边界创建顶层生成类型名`() {
+        assertEquals(
+            LsiPoetTypeName(
+                typeId = LsiSymbolId.type("Demo.API.Result"),
+                packageName = "Demo.API",
+                simpleNames = listOf("Result"),
+            ),
+            generatedTopLevelPoetTypeName("Demo.API", "Result"),
+        )
+        assertEquals(
+            LsiPoetTypeName(
+                typeId = LsiSymbolId.type("Result"),
+                packageName = "",
+                simpleNames = listOf("Result"),
+            ),
+            generatedTopLevelPoetTypeName("", "Result"),
+        )
+    }
+
+    @Test
     fun `保留大写包和小写嵌套类型的精确边界`() {
         val typeName = LsiPoetTypeName(
             typeId = LsiSymbolId.type("Demo.API.order.item"),

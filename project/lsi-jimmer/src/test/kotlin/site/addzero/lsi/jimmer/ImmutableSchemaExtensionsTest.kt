@@ -14,6 +14,25 @@ import site.addzero.lsi.model.LsiTypeArgument
 class ImmutableSchemaExtensionsTest {
 
     @Test
+    fun `解析不可变类型的包名和简单名`() {
+        val packagedType = type(
+            id = LsiSymbolId.type("Demo.API.Book"),
+            kind = ImmutableTypeKind.IMMUTABLE,
+            props = emptyList(),
+        )
+        val defaultPackageType = type(
+            id = LsiSymbolId.type("Book"),
+            kind = ImmutableTypeKind.IMMUTABLE,
+            props = emptyList(),
+        )
+
+        assertEquals("Demo.API", packagedType.packageName)
+        assertEquals("Book", packagedType.simpleName)
+        assertEquals("", defaultPackageType.packageName)
+        assertEquals("Book", defaultPackageType.simpleName)
+    }
+
+    @Test
     fun `resolves concrete and generic association semantics`() {
         val authorId = LsiSymbolId.type("demo.Author")
         val authorIdProp = prop(
@@ -99,7 +118,7 @@ private fun type(
 ): ImmutableType {
     return ImmutableType(
         id = id,
-        qualifiedName = id.value,
+        qualifiedName = id.requireTypeQualifiedName(),
         kind = kind,
         documentation = null,
         annotations = emptyList(),

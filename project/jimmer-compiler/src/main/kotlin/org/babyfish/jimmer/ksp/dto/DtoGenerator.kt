@@ -8,7 +8,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoConfigRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEnumRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
@@ -49,7 +49,6 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
 import site.addzero.lsi.jimmer.dto.baseProp
-import site.addzero.lsi.jimmer.dto.bodyType
 import site.addzero.lsi.jimmer.dto.boundImmutableProp
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.dtoAssociatedIdClientType
@@ -62,7 +61,6 @@ import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedTargetTypeOrNull
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
-import site.addzero.lsi.jimmer.dto.hiddenFlatPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
@@ -76,6 +74,7 @@ import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNu
 import site.addzero.lsi.jimmer.dto.tailProp
 import site.addzero.lsi.jimmer.dto.userProp
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.poet.LsiPoetImport
 import site.addzero.lsi.poet.LsiPoetTypeName
 import java.io.OutputStreamWriter
 import java.util.*
@@ -120,6 +119,9 @@ internal class DtoGenerator private constructor(
         (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
 
     private val locallyGeneratedDtoTypeIds = mutableSetOf<DtoTypeId>()
+
+    private val metadataFetcherPoetImports: MutableSet<LsiPoetImport> =
+        parent?.metadataFetcherPoetImports ?: linkedSetOf()
 
     private val interfacePropNames = interfaceContractResolution
         .contractFor(lsiDtoType)
@@ -266,7 +268,6 @@ internal class DtoGenerator private constructor(
                         dtoType.name!!
                     ).apply {
                         indent("    ")
-                        addImports()
                         val builder = TypeSpec
                             .classBuilder(dtoType.name!!)
                             .apply {
@@ -288,6 +289,7 @@ internal class DtoGenerator private constructor(
                         } finally {
                             _typeBuilder = null
                         }
+                        addImports()
                     }.build()
                 val writer = OutputStreamWriter(it, Charsets.UTF_8)
                 fileSpec.writeTo(writer)
@@ -346,9 +348,9 @@ internal class DtoGenerator private constructor(
                         dtoType.name!!
                     ).apply {
                         indent("    ")
-                        addImports()
                         addType(buildPolymorphicType(baseContractKind))
                         addExtensions(includeBlockConverter = false)
+                        addImports()
                     }.build()
                 val writer = OutputStreamWriter(it, Charsets.UTF_8)
                 fileSpec.writeTo(writer)
@@ -401,8 +403,13 @@ internal class DtoGenerator private constructor(
         val packages = sortedSetOf<String>().also {
             collectImports(dtoType, it)
         }
-        for (pkg in packages) {
-            addImport(pkg, "by")
+        val imports = sortedSetOf(
+            compareBy<LsiPoetImport>({ it.packageName }, { it.simpleName })
+        )
+        packages.mapTo(imports) { packageName -> LsiPoetImport(packageName, "by") }
+        imports += metadataFetcherPoetImports
+        for (sourceImport in imports) {
+            addImport(sourceImport.packageName, sourceImport.simpleName)
         }
     }
 
@@ -763,7 +770,23 @@ internal class DtoGenerator private constructor(
                             )
                             indent()
                             add("%T::class.java,\n", getDtoClassName())
-                            metadataFetcherExpr()
+                            add(
+                                "%L",
+                                KspDtoMetadataFetcherRenderer.render(
+                                    dtoType = lsiDtoType,
+                                    graph = lsiGraph,
+                                    immutableSchema = immutableSchema,
+                                    workspace = workspace,
+                                    configContractResolution = configContractResolution,
+                                    generatedPackageName = generatedDtoPackageName,
+                                    generatedSimpleNames = generatedDtoSimpleNames,
+                                    generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+                                    batchRootDtoTypeNames = rootDtoTypeNamesByTypeId,
+                                    registerImport = { sourceImport ->
+                                        metadataFetcherPoetImports += sourceImport
+                                    },
+                                )
+                            )
                             add(",\n::%T\n", getDtoClassName())
                             unindent()
                             add(")")
@@ -800,7 +823,23 @@ internal class DtoGenerator private constructor(
                             )
                             indent()
                             add("%T::class.java,\n", getDtoClassName())
-                            metadataFetcherExpr()
+                            add(
+                                "%L",
+                                KspDtoMetadataFetcherRenderer.render(
+                                    dtoType = lsiDtoType,
+                                    graph = lsiGraph,
+                                    immutableSchema = immutableSchema,
+                                    workspace = workspace,
+                                    configContractResolution = configContractResolution,
+                                    generatedPackageName = generatedDtoPackageName,
+                                    generatedSimpleNames = generatedDtoSimpleNames,
+                                    generatedDtoTypeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+                                    batchRootDtoTypeNames = rootDtoTypeNamesByTypeId,
+                                    registerImport = { sourceImport ->
+                                        metadataFetcherPoetImports += sourceImport
+                                    },
+                                )
+                            )
                             add(",\n")
                             KspDtoPolymorphicMetadataConverterRenderer.appendTo(
                                 builder = this,
@@ -819,178 +858,6 @@ internal class DtoGenerator private constructor(
                 )
                 .build()
         )
-    }
-
-    private fun CodeBlock.Builder.metadataFetcherExpr(
-        sourceDtoType: DtoType<ImmutableType, ImmutableProp> = dtoType,
-        sourceLsiType: LsiDtoType = lsiDtoType,
-    ) {
-        val sourceBaseType = requireNotNull(sourceDtoType.baseType) {
-            "Generated DTO '${sourceDtoType.qualifiedName ?: sourceDtoType.name ?: "<anonymous>"}' " +
-                "has no immutable base type"
-        }
-        add(
-            "%T(%T::class).by {\n",
-            NEW_FETCHER_FUN_CLASS_NAME,
-            sourceBaseType.className
-        )
-        indent()
-        addFetcherFields(sourceDtoType, sourceLsiType)
-        if (sourceDtoType === dtoType) {
-            dtoType.polymorphism?.let { polymorphism ->
-                for (branch in polymorphism.typeBranches) {
-                    addPolymorphicTypeFetcherBranch(branch)
-                }
-            }
-        }
-        unindent()
-        add("}")
-    }
-
-    private fun CodeBlock.Builder.addFetcherFields(
-        sourceDtoType: DtoType<ImmutableType, ImmutableProp>,
-        sourceLsiType: LsiDtoType,
-    ) {
-        for (prop in sourceDtoType.dtoProps) {
-            if (prop.nextProp === null) {
-                addFetcherField(prop, sourceLsiType.baseProp(lsiGraph, prop.name))
-            }
-        }
-        val hiddenLsiProps = sourceLsiType.hiddenFlatPropsInDeclarationOrder(lsiGraph)
-        for (hiddenFlatProp in sourceDtoType.hiddenFlatProps) {
-            if (!hiddenFlatProp.baseProp.isId) {
-                addHiddenFetcherField(
-                    hiddenFlatProp,
-                    hiddenLsiProps.single { prop -> prop.name == hiddenFlatProp.name },
-                )
-            }
-        }
-        for (foldProp in sourceDtoType.foldProps) {
-            val lsiFoldProp = sourceLsiType.foldProp(lsiGraph, foldProp.name)
-            addFoldFetcherFields(foldProp.targetType, lsiFoldProp.generatedTargetType(lsiGraph))
-        }
-    }
-
-    private fun CodeBlock.Builder.addPolymorphicTypeFetcherBranch(
-        branch: DtoPolymorphicBranch<ImmutableType, ImmutableProp>,
-    ) {
-        val targetType = branch.targetType ?: error("Internal bug: default branch cannot be rendered as type branch")
-        val branchLsiType = lsiPolymorphicBranch(branch).bodyType(lsiGraph)
-        if (targetType == baseType) {
-            addFetcherFields(branch.dtoType, branchLsiType)
-            return
-        }
-        add("forType(%T::class) {\n", targetType.className)
-        indent()
-        addFetcherFields(branch.dtoType, branchLsiType)
-        unindent()
-        add("}\n")
-    }
-
-    private fun CodeBlock.Builder.addFoldFetcherFields(
-        dtoType: DtoType<ImmutableType, ImmutableProp>,
-        lsiType: LsiDtoType,
-    ) {
-        for (prop in dtoType.dtoProps) {
-            if (prop.nextProp === null) {
-                addFetcherField(prop, lsiType.baseProp(lsiGraph, prop.name))
-            }
-        }
-        val hiddenLsiProps = lsiType.hiddenFlatPropsInDeclarationOrder(lsiGraph)
-        for (hiddenFlatProp in dtoType.hiddenFlatProps) {
-            if (!hiddenFlatProp.baseProp.isId) {
-                addHiddenFetcherField(
-                    hiddenFlatProp,
-                    hiddenLsiProps.single { prop -> prop.name == hiddenFlatProp.name },
-                )
-            }
-        }
-        for (foldProp in dtoType.foldProps) {
-            val lsiFoldProp = lsiType.foldProp(lsiGraph, foldProp.name)
-            addFoldFetcherFields(foldProp.targetType, lsiFoldProp.generatedTargetType(lsiGraph))
-        }
-    }
-
-    private fun CodeBlock.Builder.addFetcherField(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
-        lsiProp: DtoBaseProp,
-    ) {
-        if (!prop.baseProp.isId) {
-            val configured = lsiProp.config != null
-            if (prop.target !== null) {
-                if (prop.isRecursive) {
-                    add("%N", "${prop.baseProp.name}*")
-                    if (!configured) {
-                        add("()")
-                    }
-                } else {
-                    add(
-                        "%N(%T.METADATA.fetcher)",
-                        prop.baseProp.name,
-                        propElementName(prop)
-                    )
-                }
-            } else {
-                add("%N", prop.baseProp.name)
-                if (!configured) {
-                    add("()")
-                }
-            }
-            addConfigLambda(lsiProp)
-            add("\n")
-        }
-    }
-
-    private fun CodeBlock.Builder.addConfigLambda(
-        prop: DtoBaseProp,
-    ) {
-        if (prop.config == null) {
-            return
-        }
-        add(
-            "%L",
-            KspDtoConfigRenderer.render(
-                prop = prop,
-                graph = lsiGraph,
-                immutableSchema = immutableSchema,
-                workspace = workspace,
-                configContractResolution = configContractResolution,
-            )
-        )
-    }
-
-    private fun CodeBlock.Builder.addHiddenFetcherField(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
-        lsiProp: DtoBaseProp,
-    ) {
-        if ("flat" != prop.getFuncName()) {
-            addFetcherField(prop, lsiProp)
-            return
-        }
-        val targetDtoType = prop.getTargetType()!!
-        val targetLsiType = requireNotNull(lsiProp.generatedTargetType(lsiGraph)) {
-            "Frozen flat DTO property '${lsiProp.id.value}' has no generated target type"
-        }
-        add("%N {\n", prop.baseProp.name)
-        indent()
-        for (childProp in targetDtoType.dtoProps) {
-            addHiddenFetcherField(childProp, targetLsiType.baseProp(lsiGraph, childProp.name))
-        }
-        val hiddenLsiProps = targetLsiType.hiddenFlatPropsInDeclarationOrder(lsiGraph)
-        for (hiddenFlatProp in targetDtoType.hiddenFlatProps) {
-            if (!hiddenFlatProp.baseProp.isId) {
-                addHiddenFetcherField(
-                    hiddenFlatProp,
-                    hiddenLsiProps.single { child -> child.name == hiddenFlatProp.name },
-                )
-            }
-        }
-        for (foldProp in targetDtoType.foldProps) {
-            val lsiFoldProp = targetLsiType.foldProp(lsiGraph, foldProp.name)
-            addFoldFetcherFields(foldProp.targetType, lsiFoldProp.generatedTargetType(lsiGraph))
-        }
-        unindent()
-        add("\n}\n")
     }
 
     private fun addStateProp(prop: DtoProp<ImmutableType, ImmutableProp>) {
