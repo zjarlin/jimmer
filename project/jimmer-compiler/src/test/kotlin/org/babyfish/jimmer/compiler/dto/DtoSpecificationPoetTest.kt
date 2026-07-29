@@ -2,6 +2,8 @@ package org.babyfish.jimmer.compiler.dto
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSpecificationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSpecificationRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -15,6 +17,7 @@ import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
 import site.addzero.lsi.jimmer.FormulaKind
 import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableConverter
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -48,7 +51,7 @@ class DtoSpecificationPoetTest {
         val baseType = entityType()
         val schema = ImmutableSchema(listOf(baseType))
         val dtoType = specification(baseType.id)
-        val workspace = workspace(baseType.id)
+        val workspace = workspace(listOf(baseType.id))
 
         val javaMethod = AptDtoSpecificationRenderer
             .renderEntityType(dtoType, schema, workspace)
@@ -83,7 +86,7 @@ class DtoSpecificationPoetTest {
         )
         val schema = ImmutableSchema(listOf(baseType))
         val dtoType = specification(baseType.id)
-        val workspace = workspace(baseType.id)
+        val workspace = workspace(listOf(baseType.id))
 
         val javaMethod = AptDtoSpecificationRenderer
             .renderEntityType(dtoType, schema, workspace)
@@ -192,6 +195,157 @@ class DtoSpecificationPoetTest {
         )
     }
 
+    @Test
+    fun `renders converter methods with scalar and collection semantics for Java`() {
+        val fixture = applyToFixture()
+
+        assertEquals(
+            """
+                private java.lang.Long __convertConvertedCode(java.lang.String value) {
+                  if (convertedCode == null) {
+                    return null;
+                  }
+                  return demo.BookProps.CONVERTED_CODE.unwrap().<java.lang.Long, java.lang.String>getConverter().input(value);
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.convertedCode, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            """
+                private java.util.List<java.lang.Long> __convertConvertedCodes(
+                    java.util.Collection<java.lang.String> value) {
+                  if (convertedCodes == null) {
+                    return null;
+                  }
+                  return demo.BookProps.CONVERTED_CODE.unwrap().<java.util.List<java.lang.Long>, java.util.Collection<java.lang.String>>getConverter(true).input(value);
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.convertedCodes, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            """
+                private java.lang.Long __convertStoreId(java.lang.String value) {
+                  if (storeId == null) {
+                    return null;
+                  }
+                  return demo.BookProps.STORE.unwrap().<java.lang.Long, java.lang.String>getAssociatedIdConverter(false).input(value);
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.storeId, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            """
+                private java.util.List<java.lang.Long> __convertAuthorIds(
+                    java.util.Collection<java.lang.String> value) {
+                  if (authorIds == null) {
+                    return null;
+                  }
+                  return demo.BookProps.AUTHORS.unwrap().<java.util.List<java.lang.Long>, java.util.Collection<java.lang.String>>getAssociatedIdConverter(true).input(value);
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.authorIds, LsiLanguage.JAVA),
+        )
+    }
+
+    @Test
+    fun `renders converter methods with scalar and collection semantics for Kotlin`() {
+        val fixture = applyToFixture()
+
+        assertEquals(
+            """
+                public fun _convertConvertedCode(`value`: kotlin.String?): kotlin.Long? {
+                  if (value === null) {
+                    return null
+                  }
+                  return demo.BookProps.CONVERTED_CODE.unwrap().getConverter<kotlin.Long?, kotlin.String>().input(value)
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.convertedCode, LsiLanguage.KOTLIN),
+        )
+        assertEquals(
+            """
+                public fun _convertConvertedCodes(`value`: kotlin.collections.Collection<kotlin.String>?): kotlin.collections.List<kotlin.Long>? {
+                  if (value === null) {
+                    return null
+                  }
+                  return demo.BookProps.CONVERTED_CODE.unwrap().getConverter<kotlin.collections.List<kotlin.Long>?, kotlin.collections.Collection<kotlin.String>>(true).input(value)
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.convertedCodes, LsiLanguage.KOTLIN),
+        )
+        assertEquals(
+            """
+                public fun _convertStoreId(`value`: kotlin.String?): kotlin.Long? {
+                  if (value === null) {
+                    return null
+                  }
+                  return demo.BookProps.STORE.unwrap().getAssociatedIdConverter<kotlin.Long?, kotlin.String>(false).input(value)
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.storeId, LsiLanguage.KOTLIN),
+        )
+        assertEquals(
+            """
+                public fun _convertAuthorIds(`value`: kotlin.collections.Collection<kotlin.String>?): kotlin.collections.List<kotlin.Long>? {
+                  if (value === null) {
+                    return null
+                  }
+                  return demo.BookProps.AUTHORS.unwrap().getAssociatedIdConverter<kotlin.collections.List<kotlin.Long>?, kotlin.collections.Collection<kotlin.String>>(true).input(value)
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.authorIds, LsiLanguage.KOTLIN),
+        )
+    }
+
+    @Test
+    fun `renders enum converter and rejects unsupported targets`() {
+        val fixture = applyToFixture()
+
+        assertEquals(
+            """
+                private demo.Status __convertStatus(java.lang.Integer value) {
+                  if (status == null) {
+                    return null;
+                  }
+                  switch ((int)value) {
+                    case 1:
+                      return demo.Status.ACTIVE;
+                    case 0:
+                      return demo.Status.INACTIVE;
+                    default:
+                      throw new IllegalArgumentException("Illegal value `\"" + value + "\"`for enum type: \"demo.Status\"");
+                  }
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.status, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            """
+                public fun _convertStatus(`value`: kotlin.Int?): demo.Status? {
+                  if (value === null) {
+                    return null
+                  }
+                  return when (value as kotlin.Int) {
+                    1 -> demo.Status.ACTIVE
+                    0 -> demo.Status.INACTIVE
+                    else -> throw IllegalArgumentException(
+                      "Illegal value \"" + value + "\" for the enum type \"demo.Status\""
+                    )
+                  }
+                }
+            """.trimIndent(),
+            fixture.renderConverter(fixture.status, LsiLanguage.KOTLIN),
+        )
+        assertNull(fixture.renderConverter(fixture.plain, LsiLanguage.JAVA))
+        assertFailsWith<IllegalArgumentException> {
+            fixture.status.toLsiSpecificationConverterPoetFunctionOrNull(
+                fixture.graph,
+                fixture.schema,
+                LsiLanguage.UNKNOWN,
+            )
+        }
+    }
+
     private fun specification(baseTypeId: LsiSymbolId): DtoType {
         return DtoType(
             id = DTO_TYPE_ID,
@@ -245,14 +399,35 @@ class DtoSpecificationPoetTest {
             primaryMapping = PrimaryMapping.SCALAR,
             type = LsiDeclaredType(STATUS_TYPE_ID),
         )
-        val storeId = immutableProp(STORE_TYPE_ID, "id", PrimaryMapping.ID)
+        val bookConvertedCode = immutableProp(
+            ownerTypeId = BOOK_TYPE_ID,
+            name = "convertedCode",
+            primaryMapping = PrimaryMapping.SCALAR,
+            converter = longToStringConverter(),
+        )
+        val bookPlain = immutableProp(
+            ownerTypeId = BOOK_TYPE_ID,
+            name = "plain",
+            primaryMapping = PrimaryMapping.SCALAR,
+        )
+        val storeId = immutableProp(
+            STORE_TYPE_ID,
+            "id",
+            PrimaryMapping.ID,
+            converter = longToStringConverter(),
+        )
         val storeName = immutableProp(
             STORE_TYPE_ID,
             "name",
             PrimaryMapping.SCALAR,
             LsiDeclaredType(STRING_TYPE_ID),
         )
-        val authorId = immutableProp(AUTHOR_TYPE_ID, "id", PrimaryMapping.ID)
+        val authorId = immutableProp(
+            AUTHOR_TYPE_ID,
+            "id",
+            PrimaryMapping.ID,
+            converter = longToStringConverter(),
+        )
         val authorFirstName = immutableProp(
             AUTHOR_TYPE_ID,
             "firstName",
@@ -288,7 +463,15 @@ class DtoSpecificationPoetTest {
                 immutableType(
                     BOOK_TYPE_ID,
                     ImmutableTypeKind.ENTITY,
-                    listOf(bookId, bookStore, bookAuthors, bookLocation, bookStatus),
+                    listOf(
+                        bookId,
+                        bookStore,
+                        bookAuthors,
+                        bookLocation,
+                        bookStatus,
+                        bookConvertedCode,
+                        bookPlain,
+                    ),
                     bookId.id,
                 ),
                 immutableType(
@@ -394,6 +577,40 @@ class DtoSpecificationPoetTest {
         )
         visibleProps += listOf(storeFilter, locationFilter, summary, status)
         props += listOf(storeFilter, locationFilter, summary, status)
+        val convertedCode = specificationProp(
+            id = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#converter:convertedCode"),
+            ownerTypeId = ROOT_SPEC_TYPE_ID,
+            name = "convertedCode",
+            baseProps = listOf(bookConvertedCode),
+        )
+        val convertedCodes = specificationProp(
+            id = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#converter:convertedCodes"),
+            ownerTypeId = ROOT_SPEC_TYPE_ID,
+            name = "convertedCodes",
+            baseProps = listOf(bookConvertedCode),
+            functionName = "valueIn",
+        )
+        val storeIdDto = specificationProp(
+            id = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#converter:storeId"),
+            ownerTypeId = ROOT_SPEC_TYPE_ID,
+            name = "storeId",
+            baseProps = listOf(bookStore),
+            functionName = "associatedIdEq",
+        )
+        val authorIds = specificationProp(
+            id = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#converter:authorIds"),
+            ownerTypeId = ROOT_SPEC_TYPE_ID,
+            name = "authorIds",
+            baseProps = listOf(bookAuthors),
+            functionName = "associatedIdIn",
+        )
+        val plain = specificationProp(
+            id = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#converter:plain"),
+            ownerTypeId = ROOT_SPEC_TYPE_ID,
+            name = "plain",
+            baseProps = listOf(bookPlain),
+        )
+        props += listOf(convertedCode, convertedCodes, storeIdDto, authorIds, plain)
 
         val locationHostDto = specificationProp(
             id = DtoPropId("${LOCATION_TARGET_TYPE_ID.value}#prop:host"),
@@ -438,9 +655,15 @@ class DtoSpecificationPoetTest {
         return ApplyToFixture(
             graph = graph,
             schema = schema,
-            workspace = workspace(BOOK_TYPE_ID),
+            workspace = workspace(listOf(BOOK_TYPE_ID, STATUS_TYPE_ID)),
             rootType = rootType,
             nestedType = locationTargetType,
+            convertedCode = convertedCode,
+            convertedCodes = convertedCodes,
+            storeId = storeIdDto,
+            authorIds = authorIds,
+            status = status,
+            plain = plain,
         )
     }
 
@@ -555,6 +778,7 @@ class DtoSpecificationPoetTest {
         embedded: Boolean = false,
         associationKind: AssociationKind = AssociationKind.NONE,
         associationStorage: AssociationStorageKind = AssociationStorageKind.NONE,
+        converter: ImmutableConverter? = null,
     ): ImmutableProp {
         val id = LsiSymbolId.property(ownerTypeId, name)
         return ImmutableProp(
@@ -587,7 +811,18 @@ class DtoSpecificationPoetTest {
             remote = false,
             recursive = false,
             validations = emptyList(),
-            converter = null,
+            converter = converter,
+        )
+    }
+
+    private fun longToStringConverter(): ImmutableConverter {
+        return ImmutableConverter(
+            converterTypeId = LONG_TO_STRING_CONVERTER_TYPE_ID,
+            sourceType = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            targetType = LsiDeclaredType(STRING_TYPE_ID),
+            sourceNullable = false,
+            targetNullable = false,
+            propertyNullable = false,
         )
     }
 
@@ -597,10 +832,36 @@ class DtoSpecificationPoetTest {
         val workspace: LsiWorkspace,
         val rootType: DtoType,
         val nestedType: DtoType,
+        val convertedCode: DtoBaseProp,
+        val convertedCodes: DtoBaseProp,
+        val storeId: DtoBaseProp,
+        val authorIds: DtoBaseProp,
+        val status: DtoBaseProp,
+        val plain: DtoBaseProp,
     ) {
         fun renderRoot(language: LsiLanguage): String = render(rootType, language)
 
         fun renderNested(language: LsiLanguage): String = render(nestedType, language)
+
+        fun renderConverter(prop: DtoBaseProp, language: LsiLanguage): String? {
+            val function = prop.toLsiSpecificationConverterPoetFunctionOrNull(
+                graph,
+                schema,
+                language,
+            ) ?: return null
+            val typeNames = workspace.dtoSpecificationPoetTypeNames(function, schema)
+            return when (language) {
+                LsiLanguage.JAVA -> LsiJavaPoetRenderer()
+                    .renderFunction(function, typeNames)
+                    .toString()
+                    .trimEnd()
+                LsiLanguage.KOTLIN -> LsiKotlinPoetRenderer()
+                    .renderFunction(function, typeNames)
+                    .toString()
+                    .trimEnd()
+                LsiLanguage.UNKNOWN -> error("测试只支持 Java 或 Kotlin")
+            }
+        }
 
         private fun render(type: DtoType, language: LsiLanguage): String {
             val function = type.toLsiSpecificationApplyToPoetFunction(graph, schema, language)
@@ -619,18 +880,17 @@ class DtoSpecificationPoetTest {
         }
     }
 
-    private fun workspace(baseTypeId: LsiSymbolId): LsiWorkspace {
-        val simpleName = baseTypeId.requireTypeQualifiedName().substringAfterLast('.')
+    private fun workspace(typeIds: List<LsiSymbolId>): LsiWorkspace {
         return LsiWorkspace(
-            declarations = listOf(
+            declarations = typeIds.map { typeId ->
                 LsiTypeDeclaration(
-                    id = baseTypeId,
-                    name = simpleName,
-                    qualifiedName = baseTypeId.requireTypeQualifiedName(),
+                    id = typeId,
+                    name = typeId.requireTypeQualifiedName().substringAfterLast('.'),
+                    qualifiedName = typeId.requireTypeQualifiedName(),
                     kind = LsiTypeDeclarationKind.INTERFACE,
                     origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
-                ),
-            ),
+                )
+            }.sortedBy(LsiTypeDeclaration::id),
         )
     }
 
@@ -646,6 +906,7 @@ class DtoSpecificationPoetTest {
         val LOCATION_TYPE_ID = LsiSymbolId.type("demo.Location")
         val STATUS_TYPE_ID = LsiSymbolId.type("demo.Status")
         val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
+        val LONG_TO_STRING_CONVERTER_TYPE_ID = LsiSymbolId.type("demo.LongToStringConverter")
         val ROOT_SPEC_TYPE_ID = DtoTypeId("demo.dto.BookSpecification")
         val STORE_TARGET_TYPE_ID = DtoTypeId("demo.dto.BookSpecification#target:store")
         val LOCATION_TARGET_TYPE_ID = DtoTypeId("demo.dto.BookSpecification#target:location")

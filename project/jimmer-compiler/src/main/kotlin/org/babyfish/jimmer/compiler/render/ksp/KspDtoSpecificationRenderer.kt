@@ -3,9 +3,11 @@ package org.babyfish.jimmer.compiler.render.ksp
 import com.squareup.kotlinpoet.FunSpec
 import org.babyfish.jimmer.compiler.dto.dtoSpecificationPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.toLsiSpecificationApplyToPoetFunction
+import org.babyfish.jimmer.compiler.dto.toLsiSpecificationConverterPoetFunctionOrNull
 import org.babyfish.jimmer.compiler.dto.toLsiSpecificationEntityTypePoetFunction
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.model.LsiWorkspace
@@ -40,6 +42,23 @@ internal object KspDtoSpecificationRenderer {
             immutableSchema = immutableSchema,
             targetLanguage = LsiLanguage.KOTLIN,
         )
+        return LsiKotlinPoetRenderer().renderFunction(
+            function = function,
+            typeNames = workspace.dtoSpecificationPoetTypeNames(function, immutableSchema),
+        )
+    }
+
+    fun renderConverterOrNull(
+        prop: DtoBaseProp,
+        graph: DtoGraph,
+        immutableSchema: ImmutableSchema,
+        workspace: LsiWorkspace,
+    ): FunSpec? {
+        val function = prop.toLsiSpecificationConverterPoetFunctionOrNull(
+            graph = graph,
+            immutableSchema = immutableSchema,
+            targetLanguage = LsiLanguage.KOTLIN,
+        ) ?: return null
         return LsiKotlinPoetRenderer().renderFunction(
             function = function,
             typeNames = workspace.dtoSpecificationPoetTypeNames(function, immutableSchema),

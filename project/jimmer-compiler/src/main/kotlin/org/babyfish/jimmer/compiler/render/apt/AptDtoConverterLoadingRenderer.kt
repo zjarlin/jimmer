@@ -25,6 +25,7 @@ internal object AptDtoConverterLoadingRenderer {
             immutableSchema = immutableSchema,
             targetLanguage = LsiLanguage.JAVA,
             forList = forList,
+            typeArguments = emptyList(),
         )
         return LsiJavaPoetRenderer().renderCodeBlock(
             codeBlock = codeBlock,

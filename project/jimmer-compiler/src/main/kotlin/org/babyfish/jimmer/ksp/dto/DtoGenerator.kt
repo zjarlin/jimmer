@@ -528,8 +528,18 @@ internal class DtoGenerator private constructor(
             addToEntityImpl()
         }
 
-        for (prop in dtoType.dtoProps) {
-            typeBuilder.addSpecificationConverter(prop)
+        if (isSpecification) {
+            for (prop in dtoType.dtoProps) {
+                val converter = KspDtoSpecificationRenderer.renderConverterOrNull(
+                    prop = lsiProp(prop),
+                    graph = lsiGraph,
+                    immutableSchema = immutableSchema,
+                    workspace = workspace,
+                )
+                if (converter != null) {
+                    typeBuilder.addFunction(converter)
+                }
+            }
         }
 
         typeBuilder.addCopy()
@@ -1671,79 +1681,6 @@ internal class DtoGenerator private constructor(
         addProperty(builder.build())
     }
 
-    private fun TypeSpec.Builder.addSpecificationConverter(prop: DtoProp<ImmutableType, ImmutableProp>) {
-        if (!isSpecificationConverterRequired(prop)) {
-            return
-        }
-        val baseProp = prop.toTailProp().baseProp
-        val baseTypeName = when (prop.funcName) {
-            "id" -> baseProp.targetType!!.idProp!!.typeName().let {
-                if (baseProp.isList && !dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
-                    LIST.parameterizedBy(it)
-                } else {
-                    it
-                }
-            }
-
-            "null", "notNull" -> BOOLEAN
-
-            "valueIn", "valueNotIn" ->
-                LIST.parameterizedBy(baseProp.typeName())
-
-            "associatedIdEq", "associatedIdNe" ->
-                baseProp.targetType!!.idProp!!.typeName()
-
-            "associatedIdIn", "associatedIdNotIn" ->
-                LIST.parameterizedBy(baseProp.targetType!!.idProp!!.typeName())
-
-            else -> baseProp.typeName()
-        }.copy(nullable = prop.isNullable)
-        val builder = FunSpec
-            .builder(StringUtil.identifier("_convert", prop.getName()))
-            .addModifiers(KModifier.PUBLIC)
-            .addParameter("value", propTypeName(prop))
-            .returns(baseTypeName)
-            .addCode(
-                CodeBlock
-                    .builder()
-                    .apply {
-                        if (prop.isNullable) {
-                            beginControlFlow("if (value === null)")
-                            addStatement("return null")
-                            endControlFlow()
-                        }
-                        val lsiEnumProp = lsiEnumPropOrNull(prop)
-                        if (lsiEnumProp != null) {
-                            add("return ")
-                            KspDtoEnumRenderer.appendScalarToEnumConversion(
-                                this,
-                                lsiEnumProp,
-                                lsiGraph,
-                                immutableSchema,
-                                workspace,
-                                "value",
-                            )
-                        } else {
-                            add(
-                                "return %T.%N.unwrap().%N<%T, %T>(%L).input(value)",
-                                baseProp.declaringType.propsClassName,
-                                StringUtil.snake(baseProp.name, SnakeCase.UPPER),
-                                if (baseProp.isAssociation(true)) "getAssociatedIdConverter" else "getConverter",
-                                baseTypeName,
-                                propTypeName(prop).copy(nullable = false),
-                                if (baseProp.isAssociation(true)) {
-                                    if (prop.isFunc("associatedIdIn", "associatedIdNotIn")) "true" else "false"
-                                } else {
-                                    if (prop.isFunc("valueIn", "valueNotIn")) "true" else ""
-                                }
-                            )
-                        }
-                    }
-                    .build()
-            )
-        addFunction(builder.build())
-    }
-
     @Suppress("UNCHECKED_CAST")
     fun propTypeName(prop: AbstractProp): TypeName =
         when (prop) {
@@ -1963,15 +1900,6 @@ internal class DtoGenerator private constructor(
             }
         }
         throw AssertionError("Dto is too deep")
-    }
-
-    private fun isSpecificationConverterRequired(prop: DtoProp<ImmutableType, ImmutableProp>): Boolean {
-        return if (!dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
-            false
-        } else {
-            lsiEnumPropOrNull(prop) != null ||
-                lsiProp(prop).dtoConverterTargetTypeOrNull(lsiGraph, immutableSchema) != null
-        }
     }
 
     private fun TypeSpec.Builder.addCopy() {

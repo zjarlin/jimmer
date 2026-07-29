@@ -371,6 +371,11 @@ class DtoConverterLoadingPoetTest {
                 immutableSchema = schema,
                 targetLanguage = language,
                 forList = forList,
+                typeArguments = if (language == LsiLanguage.KOTLIN) {
+                    listOf(KOTLIN_ANY_TYPE, KOTLIN_ANY_TYPE)
+                } else {
+                    emptyList()
+                },
             )
             val typeNames = DTO_COMMON_POET_TYPE_NAMES + schema.toLsiGeneratedQueryPoetTypeNames()
             return when (language) {
@@ -390,5 +395,6 @@ class DtoConverterLoadingPoetTest {
         val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
         val LIST_TYPE_ID = LsiSymbolId.type("java.util.List")
         val DTO_TYPE_ID = DtoTypeId("demo.dto.BookView")
+        val KOTLIN_ANY_TYPE = LsiDeclaredType(LsiSymbolId.type("kotlin.Any"))
     }
 }

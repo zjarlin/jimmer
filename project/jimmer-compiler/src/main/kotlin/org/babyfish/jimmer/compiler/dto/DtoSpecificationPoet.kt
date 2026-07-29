@@ -23,14 +23,24 @@ import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.requiresSpecificationConverter
 import site.addzero.lsi.jimmer.dto.specificationArgumentProps
 import site.addzero.lsi.jimmer.dto.specificationBaseType
+import site.addzero.lsi.jimmer.dto.specificationConverterInputType
 import site.addzero.lsi.jimmer.dto.specificationConverterName
+import site.addzero.lsi.jimmer.dto.specificationConverterOutputType
 import site.addzero.lsi.jimmer.dto.specificationLikeOptionArguments
 import site.addzero.lsi.jimmer.dto.specificationOperationName
 import site.addzero.lsi.jimmer.dto.specificationPath
 import site.addzero.lsi.jimmer.dto.specificationTargetIsEntityAssociation
+import site.addzero.lsi.jimmer.dto.tailProp
 import site.addzero.lsi.jimmer.dto.usesSpecificationPropArrayArgument
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiFunctionType
+import site.addzero.lsi.model.LsiNullability
+import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.model.LsiTypeParameterRef
+import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetBodyStyle
 import site.addzero.lsi.poet.LsiPoetCodeBlock
@@ -152,6 +162,82 @@ internal fun DtoType.toLsiSpecificationApplyToPoetFunction(
                 type = specificationApplyToParameterType(language, baseType, nested),
             ),
         ),
+        body = body,
+        bodyStyle = LsiPoetBodyStyle.BLOCK,
+    )
+}
+
+/** 将冻结的 Specification converter 语义降低为平台中立函数。 */
+internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+): LsiPoetFunction? {
+    val language = targetLanguage.requireSpecificationTargetLanguage()
+    if (!requiresSpecificationConverter(graph, immutableSchema)) {
+        return null
+    }
+    val inputType = specificationConverterInputType(graph, immutableSchema, language)
+    val outputType = specificationConverterOutputType(graph, immutableSchema, language)
+    val propName = name
+    val body = LsiPoetCodeBlock.build {
+        if (language == LsiLanguage.JAVA || nullable) {
+            beginControlFlow {
+                text("if (")
+                text(if (language == LsiLanguage.JAVA) propName else SPECIFICATION_CONVERTER_VALUE_NAME)
+                text(if (language == LsiLanguage.JAVA) " == null)" else " === null)")
+            }
+            returnValue { text("null") }
+            endControlFlow()
+        }
+        if (enumType != null) {
+            if (language == LsiLanguage.KOTLIN) {
+                text("return ")
+            }
+            add(
+                toScalarToEnumPoetCodeBlock(
+                    targetLanguage = language,
+                    graph = graph,
+                    immutableSchema = immutableSchema,
+                    variableName = SPECIFICATION_CONVERTER_VALUE_NAME,
+                ),
+            )
+        } else {
+            val functionName = tailProp(graph).functionName
+            val forList = functionName == "valueIn" ||
+                functionName == "valueNotIn" ||
+                functionName == "associatedIdIn" ||
+                functionName == "associatedIdNotIn"
+            returnValue {
+                add(
+                    toLsiConverterLoadingPoetCodeBlock(
+                        graph = graph,
+                        immutableSchema = immutableSchema,
+                        targetLanguage = language,
+                        forList = forList,
+                        typeArguments = listOf(outputType, inputType.withNonNullRoot()),
+                    ),
+                )
+                text(".input($SPECIFICATION_CONVERTER_VALUE_NAME)")
+            }
+        }
+    }
+    return LsiPoetFunction(
+        name = specificationConverterName(language, graph),
+        modifiers = setOf(
+            if (language == LsiLanguage.JAVA) {
+                LsiPoetModifier.PRIVATE
+            } else {
+                LsiPoetModifier.PUBLIC
+            },
+        ),
+        parameters = listOf(
+            LsiPoetParameter(
+                name = SPECIFICATION_CONVERTER_VALUE_NAME,
+                type = inputType,
+            ),
+        ),
+        returnType = outputType,
         body = body,
         bodyStyle = LsiPoetBodyStyle.BLOCK,
     )
@@ -435,6 +521,19 @@ private fun LsiLanguage.requireSpecificationTargetLanguage(): LsiLanguage {
     }
     return this
 }
+
+private fun LsiTypeRef.withNonNullRoot(): LsiTypeRef {
+    return when (this) {
+        is LsiDeclaredType -> copy(nullability = LsiNullability.NON_NULL)
+        is LsiTypeParameterRef -> copy(nullability = LsiNullability.NON_NULL)
+        is LsiPrimitiveType -> copy(nullability = LsiNullability.NON_NULL)
+        is LsiArrayType -> copy(nullability = LsiNullability.NON_NULL)
+        is LsiFunctionType -> copy(nullability = LsiNullability.NON_NULL)
+        is LsiUnresolvedType -> copy(nullability = LsiNullability.NON_NULL)
+    }
+}
+
+private const val SPECIFICATION_CONVERTER_VALUE_NAME = "value"
 
 private val CLASS_TYPE_ID = LsiSymbolId.type("java.lang.Class")
 

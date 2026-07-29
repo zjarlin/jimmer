@@ -3,9 +3,11 @@ package org.babyfish.jimmer.compiler.render.apt
 import com.squareup.javapoet.MethodSpec
 import org.babyfish.jimmer.compiler.dto.dtoSpecificationPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.toLsiSpecificationApplyToPoetFunction
+import org.babyfish.jimmer.compiler.dto.toLsiSpecificationConverterPoetFunctionOrNull
 import org.babyfish.jimmer.compiler.dto.toLsiSpecificationEntityTypePoetFunction
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.model.LsiWorkspace
@@ -42,6 +44,24 @@ internal object AptDtoSpecificationRenderer {
             immutableSchema = immutableSchema,
             targetLanguage = LsiLanguage.JAVA,
         )
+        return LsiJavaPoetRenderer().renderFunction(
+            function = function,
+            typeNames = workspace.dtoSpecificationPoetTypeNames(function, immutableSchema),
+        )
+    }
+
+    @JvmStatic
+    fun renderConverterOrNull(
+        prop: DtoBaseProp,
+        graph: DtoGraph,
+        immutableSchema: ImmutableSchema,
+        workspace: LsiWorkspace,
+    ): MethodSpec? {
+        val function = prop.toLsiSpecificationConverterPoetFunctionOrNull(
+            graph = graph,
+            immutableSchema = immutableSchema,
+            targetLanguage = LsiLanguage.JAVA,
+        ) ?: return null
         return LsiJavaPoetRenderer().renderFunction(
             function = function,
             typeNames = workspace.dtoSpecificationPoetTypeNames(function, immutableSchema),
