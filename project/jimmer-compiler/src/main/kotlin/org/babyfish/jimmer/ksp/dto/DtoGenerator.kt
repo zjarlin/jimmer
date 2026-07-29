@@ -18,6 +18,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoLoadedStateRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicBranchRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicInputRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicMetadataConverterRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
@@ -1401,7 +1402,22 @@ internal class DtoGenerator private constructor(
                 .apply {
                     polymorphicInputDiscriminatorProp()
                         ?.takeIf { isTypedPolymorphicInputBranch }
-                        ?.let { addTypedPolymorphicInputDiscriminatorValidation(it) }
+                        ?.let { discriminatorProp ->
+                            addCode(
+                                KspDtoPolymorphicInputRenderer.renderTypedDiscriminatorValidation(
+                                    dtoType = lsiDtoType,
+                                    branch = requireNotNull(currentLsiPolymorphicBranchOrNull) {
+                                        "Frozen DTO typed polymorphic branch is required"
+                                    },
+                                    discriminatorProp = discriminatorProp,
+                                    graph = lsiGraph,
+                                    immutableSchema = immutableSchema,
+                                    workspace = workspace,
+                                    generatedPackageName = generatedDtoPackageName,
+                                    generatedSimpleNames = generatedDtoSimpleNames,
+                                )
+                            )
+                        }
                     for (prop in dtoType.props) {
                         when (prop) {
                             is FoldProp<*, *> -> {
@@ -1440,28 +1456,6 @@ internal class DtoGenerator private constructor(
                 }
                 .build()
         )
-    }
-
-    private fun FunSpec.Builder.addTypedPolymorphicInputDiscriminatorValidation(
-        discriminatorProp: DtoBaseProp
-    ) {
-        val value = baseType.discriminatorValue ?: return
-        beginControlFlow(
-            "if (%N != %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
-            discriminatorProp.name,
-            IMMUTABLE_TYPE_CLASS_NAME,
-            polymorphicRootType.className,
-            value
-        )
-        addStatement(
-            "throw %T(%S + %N + %S)",
-            IllegalArgumentException::class,
-            "Discriminator value \"",
-            discriminatorProp.name,
-            "\" does not match polymorphic input DTO branch \"${getDtoClassName().canonicalName}\" " +
-                    "whose entity type is \"${baseType.qualifiedName}\""
-        )
-        endControlFlow()
     }
 
     private fun FunSpec.Builder.addDraftAssignment(

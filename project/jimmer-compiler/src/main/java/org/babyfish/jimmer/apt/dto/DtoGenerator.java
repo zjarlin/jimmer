@@ -20,6 +20,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoLoadedStateRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicBranchRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicInputRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPolymorphicMetadataConverterRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoPropAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoSerializerRenderer;
@@ -1668,7 +1669,21 @@ public class DtoGenerator {
             addDefaultPolymorphicInputToEntityBody(builder, baseIdProp, discriminatorProp);
         } else {
             if (discriminatorProp != null && isTypedPolymorphicInputBranch()) {
-                addTypedPolymorphicInputDiscriminatorValidation(builder, discriminatorProp);
+                builder.addCode(
+                        AptDtoPolymorphicInputRenderer.renderTypedDiscriminatorValidation(
+                                lsiDtoType,
+                                Objects.requireNonNull(
+                                        currentLsiPolymorphicBranchOrNull(),
+                                        "Frozen DTO typed polymorphic branch is required"
+                                ),
+                                discriminatorProp,
+                                lsiGraph,
+                                immutableSchema,
+                                lsiWorkspace,
+                                getGeneratedDtoPackageName(),
+                                getGeneratedDtoSimpleNames()
+                        )
+                );
             }
             builder.addCode(
                     "return $T.$L.produce(__draft -> {$>\n",
@@ -1732,42 +1747,6 @@ public class DtoGenerator {
                 discriminatorGetter,
                 "\" for polymorphic input DTO branch \"" + getDtoClassName().canonicalName() + "\""
         );
-    }
-
-    private void addTypedPolymorphicInputDiscriminatorValidation(
-            MethodSpec.Builder builder,
-            DtoBaseProp discriminatorProp
-    ) {
-        String value = dtoType.getBaseType().getDiscriminatorValue();
-        if (value == null) {
-            return;
-        }
-        String discriminatorGetter = "this." + DtoAccessorExtensionsKt.serializerValueAccessorName(
-                discriminatorProp,
-                LsiLanguage.JAVA,
-                lsiGraph,
-                immutableSchema
-        ) + "()";
-        builder.beginControlFlow(
-                "if (!$T.equals($L, $T.get($T.class).getInheritanceInfo().discriminatorValue($S)))",
-                Constants.OBJECTS_CLASS_NAME,
-                discriminatorGetter,
-                Constants.RUNTIME_TYPE_CLASS_NAME,
-                polymorphicRootType().getClassName(),
-                value
-        );
-        builder.addStatement(
-                "throw new $T($S + $L + $S)",
-                IllegalArgumentException.class,
-                "Discriminator value \"",
-                discriminatorGetter,
-                "\" does not match polymorphic input DTO branch \"" +
-                        getDtoClassName().canonicalName() +
-                        "\" whose entity type is \"" +
-                        dtoType.getBaseType().getQualifiedName() +
-                        "\""
-        );
-        builder.endControlFlow();
     }
 
     @Nullable
