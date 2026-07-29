@@ -112,8 +112,14 @@ internal class DtoGenerator private constructor(
     private val polymorphicBranch: Boolean
         get() = lsiPolymorphicBranch != null
 
+    private val generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId> =
+        parent?.generatedDtoTypeIdsByTypeName
+            ?: JimmerDtoPoetTypeNames.forRoot(lsiGraph, lsiDtoType, rootDtoTypeNamesByTypeId)
+
     private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiPoetTypeName> =
         (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
+
+    private val locallyGeneratedDtoTypeIds = mutableSetOf<DtoTypeId>()
 
     private val interfacePropNames = interfaceContractResolution
         .contractFor(lsiDtoType)
@@ -133,15 +139,7 @@ internal class DtoGenerator private constructor(
         if ((parent === null) != (innerClassName === null)) {
             throw IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same")
         }
-        val currentTypeName = JimmerDtoPoetTypeNames.create(
-            generatedDtoPackageName,
-            generatedDtoSimpleNames,
-        )
-        val oldTypeName = generatedDtoTypeNamesByTypeId.putIfAbsent(lsiDtoType.id, currentTypeName)
-        require(oldTypeName == null || oldTypeName == currentTypeName) {
-            "Frozen DTO type '${lsiDtoType.id.value}' has conflicting generated names: " +
-                "${oldTypeName?.canonicalName} and ${currentTypeName.canonicalName}"
-        }
+        registerGeneratedDtoTypeName(lsiDtoType, generatedDtoSimpleNames)
         lsiPolymorphicBranch?.generatedPolymorphicDtoBranchOrder(
             requireNotNull(parent) {
                 "Frozen DTO polymorphic branch has no direct parent"
@@ -651,11 +649,19 @@ internal class DtoGenerator private constructor(
         type: LsiDtoType,
         simpleNames: List<String>,
     ) {
+        val typeName = JimmerDtoPoetTypeNames.create(generatedDtoPackageName, simpleNames)
+        JimmerDtoPoetTypeNames.requirePlanned(
+            graph = lsiGraph,
+            type = type,
+            typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+            typeName = typeName,
+        )
         JimmerDtoPoetTypeNames.register(
             graph = lsiGraph,
             type = type,
             typeNamesByTypeId = generatedDtoTypeNamesByTypeId,
-            typeName = JimmerDtoPoetTypeNames.create(generatedDtoPackageName, simpleNames),
+            locallyRegisteredTypeIds = locallyGeneratedDtoTypeIds,
+            typeName = typeName,
         )
     }
 

@@ -91,7 +91,11 @@ public class DtoGenerator {
 
     private final String innerClassName;
 
+    private final Map<LsiPoetTypeName, DtoTypeId> generatedDtoTypeIdsByTypeName;
+
     private final Map<DtoTypeId, LsiPoetTypeName> generatedDtoTypeNames;
+
+    private final Set<DtoTypeId> locallyGeneratedDtoTypeIds = new HashSet<>();
 
     private final Map<DtoTypeId, LsiPoetTypeName> readOnlyGeneratedDtoTypeNames;
 
@@ -207,8 +211,21 @@ public class DtoGenerator {
         this.batchRootDtoTypeNames = parent != null ?
                 parent.batchRootDtoTypeNames :
                 Collections.unmodifiableMap(new LinkedHashMap<>(batchRootDtoTypeNames));
+        this.generatedDtoTypeIdsByTypeName = parent != null ?
+                parent.generatedDtoTypeIdsByTypeName :
+                Collections.unmodifiableMap(
+                        new LinkedHashMap<>(
+                                JimmerDtoPoetTypeNames.forRoot(
+                                        lsiGraph,
+                                        lsiDtoType,
+                                        this.batchRootDtoTypeNames
+                                )
+                        )
+                );
         this.generatedDtoTypeNames = new LinkedHashMap<>(
-                parent != null ? parent.generatedDtoTypeNames : this.batchRootDtoTypeNames
+                parent != null ?
+                        parent.generatedDtoTypeNames :
+                        this.batchRootDtoTypeNames
         );
         this.readOnlyGeneratedDtoTypeNames = Collections.unmodifiableMap(generatedDtoTypeNames);
         this.jacksonVersion = parent != null ? parent.jacksonVersion : jacksonVersion;
@@ -622,7 +639,19 @@ public class DtoGenerator {
                 getGeneratedDtoPackageName(),
                 simpleNames
         );
-        JimmerDtoPoetTypeNames.register(lsiGraph, type, generatedDtoTypeNames, typeName);
+        JimmerDtoPoetTypeNames.requirePlanned(
+                lsiGraph,
+                type,
+                generatedDtoTypeIdsByTypeName,
+                typeName
+        );
+        JimmerDtoPoetTypeNames.register(
+                lsiGraph,
+                type,
+                generatedDtoTypeNames,
+                locallyGeneratedDtoTypeIds,
+                typeName
+        );
     }
 
     private void addMembers() {
