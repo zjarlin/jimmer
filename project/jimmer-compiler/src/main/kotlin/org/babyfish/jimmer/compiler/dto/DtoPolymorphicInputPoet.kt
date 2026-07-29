@@ -10,7 +10,7 @@ import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
-import site.addzero.lsi.jimmer.dto.serializerValueAccessorName
+import site.addzero.lsi.jimmer.dto.dtoValueAccessorName
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetCodeBlock
@@ -54,7 +54,7 @@ internal fun DtoType.toTypedPolymorphicInputDiscriminatorValidationPoetCodeBlock
     require(immutableSchema.typesById.containsKey(rootTypeId)) {
         "No immutable inheritance root '${rootTypeId.value}' for DTO polymorphic input branch: ${id.value}"
     }
-    val accessorName = discriminatorProp.serializerValueAccessorName(
+    val accessorName = discriminatorProp.dtoValueAccessorName(
         targetLanguage = targetLanguage,
         graph = graph,
         immutableSchema = immutableSchema,

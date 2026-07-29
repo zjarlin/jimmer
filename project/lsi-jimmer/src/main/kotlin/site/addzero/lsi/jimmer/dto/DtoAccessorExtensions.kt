@@ -291,26 +291,20 @@ fun DtoBaseProp.serializerLoadedAccessorNameOrNull(): String? {
     return if (inputModifier == DtoModifier.DYNAMIC) loadedAccessorName() else null
 }
 
-/** 返回目标语言的输入 DTO Serializer 访问属性值时使用的成员名称。 */
-fun DtoBaseProp.serializerValueAccessorName(
+/** 返回目标语言访问 DTO 属性值时使用的成员名称。 */
+fun DtoProp.dtoValueAccessorName(
     targetLanguage: LsiLanguage,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
 ): String {
-    require(graph.propsById[id] == this) {
-        "DTO property does not belong to this graph: ${id.value}"
+    requireVisibleProp(graph)
+    return when (targetLanguage) {
+        LsiLanguage.JAVA -> javaValueAccessorName(hasPrimitiveBooleanValue(graph, immutableSchema))
+        LsiLanguage.KOTLIN -> name
+        LsiLanguage.UNKNOWN -> throw IllegalArgumentException(
+            "DTO value accessor requires Java or Kotlin target language",
+        )
     }
-    val ownerType = graph.typesById.getValue(ownerTypeId)
-    require(DtoModifier.INPUT in ownerType.modifiers) {
-        "DTO serializer value accessor requires an input DTO type: ${ownerTypeId.value}"
-    }
-    if (targetLanguage == LsiLanguage.KOTLIN) {
-        return name
-    }
-    require(targetLanguage == LsiLanguage.JAVA) {
-        "DTO value accessor requires Java or Kotlin target language"
-    }
-    return javaValueAccessorName(hasPrimitiveBooleanValue(graph, immutableSchema))
 }
 
 /** 判断 DTO 属性的最终值是否为非空原生 Boolean。 */

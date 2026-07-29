@@ -1600,7 +1600,7 @@ public class DtoGenerator {
             @Nullable ImmutableProp baseIdProp,
             DtoBaseProp discriminatorProp
     ) {
-        String discriminatorGetter = "this." + DtoAccessorExtensionsKt.serializerValueAccessorName(
+        String discriminatorGetter = "this." + DtoAccessorExtensionsKt.dtoValueAccessorName(
                 discriminatorProp,
                 LsiLanguage.JAVA,
                 lsiGraph,
@@ -1707,168 +1707,14 @@ public class DtoGenerator {
     }
 
     private void addApplyTo() {
-        MethodSpec.Builder builder = MethodSpec
-                .methodBuilder("applyTo")
-                .addModifiers(Modifier.PUBLIC);
-        if (!isNestedSpecificationFragment()) {
-            builder.addAnnotation(Override.class)
-                    .addParameter(
-                            ParameterSpec.builder(
-                                    ParameterizedTypeName.get(
-                                            org.babyfish.jimmer.apt.immutable.generator.Constants.SPECIFICATION_ARGS_CLASS_NAME,
-                                            dtoType.getBaseType().getClassName(),
-                                            dtoType.getBaseType().getTableClassName()
-                                    ),
-                                    "args"
-                            ).build()
-                    );
-        } else {
-            builder.addParameter(
-                    ParameterSpec
-                            .builder(
-                                    org.babyfish.jimmer.apt.immutable.generator.Constants.PREDICATE_APPLIER_CLASS_NAME,
-                                    "__applier"
-                            )
-                            .build()
-            );
-        }
-
-        List<ImmutableProp> stack = Collections.emptyList();
-        if (!isNestedSpecificationFragment()) {
-            builder.addStatement(
-                    "$T __applier = args.getApplier()",
-                    org.babyfish.jimmer.apt.immutable.generator.Constants.PREDICATE_APPLIER_CLASS_NAME
-            );
-        }
-        for (AbstractProp abstractProp : dtoType.getProps()) {
-            if (abstractProp instanceof FoldProp<?, ?>) {
-                FoldProp<ImmutableType, ImmutableProp> foldProp = asFoldProp(abstractProp);
-                stack = addStackOperations(builder, stack, Collections.emptyList());
-                builder.beginControlFlow("if (this.$L != null)", foldProp.getName());
-                if (dtoType.getBaseType().isEntity()) {
-                    builder.addStatement("this.$L.applyTo(args)", foldProp.getName());
-                } else {
-                    builder.addStatement("this.$L.applyTo(__applier)", foldProp.getName());
-                }
-                builder.endControlFlow();
-                continue;
-            }
-            if (!(abstractProp instanceof DtoProp<?, ?>)) {
-                continue;
-            }
-            DtoProp<ImmutableType, ImmutableProp> prop = asDtoProp(abstractProp);
-            List<ImmutableProp> newStack = new ArrayList<>(stack.size() + 2);
-            DtoProp<ImmutableType, ImmutableProp> tailProp = prop.toTailProp();
-            for (DtoProp<ImmutableType, ImmutableProp> p = prop; p != null; p = p.getNextProp()) {
-                if (p != tailProp || p.getTarget() != null) {
-                    newStack.add(p.getBaseProp());
-                }
-            }
-            stack = addStackOperations(builder, stack, newStack);
-            addPredicateOperation(builder, prop);
-        }
-        addStackOperations(builder, stack, Collections.emptyList());
-        typeBuilder.addMethod(builder.build());
-    }
-
-    private List<ImmutableProp> addStackOperations(
-            MethodSpec.Builder builder,
-            List<ImmutableProp> stack,
-            List<ImmutableProp> newStack
-    ) {
-        int size = Math.min(stack.size(), newStack.size());
-        int sameCount = size;
-        for (int i = 0; i < size; i++) {
-            if (stack.get(i) != newStack.get(i)) {
-                sameCount = i;
-                break;
-            }
-        }
-        for (int i = stack.size() - sameCount; i > 0; --i) {
-            builder.addStatement("__applier.pop()");
-        }
-        for (ImmutableProp prop : newStack.subList(sameCount, newStack.size())) {
-            builder.addStatement(
-                    "__applier.push($T.$L.unwrap())",
-                    prop.getDeclaringType().getPropsClassName(),
-                    StringUtil.snake(prop.getName(), StringUtil.SnakeCase.UPPER)
-            );
-        }
-        return newStack;
-    }
-
-    private void addPredicateOperation(MethodSpec.Builder builder, DtoProp<ImmutableType, ImmutableProp> prop) {
-        String propName = prop.getName();
-        String propGetter = getterName(prop);
-        DtoProp<ImmutableType, ImmutableProp> tailProp = prop.toTailProp();
-        if (tailProp.getTarget() != null) {
-            builder.beginControlFlow("if (this.$L != null)", propName);
-            if (tailProp.getBaseProp().isAssociation(true)) {
-                builder.addStatement("this.$L.applyTo(args.child())", propName);
-            } else {
-                builder.addStatement("this.$L.applyTo(args.getApplier())", propName);
-            }
-            builder.endControlFlow();
-            return;
-        }
-
-        String funcName = tailProp.getFuncName();
-        String javaMethodName = funcName;
-        if (funcName == null) {
-            funcName = "eq";
-            javaMethodName = "eq";
-        } else if ("null".equals(funcName)) {
-            javaMethodName = "isNull";
-        } else if ("notNull".equals(funcName)) {
-            javaMethodName = "isNotNull";
-        } else if ("id".equals(funcName)) {
-            funcName = "associatedIdEq";
-            javaMethodName = "associatedIdEq";
-        }
-
-        CodeBlock.Builder cb = CodeBlock.builder();
-        if (org.babyfish.jimmer.dto.compiler.Constants.MULTI_ARGS_FUNC_NAMES.contains(funcName)) {
-            cb.add("__applier.$L(new $T[] { ", javaMethodName, org.babyfish.jimmer.apt.immutable.generator.Constants.IMMUTABLE_PROP_CLASS_NAME);
-            boolean addComma = false;
-            for (ImmutableProp baseProp : tailProp.getBasePropMap().values()) {
-                if (addComma) {
-                    cb.add(", ");
-                } else {
-                    addComma = true;
-                }
-                cb.add(
-                        "$T.$L.unwrap()",
-                        baseProp.getDeclaringType().getPropsClassName(),
-                        StringUtil.snake(baseProp.getName(), StringUtil.SnakeCase.UPPER)
-                );
-            }
-            cb.add(" }, ");
-        } else {
-            cb.add(
-                    "__applier.$L($T.$L.unwrap(), ",
-                    funcName,
-                    tailProp.getBaseProp().getDeclaringType().getPropsClassName(),
-                    StringUtil.snake(tailProp.getBaseProp().getName(), StringUtil.SnakeCase.UPPER)
-            );
-        }
-        if (isSpecificationConverterRequired(prop)) {
-            cb.add(
-                    "$L(this.$L())",
-                    StringUtil.identifier("__convert", propName),
-                    propGetter
-            );
-        } else {
-            cb.add("this.$L()", propGetter);
-        }
-        CodeBlock likeOptionArguments = AptDtoSpecificationRenderer.renderLikeOptionArguments(
-                DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, propName),
-                lsiGraph
+        typeBuilder.addMethod(
+                AptDtoSpecificationRenderer.renderApplyTo(
+                        lsiDtoType,
+                        lsiGraph,
+                        immutableSchema,
+                        lsiWorkspace
+                )
         );
-        if (likeOptionArguments != null) {
-            cb.add("$L", likeOptionArguments);
-        }
-        cb.addStatement(")");
-        builder.addCode(cb.build());
     }
 
     private void addSpecificationConverter(DtoProp<ImmutableType, ImmutableProp> prop) {
@@ -2321,13 +2167,6 @@ public class DtoGenerator {
         return documentation != null && !documentation.isEmpty() ?
                 documentation.replace("$", "$$") :
                 null;
-    }
-
-    private boolean isNestedSpecificationFragment() {
-        return DtoAccessorExtensionsKt.isNestedSpecificationFragment(
-                lsiDtoType,
-                immutableSchema
-        );
     }
 
     TypeSpec.Builder getTypeBuilder() {

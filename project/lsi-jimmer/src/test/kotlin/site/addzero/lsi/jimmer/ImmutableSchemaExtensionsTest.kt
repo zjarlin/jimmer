@@ -2,6 +2,7 @@ package site.addzero.lsi.jimmer
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -30,6 +31,62 @@ class ImmutableSchemaExtensionsTest {
         assertEquals("Book", packagedType.simpleName)
         assertEquals("", defaultPackageType.packageName)
         assertEquals("Book", defaultPackageType.simpleName)
+    }
+
+    @Test
+    fun `resolves generated query type and property constant names`() {
+        val baseTypeId = LsiSymbolId.type("demo.Base")
+        val baseProp = prop(baseTypeId, "urlValue")
+        val baseType = type(
+            id = baseTypeId,
+            kind = ImmutableTypeKind.MAPPED_SUPERCLASS,
+            props = listOf(baseProp),
+        )
+        val bookTypeId = LsiSymbolId.type("demo.Book")
+        val bookIdProp = prop(
+            ownerTypeId = bookTypeId,
+            name = "id",
+            primaryMapping = PrimaryMapping.ID,
+        )
+        val inheritedProp = baseProp.copy(
+            id = LsiSymbolId.property(bookTypeId, baseProp.name),
+            ownerTypeId = bookTypeId,
+            declaringTypeId = baseTypeId,
+            overrideChain = listOf(baseProp.id),
+            inherited = true,
+        )
+        val bookType = type(
+            id = bookTypeId,
+            kind = ImmutableTypeKind.ENTITY,
+            props = listOf(bookIdProp, inheritedProp),
+            idPropId = bookIdProp.id,
+        )
+        val schema = ImmutableSchema(listOf(baseType, bookType))
+
+        assertEquals(
+            LsiDeclaredType(LsiSymbolId.type("demo.BaseProps")),
+            baseType.generatedPropsType(),
+        )
+        assertEquals(
+            LsiDeclaredType(LsiSymbolId.type("demo.BookTable")),
+            bookType.generatedTableType(),
+        )
+        assertEquals(baseType.generatedPropsType(), schema.generatedPropsTypeOf(inheritedProp))
+        assertEquals("URL_VALUE", inheritedProp.generatedPropsConstantName())
+        assertEquals(
+            "VERSION2_VALUE",
+            inheritedProp.copy(name = "version2Value").generatedPropsConstantName(),
+        )
+        assertEquals(
+            "URLVALUE",
+            inheritedProp.copy(name = "URLValue").generatedPropsConstantName(),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            baseType.generatedTableType()
+        }
+        assertFailsWith<IllegalArgumentException> {
+            schema.generatedPropsTypeOf(inheritedProp.copy(name = "foreign"))
+        }
     }
 
     @Test

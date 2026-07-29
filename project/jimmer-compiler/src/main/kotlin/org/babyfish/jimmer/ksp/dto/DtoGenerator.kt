@@ -60,7 +60,6 @@ import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedTargetTypeOrNull
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
-import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.prop
@@ -78,7 +77,6 @@ import site.addzero.lsi.poet.LsiPoetImport
 import site.addzero.lsi.poet.LsiPoetTypeName
 import java.io.OutputStreamWriter
 import java.util.*
-import kotlin.math.min
 
 internal class DtoGenerator private constructor(
     val ctx: Context,
@@ -1410,152 +1408,12 @@ internal class DtoGenerator private constructor(
 
     private fun addApplyTo() {
         typeBuilder.addFunction(
-            FunSpec
-                .builder("applyTo")
-                .apply {
-                    if (!isNestedSpecificationFragment) {
-                        addParameter(
-                            "args",
-                            K_SPECIFICATION_ARGS_CLASS_NAME.parameterizedBy(baseType.className)
-                        )
-                        addModifiers(KModifier.OVERRIDE)
-                        addStatement("val _applier = args.applier")
-                    } else {
-                        addParameter(
-                            "_applier",
-                            PREDICATE_APPLIER
-                        )
-                    }
-                    var stack = emptyList<ImmutableProp>()
-                    for (prop in dtoType.props) {
-                        when (prop) {
-                            is FoldProp<*, *> -> {
-                                stack = addStackOperations(stack, emptyList())
-                                if (isGeneratedNullable(prop)) {
-                                    if (baseType.isEntity) {
-                                        addStatement("this.%N?.applyTo(args)", prop.name)
-                                    } else {
-                                        addStatement("this.%N?.applyTo(_applier)", prop.name)
-                                    }
-                                } else {
-                                    if (baseType.isEntity) {
-                                        addStatement("this.%N.applyTo(args)", prop.name)
-                                    } else {
-                                        addStatement("this.%N.applyTo(_applier)", prop.name)
-                                    }
-                                }
-                            }
-
-                            is DtoProp<*, *> -> {
-                                val dtoProp = prop.asDtoProp()
-                                val newStack = mutableListOf<ImmutableProp>()
-                                val tailProp = dtoProp.toTailProp()
-                                var p: DtoProp<ImmutableType, ImmutableProp>? = dtoProp
-                                while (p != null) {
-                                    if (p !== tailProp || p.target != null) {
-                                        newStack.add(p.getBaseProp())
-                                    }
-                                    p = p.getNextProp()
-                                }
-                                stack = addStackOperations(stack, newStack)
-                                addPredicateOperation(dtoProp)
-                            }
-                        }
-                    }
-                    addStackOperations(stack, emptyList())
-                }
-                .build()
-        )
-    }
-
-    private fun FunSpec.Builder.addStackOperations(
-        stack: List<ImmutableProp>,
-        newStack: List<ImmutableProp>,
-    ): List<ImmutableProp> {
-        val size = min(stack.size, newStack.size)
-        var sameCount = size
-        for (i in 0 until size) {
-            if (stack[i] !== newStack[i]) {
-                sameCount = i
-                break
-            }
-        }
-        for (i in stack.size - sameCount downTo 1) {
-            addStatement("_applier.pop()")
-        }
-        for (prop in newStack.subList(sameCount, newStack.size)) {
-            addStatement(
-                "_applier.push(%T.%N.unwrap())",
-                prop.declaringType.propsClassName,
-                StringUtil.snake(prop.name, SnakeCase.UPPER)
-            )
-        }
-        return newStack
-    }
-
-    private fun FunSpec.Builder.addPredicateOperation(prop: DtoProp<ImmutableType, ImmutableProp>) {
-        val propName = prop.name
-        val tailProp = prop.toTailProp()
-        if (tailProp.target != null) {
-            if (tailProp.baseProp.isAssociation(true)) {
-                addStatement("this.%N?.let { it.applyTo(args.child()) }", propName)
-            } else {
-                addStatement("this.%N?.let { it.applyTo(args.applier) }", propName)
-            }
-            return
-        }
-
-        val funcName = when (tailProp.funcName) {
-            null -> "eq"
-            "id" -> "associatedIdEq"
-            else -> tailProp.funcName
-        }
-        val ktFunName = when (funcName) {
-            "null" -> "isNull"
-            "notNull" -> "isNotNull"
-            else -> funcName
-        }
-
-        addCode(
-            CodeBlock.builder()
-                .apply {
-                    add("_applier.%N(", ktFunName)
-                    if (Constants.MULTI_ARGS_FUNC_NAMES.contains(funcName)) {
-                        add("arrayOf(")
-                        tailProp.basePropMap.values.forEachIndexed { index, baseProp ->
-                            if (index != 0) {
-                                add(", ")
-                            }
-                            add(
-                                "%T.%N.unwrap()",
-                                baseProp.declaringType.propsClassName,
-                                StringUtil.snake(baseProp.name, SnakeCase.UPPER)
-                            )
-                        }
-                        add(")")
-                    } else {
-                        add(
-                            "%T.%N.unwrap()",
-                            tailProp.baseProp.declaringType.propsClassName,
-                            StringUtil.snake(tailProp.baseProp.name, SnakeCase.UPPER)
-                        )
-                    }
-                    if (isSpecificationConverterRequired(prop)) {
-                        add(
-                            ", %N(this.%N)",
-                            StringUtil.identifier("_convert", propName),
-                            propName
-                        )
-                    } else {
-                        add(", this.%N", propName)
-                    }
-                    KspDtoSpecificationRenderer.renderLikeOptionArguments(
-                        lsiDtoType.baseProp(lsiGraph, propName),
-                        lsiGraph,
-                    )?.let { arguments -> add("%L", arguments) }
-                    add(")\n")
-                }
-                .build()
+            KspDtoSpecificationRenderer.renderApplyTo(
+                dtoType = lsiDtoType,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                workspace = workspace,
+            ),
         )
     }
 
@@ -2174,9 +2032,6 @@ internal class DtoGenerator private constructor(
                 ?.let { "${it.simpleNamePart()}.$name" }
                 ?: name
         }
-
-    private val isNestedSpecificationFragment: Boolean
-        get() = lsiDtoType.isNestedSpecificationFragment(immutableSchema)
 
     private val isSerializerRequired: Boolean by lazy {
         lsiDtoType.requiresDynamicInputSerialization(lsiGraph)

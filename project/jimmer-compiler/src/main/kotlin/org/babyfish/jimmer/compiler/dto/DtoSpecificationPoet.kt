@@ -2,26 +2,50 @@ package org.babyfish.jimmer.compiler.dto
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.generatedPropsConstantName
+import site.addzero.lsi.jimmer.generatedPropsTypeOf
+import site.addzero.lsi.jimmer.generatedTableType
+import site.addzero.lsi.jimmer.packageName
+import site.addzero.lsi.jimmer.simpleName
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
+import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoModifier
+import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.DtoUserProp
+import site.addzero.lsi.jimmer.dto.dtoValueAccessorName
+import site.addzero.lsi.jimmer.dto.hasSpecificationTarget
 import site.addzero.lsi.jimmer.dto.isNestedSpecificationFragment
+import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
+import site.addzero.lsi.jimmer.dto.requiresSpecificationConverter
+import site.addzero.lsi.jimmer.dto.specificationArgumentProps
 import site.addzero.lsi.jimmer.dto.specificationBaseType
+import site.addzero.lsi.jimmer.dto.specificationConverterName
 import site.addzero.lsi.jimmer.dto.specificationLikeOptionArguments
+import site.addzero.lsi.jimmer.dto.specificationOperationName
+import site.addzero.lsi.jimmer.dto.specificationPath
+import site.addzero.lsi.jimmer.dto.specificationTargetIsEntityAssociation
+import site.addzero.lsi.jimmer.dto.usesSpecificationPropArrayArgument
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetBodyStyle
 import site.addzero.lsi.poet.LsiPoetCodeBlock
+import site.addzero.lsi.poet.LsiPoetCodeBuilder
 import site.addzero.lsi.poet.LsiPoetFunction
 import site.addzero.lsi.poet.LsiPoetModifier
+import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 /** 将冻结的 Specification 基础类型语义降低为平台中立的 entityType 函数。 */
-internal fun DtoType.toDtoEntityTypePoetFunction(
+internal fun DtoType.toLsiSpecificationEntityTypePoetFunction(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
 ): LsiPoetFunction {
@@ -52,27 +76,365 @@ internal fun DtoType.toDtoEntityTypePoetFunction(
     )
 }
 
-/** 将冻结的 like/notLike 匹配参数降低为调用参数片段。 */
-internal fun DtoBaseProp.toSpecificationLikeOptionArgumentsPoetCodeBlock(
+/** 将冻结的 Specification 谓词语义降低为平台中立的 applyTo 函数。 */
+internal fun DtoType.toLsiSpecificationApplyToPoetFunction(
     graph: DtoGraph,
-): LsiPoetCodeBlock? {
-    val arguments = specificationLikeOptionArguments(graph) ?: return null
-    return LsiPoetCodeBlock.build {
-        arguments.forEach { argument ->
-            text(", ")
-            literal(argument.toString())
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+): LsiPoetFunction {
+    val language = targetLanguage.requireSpecificationTargetLanguage()
+    require(DtoModifier.SPECIFICATION in modifiers) {
+        "DTO applyTo lowering requires a specification type: ${id.value}"
+    }
+    val baseType = specificationBaseType(immutableSchema)
+    val nested = isNestedSpecificationFragment(immutableSchema)
+    val argsName = "args"
+    val applierName = if (language == LsiLanguage.JAVA) "__applier" else "_applier"
+    val body = LsiPoetCodeBlock.build {
+        if (!nested) {
+            declareSpecificationApplier(language, argsName, applierName)
+        }
+        var path = emptyList<ImmutableProp>()
+        propsInDeclarationOrder(graph).forEach { prop ->
+            when (prop) {
+                is DtoBaseProp -> {
+                    val nextPath = prop.specificationPath(graph, immutableSchema)
+                    changeSpecificationPath(path, nextPath, immutableSchema, applierName)
+                    path = nextPath
+                    if (prop.hasSpecificationTarget(graph)) {
+                        appendSpecificationTarget(
+                            prop = prop,
+                            graph = graph,
+                            immutableSchema = immutableSchema,
+                            targetLanguage = language,
+                            nested = nested,
+                            argsName = argsName,
+                            applierName = applierName,
+                        )
+                    } else {
+                        appendSpecificationOperation(
+                            prop = prop,
+                            graph = graph,
+                            immutableSchema = immutableSchema,
+                            targetLanguage = language,
+                            applierName = applierName,
+                        )
+                    }
+                }
+                is DtoFoldProp -> {
+                    changeSpecificationPath(path, emptyList(), immutableSchema, applierName)
+                    path = emptyList()
+                    appendSpecificationFold(
+                        prop = prop,
+                        targetLanguage = language,
+                        nested = nested,
+                        argsName = argsName,
+                        applierName = applierName,
+                    )
+                }
+                is DtoUserProp -> Unit
+            }
+        }
+        changeSpecificationPath(path, emptyList(), immutableSchema, applierName)
+    }
+    val modifiers = buildSet {
+        if (language == LsiLanguage.JAVA) {
+            add(LsiPoetModifier.PUBLIC)
+        }
+        if (!nested) {
+            add(LsiPoetModifier.OVERRIDE)
+        }
+    }
+    return LsiPoetFunction(
+        name = "applyTo",
+        modifiers = modifiers,
+        parameters = listOf(
+            LsiPoetParameter(
+                name = if (nested) applierName else argsName,
+                type = specificationApplyToParameterType(language, baseType, nested),
+            ),
+        ),
+        body = body,
+        bodyStyle = LsiPoetBodyStyle.BLOCK,
+    )
+}
+
+/** 解析 Specification lowering 引用的精确源码类型名称。 */
+internal fun LsiWorkspace.dtoSpecificationPoetTypeNames(
+    function: LsiPoetFunction,
+    immutableSchema: ImmutableSchema,
+): List<LsiPoetTypeName> {
+    val generatedTypeNames = immutableSchema.types.flatMap { type ->
+        listOf(
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Props"),
+            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Table"),
+        )
+    }
+    return toLsiPoetTypeNames(
+        typeIds = function.referencedTypeIds,
+        additional = (
+            DTO_COMMON_POET_TYPE_NAMES +
+                SPECIFICATION_POET_TYPE_NAMES +
+                generatedTypeNames
+            ).distinctBy(LsiPoetTypeName::typeId),
+    )
+}
+
+private fun LsiPoetCodeBuilder.declareSpecificationApplier(
+    targetLanguage: LsiLanguage,
+    argsName: String,
+    applierName: String,
+) {
+    statement {
+        if (targetLanguage == LsiLanguage.JAVA) {
+            type(PREDICATE_APPLIER_TYPE)
+            text(" ")
+        } else {
+            text("val ")
+        }
+        name(applierName)
+        text(" = ")
+        name(argsName)
+        text(if (targetLanguage == LsiLanguage.JAVA) ".getApplier()" else ".applier")
+    }
+}
+
+private fun LsiPoetCodeBuilder.changeSpecificationPath(
+    currentPath: List<ImmutableProp>,
+    nextPath: List<ImmutableProp>,
+    immutableSchema: ImmutableSchema,
+    applierName: String,
+) {
+    val sameCount = currentPath
+        .zip(nextPath)
+        .takeWhile { (current, next) -> current.id == next.id }
+        .size
+    repeat(currentPath.size - sameCount) {
+        statement {
+            name(applierName)
+            text(".pop()")
+        }
+    }
+    nextPath.drop(sameCount).forEach { prop ->
+        statement {
+            name(applierName)
+            text(".push(")
+            immutablePropReference(immutableSchema, prop)
+            text(")")
         }
     }
 }
 
-/** 解析 entityType lowering 引用的精确源码类型名称。 */
-internal fun LsiWorkspace.dtoSpecificationPoetTypeNames(
-    function: LsiPoetFunction,
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
-        typeIds = function.referencedTypeIds,
-        additional = DTO_COMMON_POET_TYPE_NAMES + CLASS_TYPE_NAME,
-    )
+private fun LsiPoetCodeBuilder.appendSpecificationFold(
+    prop: DtoFoldProp,
+    targetLanguage: LsiLanguage,
+    nested: Boolean,
+    argsName: String,
+    applierName: String,
+) {
+    val targetName = if (nested) applierName else argsName
+    if (targetLanguage == LsiLanguage.JAVA) {
+        beginControlFlow {
+            text("if (this.")
+            name(prop.name)
+            text(" != null)")
+        }
+        statement {
+            text("this.")
+            name(prop.name)
+            text(".applyTo(")
+            name(targetName)
+            text(")")
+        }
+        endControlFlow()
+    } else {
+        statement {
+            text("this.")
+            name(prop.name)
+            text("?.applyTo(")
+            name(targetName)
+            text(")")
+        }
+    }
+}
+
+private fun LsiPoetCodeBuilder.appendSpecificationTarget(
+    prop: DtoBaseProp,
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+    nested: Boolean,
+    argsName: String,
+    applierName: String,
+) {
+    val entityAssociation = prop.specificationTargetIsEntityAssociation(graph, immutableSchema)
+    require(!nested || !entityAssociation) {
+        "Nested specification target cannot be an entity association: ${prop.id.value}"
+    }
+    if (targetLanguage == LsiLanguage.JAVA) {
+        beginControlFlow {
+            text("if (this.")
+            name(prop.name)
+            text(" != null)")
+        }
+        statement {
+            text("this.")
+            name(prop.name)
+            text(".applyTo(")
+            appendSpecificationTargetArgument(
+                targetLanguage = targetLanguage,
+                entityAssociation = entityAssociation,
+                nested = nested,
+                argsName = argsName,
+                applierName = applierName,
+            )
+            text(")")
+        }
+        endControlFlow()
+    } else {
+        statement {
+            text("this.")
+            name(prop.name)
+            text("?.let { it.applyTo(")
+            appendSpecificationTargetArgument(
+                targetLanguage = targetLanguage,
+                entityAssociation = entityAssociation,
+                nested = nested,
+                argsName = argsName,
+                applierName = applierName,
+            )
+            text(") }")
+        }
+    }
+}
+
+private fun LsiPoetCodeBuilder.appendSpecificationTargetArgument(
+    targetLanguage: LsiLanguage,
+    entityAssociation: Boolean,
+    nested: Boolean,
+    argsName: String,
+    applierName: String,
+) {
+    when {
+        entityAssociation -> {
+            name(argsName)
+            text(".child()")
+        }
+        nested -> name(applierName)
+        targetLanguage == LsiLanguage.JAVA -> {
+            name(argsName)
+            text(".getApplier()")
+        }
+        else -> {
+            name(argsName)
+            text(".applier")
+        }
+    }
+}
+
+private fun LsiPoetCodeBuilder.appendSpecificationOperation(
+    prop: DtoBaseProp,
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+    applierName: String,
+) {
+    statement {
+        name(applierName)
+        text(".")
+        name(prop.specificationOperationName(graph))
+        text("(")
+        appendSpecificationPropArgument(prop, graph, immutableSchema, targetLanguage)
+        text(", ")
+        if (prop.requiresSpecificationConverter(graph, immutableSchema)) {
+            name(prop.specificationConverterName(targetLanguage, graph))
+            text("(")
+            appendSpecificationValue(prop, graph, immutableSchema, targetLanguage)
+            text(")")
+        } else {
+            appendSpecificationValue(prop, graph, immutableSchema, targetLanguage)
+        }
+        prop.specificationLikeOptionArguments(graph)?.forEach { argument ->
+            text(", ")
+            literal(argument.toString())
+        }
+        text(")")
+    }
+}
+
+private fun LsiPoetCodeBuilder.appendSpecificationPropArgument(
+    prop: DtoBaseProp,
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+) {
+    val props = prop.specificationArgumentProps(graph, immutableSchema)
+    if (!prop.usesSpecificationPropArrayArgument(graph)) {
+        immutablePropReference(immutableSchema, props.single())
+        return
+    }
+    if (targetLanguage == LsiLanguage.JAVA) {
+        text("new ")
+        type(IMMUTABLE_PROP_TYPE)
+        text("[] { ")
+    } else {
+        text("arrayOf(")
+    }
+    props.forEachIndexed { index, immutableProp ->
+        if (index != 0) {
+            text(", ")
+        }
+        immutablePropReference(immutableSchema, immutableProp)
+    }
+    text(if (targetLanguage == LsiLanguage.JAVA) " }" else ")")
+}
+
+private fun LsiPoetCodeBuilder.appendSpecificationValue(
+    prop: DtoBaseProp,
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+) {
+    text("this.")
+    name(prop.dtoValueAccessorName(targetLanguage, graph, immutableSchema))
+    if (targetLanguage == LsiLanguage.JAVA) {
+        text("()")
+    }
+}
+
+private fun LsiPoetCodeBuilder.immutablePropReference(
+    immutableSchema: ImmutableSchema,
+    prop: ImmutableProp,
+) {
+    type(immutableSchema.generatedPropsTypeOf(prop))
+    text(".")
+    name(prop.generatedPropsConstantName())
+    text(".unwrap()")
+}
+
+private fun specificationApplyToParameterType(
+    targetLanguage: LsiLanguage,
+    baseType: ImmutableType,
+    nested: Boolean,
+): LsiDeclaredType {
+    if (nested) {
+        return PREDICATE_APPLIER_TYPE
+    }
+    val baseTypeRef = LsiDeclaredType(baseType.id)
+    return when (targetLanguage) {
+        LsiLanguage.JAVA -> LsiDeclaredType(
+            declarationId = SPECIFICATION_ARGS_TYPE_ID,
+            arguments = listOf(
+                LsiTypeArgument.invariant(baseTypeRef),
+                LsiTypeArgument.invariant(baseType.generatedTableType()),
+            ),
+        )
+        LsiLanguage.KOTLIN -> LsiDeclaredType(
+            declarationId = K_SPECIFICATION_ARGS_TYPE_ID,
+            arguments = listOf(LsiTypeArgument.invariant(baseTypeRef)),
+        )
+        LsiLanguage.UNKNOWN -> error("DTO specification methods require Java or Kotlin target language")
+    }
 }
 
 private fun LsiLanguage.requireSpecificationTargetLanguage(): LsiLanguage {
@@ -85,3 +447,38 @@ private fun LsiLanguage.requireSpecificationTargetLanguage(): LsiLanguage {
 private val CLASS_TYPE_ID = LsiSymbolId.type("java.lang.Class")
 
 private val CLASS_TYPE_NAME = LsiPoetTypeName(CLASS_TYPE_ID, "java.lang", listOf("Class"))
+
+private val SPECIFICATION_ARGS_TYPE_ID =
+    LsiSymbolId.type("org.babyfish.jimmer.sql.ast.query.specification.SpecificationArgs")
+
+private val K_SPECIFICATION_ARGS_TYPE_ID =
+    LsiSymbolId.type("org.babyfish.jimmer.sql.kt.ast.query.specification.KSpecificationArgs")
+
+private val PREDICATE_APPLIER_TYPE =
+    LsiDeclaredType(LsiSymbolId.type("org.babyfish.jimmer.sql.ast.query.specification.PredicateApplier"))
+
+private val IMMUTABLE_PROP_TYPE = LsiDeclaredType(LsiSymbolId.type("org.babyfish.jimmer.meta.ImmutableProp"))
+
+private val SPECIFICATION_POET_TYPE_NAMES = listOf(
+    CLASS_TYPE_NAME,
+    LsiPoetTypeName(
+        SPECIFICATION_ARGS_TYPE_ID,
+        "org.babyfish.jimmer.sql.ast.query.specification",
+        listOf("SpecificationArgs"),
+    ),
+    LsiPoetTypeName(
+        K_SPECIFICATION_ARGS_TYPE_ID,
+        "org.babyfish.jimmer.sql.kt.ast.query.specification",
+        listOf("KSpecificationArgs"),
+    ),
+    LsiPoetTypeName(
+        PREDICATE_APPLIER_TYPE.declarationId,
+        "org.babyfish.jimmer.sql.ast.query.specification",
+        listOf("PredicateApplier"),
+    ),
+    LsiPoetTypeName(
+        IMMUTABLE_PROP_TYPE.declarationId,
+        "org.babyfish.jimmer.meta",
+        listOf("ImmutableProp"),
+    ),
+)

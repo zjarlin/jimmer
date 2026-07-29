@@ -919,21 +919,21 @@ class DtoAccessorExtensionsTest {
         val idGraph = singlePropGraph(idProp)
         assertEquals(
             "isTargetId",
-            idProp.serializerValueAccessorName(LsiLanguage.JAVA, idGraph, schema),
+            idProp.dtoValueAccessorName(LsiLanguage.JAVA, idGraph, schema),
         )
 
         val listIdProp = baseProp("targetIds", baseName = "targets").copy(functionName = "id")
         val listIdGraph = singlePropGraph(listIdProp)
         assertEquals(
             "getTargetIds",
-            listIdProp.serializerValueAccessorName(LsiLanguage.JAVA, listIdGraph, schema),
+            listIdProp.dtoValueAccessorName(LsiLanguage.JAVA, listIdGraph, schema),
         )
 
         val idViewProp = baseProp("targetIdView", baseName = "targetId")
         val idViewGraph = singlePropGraph(idViewProp)
         assertEquals(
             "isTargetIdView",
-            idViewProp.serializerValueAccessorName(LsiLanguage.JAVA, idViewGraph, schema),
+            idViewProp.dtoValueAccessorName(LsiLanguage.JAVA, idViewGraph, schema),
         )
 
         val convertedIdViewProp = baseProp(
@@ -943,7 +943,7 @@ class DtoAccessorExtensionsTest {
         val convertedIdViewGraph = singlePropGraph(convertedIdViewProp)
         assertEquals(
             "getConvertedTargetIdView",
-            convertedIdViewProp.serializerValueAccessorName(
+            convertedIdViewProp.dtoValueAccessorName(
                 LsiLanguage.JAVA,
                 convertedIdViewGraph,
                 schema,
@@ -962,8 +962,8 @@ class DtoAccessorExtensionsTest {
         val graph = singlePropGraph(aliasProp)
         val schema = immutableSchema(immutableProp("active", STRING_TYPE))
 
-        assertEquals("getWhen", aliasProp.serializerValueAccessorName(LsiLanguage.JAVA, graph, schema))
-        assertEquals("when", aliasProp.serializerValueAccessorName(LsiLanguage.KOTLIN, graph, schema))
+        assertEquals("getWhen", aliasProp.dtoValueAccessorName(LsiLanguage.JAVA, graph, schema))
+        assertEquals("when", aliasProp.dtoValueAccessorName(LsiLanguage.KOTLIN, graph, schema))
         assertEquals("isWhenLoaded", aliasProp.loadedAccessorName())
         assertEquals(
             "isURLloaded",
@@ -1237,7 +1237,7 @@ class DtoAccessorExtensionsTest {
         )
 
         assertFailsWith<IllegalArgumentException> {
-            prop.serializerValueAccessorName(LsiLanguage.JAVA, graph, schema)
+            prop.dtoValueAccessorName(LsiLanguage.JAVA, graph, schema)
         }
 
         val consistentProp = prop.copy(
@@ -1253,7 +1253,7 @@ class DtoAccessorExtensionsTest {
         )
         assertEquals(
             "isMixed",
-            consistentProp.serializerValueAccessorName(
+            consistentProp.dtoValueAccessorName(
                 LsiLanguage.JAVA,
                 consistentGraph,
                 consistentSchema,
@@ -1262,16 +1262,15 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
-    fun `rejects serializer accessors for a non-input DTO`() {
+    fun `derives value accessors for any visible DTO property`() {
         val prop = baseProp("value")
         val graph = singlePropGraph(prop, input = false)
+        val schema = immutableSchema(immutableProp("value", STRING_TYPE))
 
+        assertEquals("getValue", prop.dtoValueAccessorName(LsiLanguage.JAVA, graph, schema))
+        assertEquals("value", prop.dtoValueAccessorName(LsiLanguage.KOTLIN, graph, schema))
         assertFailsWith<IllegalArgumentException> {
-            prop.serializerValueAccessorName(
-                LsiLanguage.JAVA,
-                graph,
-                immutableSchema(immutableProp("value", STRING_TYPE)),
-            )
+            prop.dtoValueAccessorName(LsiLanguage.UNKNOWN, graph, schema)
         }
     }
 
@@ -1398,7 +1397,7 @@ class DtoAccessorExtensionsTest {
                 converter = converter,
             ),
         )
-        return prop.serializerValueAccessorName(LsiLanguage.JAVA, graph, schema)
+        return prop.dtoValueAccessorName(LsiLanguage.JAVA, graph, schema)
     }
 
     private fun singlePropGraph(

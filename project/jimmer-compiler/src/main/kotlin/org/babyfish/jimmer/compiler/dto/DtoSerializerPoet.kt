@@ -8,7 +8,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.serializerLoadedAccessorNameOrNull
 import site.addzero.lsi.jimmer.dto.serializerPropsInDeclarationOrder
-import site.addzero.lsi.jimmer.dto.serializerValueAccessorName
+import site.addzero.lsi.jimmer.dto.dtoValueAccessorName
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.poet.LsiPoetCodeBlock
@@ -110,7 +110,7 @@ private fun DtoType.serializerBody(
             name("input")
             text(".")
             name(
-                prop.serializerValueAccessorName(
+                prop.dtoValueAccessorName(
                     targetLanguage = targetLanguage,
                     graph = graph,
                     immutableSchema = immutableSchema,

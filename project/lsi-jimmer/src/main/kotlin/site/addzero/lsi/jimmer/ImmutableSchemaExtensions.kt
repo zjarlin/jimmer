@@ -12,6 +12,35 @@ val ImmutableType.packageName: String
 val ImmutableType.simpleName: String
     get() = qualifiedName.substringAfterLast('.')
 
+/** 返回不可变类型对应的生成 Props 类型。 */
+fun ImmutableType.generatedPropsType(): LsiDeclaredType {
+    return generatedQueryType("${simpleName}Props")
+}
+
+/** 返回实体类型对应的生成 Table 类型。 */
+fun ImmutableType.generatedTableType(): LsiDeclaredType {
+    require(kind == ImmutableTypeKind.ENTITY) {
+        "Only immutable entity type can have a generated table type: ${id.value}"
+    }
+    return generatedQueryType("${simpleName}Table")
+}
+
+/** 返回属性声明类型对应的生成 Props 类型。 */
+fun ImmutableSchema.generatedPropsTypeOf(prop: ImmutableProp): LsiDeclaredType {
+    require(propsById[prop.id] == prop) {
+        "Immutable property does not belong to this schema: ${prop.id.value}"
+    }
+    val declaringType = requireNotNull(typesById[prop.declaringTypeId]) {
+        "Immutable property declaring type does not exist: ${prop.declaringTypeId.value}"
+    }
+    return declaringType.generatedPropsType()
+}
+
+/** 返回属性在生成 Props 类型中的常量名。 */
+fun ImmutableProp.generatedPropsConstantName(): String {
+    return name.toUpperSnakeCase()
+}
+
 /** 返回属性的具体不可变目标类型，泛型目标尚未具体化时返回空。 */
 fun ImmutableSchema.targetTypeOf(prop: ImmutableProp): ImmutableType? {
     return prop.targetTypeId?.let(typesById::get)
@@ -114,4 +143,21 @@ private fun ImmutableType.isPrimarySubtypeOf(
         currentTypeId = schema.typesById[currentTypeId]?.primarySuperTypeId
     }
     return false
+}
+
+private fun ImmutableType.generatedQueryType(simpleName: String): LsiDeclaredType {
+    val qualifiedName = if (packageName.isEmpty()) simpleName else "$packageName.$simpleName"
+    return LsiDeclaredType(LsiSymbolId.type(qualifiedName))
+}
+
+private fun String.toUpperSnakeCase(): String = buildString(length + 8) {
+    var previousLowerCaseOrDigit = false
+    for (character in this@toUpperSnakeCase) {
+        val lowerCaseOrDigit = character.isLowerCase() || character.isDigit()
+        if (previousLowerCaseOrDigit && !lowerCaseOrDigit) {
+            append('_')
+        }
+        previousLowerCaseOrDigit = lowerCaseOrDigit
+        append(character.uppercaseChar())
+    }
 }
