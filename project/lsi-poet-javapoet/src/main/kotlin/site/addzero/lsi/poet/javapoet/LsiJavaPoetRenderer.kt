@@ -75,6 +75,15 @@ class LsiJavaPoetRenderer : LsiPoetRenderer {
         return function.toJavaMethod(typeNames)
     }
 
+    /** 将单个 LSI 字段渲染为可嵌入现有 JavaPoet 类型的结构。 */
+    fun renderField(
+        field: LsiPoetField,
+        typeNames: List<LsiPoetTypeName>,
+        currentPackageName: String? = null,
+    ): FieldSpec {
+        return field.toJavaField(typeNames, currentPackageName)
+    }
+
     /** 将单个 LSI Poet 注解渲染为可嵌入现有 JavaPoet 声明的结构。 */
     fun renderAnnotation(
         annotation: LsiPoetAnnotation,

@@ -5,7 +5,6 @@ import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.symbol.KSFile
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import org.babyfish.jimmer.client.ApiIgnore
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
@@ -989,25 +988,11 @@ internal class DtoGenerator private constructor(
     }
 
     private fun addStateProp(prop: DtoProp<ImmutableType, ImmutableProp>) {
-        lsiDtoType
-            .prop(lsiGraph, prop.name)
-            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
-            ?.let {
-            typeBuilder.addProperty(
-                PropertySpec
-                    .builder(it, BOOLEAN)
-                    .addAnnotation(ApiIgnore::class)
-                    .addAnnotation(
-                        AnnotationSpec
-                            .builder(ctx.jacksonTypes.jsonIgnore)
-                            .useSiteTarget(AnnotationSpec.UseSiteTarget.GET)
-                            .build()
-                    )
-                    .mutable(mutable)
-                    .initializer("%N", it)
-                    .build()
-            )
-        }
+        KspDtoLoadedStateRenderer.renderStorageProperty(
+            prop = lsiDtoType.prop(lsiGraph, prop.name),
+            graph = lsiGraph,
+            mutable = mutable,
+        )?.let(typeBuilder::addProperty)
     }
 
     @Suppress("UNCHECKED_CAST")

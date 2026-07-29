@@ -83,6 +83,14 @@ class LsiKotlinPoetRenderer : LsiPoetRenderer {
         return function.toKotlinFunction(typeNames)
     }
 
+    /** 将单个 LSI 属性渲染为可嵌入现有 KotlinPoet 类型的结构。 */
+    fun renderProperty(
+        property: LsiPoetProperty,
+        typeNames: List<LsiPoetTypeName>,
+    ): PropertySpec {
+        return property.toKotlinProperty(typeNames)
+    }
+
     /** 将单个 LSI Poet 注解渲染为可嵌入现有 KotlinPoet 声明的结构。 */
     fun renderAnnotation(
         annotation: LsiPoetAnnotation,

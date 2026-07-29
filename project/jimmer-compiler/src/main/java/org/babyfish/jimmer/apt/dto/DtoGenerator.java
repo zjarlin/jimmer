@@ -1276,19 +1276,14 @@ public class DtoGenerator {
     }
 
     private void addStateField(DtoProp<ImmutableType, ImmutableProp> prop) {
-        String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+        FieldSpec stateField = AptDtoLoadedStateRenderer.renderStorageField(
                 DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
                 lsiGraph,
-                LsiLanguage.JAVA
-        );
-        if (stateFieldName == null) {
-            return;
-        }
-        typeBuilder.addField(
-                TypeName.BOOLEAN,
-                stateFieldName,
                 ctx.getDtoFieldModifier()
         );
+        if (stateField != null) {
+            typeBuilder.addField(stateField);
+        }
     }
 
     private void addAccessorDeclaration(AbstractProp prop) {
