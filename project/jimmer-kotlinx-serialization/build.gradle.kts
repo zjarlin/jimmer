@@ -14,6 +14,8 @@ dependencies {
 
     testImplementation(projects.jimmerSql)
     testImplementation(projects.jimmerSqlKotlin)
+    testImplementation(projects.jimmerJackson2)
+    testImplementation(projects.jimmerJackson3)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.jackson.annotations)
 

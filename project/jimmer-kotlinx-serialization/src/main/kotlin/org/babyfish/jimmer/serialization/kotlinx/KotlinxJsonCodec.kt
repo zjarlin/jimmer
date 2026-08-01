@@ -19,6 +19,7 @@ import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.serializer
+import kotlinx.serialization.serializerOrNull
 import org.babyfish.jimmer.json.codec.JsonCodec
 import org.babyfish.jimmer.json.codec.JsonCodecOptions
 import org.babyfish.jimmer.json.codec.JsonType
@@ -96,16 +97,51 @@ class KotlinxJsonCodec @JvmOverloads constructor(
     }
 }
 
-class KotlinxJsonCodecProvider : org.babyfish.jimmer.json.codec.JsonCodecProvider {
+class KotlinxJsonCodecProvider @JvmOverloads constructor(
+    private val json: Json = KotlinxJsonCodec.DEFAULT_JSON
+) : org.babyfish.jimmer.json.codec.JsonCodecProvider {
+
+    private val codec = KotlinxJsonCodec(json)
+
     override fun priority(): Int =
-        100
+        400
+
+    override fun supportsEncode(value: Any?, type: JsonType): Boolean =
+        KotlinxJsonSupport.supportsEncode(json, value, type)
+
+    override fun supportsDecode(type: JsonType): Boolean =
+        KotlinxJsonSupport.supportsDecode(json, type)
 
     override fun codec(): JsonCodec =
-        KotlinxJsonCodec()
+        codec
 }
 
 @OptIn(ExperimentalSerializationApi::class)
 private object KotlinxJsonSupport {
+
+    fun supportsEncode(json: Json, value: Any?, type: JsonType): Boolean {
+        if (value == null) {
+            return true
+        }
+        if (!type.isAny) {
+            if (value is ImmutableSpi) {
+                return true
+            }
+            return hasSerializer(json) { KotlinxJsonTypes.constructType(type) }
+        }
+        return supportsUntypedValue(json, value)
+    }
+
+    fun supportsDecode(json: Json, type: JsonType): Boolean {
+        if (type.isAny || type.type == Node::class.java) {
+            return true
+        }
+        val rawType = type.type as? Class<*>
+        if (rawType != null && ImmutableType.tryGet(rawType) != null) {
+            return true
+        }
+        return hasSerializer(json) { KotlinxJsonTypes.constructType(type) }
+    }
 
     fun encodeUntyped(
         json: Json,
@@ -137,7 +173,44 @@ private object KotlinxJsonSupport {
                     key.toString() to encodeUntyped(json, entryValue, options)
                 }
             )
-            else -> encodeElement(json, value, value::class.createType(), options)
+            else -> encodeElement(
+                json,
+                value,
+                KotlinxJsonTypes.constructRuntimeType(json, value),
+                options
+            )
+        }
+
+    private fun supportsUntypedValue(json: Json, value: Any?): Boolean =
+        when (value) {
+            null,
+            is JsonElement,
+            is ImmutableSpi,
+            is Boolean,
+            is Number,
+            is String,
+            is Char,
+            is UUID,
+            is Enum<*>,
+            is BooleanArray,
+            is ByteArray,
+            is ShortArray,
+            is IntArray,
+            is LongArray,
+            is FloatArray,
+            is DoubleArray,
+            is CharArray -> true
+            is Iterable<*> -> value.all { supportsUntypedValue(json, it) }
+            is Array<*> -> value.all { supportsUntypedValue(json, it) }
+            is Map<*, *> -> value.values.all { supportsUntypedValue(json, it) }
+            else -> hasSerializer(json) { KotlinxJsonTypes.constructRuntimeType(json, value) }
+        }
+
+    private fun hasSerializer(json: Json, typeProvider: () -> KType): Boolean =
+        try {
+            json.serializersModule.serializerOrNull(typeProvider()) != null
+        } catch (_: IllegalArgumentException) {
+            false
         }
 
     fun encodeElement(
@@ -299,6 +372,15 @@ private object KotlinxJsonTypes {
 
     fun constructType(type: Type): KType =
         type.toKType()
+
+    fun constructRuntimeType(json: Json, value: Any): KType {
+        val runtimeType = value::class.createType()
+        return value::class.supertypes.firstOrNull { superType ->
+            val classifier = superType.classifier as? kotlin.reflect.KClass<*>
+            classifier?.isSealed == true &&
+                json.serializersModule.serializerOrNull(superType) != null
+        } ?: runtimeType
+    }
 
     fun constructArrayType(componentType: KType): KType =
         Array<Any?>::class.createType(listOf(KTypeProjection.invariant(componentType)))

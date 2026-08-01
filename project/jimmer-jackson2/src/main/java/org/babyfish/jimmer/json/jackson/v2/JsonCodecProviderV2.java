@@ -1,10 +1,21 @@
 package org.babyfish.jimmer.json.jackson.v2;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.babyfish.jimmer.json.codec.JsonCodec;
 import org.babyfish.jimmer.json.codec.JsonCodecProvider;
 import org.jspecify.annotations.NonNull;
 
 public class JsonCodecProviderV2 implements JsonCodecProvider {
+
+    private final ObjectMapper mapper;
+
+    public JsonCodecProviderV2() {
+        this.mapper = null;
+    }
+
+    public JsonCodecProviderV2(ObjectMapper mapper) {
+        this.mapper = mapper;
+    }
 
     @Override
     public int priority() {
@@ -14,6 +25,6 @@ public class JsonCodecProviderV2 implements JsonCodecProvider {
     @Override
     @NonNull
     public JsonCodec codec() {
-        return new JsonCodecV2();
+        return mapper != null ? new JsonCodecV2(mapper) : new JsonCodecV2();
     }
 }

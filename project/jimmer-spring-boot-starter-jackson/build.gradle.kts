@@ -8,4 +8,6 @@ dependencies {
     api(projects.jimmerJackson3)
 
     annotationProcessor(libs.spring.boot.configurationProcessor)
+
+    testImplementation(projects.jimmerKotlinxSerialization)
 }

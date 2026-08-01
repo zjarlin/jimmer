@@ -9,7 +9,7 @@ public class DefaultImmutableSerializationSupportTest {
 
     @Test
     public void test() throws Exception {
-        JsonCodec codec = JsonCodecDetector.loadJsonCodecProvider().codec();
+        JsonCodec codec = JsonCodec.defaultCodec();
         String json = codec.encode(BookDraft.$.produce(draft -> {
         }));
         assertEquals("{}", json);
