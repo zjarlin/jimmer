@@ -33,6 +33,8 @@ public class Jackson3BinaryCompatibilityTest {
 
         JsonCodecProviderV3 provider = new JsonCodecProviderV3();
         assertEquals(300, provider.priority());
+        assertTrue(provider.supportsEncode(map, JsonType.any()));
+        assertTrue(provider.supportsDecode(JsonType.of(Map.class)));
         assertTrue(provider.codec() instanceof JsonCodec);
         assertEquals(map, new JsonConverterV3(mapper).convert(map, Map.class));
         assertEquals(map, new JsonReaderV3<Map<String, Object>>(mapper.readerFor(Map.class)).read(json));
