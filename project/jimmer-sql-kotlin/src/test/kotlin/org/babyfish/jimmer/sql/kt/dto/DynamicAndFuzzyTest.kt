@@ -20,8 +20,7 @@ class DynamicAndFuzzyTest {
             input.toEntity()
         )
         val store = defaultCodec()
-            .readerFor(DynamicBookStoreInput::class.java)
-            .read("{\"name\":\"MANNING\"}")
+            .decode("{\"name\":\"MANNING\"}", DynamicBookStoreInput::class.java)
             .toEntity()
         assertContent(
             "{\"name\":\"MANNING\"}",
@@ -37,8 +36,7 @@ class DynamicAndFuzzyTest {
             input.toEntity()
         )
         val book = defaultCodec()
-            .readerFor(DynamicBookInput::class.java)
-            .read("{}")
+            .decode("{}", DynamicBookInput::class.java)
             .toEntity()
         assertContent("{}", book)
     }
@@ -64,14 +62,14 @@ class DynamicAndFuzzyTest {
             input.toEntity().toString()
         )
         val book = defaultCodec()
-            .readerFor(DynamicBookInput::class.java)
-            .read(
+            .decode(
                 "{" +
                         "\"name\":\"Book\"," +
                         "\"edition\":7," +
                         "\"price\":59.99," +
                         "\"storeId\":3" +
-                        "}"
+                        "}",
+                DynamicBookInput::class.java
             ).toEntity()
         assertContent(
             "{" +
@@ -98,8 +96,10 @@ class DynamicAndFuzzyTest {
             input.toEntity()
         )
         val book = defaultCodec()
-            .readerFor(DynamicBookInput2::class.java)
-            .read("{\"parentName\":\"MANNING\",\"parentWebsite\":null}")
+            .decode(
+                "{\"parentName\":\"MANNING\",\"parentWebsite\":null}",
+                DynamicBookInput2::class.java
+            )
             .toEntity()
         assertContent(
             "{\"store\":{\"name\":\"MANNING\",\"website\":null}}",
@@ -129,15 +129,15 @@ class DynamicAndFuzzyTest {
             input.toEntity().toString()
         )
         val book = defaultCodec()
-            .readerFor(DynamicBookInput2::class.java)
-            .read(
+            .decode(
                 "{" +
                         "\"name\":\"Book\"," +
                         "\"edition\":7," +
                         "\"price\":59.99," +
                         "\"parentName\":\"Store\"," +
                         "\"parentWebsite\":\"https://www.store.com\"" +
-                        "}"
+                        "}",
+                DynamicBookInput2::class.java
             ).toEntity()
         assertContent(
             "{" +
@@ -158,11 +158,10 @@ class DynamicAndFuzzyTest {
         val input = DynamicBookInput(name = "MANNING")
         assertContent(
             "{\"name\":\"MANNING\"}",
-            defaultCodec().writer().writeAsString(input)
+            defaultCodec().encode(input)
         )
         val book = defaultCodec()
-            .readerFor(DynamicBookInput::class.java)
-            .read("{\"name\":\"MANNING\"}")
+            .decode("{\"name\":\"MANNING\"}", DynamicBookInput::class.java)
             .toEntity()
         assertContent(
             "{\"name\":\"MANNING\"}",
@@ -179,18 +178,17 @@ class DynamicAndFuzzyTest {
                     "\"price\":null," +
                     "\"storeId\":null," +
                     "\"authorIds\":null}",
-            defaultCodec().writer().writeAsString(input)
+            defaultCodec().encode(input)
         )
         val book = defaultCodec()
-            .readerFor(FuzzyBookInput::class.java)
-            .read(
+            .decode(
                 "{\"name\":\"SQL in Action\"," +
                         "\"edition\":null," +
                         "\"price\":null," +
                         "\"storeId\":null," +
                         "\"authorIds\":null}",
+                FuzzyBookInput::class.java
             ).toEntity()
         assertContent("{\"name\":\"SQL in Action\"}", book)
     }
 }
-

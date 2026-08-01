@@ -158,7 +158,7 @@ abstract class AbstractQueryTest : AbstractTest() {
 
         fun rows(json: String): QueryTestContext<R> {
             try {
-                contentEquals(json, defaultCodec().writer().writeAsString(rows))
+                contentEquals(json, defaultCodec().encode(rows))
             } catch (ex: JsonProcessingException) {
                 throw RuntimeException(ex)
             }

@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.sql.dto;
 
 import org.babyfish.jimmer.Input;
-import org.babyfish.jimmer.json.codec.JsonReader;
 import org.babyfish.jimmer.sql.common.Tests;
 import org.babyfish.jimmer.sql.model.dto.*;
 import org.junit.jupiter.api.Assertions;
@@ -10,9 +9,6 @@ import org.junit.jupiter.api.Test;
 import static org.babyfish.jimmer.json.codec.JsonCodec.defaultCodec;
 
 public class InputModifierPropTest extends Tests {
-    private static final JsonReader<MixedBookInput> MIXED_BOOK_INPUT_READER =
-            defaultCodec().readerFor(MixedBookInput.class);
-
     @Test
     public void testAllProperties() throws Exception {
         String json = "{" +
@@ -21,7 +17,7 @@ public class InputModifierPropTest extends Tests {
                 "\"edition\": 2, " +
                 "\"price\": 49.9" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=4470bb60-7f23-449b-840c-c511730c93b9, " +
@@ -50,7 +46,7 @@ public class InputModifierPropTest extends Tests {
                 "\"edition\": 2, " +
                 "\"price\": 49.9" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=null, " +
@@ -79,13 +75,13 @@ public class InputModifierPropTest extends Tests {
                 "}";
         RuntimeException ex = Assertions.assertThrows(
                 RuntimeException.class,
-                () -> MIXED_BOOK_INPUT_READER.read(json)
+                () -> defaultCodec().decode(json, MixedBookInput.class)
         );
         Assertions.assertEquals("ValueInstantiationException", ex.getClass().getSimpleName());
         Assertions.assertEquals(
                 "An object whose type is " +
                         "\"org.babyfish.jimmer.sql.model.dto.MixedBookInput\" " +
-                        "cannot be deserialized by Jackson. " +
+                        "cannot be deserialized by JSON codec. " +
                         "The current input has the fixed nullable property \"id\", " +
                         "it is not specified by JSON explicitly. Please either " +
                         "explicitly specify the property as null in the JSON, " +
@@ -103,7 +99,7 @@ public class InputModifierPropTest extends Tests {
                 "\"edition\": 2, " +
                 "\"price\": 49.9" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=4470bb60-7f23-449b-840c-c511730c93b9, " +
@@ -130,7 +126,7 @@ public class InputModifierPropTest extends Tests {
                 "\"edition\": 2, " +
                 "\"price\": 49.9" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=4470bb60-7f23-449b-840c-c511730c93b9, " +
@@ -158,7 +154,7 @@ public class InputModifierPropTest extends Tests {
                 "\"edition\": null, " +
                 "\"price\": 49.9" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=4470bb60-7f23-449b-840c-c511730c93b9, " +
@@ -185,7 +181,7 @@ public class InputModifierPropTest extends Tests {
                 "\"name\": \"SQL in Action\", " +
                 "\"price\": 49.9" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=4470bb60-7f23-449b-840c-c511730c93b9, " +
@@ -212,7 +208,7 @@ public class InputModifierPropTest extends Tests {
                 "\"edition\": 2, " +
                 "\"price\": null" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=4470bb60-7f23-449b-840c-c511730c93b9, " +
@@ -238,7 +234,7 @@ public class InputModifierPropTest extends Tests {
                 "\"name\": \"SQL in Action\", " +
                 "\"edition\": 2" +
                 "}";
-        MixedBookInput input = MIXED_BOOK_INPUT_READER.read(json);
+        MixedBookInput input = defaultCodec().decode(json, MixedBookInput.class);
         assertContentEquals(
                 "MixedBookInput(" +
                         "--->id=4470bb60-7f23-449b-840c-c511730c93b9, " +
@@ -340,7 +336,7 @@ public class InputModifierPropTest extends Tests {
             String dtoJson,
             String entityJson
     ) throws Exception {
-        T input = defaultCodec().readerFor(inputType).read(json);
+        T input = defaultCodec().decode(json, inputType);
         assertContentEquals(dtoJson, input);
         assertContentEquals(entityJson, input.toEntity());
     }

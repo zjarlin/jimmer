@@ -152,7 +152,7 @@ public class TransactionCacheOperator extends AbstractCacheOperator {
                     for (Object key : keys) {
                         stmt.setString(1, type != null ? type.toString() : null);
                         stmt.setString(2, prop != null ? prop.toString() : null);
-                        stmt.setString(3, jsonCodec.writer().writeAsString(key));
+                        stmt.setString(3, jsonCodec.encode(key));
                         stmt.setString(4, reason);
                         stmt.addBatch();
                     }
@@ -226,10 +226,10 @@ public class TransactionCacheOperator extends AbstractCacheOperator {
                     ImmutableType type = typeFromString(rs.getString(2));
                     ImmutableProp prop = propFromString(rs.getString(3));
                     String json = rs.getString(4);
-                    Object key = jsonCodec.readerFor(type != null ?
-                                    (Class<Object>) type.getIdProp().getElementClass() :
-                                    (Class<Object>) prop.getDeclaringType().getIdProp().getElementClass())
-                            .read(json);
+                    Class<Object> keyType = type != null ?
+                            (Class<Object>) type.getIdProp().getElementClass() :
+                            (Class<Object>) prop.getDeclaringType().getIdProp().getElementClass();
+                    Object key = jsonCodec.decode(json, keyType);
                     String reason = rs.getString(5);
                     keyMap
                             .computeIfAbsent(new MergedKey(type, prop, reason), it -> new LinkedHashSet<>())

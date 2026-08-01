@@ -20,7 +20,7 @@ public class SqlTimeFunctionTest extends AbstractQueryTest {
 
     private static String toString(Object o) {
         try {
-            return new JsonCodecV2().writer().writeAsString(o);
+            return new JsonCodecV2().encode(o);
         } catch (Exception e) {
             Assertions.fail();
             return "";

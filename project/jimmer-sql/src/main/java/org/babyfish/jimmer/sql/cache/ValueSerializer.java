@@ -1,9 +1,7 @@
 package org.babyfish.jimmer.sql.cache;
 
 import org.babyfish.jimmer.json.codec.JsonCodec;
-import org.babyfish.jimmer.json.codec.JsonReader;
 import org.babyfish.jimmer.json.codec.JsonType;
-import org.babyfish.jimmer.json.codec.JsonWriter;
 import org.babyfish.jimmer.meta.ImmutableProp;
 import org.babyfish.jimmer.meta.ImmutableType;
 import org.babyfish.jimmer.meta.TargetLevel;
@@ -19,8 +17,8 @@ import static org.babyfish.jimmer.json.codec.JsonCodec.defaultCodec;
 public class ValueSerializer<T> {
     private static final byte[] NULL_BYTES = "<null>".getBytes(StandardCharsets.UTF_8);
 
-    private final JsonReader<T> jsonReader;
-    private final JsonWriter jsonWriter;
+    private final JsonCodec jsonCodec;
+    private final JsonType jsonType;
 
     public ValueSerializer(@NotNull ImmutableType type) {
         this(type, null, defaultCodec());
@@ -42,8 +40,8 @@ public class ValueSerializer<T> {
         if ((type == null) == (prop == null)) {
             throw new IllegalArgumentException("Internal bug: nullity of type and prop must be different");
         }
-        this.jsonReader = codec.readerFor(createValueType(type, prop));
-        this.jsonWriter = codec.writer();
+        this.jsonCodec = codec;
+        this.jsonType = createValueType(type, prop);
     }
 
     private static JsonType createValueType(ImmutableType type, ImmutableProp prop) {
@@ -67,7 +65,7 @@ public class ValueSerializer<T> {
             return NULL_BYTES.clone();
         }
         try {
-            return jsonWriter.writeAsBytes(value);
+            return jsonCodec.encode(value).getBytes(StandardCharsets.UTF_8);
         } catch (Exception ex) {
             throw new SerializationException(ex);
         }
@@ -96,7 +94,7 @@ public class ValueSerializer<T> {
             return null;
         }
         try {
-            return jsonReader.read(value);
+            return jsonCodec.decode(new String(value, StandardCharsets.UTF_8), jsonType);
         } catch (Exception ex) {
             throw new SerializationException(ex);
         }

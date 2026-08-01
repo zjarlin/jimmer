@@ -1,14 +1,14 @@
 package org.babyfish.jimmer;
 
 import org.babyfish.jimmer.json.codec.JsonCodec;
+import org.babyfish.jimmer.json.codec.JsonCodecOptions;
 import org.babyfish.jimmer.model.TreeNode;
 import org.babyfish.jimmer.model.TreeNodeDraft;
-import org.babyfish.jimmer.json.codec.PropertyNamingCustomization;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.babyfish.jimmer.json.codec.JsonCodec.defaultCodec;
-import static org.babyfish.jimmer.json.codec.PropertyNamingCustomization.PropertyNaming.SNAKE_CASE;
+import static org.babyfish.jimmer.json.codec.JsonCodecOptions.PropertyNaming.SNAKE_CASE;
 
 public class TreeNodeTest {
 
@@ -106,7 +106,7 @@ public class TreeNodeTest {
         );
         Assertions.assertEquals(
                 treeNode,
-                defaultCodec().readerFor(TreeNode.class).read(json)
+                defaultCodec().decode(json, TreeNode.class)
         );
     }
 
@@ -136,7 +136,7 @@ public class TreeNodeTest {
                                 "--->]" +
                                 "}"
                 ).replace("--->", ""),
-                defaultCodec().readerFor(TreeNode.class).read(
+                defaultCodec().decode(
                         (
                                 "{" +
                                         "--->\"name\":\"Root\"," +
@@ -155,7 +155,8 @@ public class TreeNodeTest {
                                         "--->--->}" +
                                         "--->]" +
                                         "}"
-                        ).replace("--->", "")
+                        ).replace("--->", ""),
+                        TreeNode.class
                 ).toString()
         );
     }
@@ -180,7 +181,10 @@ public class TreeNodeTest {
                 ;
             });
         });
-        JsonCodec codec = defaultCodec().withCustomizations(new PropertyNamingCustomization(SNAKE_CASE));
+        JsonCodec codec = defaultCodec();
+        JsonCodecOptions options = JsonCodecOptions.newBuilder()
+                .propertyNaming(SNAKE_CASE)
+                .build();
 
         String json =
                 "{" +
@@ -203,11 +207,11 @@ public class TreeNodeTest {
         json = json.replace("--->", "");
         Assertions.assertEquals(
                 json,
-                codec.writer().writeAsString(treeNode)
+                codec.encode(treeNode, options)
         );
         Assertions.assertEquals(
                 json,
-                codec.readerFor(TreeNode.class).read(json).toString()
+                codec.decode(json, TreeNode.class, options).toString()
                         .replace("childNodes", "child_nodes")
         );
     }

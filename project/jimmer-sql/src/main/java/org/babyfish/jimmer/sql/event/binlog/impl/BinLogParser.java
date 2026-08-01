@@ -9,6 +9,7 @@ import org.babyfish.jimmer.runtime.DraftSpi;
 import org.babyfish.jimmer.runtime.Internal;
 import org.babyfish.jimmer.sql.association.meta.AssociationProp;
 import org.babyfish.jimmer.sql.association.meta.AssociationType;
+import org.babyfish.jimmer.sql.ast.impl.mutation.EmbeddableObjects;
 import org.babyfish.jimmer.sql.ast.tuple.Tuple2;
 import org.babyfish.jimmer.sql.event.binlog.BinLogPropReader;
 import org.babyfish.jimmer.sql.meta.JoinTableFilterInfo;
@@ -42,7 +43,7 @@ public class BinLogParser {
             @NotNull Map<ImmutableProp, BinLogPropReader> propReaderMap,
             @NotNull Map<Class<?>, BinLogPropReader> typePropReaderMap
     ) {
-        this.jsonCodec = jsonCodec.withCustomizations(new BinLogModuleCustomization(this));
+        this.jsonCodec = jsonCodec;
         this.configuredReaderMap = propReaderMap;
         this.typeReaderMap = typePropReaderMap;
     }
@@ -84,7 +85,12 @@ public class BinLogParser {
             return null;
         }
         try {
-            return jsonCodec.readerFor(type).read(json);
+            ImmutableType immutableType = ImmutableType.tryGet(type);
+            if (immutableType == null) {
+                return jsonCodec.decode(json, type);
+            }
+            Node data = jsonCodec.decode(json, Node.class);
+            return parseEntity(immutableType, data);
         } catch (Exception ex) {
             throw new IllegalArgumentException("Illegal json: " + json, ex);
         }
@@ -102,7 +108,28 @@ public class BinLogParser {
         if (type instanceof AssociationType) {
             throw new IllegalArgumentException("type cannot be AssociationType");
         }
-        return (T) parseEntity(type.getJavaClass(), data);
+        MetadataStrategy strategy = sqlClient.getMetadataStrategy();
+        return (T) Internal.produce(type, null, draft -> {
+            Iterator<Map.Entry<String, Node>> itr = data.fieldsIterator();
+            while (itr.hasNext()) {
+                Map.Entry<String, Node> fieldEntry = itr.next();
+                List<ImmutableProp> chain = type.getPropChain(fieldEntry.getKey(), strategy);
+                ValueParser.addEntityProp((DraftSpi) draft, chain, fieldEntry.getValue(), this);
+            }
+            for (ImmutableProp prop : type.getProps().values()) {
+                if (prop.isMutable() && prop.isEmbedded(EmbeddedLevel.BOTH)) {
+                    DraftSpi spi = (DraftSpi) draft;
+                    if (!EmbeddableObjects.isCompleted(spi.__get(prop.getId()))) {
+                        if (!prop.isNullable()) {
+                            throw new IllegalArgumentException(
+                                    "Illegal binlog data, the property \"" + prop + "\" is not nullable"
+                            );
+                        }
+                        spi.__set(prop.getId(), null);
+                    }
+                }
+            }
+        });
     }
 
     @SuppressWarnings("unchecked")
@@ -191,7 +218,7 @@ public class BinLogParser {
         }
         Node data;
         try {
-            data = jsonCodec.treeReader().read(json);
+            data = jsonCodec.decode(json, Node.class);
         } catch (Exception ex) {
             throw new IllegalArgumentException("Illegal json: " + json, ex);
         }

@@ -90,7 +90,7 @@ public class InvalidateMessageTest extends Tests {
 
     @Test
     public void testTypeByJacksonForIssue621() throws Exception {
-        String json = defaultCodec().writer().writeAsString(
+        String json = defaultCodec().encode(
                 new InvalidateMessage(
                         UUID.randomUUID(),
                         new CacheTracker.InvalidateEvent(
@@ -105,8 +105,7 @@ public class InvalidateMessageTest extends Tests {
         );
 
         CacheTracker.InvalidateEvent event = defaultCodec()
-                .readerFor(InvalidateMessage.class)
-                .read(json)
+                .decode(json, InvalidateMessage.class)
                 .toEvent();
 
         assertContentEquals(
@@ -121,7 +120,7 @@ public class InvalidateMessageTest extends Tests {
 
     @Test
     public void testPropByJacksonForIssue621() throws Exception {
-        String json = defaultCodec().writer().writeAsString(
+        String json = defaultCodec().encode(
                 new InvalidateMessage(
                         UUID.randomUUID(),
                         new CacheTracker.InvalidateEvent(
@@ -136,8 +135,7 @@ public class InvalidateMessageTest extends Tests {
         );
 
         CacheTracker.InvalidateEvent event = defaultCodec()
-                .readerFor(InvalidateMessage.class)
-                .read(json)
+                .decode(json, InvalidateMessage.class)
                 .toEvent();
 
         assertContentEquals(

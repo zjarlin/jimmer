@@ -1,6 +1,7 @@
 package org.babyfish.jimmer;
 
 import org.babyfish.jimmer.json.codec.JsonCodec;
+import org.babyfish.jimmer.json.codec.JsonCodecOptions;
 import org.babyfish.jimmer.meta.*;
 import org.babyfish.jimmer.runtime.DraftSpi;
 import org.babyfish.jimmer.runtime.ImmutableSpi;
@@ -358,7 +359,7 @@ public class ImmutableObjects {
      */
     public static String toString(Object immutable) {
         try {
-            return defaultCodec().writer().writeAsString(immutable);
+            return defaultCodec().encode(immutable);
         } catch (Exception e) {
             throw new IllegalArgumentException("Can't serialize object", e);
         }
@@ -373,8 +374,16 @@ public class ImmutableObjects {
      * @return JSON string
      */
     public static String toString(Object immutable, @NotNull JsonCodec jsonCodec) {
+        return toString(immutable, jsonCodec, JsonCodecOptions.DEFAULT);
+    }
+
+    public static String toString(
+            Object immutable,
+            @NotNull JsonCodec jsonCodec,
+            @NotNull JsonCodecOptions options
+    ) {
         try {
-            return jsonCodec.writer().writeAsString(immutable);
+            return jsonCodec.encode(immutable, options);
         } catch (Exception e) {
             throw new IllegalArgumentException("Can't serialize object", e);
         }
@@ -388,15 +397,24 @@ public class ImmutableObjects {
      */
     public static <I> I fromString(Class<I> type, String json) {
         try {
-            return defaultCodec().readerFor(type).read(json);
+            return defaultCodec().decode(json, type);
         } catch (Exception e) {
             throw new IllegalArgumentException("Can't deserialize object ", e);
         }
     }
 
     public static <I> I fromString(Class<I> type, String json, @NotNull JsonCodec jsonCodec) {
+        return fromString(type, json, jsonCodec, JsonCodecOptions.DEFAULT);
+    }
+
+    public static <I> I fromString(
+            Class<I> type,
+            String json,
+            @NotNull JsonCodec jsonCodec,
+            @NotNull JsonCodecOptions options
+    ) {
         try {
-            return jsonCodec.readerFor(type).read(json);
+            return jsonCodec.decode(json, type, options);
         } catch (Exception e) {
             throw new IllegalArgumentException("Can't deserialize object ", e);
         }

@@ -246,17 +246,14 @@ class ScalarProviderManager implements ScalarTypeStrategy {
                 (Class<Object>) type,
                 String.class
         ) {
-            final JsonReader<?> reader = jsonCodec.readerFor(jsonType);
-            final JsonWriter writer = jsonCodec.writer();
-
             @Override
             public @NotNull Object toScalar(@NotNull String sqlValue) throws Exception {
-                return reader.read(sqlValue);
+                return jsonCodec.decode(sqlValue, jsonType);
             }
 
             @Override
             public @NotNull String toSql(@NotNull Object scalarValue) throws Exception {
-                return writer.writeAsString(scalarValue);
+                return jsonCodec.encode(scalarValue);
             }
 
             @Override

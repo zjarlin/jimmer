@@ -61,8 +61,8 @@ class FilterCacheEvictTest : AbstractQueryTest() {
         connectAndExpect({
             _sqlClient.binLog.accept(
                 "file",
-                defaultCodec().treeReader().read("{\"id\":9, \"parent_id\":8}"),
-                defaultCodec().treeReader().read("{\"id\":9, \"parent_id\":2}")
+                defaultCodec().decode("{\"id\":9, \"parent_id\":8}", org.babyfish.jimmer.json.codec.Node::class.java),
+                defaultCodec().decode("{\"id\":9, \"parent_id\":2}", org.babyfish.jimmer.json.codec.Node::class.java)
             )
         }) {
 
@@ -78,7 +78,7 @@ class FilterCacheEvictTest : AbstractQueryTest() {
         connectAndExpect({
             _sqlClient.binLog.accept(
                 "file_user_mapping",
-                defaultCodec().treeReader().read("{\"file_id\":28, \"user_id\":2}"),
+                defaultCodec().decode("{\"file_id\":28, \"user_id\":2}", org.babyfish.jimmer.json.codec.Node::class.java),
                 null
             )
         }) {

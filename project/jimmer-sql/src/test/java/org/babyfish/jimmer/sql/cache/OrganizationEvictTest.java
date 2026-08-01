@@ -70,8 +70,8 @@ public class OrganizationEvictTest extends AbstractQueryTest {
                     try {
                         sqlClient.getBinLog().accept(
                                 "organization",
-                                defaultCodec().treeReader().read("{\"id\":9, \"parent_id\":2}"),
-                                defaultCodec().treeReader().read("{\"id\":9, \"parent_id\":3}")
+                                defaultCodec().decode("{\"id\":9, \"parent_id\":2}", org.babyfish.jimmer.json.codec.Node.class),
+                                defaultCodec().decode("{\"id\":9, \"parent_id\":3}", org.babyfish.jimmer.json.codec.Node.class)
                         );
                     } catch (Exception ex) {
                         Assertions.fail(ex);
@@ -94,8 +94,8 @@ public class OrganizationEvictTest extends AbstractQueryTest {
                     try {
                         sqlClient.getBinLog().accept(
                                 "organization",
-                                defaultCodec().treeReader().read("{\"tenant\":\"a\"}"),
-                                defaultCodec().treeReader().read("{\"id\":9, \"tenant\": \"b\", \"parent_id\":2}")
+                                defaultCodec().decode("{\"tenant\":\"a\"}", org.babyfish.jimmer.json.codec.Node.class),
+                                defaultCodec().decode("{\"id\":9, \"tenant\": \"b\", \"parent_id\":2}", org.babyfish.jimmer.json.codec.Node.class)
                         );
                     } catch (Exception ex) {
                         Assertions.fail(ex);

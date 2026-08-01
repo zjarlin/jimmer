@@ -19,9 +19,7 @@ class InputModifierTest {
             |"edition": 1,
             |"price": 49.9
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=100, 
@@ -50,9 +48,7 @@ class InputModifierTest {
             |"edition": 1,
             |"price": 49.9
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=null, 
@@ -80,19 +76,17 @@ class InputModifierTest {
             |"price": 49.9
             |}""".trimMargin()
 
-        val reader = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-
-        val ex = assertFails { reader.read(json) }
+        val ex = assertFails {
+            defaultCodec().decode(json, MixedBookInput::class.java)
+        }
         expect(
-            """An object whose type is 
-                |"org.babyfish.jimmer.sql.kt.model.classic.book.dto.MixedBookInput" 
-                |cannot be deserialized by Jackson. The current input has the fixed 
-                |nullable property "id", it is not specified by JSON explicitly. 
-                |Please either explicitly specify the property as null in the JSON, 
-                |or specify the current input property as static, dynamic or fuzzy 
-                |in the DTO language"""
-                .trimMargin().replace("\r", "").replace("\n", "")
+            "An object whose type is " +
+                "\"org.babyfish.jimmer.sql.kt.model.classic.book.dto.MixedBookInput\" " +
+                "cannot be deserialized by JSON codec. The current input has the fixed " +
+                "nullable property \"id\", it is not specified by JSON explicitly. " +
+                "Please either explicitly specify the property as null in the JSON, " +
+                "or specify the current input property as static, dynamic or fuzzy " +
+                "in the DTO language"
         ) {
             ex.cause!!.message
         }
@@ -106,9 +100,7 @@ class InputModifierTest {
             |"edition": 1,
             |"price": 49.9
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=100, 
@@ -135,9 +127,7 @@ class InputModifierTest {
             |"edition": 1,
             |"price": 49.9
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=100, 
@@ -165,9 +155,7 @@ class InputModifierTest {
             |"edition": null,
             |"price": 49.9
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=100, 
@@ -194,9 +182,7 @@ class InputModifierTest {
             |"name": "SQL in Action",
             |"price": 49.9
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=100, 
@@ -223,9 +209,7 @@ class InputModifierTest {
             |"edition": 1,
             |"price": null
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=100, 
@@ -251,9 +235,7 @@ class InputModifierTest {
             |"name": "SQL in Action",
             |"edition": 1
             |}""".trimMargin()
-        val input = defaultCodec()
-            .readerFor(MixedBookInput::class.java)
-            .read(json)
+        val input = defaultCodec().decode(json, MixedBookInput::class.java)
         assertContent(
             """MixedBookInput(
                 |--->id=100, 
@@ -356,7 +338,7 @@ class InputModifierTest {
             dtoJson: String,
             entityJson: String
         ) {
-            val input = defaultCodec().readerFor(type.java).read(json)
+            val input = defaultCodec().decode(json, type.java)
             assertContent(dtoJson, input)
             assertContent(entityJson, input.toEntity())
         }

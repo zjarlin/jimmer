@@ -17,7 +17,7 @@ public class ViewJacksonTest {
                 "{\"id\":\"1639d9d5-7b92-43cf-a03f-25314832f794\"}" +
                 "]" +
                 "}";
-        Book book2 = defaultCodec().readerFor(Book.class).read(json);
+        Book book2 = defaultCodec().decode(json, Book.class);
         Assertions.assertEquals(
                 json,
                 book2.toString()
@@ -33,7 +33,7 @@ public class ViewJacksonTest {
                 "\"1639d9d5-7b92-43cf-a03f-25314832f794\"" +
                 "]" +
                 "}";
-        Book book = defaultCodec().readerFor(Book.class).read(json);
+        Book book = defaultCodec().decode(json, Book.class);
         Assertions.assertEquals(
                 json,
                 book.toString()

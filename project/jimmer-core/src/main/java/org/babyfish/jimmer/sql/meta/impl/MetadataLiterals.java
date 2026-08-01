@@ -58,7 +58,7 @@ public class MetadataLiterals {
             }
         }
         try {
-            return JSON_CODEC.readerFor(JsonType.of(type)).read(value);
+            return JSON_CODEC.decode(value, JsonType.of(type));
         } catch (Exception ex) {
             throw new IllegalArgumentException(
                     "The value \"" +

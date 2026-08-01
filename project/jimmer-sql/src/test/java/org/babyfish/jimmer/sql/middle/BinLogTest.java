@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.sql.middle;
 
 import org.babyfish.jimmer.json.codec.JsonCodec;
+import org.babyfish.jimmer.json.codec.Node;
 import org.babyfish.jimmer.sql.JSqlClient;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,16 +48,18 @@ public class BinLogTest {
     public void testLogicalDeletion() throws Exception {
         sqlClient.getBinLog().accept(
                 "[SHOP_customer_mappING]",
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"[shop_ID]\": 1," +
                         "\"`CUSTOMER_ID`\": 1," +
                         "\"DELETED_millis\": 0," +
                         "\"[tyPE]\": \"VIP\"" +
-                        "}"
+                        "}",
+                        Node.class
                 ),
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"[deleted_Millis]\": 1" +
-                        "}"
+                        "}",
+                        Node.class
                 )
         );
         Assertions.assertEquals(
@@ -72,16 +75,18 @@ public class BinLogTest {
     public void tetLogicalInsertion() throws Exception {
         sqlClient.getBinLog().accept(
                 "[SHOP_customer_mappING]",
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"[shop_ID]\": 1," +
                         "\"`CUSTOMER_ID`\": 4," +
                         "\"DELETED_millis\": -1," +
                         "\"[tyPE]\": \"ORDINARY\"" +
-                        "}"
+                        "}",
+                        Node.class
                 ),
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"[deleted_Millis]\": 0" +
-                        "}"
+                        "}",
+                        Node.class
                 )
         );
         Assertions.assertEquals(
@@ -97,16 +102,18 @@ public class BinLogTest {
     public void testChangeType() throws Exception {
         sqlClient.getBinLog().accept(
                 "[SHOP_customer_mappING]",
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"[shop_ID]\": 1," +
                         "\"`CUSTOMER_ID`\": 1," +
                         "\"DELETED_millis\": 0," +
                         "\"[tyPE]\": \"VIP\"" +
-                        "}"
+                        "}",
+                        Node.class
                 ),
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"`TypE`\": \"ORDINARY\"" +
-                        "}"
+                        "}",
+                        Node.class
                 )
         );
         Assertions.assertEquals(
@@ -126,18 +133,20 @@ public class BinLogTest {
     public void testChangeEverything() throws Exception {
         sqlClient.getBinLog().accept(
                 "[SHOP_customer_mappING]",
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"[shop_ID]\": 1," +
                         "\"`CUSTOMER_ID`\": 1," +
                         "\"DELETED_millis\": 0," +
                         "\"[tyPE]\": \"VIP\"" +
-                        "}"
+                        "}",
+                        Node.class
                 ),
-                JSON_CODEC.treeReader().read("{" +
+                JSON_CODEC.decode("{" +
                         "\"[shop_ID]\": 1," +
                         "\"`CUSTOMER_ID`\": 9," +
                         "\"[tyPE]\": \"ORDINARY\"" +
-                        "}"
+                        "}",
+                        Node.class
                 )
         );
         Assertions.assertEquals(

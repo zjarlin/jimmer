@@ -40,7 +40,7 @@ class AdministratorInputTest {
             createdTime = LocalDateTime.parse("2024-12-02 13:07:24", formatter),
             modifiedTime = LocalDateTime.parse("2024-12-03 02:00:14", formatter),
         )
-        val json = defaultCodec().writer().writeAsString(input)
+        val json = defaultCodec().encode(input)
         assertContent(
             """{"
                 |--->id":10,
@@ -50,9 +50,7 @@ class AdministratorInputTest {
                 |}""".trimMargin(),
             json
         )
-        val input2 = defaultCodec()
-            .readerFor(AdministratorInputForIssue819::class.java)
-            .read(json)
+        val input2 = defaultCodec().decode(json, AdministratorInputForIssue819::class.java)
 
         assertContent(
             """AdministratorInputForIssue819(

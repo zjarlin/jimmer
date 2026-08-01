@@ -34,7 +34,7 @@ class BookFoldTest : AbstractQueryTest() {
         )
         assertContent(
             """{"id":1,"summary":{"name":"Programming TypeScript","edition":2}}""",
-            defaultCodec().writer().writeAsString(view)
+            defaultCodec().encode(view)
         )
     }
 
@@ -46,7 +46,7 @@ class BookFoldTest : AbstractQueryTest() {
         )
         assertContent(
             """{"id":1,"summary":null}""",
-            defaultCodec().writer().writeAsString(view)
+            defaultCodec().encode(view)
         )
     }
 
@@ -72,7 +72,7 @@ class BookFoldTest : AbstractQueryTest() {
                 |--->--->"detail":{"name":"GraphQL in Action","edition":3}
                 |--->}
                 |}""".trimMargin(),
-            defaultCodec().writer().writeAsString(view)
+            defaultCodec().encode(view)
         )
     }
 
@@ -86,7 +86,7 @@ class BookFoldTest : AbstractQueryTest() {
         )
         assertContent(
             """{"id":1,"storeKey":{"name":"MANNING"}}""",
-            defaultCodec().writer().writeAsString(view)
+            defaultCodec().encode(view)
         )
     }
 
