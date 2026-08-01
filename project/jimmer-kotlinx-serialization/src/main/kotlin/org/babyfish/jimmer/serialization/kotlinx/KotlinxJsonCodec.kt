@@ -20,6 +20,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.serializer
 import kotlinx.serialization.serializerOrNull
+import org.babyfish.jimmer.impl.util.JsonCodecProviderUtil
 import org.babyfish.jimmer.json.codec.JsonCodec
 import org.babyfish.jimmer.json.codec.JsonCodecOptions
 import org.babyfish.jimmer.json.codec.JsonType
@@ -181,8 +182,11 @@ private object KotlinxJsonSupport {
             )
         }
 
-    private fun supportsUntypedValue(json: Json, value: Any?): Boolean =
-        when (value) {
+    private fun supportsUntypedValue(json: Json, value: Any?): Boolean {
+        if (isJacksonValue(value)) {
+            return false
+        }
+        return when (value) {
             null,
             is JsonElement,
             is ImmutableSpi,
@@ -205,6 +209,17 @@ private object KotlinxJsonSupport {
             is Map<*, *> -> value.values.all { supportsUntypedValue(json, it) }
             else -> hasSerializer(json) { KotlinxJsonTypes.constructRuntimeType(json, value) }
         }
+    }
+
+    private fun isJacksonValue(value: Any?): Boolean {
+        val type = value?.javaClass ?: return false
+        return JsonCodecProviderUtil.containsType(
+            type,
+            "com.fasterxml.jackson.core.",
+            "com.fasterxml.jackson.databind.",
+            "tools.jackson."
+        )
+    }
 
     private fun hasSerializer(json: Json, typeProvider: () -> KType): Boolean =
         try {

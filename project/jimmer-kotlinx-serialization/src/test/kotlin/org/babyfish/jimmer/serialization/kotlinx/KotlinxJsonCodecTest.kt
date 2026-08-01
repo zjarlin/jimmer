@@ -133,6 +133,45 @@ class KotlinxJsonCodecTest {
     }
 
     @Test
+    fun `default codec routes native jackson trees to their owning versions`() {
+        val providers = ServiceLoader.load(JsonCodecProvider::class.java)
+            .associateBy { it.javaClass.name }
+        val jackson2Provider = providers.getValue(
+            "org.babyfish.jimmer.json.jackson.v2.JsonCodecProviderV2"
+        )
+        val jackson3Provider = providers.getValue(
+            "org.babyfish.jimmer.json.jackson.v3.JsonCodecProviderV3"
+        )
+        val jackson2Node = com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree("""{"source":"jackson2"}""")
+        val jackson3Node = tools.jackson.databind.json.JsonMapper.builder()
+            .build()
+            .readTree("""{"source":"jackson3"}""")
+        val codec = JsonCodec.defaultCodec()
+
+        assertTrue(jackson2Provider.supportsEncode(jackson2Node, JsonType.any()))
+        assertFalse(jackson3Provider.supportsEncode(jackson2Node, JsonType.any()))
+        assertTrue(jackson3Provider.supportsEncode(jackson3Node, JsonType.any()))
+        assertFalse(jackson2Provider.supportsEncode(jackson3Node, JsonType.any()))
+
+        val jackson2Json = codec.encode(listOf(jackson2Node))
+        val jackson3Json = codec.encode(listOf(jackson3Node))
+        val decodedJackson2: List<com.fasterxml.jackson.databind.JsonNode> = codec.decode(
+            jackson2Json,
+            JsonType.listOf(com.fasterxml.jackson.databind.JsonNode::class.java)
+        )
+        val decodedJackson3: List<tools.jackson.databind.JsonNode> = codec.decode(
+            jackson3Json,
+            JsonType.listOf(tools.jackson.databind.JsonNode::class.java)
+        )
+
+        assertEquals("""[{"source":"jackson2"}]""", jackson2Json)
+        assertEquals("""[{"source":"jackson3"}]""", jackson3Json)
+        assertEquals("jackson2", decodedJackson2.single()["source"].asText())
+        assertEquals("jackson3", decodedJackson3.single()["source"].asString())
+    }
+
+    @Test
     fun `default codec preserves sealed class discriminator with all providers present`() {
         val codec = JsonCodec.defaultCodec()
         val event: DomainEvent = DomainEvent.Created("event-1", "jimmer")
