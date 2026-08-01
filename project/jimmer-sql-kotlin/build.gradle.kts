@@ -12,8 +12,6 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(projects.jimmerSqlTest.jimmerSqlTestSupport)
     testImplementation(projects.jimmerSqlTest.jimmerSqlTestModelKotlin)
-    kspTest(projects.jimmerKsp)
-    kspTest(projects.jimmerJackson2)
 
     testImplementation(projects.jimmerJackson2)
     testImplementation(libs.bundles.jackson)

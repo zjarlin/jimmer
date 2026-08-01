@@ -22,7 +22,7 @@ buildConfig {
     className("JimmerVersion")
     buildConfigField("int", "major", versionParts[0])
     buildConfigField("int", "minor", versionParts[1])
-    buildConfigField("int", "patch", versionParts[2])
+    buildConfigField("int", "patch", versionParts[2].substringBefore('-'))
     useKotlinOutput {
         internalVisibility = false
     }

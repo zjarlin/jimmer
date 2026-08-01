@@ -280,12 +280,22 @@ private object KotlinxJsonSupport {
         options: JsonCodecOptions
     ): JsonObject {
         val fields = linkedMapOf<String, JsonElement>()
-        for (prop in value.__type().props.values) {
+        val immutableType = value.__type()
+        val inheritanceInfo = immutableType.inheritanceInfo
+        val discriminatorProp = inheritanceInfo?.getDiscriminatorProp(immutableType)
+        val derivedDiscriminator = inheritanceInfo?.getDiscriminatorValue(immutableType)
+        for (prop in immutableType.props.values) {
             val propId = prop.id
-            if (value.__isLoaded(propId) && value.__isVisible(propId)) {
-                val name = propertyName(prop.name, options.propertyNaming)
-                fields[name] = encodeUntyped(json, value.__get(propId), options)
+            if (!value.__isVisible(propId)) {
+                continue
             }
+            val propValue = when {
+                value.__isLoaded(propId) -> value.__get(propId)
+                prop === discriminatorProp && derivedDiscriminator !== null -> derivedDiscriminator
+                else -> continue
+            }
+            val name = propertyName(prop.name, options.propertyNaming)
+            fields[name] = encodeUntyped(json, propValue, options)
         }
         return JsonObject(fields)
     }

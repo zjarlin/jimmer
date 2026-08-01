@@ -1,5 +1,5 @@
 plugins {
-    `kotlin-convention`
+    `kotlin-publish-convention`
     `dokka-convention`
     alias(libs.plugins.kotlinx.serialization)
     alias(libs.plugins.ksp)
@@ -14,6 +14,7 @@ dependencies {
 
     testImplementation(projects.jimmerSql)
     testImplementation(projects.jimmerSqlKotlin)
+    testImplementation(projects.jimmerSqlTest.jimmerSqlTestModel)
     testImplementation(projects.jimmerJackson2)
     testImplementation(projects.jimmerJackson3)
     testImplementation(libs.kotlin.test)
