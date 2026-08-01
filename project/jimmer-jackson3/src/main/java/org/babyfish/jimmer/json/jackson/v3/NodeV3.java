@@ -1,6 +1,5 @@
 package org.babyfish.jimmer.json.jackson.v3;
 
-import org.babyfish.jimmer.json.codec.JsonConverter;
 import org.babyfish.jimmer.json.codec.Node;
 import tools.jackson.databind.JsonNode;
 
@@ -79,11 +78,6 @@ public class NodeV3 implements Node {
             throw new IllegalArgumentException("Cannot cast node to type " + type.getName());
         }
         return (T) caster.apply(node);
-    }
-
-    @Override
-    public <T> T convertTo(Class<T> targetType, JsonConverter converter) throws Exception {
-        return converter.convert(node, targetType);
     }
 
     @Override

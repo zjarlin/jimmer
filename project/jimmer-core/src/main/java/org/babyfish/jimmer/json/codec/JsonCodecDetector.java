@@ -7,7 +7,7 @@ class JsonCodecDetector {
 
     static {
         JsonCodecProvider provider = loadJsonCodecProvider();
-        DEFAULT_CODEC = provider.codec().withCustomizations(new ImmutableModuleCustomization());
+        DEFAULT_CODEC = provider.codec();
     }
 
     static JsonCodecProvider loadJsonCodecProvider() {

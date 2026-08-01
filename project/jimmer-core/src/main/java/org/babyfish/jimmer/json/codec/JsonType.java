@@ -12,10 +12,17 @@ import java.util.Objects;
 
 public final class JsonType {
 
+    private static final JsonType ANY = new JsonType(Object.class);
+
     private final Type type;
 
     private JsonType(Type type) {
         this.type = Objects.requireNonNull(type, "type cannot be null");
+    }
+
+    @NotNull
+    public static JsonType any() {
+        return ANY;
     }
 
     @NotNull
@@ -102,6 +109,10 @@ public final class JsonType {
     @NotNull
     public Type getType() {
         return type;
+    }
+
+    public boolean isAny() {
+        return type == Object.class;
     }
 
     @Override

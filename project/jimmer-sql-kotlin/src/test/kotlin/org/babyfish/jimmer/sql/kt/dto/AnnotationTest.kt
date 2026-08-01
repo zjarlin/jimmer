@@ -37,7 +37,7 @@ class AnnotationTest {
         )
         assertContent(
             """{"id":3,"name":"RUST programming","price":53.4}""",
-            defaultCodec().writer().writeAsString(view)
+            defaultCodec().encode(view)
         )
     }
 }

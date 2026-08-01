@@ -69,8 +69,8 @@ public class LogicalDeletedEvictTest extends AbstractQueryTest {
                     try {
                         sqlClient.getBinLog().accept(
                                 "administrator",
-                                defaultCodec().treeReader().read("{\"id\":1, \"deleted\":false}"),
-                                defaultCodec().treeReader().read("{\"id\":1, \"deleted\":true}")
+                                defaultCodec().decode("{\"id\":1, \"deleted\":false}", org.babyfish.jimmer.json.codec.Node.class),
+                                defaultCodec().decode("{\"id\":1, \"deleted\":true}", org.babyfish.jimmer.json.codec.Node.class)
                         );
                     } catch (Exception ex) {
                         Assertions.fail(ex);
@@ -107,8 +107,8 @@ public class LogicalDeletedEvictTest extends AbstractQueryTest {
                     try {
                         sqlClient.getBinLog().accept(
                                 "role",
-                                defaultCodec().treeReader().read("{\"id\":100, \"deleted\":false}"),
-                                defaultCodec().treeReader().read("{\"id\":100, \"deleted\":true}")
+                                defaultCodec().decode("{\"id\":100, \"deleted\":false}", org.babyfish.jimmer.json.codec.Node.class),
+                                defaultCodec().decode("{\"id\":100, \"deleted\":true}", org.babyfish.jimmer.json.codec.Node.class)
                         );
                     } catch (Exception ex) {
                         Assertions.fail(ex);
@@ -146,8 +146,8 @@ public class LogicalDeletedEvictTest extends AbstractQueryTest {
                     try {
                         sqlClient.getBinLog().accept(
                                 "permission",
-                                defaultCodec().treeReader().read("{\"id\":1000, \"deleted\":false, \"role_id\": 100}"),
-                                defaultCodec().treeReader().read("{\"id\":1000, \"deleted\":true}")
+                                defaultCodec().decode("{\"id\":1000, \"deleted\":false, \"role_id\": 100}", org.babyfish.jimmer.json.codec.Node.class),
+                                defaultCodec().decode("{\"id\":1000, \"deleted\":true}", org.babyfish.jimmer.json.codec.Node.class)
                         );
                     } catch (Exception ex) {
                         Assertions.fail(ex);
@@ -178,8 +178,8 @@ public class LogicalDeletedEvictTest extends AbstractQueryTest {
                     try {
                         sqlClient.getBinLog().accept(
                                 "permission",
-                                defaultCodec().treeReader().read("{\"id\":1000, \"deleted\":false, \"role_id\": 100}"),
-                                defaultCodec().treeReader().read("{\"id\":1000, \"deleted\":true, \"role_id\": 200}")
+                                defaultCodec().decode("{\"id\":1000, \"deleted\":false, \"role_id\": 100}", org.babyfish.jimmer.json.codec.Node.class),
+                                defaultCodec().decode("{\"id\":1000, \"deleted\":true, \"role_id\": 200}", org.babyfish.jimmer.json.codec.Node.class)
                         );
                     } catch (Exception ex) {
                         Assertions.fail(ex);
@@ -211,7 +211,7 @@ public class LogicalDeletedEvictTest extends AbstractQueryTest {
                         sqlClient.getBinLog().accept(
                                 "administrator_role_mapping",
                                 null,
-                                defaultCodec().treeReader().read("{\"administrator_id\":1, \"role_id\": 400}")
+                                defaultCodec().decode("{\"administrator_id\":1, \"role_id\": 400}", org.babyfish.jimmer.json.codec.Node.class)
                         );
                     } catch (Exception ex) {
                         Assertions.fail(ex);
@@ -241,7 +241,7 @@ public class LogicalDeletedEvictTest extends AbstractQueryTest {
                     try {
                         sqlClient.getBinLog().accept(
                                 "administrator_role_mapping",
-                                defaultCodec().treeReader().read("{\"administrator_id\":1, \"role_id\": 200}"),
+                                defaultCodec().decode("{\"administrator_id\":1, \"role_id\": 200}", org.babyfish.jimmer.json.codec.Node.class),
                                 null
                         );
                     } catch (Exception ex) {

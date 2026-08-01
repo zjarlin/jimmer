@@ -14,7 +14,6 @@ import org.babyfish.jimmer.client.FetchBy;
 import org.babyfish.jimmer.client.TNullable;
 import org.babyfish.jimmer.client.meta.*;
 import org.babyfish.jimmer.client.meta.impl.*;
-import org.babyfish.jimmer.json.codec.ImmutableModuleCustomization;
 import org.babyfish.jimmer.json.codec.JsonCodec;
 import org.babyfish.jimmer.json.jackson.v2.JsonCodecV2;
 import org.babyfish.jimmer.error.CodeBasedException;
@@ -43,8 +42,7 @@ public class ClientProcessor {
 
     private static final String JIMMER_CLIENT = "META-INF/jimmer/client";
 
-    private static final JsonCodec JSON_CODEC = new JsonCodecV2()
-            .withCustomizations(new ImmutableModuleCustomization());
+    private static final JsonCodec JSON_CODEC = new JsonCodecV2();
 
     private static final Method RECORD_COMPONENT_ELEMENT_GET_ACCESSOR;
 

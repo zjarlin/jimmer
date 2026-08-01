@@ -63,8 +63,8 @@ class LogicalDeletedCacheEvictTest : AbstractQueryTest() {
         connectAndExpect({
             _sqlClient.binLog.accept(
                 "administrator",
-                defaultCodec().treeReader().read("""{"id": 1, "deleted": false}"""),
-                defaultCodec().treeReader().read("""{"id": 1, "deleted": true}""")
+                defaultCodec().decode("""{"id": 1, "deleted": false}""", org.babyfish.jimmer.json.codec.Node::class.java),
+                defaultCodec().decode("""{"id": 1, "deleted": true}""", org.babyfish.jimmer.json.codec.Node::class.java)
             )
         }) {
             sql(
@@ -93,8 +93,8 @@ class LogicalDeletedCacheEvictTest : AbstractQueryTest() {
         connectAndExpect({
             _sqlClient.binLog.accept(
                 "role",
-                defaultCodec().treeReader().read("""{"id": 100, "deleted": false}"""),
-                defaultCodec().treeReader().read("""{"id": 100, "deleted": true}""")
+                defaultCodec().decode("""{"id": 100, "deleted": false}""", org.babyfish.jimmer.json.codec.Node::class.java),
+                defaultCodec().decode("""{"id": 100, "deleted": true}""", org.babyfish.jimmer.json.codec.Node::class.java)
             )
         }) {
             sql(
@@ -125,8 +125,8 @@ class LogicalDeletedCacheEvictTest : AbstractQueryTest() {
         connectAndExpect({
             _sqlClient.binLog.accept(
                 "permission",
-                defaultCodec().treeReader().read("""{"id":1000, "deleted":false, "role_id": 100}"""),
-                defaultCodec().treeReader().read("""{"id": 1000, "deleted": true}""")
+                defaultCodec().decode("""{"id":1000, "deleted":false, "role_id": 100}""", org.babyfish.jimmer.json.codec.Node::class.java),
+                defaultCodec().decode("""{"id": 1000, "deleted": true}""", org.babyfish.jimmer.json.codec.Node::class.java)
             )
         }) {
         }
@@ -150,8 +150,8 @@ class LogicalDeletedCacheEvictTest : AbstractQueryTest() {
         connectAndExpect({
             _sqlClient.binLog.accept(
                 "permission",
-                defaultCodec().treeReader().read("""{"id":1000, "deleted":false, "role_id": 100}"""),
-                defaultCodec().treeReader().read("""{"id":1000, "deleted":false, "role_id": 200}""")
+                defaultCodec().decode("""{"id":1000, "deleted":false, "role_id": 100}""", org.babyfish.jimmer.json.codec.Node::class.java),
+                defaultCodec().decode("""{"id":1000, "deleted":false, "role_id": 200}""", org.babyfish.jimmer.json.codec.Node::class.java)
             )
         }) {
         }

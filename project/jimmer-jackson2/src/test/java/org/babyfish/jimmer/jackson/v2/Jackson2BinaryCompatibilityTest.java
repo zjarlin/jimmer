@@ -3,6 +3,8 @@ package org.babyfish.jimmer.jackson.v2;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.babyfish.jimmer.json.codec.JsonCodec;
+import org.babyfish.jimmer.json.codec.JsonCodecOptions;
+import org.babyfish.jimmer.json.codec.JsonType;
 import org.babyfish.jimmer.json.codec.Node;
 import org.junit.jupiter.api.Test;
 
@@ -22,8 +24,13 @@ public class Jackson2BinaryCompatibilityTest {
         String json = "{\"name\":\"jimmer\",\"score\":7}";
 
         JsonCodec codec = new JsonCodecV2(mapper);
-        assertEquals(json, codec.writer().writeAsString(map));
-        assertEquals("jimmer", codec.treeReader().read(json).get("name").castTo(String.class));
+        assertEquals(json, codec.encode(map));
+        assertEquals(map, codec.decode(json, JsonType.mapOf(String.class, Object.class)));
+        assertTrue(codec.encode(
+                map,
+                JsonCodecOptions.newBuilder().prettyPrint(true).build()
+        ).contains("\n"));
+        assertEquals("jimmer", codec.decode(json, Node.class).get("name").castTo(String.class));
 
         JsonCodecProviderV2 provider = new JsonCodecProviderV2();
         assertEquals(200, provider.priority());

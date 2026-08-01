@@ -139,7 +139,7 @@ class ValueParser {
             return node.castTo(type);
         }
         try {
-            return node.convertTo(type, codec.converter());
+            return codec.decode(node.toString(), type);
         } catch (Exception ex) {
             throw new IllegalArgumentException("Cannot convert  \"" +
                     node +
@@ -158,7 +158,7 @@ class ValueParser {
             return node.castTo(type);
         }
         try {
-            return node.convertTo(type, codec.converter());
+            return codec.decode(node.toString(), type);
         } catch (Exception ex) {
             return ILLEGAL_VALUE;
         }

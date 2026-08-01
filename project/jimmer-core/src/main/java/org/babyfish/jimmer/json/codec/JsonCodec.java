@@ -1,8 +1,5 @@
 package org.babyfish.jimmer.json.codec;
 
-import java.util.List;
-import java.util.Map;
-
 /**
  * 抽象 Jimmer 与具体 JSON 实现的门面。
  */
@@ -14,39 +11,31 @@ public interface JsonCodec {
         return JsonCodecDetector.DEFAULT_CODEC;
     }
 
-    JsonCodec withCustomizations(JsonCodecCustomization... customizations);
-
-    JsonConverter converter();
-
-    default <T> JsonReader<T> readerFor(Class<T> clazz) {
-        return readerFor(JsonType.of(clazz));
+    default String encode(Object value) throws Exception {
+        return encode(value, JsonType.any(), JsonCodecOptions.DEFAULT);
     }
 
-    <T> JsonReader<T> readerFor(JsonType type);
-
-    default <T> JsonReader<T[]> readerForArrayOf(Class<T> componentType) {
-        return readerFor(JsonType.arrayOf(componentType));
+    default String encode(Object value, JsonType type) throws Exception {
+        return encode(value, type, JsonCodecOptions.DEFAULT);
     }
 
-    default <T> JsonReader<List<T>> readerForListOf(Class<T> elementType) {
-        return readerFor(JsonType.listOf(elementType));
+    default String encode(Object value, JsonCodecOptions options) throws Exception {
+        return encode(value, JsonType.any(), options);
     }
 
-    default <V> JsonReader<Map<String, V>> readerForMapOf(Class<V> valueType) {
-        return readerFor(JsonType.mapOf(String.class, valueType));
+    String encode(Object value, JsonType type, JsonCodecOptions options) throws Exception;
+
+    default <T> T decode(String json, Class<T> type) throws Exception {
+        return decode(json, JsonType.of(type), JsonCodecOptions.DEFAULT);
     }
 
-    default <K, V> JsonReader<Map<K, V>> readerForMapOf(Class<K> keyType, Class<V> valueType) {
-        return readerFor(JsonType.mapOf(keyType, valueType));
+    default <T> T decode(String json, Class<T> type, JsonCodecOptions options) throws Exception {
+        return decode(json, JsonType.of(type), options);
     }
 
-    JsonReader<Node> treeReader();
-
-    JsonWriter writer();
-
-    default JsonWriter writerFor(Class<?> clazz) {
-        return writerFor(JsonType.of(clazz));
+    default <T> T decode(String json, JsonType type) throws Exception {
+        return decode(json, type, JsonCodecOptions.DEFAULT);
     }
 
-    JsonWriter writerFor(JsonType type);
+    <T> T decode(String json, JsonType type, JsonCodecOptions options) throws Exception;
 }

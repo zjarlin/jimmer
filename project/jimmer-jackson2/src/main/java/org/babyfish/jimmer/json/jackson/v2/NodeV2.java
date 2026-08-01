@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.json.jackson.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.babyfish.jimmer.json.codec.JsonConverter;
 import org.babyfish.jimmer.json.codec.Node;
 
 import java.math.BigDecimal;
@@ -79,11 +78,6 @@ public class NodeV2 implements Node {
             throw new IllegalArgumentException("Cannot cast node to type " + type.getName());
         }
         return (T) caster.apply(node);
-    }
-
-    @Override
-    public <T> T convertTo(Class<T> targetType, JsonConverter converter) throws Exception {
-        return converter.convert(node, targetType);
     }
 
     @Override

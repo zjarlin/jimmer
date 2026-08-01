@@ -1,10 +1,7 @@
 package org.babyfish.jimmer.sql.cache;
 
 import org.babyfish.jimmer.json.codec.JsonCodec;
-import org.babyfish.jimmer.json.codec.JsonConverter;
-import org.babyfish.jimmer.json.codec.JsonReader;
 import org.babyfish.jimmer.json.codec.JsonType;
-import org.babyfish.jimmer.json.codec.JsonWriter;
 import org.babyfish.jimmer.json.codec.Node;
 import org.babyfish.jimmer.meta.ImmutableProp;
 import org.babyfish.jimmer.meta.ImmutableType;
@@ -25,14 +22,12 @@ import static org.babyfish.jimmer.json.codec.JsonCodec.defaultCodec;
 public class ValueSerializer<T> {
     private static final byte[] NULL_BYTES = "<null>".getBytes(StandardCharsets.UTF_8);
 
-    private final JsonReader<T> jsonReader;
-    private final JsonWriter jsonWriter;
+    private final JsonCodec jsonCodec;
+    private final JsonType jsonType;
     private final String discriminatorPropName;
     private final Class<?> discriminatorType;
     private final InheritanceInfo inheritanceInfo;
     private final Map<Object, ImmutableType> typeByDiscriminator;
-    private final JsonReader<Node> treeReader;
-    private final JsonConverter jsonConverter;
 
     public ValueSerializer(@NotNull ImmutableType type) {
         this(type, null, defaultCodec());
@@ -54,22 +49,18 @@ public class ValueSerializer<T> {
         if ((type == null) == (prop == null)) {
             throw new IllegalArgumentException("Internal bug: nullity of type and prop must be different");
         }
-        this.jsonReader = codec.readerFor(createValueType(type, prop));
-        this.jsonWriter = codec.writer();
+        this.jsonCodec = codec;
+        this.jsonType = createValueType(type, prop);
         this.inheritanceInfo = type != null ? type.getInheritanceInfo() : null;
         if (inheritanceInfo != null && type.hasDerivedTypes()) {
             ImmutableProp discriminatorProp = inheritanceInfo.getDiscriminatorProp();
             this.discriminatorPropName = discriminatorProp.getName();
             this.discriminatorType = discriminatorProp.getReturnClass();
             this.typeByDiscriminator = inheritanceInfo.getDiscriminatorTypeMap(type);
-            this.treeReader = codec.treeReader();
-            this.jsonConverter = codec.converter();
         } else {
             this.discriminatorPropName = null;
             this.discriminatorType = null;
             this.typeByDiscriminator = null;
-            this.treeReader = null;
-            this.jsonConverter = null;
         }
     }
 
@@ -93,7 +84,7 @@ public class ValueSerializer<T> {
             return NULL_BYTES.clone();
         }
         try {
-            return jsonWriter.writeAsBytes(value);
+            return jsonCodec.encode(value).getBytes(StandardCharsets.UTF_8);
         } catch (Exception ex) {
             throw new SerializationException(ex);
         }
@@ -123,8 +114,9 @@ public class ValueSerializer<T> {
             return null;
         }
         try {
+            String json = new String(value, StandardCharsets.UTF_8);
             if (typeByDiscriminator != null) {
-                Node node = treeReader.read(value);
+                Node node = jsonCodec.decode(json, Node.class);
                 Node discriminatorNode = node.get(discriminatorPropName);
                 if (discriminatorNode == null || discriminatorNode.isNull()) {
                     throw new IllegalArgumentException(
@@ -135,7 +127,7 @@ public class ValueSerializer<T> {
                 }
                 Object discriminator = discriminatorNode.canCastTo(discriminatorType) ?
                         discriminatorNode.castTo(discriminatorType) :
-                        discriminatorNode.convertTo(discriminatorType, jsonConverter);
+                        jsonCodec.decode(discriminatorNode.toString(), discriminatorType);
                 ImmutableType actualType = typeByDiscriminator.get(discriminator);
                 if (actualType == null) {
                     throw new IllegalArgumentException(
@@ -145,10 +137,10 @@ public class ValueSerializer<T> {
                     );
                 }
                 return loadDiscriminator(
-                        (T) node.convertTo(actualType.getJavaClass(), jsonConverter)
+                        (T) jsonCodec.decode(json, actualType.getJavaClass())
                 );
             }
-            T result = jsonReader.read(value);
+            T result = jsonCodec.decode(json, jsonType);
             return inheritanceInfo != null ? loadDiscriminator(result) : result;
         } catch (Exception ex) {
             throw new SerializationException(ex);

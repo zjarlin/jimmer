@@ -22,7 +22,7 @@ class JacksonTest {
 
     private fun testOutputImpl(registerKtMode: Boolean) {
         val department = DepartmentView2(id = "00A", name = "Develop")
-        val json = defaultCodec().writer().writeAsString(department)
+        val json = defaultCodec().encode(department)
         expect(
             "{\"id\":\"00A\",\"name\":\"Efwfmpq\"}"
         ) {
@@ -31,13 +31,13 @@ class JacksonTest {
         expect(
             "DepartmentView2(id=00A, name=Develop)"
         ) {
-            defaultCodec().readerFor(DepartmentView2::class.java).read(json).toString()
+            defaultCodec().decode(json, DepartmentView2::class.java).toString()
         }
     }
 
     private fun testInputForIssue807Impl(registerKtMode: Boolean) {
         val employee = EmployeeInput("001", "Rossi")
-        val json = defaultCodec().writer().writeAsString(employee)
+        val json = defaultCodec().encode(employee)
         expect(
             "{\"id\":\"001\",\"name\":\"Spttj\"}"
         ) {
@@ -46,7 +46,7 @@ class JacksonTest {
         expect(
             "EmployeeInput(id=001, name=Rossi)"
         ) {
-            defaultCodec().readerFor(EmployeeInput::class.java).read(json).toString()
+            defaultCodec().decode(json, EmployeeInput::class.java).toString()
         }
     }
 }

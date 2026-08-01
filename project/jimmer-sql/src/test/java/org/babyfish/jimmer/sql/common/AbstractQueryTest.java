@@ -230,7 +230,7 @@ public class AbstractQueryTest extends AbstractTest {
             try {
                 Assertions.assertEquals(
                         json.replace("--->", ""),
-                        defaultCodec().writer().writeAsString(rows.get(index))
+                        defaultCodec().encode(rows.get(index))
                 );
             } catch (Exception ex) {
                 throw new RuntimeException(ex);
@@ -242,7 +242,7 @@ public class AbstractQueryTest extends AbstractTest {
             try {
                 Assertions.assertEquals(
                         json.replace("--->", ""),
-                        defaultCodec().writer().writeAsString(rows)
+                        defaultCodec().encode(rows)
                 );
             } catch (Exception ex) {
                 throw new RuntimeException(ex);

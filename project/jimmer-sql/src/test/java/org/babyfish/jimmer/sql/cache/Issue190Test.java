@@ -134,7 +134,7 @@ public class Issue190Test extends AbstractQueryTest {
             Internal.requiresNewDraftContext(ctx -> {
                 try {
                     for (Object key : keys) {
-                        resultMap.put(key, defaultCodec().readerFor(type.getJavaClass()).read(map.get(prefix + key)));
+                        resultMap.put(key, defaultCodec().decode(map.get(prefix + key), type.getJavaClass()));
                     }
                 } catch (Exception ex) {
                     Assertions.fail(ex);

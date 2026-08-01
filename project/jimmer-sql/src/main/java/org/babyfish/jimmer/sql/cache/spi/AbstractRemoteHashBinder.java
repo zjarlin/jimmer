@@ -72,7 +72,7 @@ public abstract class AbstractRemoteHashBinder<K, V>
                 builder.append("\"");
                 builder.append(e.getKey());
                 builder.append("\":");
-                builder.append(jsonCodec.writer().writeAsString(e.getValue()));
+                builder.append(jsonCodec.encode(e.getValue()));
             }
             builder.append("}");
             return builder.toString();

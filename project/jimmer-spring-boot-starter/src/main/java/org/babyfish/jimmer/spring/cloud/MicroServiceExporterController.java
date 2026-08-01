@@ -53,9 +53,7 @@ public class MicroServiceExporterController {
     ) throws Exception {
         Fetcher<?> fetcher = FetcherCompiler.compile(fetcherStr);
         Class<?> idType = fetcher.getImmutableType().getIdProp().getElementClass();
-        List<?> ids = jsonCodec
-                .readerForListOf(idType)
-                .read(idArrStr);
+        List<?> ids = jsonCodec.decode(idArrStr, JsonType.listOf(idType));
         return exporter.findByIds(ids, fetcher);
     }
 
@@ -68,9 +66,7 @@ public class MicroServiceExporterController {
         Fetcher<?> fetcher = FetcherCompiler.compile(fetcherStr);
         ImmutableProp immutableProp = fetcher.getImmutableType().getProp(prop);
         Class<?> targetIdType = immutableProp.getTargetType().getIdProp().getElementClass();
-        List<?> targetIds = jsonCodec
-                .<List<?>>readerFor(JsonType.listOf(targetIdType))
-                .read(targetIdArrStr);
+        List<?> targetIds = jsonCodec.decode(targetIdArrStr, JsonType.listOf(targetIdType));
 
         return exporter.findByAssociatedIds(
                 immutableProp,

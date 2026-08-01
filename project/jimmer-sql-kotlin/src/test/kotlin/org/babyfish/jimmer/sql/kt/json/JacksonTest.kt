@@ -13,9 +13,7 @@ class JacksonTest {
             |"id": 1,
             |"deleted": true
             |}""".trimMargin()
-        val administrator = defaultCodec()
-            .readerFor(Administrator::class.java)
-            .read(json)
+        val administrator = defaultCodec().decode(json, Administrator::class.java)
         expect(
             """{"deleted":true,"id":1}"""
         ) {

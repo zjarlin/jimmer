@@ -13,9 +13,6 @@ class EmbeddedMutationTest : AbstractMutationTest() {
 
     @Test
     fun testIssue527() {
-        val reader = defaultCodec()
-            .readerFor(DynamicRectInput::class.java)
-
         val sourceJson = "{" +
             "    \"leftTop\": {\"x\": 1}, " +
             "    \"rightBottom\": {\"y\": 2} " +
@@ -26,8 +23,8 @@ class EmbeddedMutationTest : AbstractMutationTest() {
             "}"
         val transform = new(Transform::class).by {
             id = 1L
-            source = reader.read(sourceJson).toImmutable()
-            target = reader.read(targetJson).toImmutable()
+            source = defaultCodec().decode(sourceJson, DynamicRectInput::class.java).toImmutable()
+            target = defaultCodec().decode(targetJson, DynamicRectInput::class.java).toImmutable()
         }
         connectAndExpect({
             sqlClient.entities.forConnection(it).save(transform) {

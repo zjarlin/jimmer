@@ -15,14 +15,14 @@ public class JacksonTest {
         DepartmentView2 department = new DepartmentView2();
         department.setId("00A");
         department.setName("Develop");
-        String json = defaultCodec().writer().writeAsString(department);
+        String json = defaultCodec().encode(department);
         Assertions.assertEquals(
                 "{\"id\":\"00A\",\"name\":\"Efwfmpq\"}",
                 json
         );
         Assertions.assertEquals(
                 "DepartmentView2(id=00A, name=Develop)",
-                defaultCodec().readerFor(DepartmentView2.class).read(json).toString()
+                defaultCodec().decode(json, DepartmentView2.class).toString()
         );
     }
 
@@ -32,14 +32,14 @@ public class JacksonTest {
         employee.setId("001");
         employee.setName("Rossi");
         employee.setGender(Gender.FEMALE);
-        String json = defaultCodec().writer().writeAsString(employee);
+        String json = defaultCodec().encode(employee);
         Assertions.assertEquals(
                 "{\"id\":\"001\",\"gender\":\"FEMALE\",\"name\":\"Spttj\"}",
                 json
         );
         Assertions.assertEquals(
                 "EmployeeInput(id=001, gender=FEMALE, name=Rossi)",
-                defaultCodec().readerFor(EmployeeInput.class).read(json).toString()
+                defaultCodec().decode(json, EmployeeInput.class).toString()
         );
     }
 }

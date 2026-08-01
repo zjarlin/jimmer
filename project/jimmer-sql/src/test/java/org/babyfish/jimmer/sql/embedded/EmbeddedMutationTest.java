@@ -118,14 +118,12 @@ public class EmbeddedMutationTest extends AbstractMutationTest {
             draft.setId(1L);
             draft.setSource(
                     defaultCodec()
-                            .readerFor(DynamicRectInput.class)
-                            .read(sourceJson)
+                            .decode(sourceJson, DynamicRectInput.class)
                             .toImmutable()
             );
             draft.setTarget(
                     defaultCodec()
-                            .readerFor(DynamicRectInput.class)
-                            .read(targetJson)
+                            .decode(targetJson, DynamicRectInput.class)
                             .toImmutable()
             );
         });

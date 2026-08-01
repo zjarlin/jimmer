@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.serialization.kotlinx;
 
 import org.babyfish.jimmer.ImmutableObjects;
+import org.babyfish.jimmer.json.codec.JsonType;
 import org.babyfish.jimmer.serialization.kotlinx.model.SerializableBook;
 import org.babyfish.jimmer.serialization.kotlinx.model.dto.SerializableBookView;
 import org.junit.jupiter.api.Test;
@@ -29,8 +30,8 @@ public class KotlinxJsonCodecJavaTest {
         KotlinxJsonCodec codec = new KotlinxJsonCodec();
         SerializableBookView view = new SerializableBookView(4L, "Java DTO");
 
-        String json = codec.writerFor(SerializableBookView.class).writeAsString(view);
-        SerializableBookView decoded = codec.readerFor(SerializableBookView.class).read(json);
+        String json = codec.encode(view, JsonType.of(SerializableBookView.class));
+        SerializableBookView decoded = codec.decode(json, SerializableBookView.class);
 
         assertEquals("{\"id\":4,\"name\":\"Java DTO\"}", json);
         assertEquals(view, decoded);

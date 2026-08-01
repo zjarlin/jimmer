@@ -41,13 +41,14 @@ public class SpringCloudExchange implements MicroServiceExchange {
                         MicroServiceExporterController.FETCHER +
                         "={fetcher}",
                 String.class,
-                jsonCodec.writer().writeAsString(ids),
+                jsonCodec.encode(ids),
                 fetcher.toString()
         );
 
-        return (List<ImmutableSpi>) jsonCodec
-                .readerFor(JsonType.listOf(fetcher.getImmutableType().getJavaClass()))
-                .read(json);
+        return (List<ImmutableSpi>) jsonCodec.decode(
+                json,
+                JsonType.listOf(fetcher.getImmutableType().getJavaClass())
+        );
     }
 
     @Override
@@ -70,17 +71,20 @@ public class SpringCloudExchange implements MicroServiceExchange {
                         "={fetcher}",
                 String.class,
                 prop.getName(),
-                jsonCodec.writer().writeAsString(targetIds),
+                jsonCodec.encode(targetIds),
                 fetcher.toString()
         );
 
-        return jsonCodec
-                .<List<Tuple2<Object, ImmutableSpi>>>readerFor(JsonType.collectionOf(
-                        List.class,
-                        JsonType.parameterized(
-                                Tuple2.class,
-                                Classes.boxTypeOf(prop.getTargetType().getIdProp().getElementClass()),
-                                fetcher.getImmutableType().getJavaClass())))
-                .read(json);
+        return jsonCodec.decode(
+                json,
+                JsonType.collectionOf(
+                    List.class,
+                    JsonType.parameterized(
+                            Tuple2.class,
+                            Classes.boxTypeOf(prop.getTargetType().getIdProp().getElementClass()),
+                            fetcher.getImmutableType().getJavaClass()
+                    )
+                )
+        );
     }
 }
