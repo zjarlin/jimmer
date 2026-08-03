@@ -1035,6 +1035,22 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `resolves Kotlin base value accessor from the frozen head binding`() {
+        val prop = baseProp(name = "displayName", baseName = "name").copy(
+            baseProps = listOf(
+                DtoBasePropBinding("name", LsiSymbolId.property(BASE_TYPE_ID, "name")),
+                DtoBasePropBinding("suffix", LsiSymbolId.property(BASE_TYPE_ID, "suffix")),
+            ),
+        )
+        val graph = singlePropGraph(prop)
+
+        assertEquals("name", prop.kotlinBaseValueAccessorName(graph))
+        assertFailsWith<IllegalArgumentException> {
+            prop.copy(name = "foreign").kotlinBaseValueAccessorName(graph)
+        }
+    }
+
+    @Test
     fun `derives generated loaded state storage from the frozen DTO graph`() {
         val graph = graph(visibleDynamic = true)
         val type = graph.types.single()

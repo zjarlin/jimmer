@@ -465,6 +465,12 @@ fun DtoProp.dtoValueAccessorName(
     }
 }
 
+/** 返回 Kotlin 从基础不可变对象直接读取 DTO 属性时使用的成员名。 */
+fun DtoBaseProp.kotlinBaseValueAccessorName(graph: DtoGraph): String {
+    requireVisibleProp(graph)
+    return baseProps.first().name
+}
+
 /** 返回 Java 修改 DTO 属性值时使用的 setter 方法名。 */
 fun DtoProp.javaValueSetterName(
     graph: DtoGraph,

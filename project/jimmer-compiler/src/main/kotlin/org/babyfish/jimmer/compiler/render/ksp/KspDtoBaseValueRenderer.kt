@@ -8,6 +8,7 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.jimmer.dto.kotlinBaseValueAccessorName
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
@@ -23,7 +24,6 @@ internal object KspDtoBaseValueRenderer {
         workspace: LsiWorkspace,
         accessorName: String,
         baseParameterName: String,
-        baseValueAccessorName: String,
         conversionErrorMessage: String,
         generatedTargetType: (DtoProp) -> LsiDeclaredType,
         generatedTypeNames: Collection<LsiPoetTypeName>,
@@ -35,7 +35,7 @@ internal object KspDtoBaseValueRenderer {
             generatedTargetType = generatedTargetType,
             baseParameterName = baseParameterName,
             accessorName = accessorName,
-            baseValueAccessorName = baseValueAccessorName,
+            baseValueAccessorName = prop.kotlinBaseValueAccessorName(graph),
             conversionErrorMessage = conversionErrorMessage,
         )
         return LsiKotlinPoetRenderer().renderCodeBlock(

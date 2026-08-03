@@ -102,7 +102,6 @@ class DtoBaseValuePoetTest {
                 workspace = LsiWorkspace.EMPTY,
                 accessorName = "VALUE_ACCESSOR",
                 baseParameterName = "base",
-                baseValueAccessorName = "value",
                 conversionErrorMessage = ERROR_MESSAGE,
                 generatedTargetType = { LsiDeclaredType(STRING_TYPE_ID) },
                 generatedTypeNames = emptyList(),

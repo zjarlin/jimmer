@@ -78,7 +78,7 @@ import site.addzero.lsi.jimmer.dto.requiresDtoPropAccessor
 import site.addzero.lsi.jimmer.dto.requireGeneratedMergedType
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
-import site.addzero.lsi.jimmer.dto.userProp
+import site.addzero.lsi.jimmer.dto.userPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
@@ -1018,90 +1018,85 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    @Suppress("UNCHECKED_CAST")
     private fun addConverterConstructor() {
         typeBuilder.addFunction(
             FunSpec
                 .constructorBuilder()
                 .addParameter("base", baseType.className)
                 .apply {
-                    for (userProp in dtoType.userProps) {
-                        val frozenUserProp = lsiDtoType.userProp(lsiGraph, userProp.name)
+                    for (userProp in lsiDtoType.userPropsInDeclarationOrder(lsiGraph)) {
                         addParameter(
                             ParameterSpec
                                 .builder(
                                     userProp.alias,
                                     KspDtoTypeRefRenderer.render(
-                                        frozenUserProp.type,
+                                        userProp.type,
                                         workspace,
                                     ),
                                 )
                                 .apply {
-                                    frozenUserProp.kotlinDefaultValueTextOrNull()?.let(::defaultValue)
+                                    userProp.kotlinDefaultValueTextOrNull()?.let(::defaultValue)
                                 }
                                 .build()
                         )
                     }
                 }
-                .callThisConstructor(dtoType.props.map { prop ->
+                .callThisConstructor(lsiDtoType.propsInDeclarationOrder(lsiGraph).map { prop ->
                     CodeBlock
                         .builder()
                         .indent()
                         .add("\n")
                         .apply {
-                            if (prop is FoldProp<*, *>) {
-                                val foldProp = prop.asFoldProp()
-                                add(
+                            when (prop) {
+                                is DtoFoldProp -> add(
                                     "%L",
                                     KspDtoFoldValueRenderer.render(
-                                        prop = lsiDtoType.foldProp(lsiGraph, foldProp.name),
+                                        prop = prop,
                                         graph = lsiGraph,
                                         workspace = workspace,
                                         baseParameterName = "base",
-                                        nullGuardAccessorName = foldNullGuardAccessorFieldName(foldProp),
+                                        nullGuardAccessorName = foldNullGuardAccessorFieldName(prop.name),
                                         generatedTargetType = ::generatedTargetType,
                                         generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
                                     ),
                                 )
-                            } else if (prop is DtoProp<*, *>) {
-                                val dtoProp = prop.asDtoProp()
-                                val lsiProp = lsiDtoType.baseProp(lsiGraph, dtoProp.name)
-                                val stateInitializer = KspDtoLoadedStateRenderer.renderBaseInitializer(
-                                    prop = lsiProp,
-                                    graph = lsiGraph,
-                                    accessorName = accessorFieldName(dtoProp.name),
-                                    baseParameterName = "base",
-                                )
-                                val simple = lsiProp.usesDirectBaseAccess(
-                                    graph = lsiGraph,
-                                    immutableSchema = immutableSchema,
-                                    targetLanguage = LsiLanguage.KOTLIN,
-                                    generatedTargetType = ::generatedTargetType,
-                                )
-                                add(
-                                    "%L",
-                                    KspDtoBaseValueRenderer.render(
-                                        prop = lsiProp,
+
+                                is DtoBaseProp -> {
+                                    val stateInitializer = KspDtoLoadedStateRenderer.renderBaseInitializer(
+                                        prop = prop,
+                                        graph = lsiGraph,
+                                        accessorName = accessorFieldName(prop.name),
+                                        baseParameterName = "base",
+                                    )
+                                    val simple = prop.usesDirectBaseAccess(
                                         graph = lsiGraph,
                                         immutableSchema = immutableSchema,
-                                        workspace = workspace,
-                                        accessorName = accessorFieldName(dtoProp.name),
-                                        baseParameterName = "base",
-                                        baseValueAccessorName = dtoProp.baseProp.name,
-                                        conversionErrorMessage =
-                                            "Cannot convert \"${baseType.className}\" to " +
-                                                "\"${getDtoClassName()}\" because the cannot get non-null " +
-                                                "value for \"${dtoProp.name}\"",
+                                        targetLanguage = LsiLanguage.KOTLIN,
                                         generatedTargetType = ::generatedTargetType,
-                                        generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
-                                    ),
-                                )
-                                stateInitializer?.let { initializer ->
-                                    add(if (simple) ",\n%L" else ",\n%L\n", initializer)
+                                    )
+                                    add(
+                                        "%L",
+                                        KspDtoBaseValueRenderer.render(
+                                            prop = prop,
+                                            graph = lsiGraph,
+                                            immutableSchema = immutableSchema,
+                                            workspace = workspace,
+                                            accessorName = accessorFieldName(prop.name),
+                                            baseParameterName = "base",
+                                            conversionErrorMessage =
+                                                "Cannot convert \"${baseType.className}\" to " +
+                                                    "\"${getDtoClassName()}\" because the cannot get non-null " +
+                                                    "value for \"${prop.name}\"",
+                                            generatedTargetType = ::generatedTargetType,
+                                            generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
+                                        ),
+                                    )
+                                    stateInitializer?.let { initializer ->
+                                        add(if (simple) ",\n%L" else ",\n%L\n", initializer)
+                                    }
                                 }
-                            } else {
-                                val userProp = prop as UserProp
-                                add("%N", userProp.alias)
+
+                                is DtoUserProp -> add("%N", prop.alias)
                             }
                         }
                         .unindent()
@@ -1405,7 +1400,7 @@ internal class DtoGenerator private constructor(
         val nullGuardProp = lsiDtoType.foldProp(lsiGraph, prop.name).nullGuardProp(lsiGraph) ?: return
         addAccessorField(
             nullGuardProp,
-            foldNullGuardAccessorFieldName(prop),
+            foldNullGuardAccessorFieldName(prop.name),
             true,
             false,
         )
@@ -1504,8 +1499,8 @@ internal class DtoGenerator private constructor(
     private fun accessorFieldName(propName: String): String =
         StringUtil.snake("${propName}Accessor", SnakeCase.UPPER)
 
-    private fun foldNullGuardAccessorFieldName(prop: FoldProp<ImmutableType, ImmutableProp>): String =
-        StringUtil.snake("${prop.name}NullGuardAccessor", SnakeCase.UPPER)
+    private fun foldNullGuardAccessorFieldName(propName: String): String =
+        StringUtil.snake("${propName}NullGuardAccessor", SnakeCase.UPPER)
 
     private fun TypeSpec.Builder.addCopy() {
         addFunction(
