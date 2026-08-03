@@ -49,7 +49,6 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
 import site.addzero.lsi.jimmer.dto.baseProp
-import site.addzero.lsi.jimmer.dto.boundImmutableProp
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
@@ -57,6 +56,7 @@ import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
+import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.nullGuardProp
@@ -66,9 +66,11 @@ import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiresNonNullDraftWriteGuard
+import site.addzero.lsi.jimmer.dto.requiresDtoPropAccessor
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
 import site.addzero.lsi.jimmer.dto.userProp
+import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetImport
@@ -544,7 +546,17 @@ internal class DtoGenerator private constructor(
         typeBuilder.addEquals()
         typeBuilder.addToString()
 
-        if (!isSpecification && (!polymorphicBranch || hasAccessorFields())) {
+        if (
+            !isSpecification &&
+            (
+                !polymorphicBranch || lsiDtoType.hasDtoPropAccessorFields(
+                    graph = lsiGraph,
+                    immutableSchema = immutableSchema,
+                    targetLanguage = LsiLanguage.KOTLIN,
+                    generatedTargetType = ::generatedTargetType,
+                )
+            )
+        ) {
             typeBuilder.addType(
                 TypeSpec
                     .companionObjectBuilder()
@@ -1071,7 +1083,12 @@ internal class DtoGenerator private constructor(
                                     accessorName = accessorFieldName(dtoProp.name),
                                     baseParameterName = "base",
                                 )
-                                val simple = isSimpleProp(dtoProp)
+                                val simple = lsiProp.usesDirectBaseAccess(
+                                    graph = lsiGraph,
+                                    immutableSchema = immutableSchema,
+                                    targetLanguage = LsiLanguage.KOTLIN,
+                                    generatedTargetType = ::generatedTargetType,
+                                )
                                 if (simple && stateInitializer == null) {
                                     add("base.%N", dtoProp.baseProp.name)
                                 } else if (!dtoProp.isNullable && dtoProp.isBaseNullable) {
@@ -1329,7 +1346,14 @@ internal class DtoGenerator private constructor(
         valueName: String,
     ) {
         val baseProp = prop.toTailProp().baseProp
-        if (isSimpleProp(prop)) {
+        if (
+            lsiProp.usesDirectBaseAccess(
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                targetLanguage = LsiLanguage.KOTLIN,
+                generatedTargetType = ::generatedTargetType,
+            )
+        ) {
             addStatement("_draft.%N = %N", baseProp.name, valueName)
         } else {
             addCode(
@@ -1426,48 +1450,24 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    private fun isSimpleProp(prop: DtoProp<ImmutableType, ImmutableProp>): Boolean {
-        if (prop.getNextProp() != null) {
-            return false
-        }
-        if (prop.baseProp.isDiscriminator) {
-            return false
-        }
-        return if ((prop.isNullable() && (!prop.getBaseProp().isNullable || dtoType.modifiers.contains(DtoModifier.SPECIFICATION))) ||
-            (lsiProp(prop).boundImmutableProp(lsiGraph, immutableSchema).converter != null &&
-                    !dtoType.modifiers.contains(DtoModifier.INPUT) &&
-                    !dtoType.modifiers.contains(DtoModifier.SPECIFICATION))
-        ) {
-            false
-        } else {
-            propTypeName(prop) == prop.getBaseProp().typeName()
-        }
-    }
-
-    private fun hasAccessorFields(): Boolean =
-        dtoType.dtoProps.any(::requiresAccessorField) ||
-                dtoType.foldProps.any { it.nullGuardProp !== null }
-
     private fun TypeSpec.Builder.addAccessorField(prop: DtoProp<ImmutableType, ImmutableProp>) {
-        if (!requiresAccessorField(prop)) {
+        val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
+        if (
+            !lsiProp.requiresDtoPropAccessor(
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                targetLanguage = LsiLanguage.KOTLIN,
+                generatedTargetType = ::generatedTargetType,
+            )
+        ) {
             return
         }
-        val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
         addAccessorField(
             lsiProp,
             accessorFieldName(prop.name),
             lsiProp.acceptsNullInAccessor(lsiGraph),
             true,
         )
-    }
-
-    private fun requiresAccessorField(prop: DtoProp<ImmutableType, ImmutableProp>): Boolean {
-        if (!isSimpleProp(prop)) {
-            return true
-        }
-        return lsiDtoType
-            .baseProp(lsiGraph, prop.name)
-            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN) != null
     }
 
     private fun TypeSpec.Builder.addFoldNullGuardAccessorField(prop: FoldProp<ImmutableType, ImmutableProp>) {

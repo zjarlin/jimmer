@@ -12,6 +12,7 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.model.LsiVariance
 
 /** 将冻结的 DTO 类型引用解析为目标源码语言的 LSI 类型。 */
 fun DtoTypeRef.toLsiType(targetLanguage: LsiLanguage): LsiTypeRef {
@@ -109,6 +110,203 @@ internal fun LsiTypeRef.toDtoTargetType(targetLanguage: LsiLanguage): LsiTypeRef
         is LsiTypeParameterRef -> copy(annotations = emptyList())
         is LsiUnresolvedType -> copy(annotations = emptyList())
     }
+}
+
+/** 判断已生成类型与原生属性类型在目标源码语言中是否具有相同表示。 */
+internal fun LsiTypeRef.hasSameDtoSourceType(
+    other: LsiTypeRef,
+    targetLanguage: LsiLanguage,
+): Boolean {
+    val language = targetLanguage.requireDtoTargetLanguage()
+    val left = toDtoTargetType(language)
+    return if (language == LsiLanguage.JAVA) {
+        left.toJavaDtoSourceType() == other.toJavaDtoSourceType()
+    } else {
+        left.toKotlinDtoSourceType() == other.toKotlinDtoSourceType()
+    }
+}
+
+private fun LsiTypeRef.toJavaDtoSourceType(boxPrimitive: Boolean = false): LsiTypeRef {
+    return when (this) {
+        is LsiDeclaredType -> copy(
+            arguments = arguments.map { argument ->
+                if (argument.variance == LsiVariance.STAR) {
+                    LsiTypeArgument.output(LsiDeclaredType(LsiSymbolId.type("java.lang.Object")))
+                } else {
+                    argument.copy(type = argument.type?.toJavaDtoSourceType(boxPrimitive = true))
+                }
+            },
+            nullability = LsiNullability.UNKNOWN,
+            annotations = emptyList(),
+        )
+        is LsiPrimitiveType -> when {
+            boxed || boxPrimitive -> LsiDeclaredType(
+                declarationId = kind.javaDtoBoxedTypeId(),
+                nullability = LsiNullability.UNKNOWN,
+            )
+            kind == LsiPrimitiveKind.UNIT -> copy(
+                kind = LsiPrimitiveKind.VOID,
+                nullability = LsiNullability.UNKNOWN,
+                annotations = emptyList(),
+            )
+            else -> copy(
+                nullability = LsiNullability.UNKNOWN,
+                annotations = emptyList(),
+            )
+        }
+        is LsiArrayType -> copy(
+            elementType = elementType.toJavaDtoSourceType(),
+            nullability = LsiNullability.UNKNOWN,
+            annotations = emptyList(),
+        )
+        is LsiFunctionType -> copy(
+            returnType = returnType.toJavaDtoSourceType(),
+            receiverType = receiverType?.toJavaDtoSourceType(),
+            parameterTypes = parameterTypes.map { type -> type.toJavaDtoSourceType() },
+            nullability = LsiNullability.UNKNOWN,
+            annotations = emptyList(),
+        )
+        is LsiTypeParameterRef -> copy(
+            nullability = LsiNullability.UNKNOWN,
+            annotations = emptyList(),
+        )
+        is LsiUnresolvedType -> copy(
+            nullability = LsiNullability.UNKNOWN,
+            annotations = emptyList(),
+        )
+    }
+}
+
+private fun LsiTypeRef.toKotlinDtoSourceType(referenceContext: Boolean = false): LsiTypeRef {
+    val sourceNullability = kotlinDtoSourceNullability()
+    return when (this) {
+        is LsiDeclaredType -> {
+            val qualifiedName = declarationId.requireTypeQualifiedName()
+            val primitiveKind = KOTLIN_DTO_SOURCE_PRIMITIVE_KINDS[qualifiedName]
+            if (primitiveKind != null) {
+                LsiPrimitiveType(
+                    kind = primitiveKind,
+                    nullability = sourceNullability,
+                )
+            } else {
+                copy(
+                    declarationId = LsiSymbolId.type(
+                        KOTLIN_DTO_SOURCE_DECLARED_TYPES[qualifiedName] ?: qualifiedName,
+                    ),
+                    arguments = arguments.map { argument ->
+                        argument.copy(
+                            type = argument.type?.toKotlinDtoSourceType(referenceContext = true),
+                        )
+                    },
+                    nullability = sourceNullability,
+                    annotations = emptyList(),
+                )
+            }
+        }
+        is LsiPrimitiveType -> when {
+            kind == LsiPrimitiveKind.VOID && (boxed || referenceContext) -> LsiDeclaredType(
+                declarationId = LsiSymbolId.type("java.lang.Void"),
+                nullability = sourceNullability,
+            )
+            kind == LsiPrimitiveKind.VOID -> LsiPrimitiveType(
+                kind = LsiPrimitiveKind.UNIT,
+                nullability = sourceNullability,
+            )
+            boxed && !referenceContext && nullability != LsiNullability.NULLABLE &&
+                kind != LsiPrimitiveKind.UNIT -> LsiDeclaredType(
+                    declarationId = kind.javaDtoBoxedTypeId(),
+                    nullability = sourceNullability,
+                )
+            else -> copy(
+                nullability = sourceNullability,
+                annotations = emptyList(),
+                boxed = false,
+            )
+        }
+        is LsiArrayType -> {
+            val primitiveType = elementType as? LsiPrimitiveType
+            val primitiveArrayTypeId = primitiveType
+                ?.takeIf { type ->
+                    !type.boxed && type.nullability == LsiNullability.NON_NULL
+                }
+                ?.kind
+                ?.kotlinDtoPrimitiveArrayTypeIdOrNull()
+            if (primitiveArrayTypeId != null) {
+                LsiDeclaredType(
+                    declarationId = primitiveArrayTypeId,
+                    nullability = sourceNullability,
+                )
+            } else {
+                LsiDeclaredType(
+                    declarationId = KOTLIN_ARRAY_TYPE_ID,
+                    arguments = listOf(
+                        LsiTypeArgument.invariant(
+                            elementType.toKotlinDtoSourceType(referenceContext = true),
+                        ),
+                    ),
+                    nullability = sourceNullability,
+                )
+            }
+        }
+        is LsiFunctionType -> copy(
+            returnType = returnType.toKotlinDtoSourceType(),
+            receiverType = receiverType?.toKotlinDtoSourceType(referenceContext = true),
+            parameterTypes = parameterTypes.map { type ->
+                type.toKotlinDtoSourceType(referenceContext = true)
+            },
+            nullability = sourceNullability,
+            annotations = emptyList(),
+        )
+        is LsiTypeParameterRef -> copy(
+            nullability = sourceNullability,
+            annotations = emptyList(),
+        )
+        is LsiUnresolvedType -> copy(
+            nullability = sourceNullability,
+            annotations = emptyList(),
+        )
+    }
+}
+
+private fun LsiTypeRef.kotlinDtoSourceNullability(): LsiNullability {
+    return if (nullability == LsiNullability.NULLABLE) {
+        LsiNullability.NULLABLE
+    } else {
+        LsiNullability.NON_NULL
+    }
+}
+
+private fun LsiPrimitiveKind.javaDtoBoxedTypeId(): LsiSymbolId {
+    val qualifiedName = when (this) {
+        LsiPrimitiveKind.BOOLEAN -> "java.lang.Boolean"
+        LsiPrimitiveKind.BYTE -> "java.lang.Byte"
+        LsiPrimitiveKind.SHORT -> "java.lang.Short"
+        LsiPrimitiveKind.INT -> "java.lang.Integer"
+        LsiPrimitiveKind.LONG -> "java.lang.Long"
+        LsiPrimitiveKind.CHAR -> "java.lang.Character"
+        LsiPrimitiveKind.FLOAT -> "java.lang.Float"
+        LsiPrimitiveKind.DOUBLE -> "java.lang.Double"
+        LsiPrimitiveKind.UNIT -> "kotlin.Unit"
+        LsiPrimitiveKind.VOID -> "java.lang.Void"
+    }
+    return LsiSymbolId.type(qualifiedName)
+}
+
+private fun LsiPrimitiveKind.kotlinDtoPrimitiveArrayTypeIdOrNull(): LsiSymbolId? {
+    val simpleName = when (this) {
+        LsiPrimitiveKind.BOOLEAN -> "BooleanArray"
+        LsiPrimitiveKind.BYTE -> "ByteArray"
+        LsiPrimitiveKind.SHORT -> "ShortArray"
+        LsiPrimitiveKind.INT -> "IntArray"
+        LsiPrimitiveKind.LONG -> "LongArray"
+        LsiPrimitiveKind.CHAR -> "CharArray"
+        LsiPrimitiveKind.FLOAT -> "FloatArray"
+        LsiPrimitiveKind.DOUBLE -> "DoubleArray"
+        LsiPrimitiveKind.UNIT,
+        LsiPrimitiveKind.VOID,
+        -> return null
+    }
+    return LsiSymbolId.type("kotlin.$simpleName")
 }
 
 /** 覆盖 DTO 生成值类型的根可空性。 */
@@ -308,6 +506,39 @@ private val DTO_PRIMITIVE_KINDS = mapOf(
     "Long" to LsiPrimitiveKind.LONG,
     "Float" to LsiPrimitiveKind.FLOAT,
     "Double" to LsiPrimitiveKind.DOUBLE,
+)
+
+private val KOTLIN_DTO_SOURCE_PRIMITIVE_KINDS = mapOf(
+    "java.lang.Boolean" to LsiPrimitiveKind.BOOLEAN,
+    "java.lang.Byte" to LsiPrimitiveKind.BYTE,
+    "java.lang.Short" to LsiPrimitiveKind.SHORT,
+    "java.lang.Integer" to LsiPrimitiveKind.INT,
+    "java.lang.Long" to LsiPrimitiveKind.LONG,
+    "java.lang.Character" to LsiPrimitiveKind.CHAR,
+    "java.lang.Float" to LsiPrimitiveKind.FLOAT,
+    "java.lang.Double" to LsiPrimitiveKind.DOUBLE,
+    "kotlin.Boolean" to LsiPrimitiveKind.BOOLEAN,
+    "kotlin.Byte" to LsiPrimitiveKind.BYTE,
+    "kotlin.Short" to LsiPrimitiveKind.SHORT,
+    "kotlin.Int" to LsiPrimitiveKind.INT,
+    "kotlin.Long" to LsiPrimitiveKind.LONG,
+    "kotlin.Char" to LsiPrimitiveKind.CHAR,
+    "kotlin.Float" to LsiPrimitiveKind.FLOAT,
+    "kotlin.Double" to LsiPrimitiveKind.DOUBLE,
+    "kotlin.Unit" to LsiPrimitiveKind.UNIT,
+)
+
+private val KOTLIN_DTO_SOURCE_DECLARED_TYPES = mapOf(
+    "java.lang.String" to "kotlin.String",
+    "java.lang.Object" to "kotlin.Any",
+    "java.lang.Iterable" to "kotlin.collections.Iterable",
+    "java.util.Collection" to "kotlin.collections.Collection",
+    "java.util.Iterator" to "kotlin.collections.Iterator",
+    "java.util.List" to "kotlin.collections.List",
+    "java.util.ListIterator" to "kotlin.collections.ListIterator",
+    "java.util.Map" to "kotlin.collections.Map",
+    "java.util.Map.Entry" to "kotlin.collections.Map.Entry",
+    "java.util.Set" to "kotlin.collections.Set",
 )
 
 private val DTO_RENDERABLE_BUILTIN_TYPE_ARITIES = buildMap {

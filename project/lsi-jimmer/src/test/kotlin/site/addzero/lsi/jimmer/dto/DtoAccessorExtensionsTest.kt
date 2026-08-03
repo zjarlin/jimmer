@@ -22,10 +22,12 @@ import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.InheritanceStrategy
 import site.addzero.lsi.jimmer.JoinedTableDissociateAction
 import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 
 class DtoAccessorExtensionsTest {
@@ -1530,6 +1532,394 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `uses direct base access only when frozen source representations match`() {
+        val directImmutableProp = immutableProp("name", STRING_TYPE)
+        val directProp = baseProp("name")
+        val directGraph = singlePropGraph(directProp)
+        val directSchema = immutableSchema(directImmutableProp)
+        for (language in listOf(LsiLanguage.JAVA, LsiLanguage.KOTLIN)) {
+            assertTrue(
+                directProp.usesDirectBaseAccess(
+                    directGraph,
+                    directSchema,
+                    language,
+                    ::generatedTargetType,
+                ),
+            )
+        }
+
+        val primitiveProp = baseProp("active")
+        val primitiveGraph = singlePropGraph(primitiveProp)
+        val primitiveSchema = immutableSchema(immutableProp("active", BOOLEAN_TYPE))
+        for (language in listOf(LsiLanguage.JAVA, LsiLanguage.KOTLIN)) {
+            assertTrue(
+                primitiveProp.usesDirectBaseAccess(
+                    primitiveGraph,
+                    primitiveSchema,
+                    language,
+                    ::generatedTargetType,
+                ),
+            )
+        }
+
+        val nullableBoxedBooleanType = BOOLEAN_TYPE.copy(
+            nullability = LsiNullability.NULLABLE,
+            boxed = true,
+        )
+        val nullablePrimitiveProp = baseProp(
+            name = "active",
+            nullable = true,
+            baseNullable = true,
+        )
+        val nullablePrimitiveGraph = singlePropGraph(nullablePrimitiveProp)
+        val nullablePrimitiveSchema = immutableSchema(
+            immutableProp(
+                name = "active",
+                type = nullableBoxedBooleanType,
+                nullable = true,
+            ),
+        )
+        for (language in listOf(LsiLanguage.JAVA, LsiLanguage.KOTLIN)) {
+            assertTrue(
+                nullablePrimitiveProp.usesDirectBaseAccess(
+                    nullablePrimitiveGraph,
+                    nullablePrimitiveSchema,
+                    language,
+                    ::generatedTargetType,
+                ),
+            )
+        }
+
+        val flatTailProp = baseProp(
+            name = "name",
+            idSuffix = "direct-access-tail",
+        )
+        val flatProp = baseProp(
+            name = "displayName",
+            idSuffix = "direct-access-head",
+            baseName = "name",
+        ).copy(
+            nextPropId = flatTailProp.id,
+            tailPropId = flatTailProp.id,
+        )
+        val flatGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(singlePropType(flatProp)),
+            props = listOf(flatProp, flatTailProp).sortedBy(DtoProp::id),
+        )
+        assertFalse(
+            flatProp.usesDirectBaseAccess(
+                flatGraph,
+                directSchema,
+                LsiLanguage.JAVA,
+                ::generatedTargetType,
+            ),
+        )
+
+        val discriminatorImmutableProp = immutableProp(
+            name = "kind",
+            type = STRING_TYPE,
+            primaryMapping = PrimaryMapping.DISCRIMINATOR,
+        )
+        val discriminatorProp = baseProp("kind")
+        assertFalse(
+            discriminatorProp.usesDirectBaseAccess(
+                singlePropGraph(discriminatorProp),
+                immutableSchema(discriminatorImmutableProp),
+                LsiLanguage.JAVA,
+                ::generatedTargetType,
+            ),
+        )
+
+        val enumImmutableProp = immutableProp(
+            name = "status",
+            type = LsiDeclaredType(LsiSymbolId.type("demo.Status")),
+        )
+        val enumProp = baseProp("status").copy(
+            enumType = DtoEnumType(
+                numeric = false,
+                mappings = listOf(DtoEnumMapping("ENABLED", "enabled")),
+            ),
+        )
+        assertFalse(
+            enumProp.usesDirectBaseAccess(
+                singlePropGraph(enumProp),
+                immutableSchema(enumImmutableProp),
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+
+        val boxedBooleanType = BOOLEAN_TYPE.copy(boxed = true)
+        val primitiveConvertedImmutableProp = immutableProp(
+            name = "active",
+            type = BOOLEAN_TYPE,
+            converter = converter(
+                targetType = boxedBooleanType,
+                sourceType = boxedBooleanType,
+            ),
+        )
+        val convertedProp = baseProp("active")
+        assertFalse(
+            convertedProp.usesDirectBaseAccess(
+                singlePropGraph(convertedProp),
+                immutableSchema(primitiveConvertedImmutableProp),
+                LsiLanguage.JAVA,
+                ::generatedTargetType,
+            ),
+        )
+
+        val nullableConvertedType = boxedBooleanType.copy(
+            nullability = LsiNullability.NULLABLE,
+        )
+        val nullableConvertedImmutableProp = immutableProp(
+            name = "active",
+            type = nullableConvertedType,
+            nullable = true,
+            converter = converter(
+                targetType = boxedBooleanType,
+                sourceType = boxedBooleanType,
+            ),
+        )
+        val nullableConvertedProp = baseProp(
+            name = "active",
+            nullable = true,
+            baseNullable = true,
+        )
+        val nullableConvertedSchema = immutableSchema(nullableConvertedImmutableProp)
+        assertTrue(
+            nullableConvertedProp.usesDirectBaseAccess(
+                singlePropGraph(nullableConvertedProp),
+                nullableConvertedSchema,
+                LsiLanguage.JAVA,
+                ::generatedTargetType,
+            ),
+        )
+        assertFalse(
+            nullableConvertedProp.usesDirectBaseAccess(
+                singlePropGraph(nullableConvertedProp, input = false),
+                nullableConvertedSchema,
+                LsiLanguage.JAVA,
+                ::generatedTargetType,
+            ),
+        )
+    }
+
+    @Test
+    fun `preserves target language nullability rules for direct base access`() {
+        val nullableStringType = STRING_TYPE.copy(nullability = LsiNullability.NULLABLE)
+        val nullableImmutableProp = immutableProp(
+            name = "name",
+            type = nullableStringType,
+            nullable = true,
+        )
+        val requiredProp = baseProp("name", baseNullable = true)
+        val requiredGraph = singlePropGraph(requiredProp)
+        val requiredSchema = immutableSchema(nullableImmutableProp)
+        assertTrue(
+            requiredProp.usesDirectBaseAccess(
+                requiredGraph,
+                requiredSchema,
+                LsiLanguage.JAVA,
+                ::generatedTargetType,
+            ),
+        )
+        assertFalse(
+            requiredProp.usesDirectBaseAccess(
+                requiredGraph,
+                requiredSchema,
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+
+        val widenedProp = baseProp("name", nullable = true, baseNullable = false)
+        val widenedGraph = singlePropGraph(widenedProp)
+        val nonNullSchema = immutableSchema(immutableProp("name", STRING_TYPE))
+        for (language in listOf(LsiLanguage.JAVA, LsiLanguage.KOTLIN)) {
+            assertFalse(
+                widenedProp.usesDirectBaseAccess(
+                    widenedGraph,
+                    nonNullSchema,
+                    language,
+                    ::generatedTargetType,
+                ),
+            )
+        }
+
+        val nullableArgument = STRING_TYPE.copy(nullability = LsiNullability.NULLABLE)
+        val listWithNullableArgument = LsiDeclaredType(
+            declarationId = LsiSymbolId.type("java.util.List"),
+            arguments = listOf(LsiTypeArgument.invariant(nullableArgument)),
+        )
+        val listWithNonNullArgument = listWithNullableArgument.copy(
+            arguments = listOf(LsiTypeArgument.invariant(STRING_TYPE)),
+        )
+        val listImmutableProp = immutableProp(
+            name = "tags",
+            type = listWithNullableArgument,
+            list = true,
+            converter = converter(
+                targetType = listWithNonNullArgument,
+                sourceType = listWithNullableArgument,
+            ),
+        )
+        val listProp = baseProp("tags")
+        val listGraph = singlePropGraph(listProp)
+        val listSchema = immutableSchema(listImmutableProp)
+        assertTrue(
+            listProp.usesDirectBaseAccess(
+                listGraph,
+                listSchema,
+                LsiLanguage.JAVA,
+                ::generatedTargetType,
+            ),
+        )
+        assertFalse(
+            listProp.usesDirectBaseAccess(
+                listGraph,
+                listSchema,
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+    }
+
+    @Test
+    fun `compares canonical target source representations without poet`() {
+        val nonNullArgument = STRING_TYPE.copy(nullability = LsiNullability.NON_NULL)
+        val nonNullList = LsiDeclaredType(
+            declarationId = LsiSymbolId.type("java.util.List"),
+            arguments = listOf(LsiTypeArgument.invariant(nonNullArgument)),
+        )
+        for (nullability in listOf(LsiNullability.PLATFORM, LsiNullability.UNKNOWN)) {
+            val platformList = nonNullList.copy(
+                arguments = listOf(
+                    LsiTypeArgument.invariant(
+                        nonNullArgument.copy(nullability = nullability),
+                    ),
+                ),
+            )
+            assertTrue(platformList.hasSameDtoSourceType(nonNullList, LsiLanguage.KOTLIN))
+        }
+
+        val nullableList = nonNullList.copy(
+            arguments = listOf(
+                LsiTypeArgument.invariant(
+                    nonNullArgument.copy(nullability = LsiNullability.NULLABLE),
+                ),
+            ),
+        )
+        assertFalse(nullableList.hasSameDtoSourceType(nonNullList, LsiLanguage.KOTLIN))
+
+        val javaIntegerType = LsiDeclaredType(LsiSymbolId.type("java.lang.Integer"))
+        val intType = LsiPrimitiveType(LsiPrimitiveKind.INT)
+        assertTrue(javaIntegerType.hasSameDtoSourceType(intType, LsiLanguage.KOTLIN))
+        assertTrue(
+            javaIntegerType.hasSameDtoSourceType(
+                intType.copy(boxed = true),
+                LsiLanguage.JAVA,
+            ),
+        )
+        assertFalse(
+            javaIntegerType.hasSameDtoSourceType(
+                intType,
+                LsiLanguage.JAVA,
+            ),
+        )
+
+        val generatedPrimitiveArray = LsiArrayType(intType)
+        val nativeBoxedArray = LsiArrayType(intType.copy(boxed = true))
+        assertFalse(
+            generatedPrimitiveArray.hasSameDtoSourceType(
+                nativeBoxedArray,
+                LsiLanguage.KOTLIN,
+            ),
+        )
+        assertTrue(
+            generatedPrimitiveArray.hasSameDtoSourceType(
+                LsiDeclaredType(LsiSymbolId.type("kotlin.IntArray")),
+                LsiLanguage.KOTLIN,
+            ),
+        )
+    }
+
+    @Test
+    fun `requires accessors for loaded state and fold null guards`() {
+        val nullableStringType = STRING_TYPE.copy(nullability = LsiNullability.NULLABLE)
+        val immutableProp = immutableProp(
+            name = "name",
+            type = nullableStringType,
+            nullable = true,
+        )
+        val dynamicProp = baseProp(
+            name = "name",
+            modifier = DtoModifier.DYNAMIC,
+            nullable = true,
+            baseNullable = true,
+        )
+        val dynamicGraph = singlePropGraph(dynamicProp)
+        val schema = immutableSchema(immutableProp)
+        assertTrue(
+            dynamicProp.usesDirectBaseAccess(
+                dynamicGraph,
+                schema,
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+        assertTrue(
+            dynamicProp.requiresDtoPropAccessor(
+                dynamicGraph,
+                schema,
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+
+        val staticProp = dynamicProp.copy(inputModifier = DtoModifier.STATIC)
+        val staticGraph = singlePropGraph(staticProp)
+        assertFalse(
+            staticProp.requiresDtoPropAccessor(
+                staticGraph,
+                schema,
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+        assertFalse(
+            staticGraph.types.single().hasDtoPropAccessorFields(
+                staticGraph,
+                schema,
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+
+        val nullGuardProp = staticProp.copy(id = DtoPropId("dto#hidden:null-guard"))
+        val foldProp = foldProp().copy(nullGuardPropId = nullGuardProp.id)
+        val ownerType = singlePropType(staticProp).copy(
+            propIds = listOf(staticProp.id, foldProp.id),
+            hiddenFlatPropIds = listOf(nullGuardProp.id),
+        )
+        val foldGraph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(TYPE_ID),
+            types = listOf(ownerType),
+            props = listOf(staticProp, nullGuardProp, foldProp).sortedBy(DtoProp::id),
+        )
+        assertTrue(
+            ownerType.hasDtoPropAccessorFields(
+                foldGraph,
+                schema,
+                LsiLanguage.KOTLIN,
+                ::generatedTargetType,
+            ),
+        )
+    }
+
+    @Test
     fun `rejects a DTO type from another graph`() {
         val graph = graph(visibleDynamic = true)
         val foreignType = graph.types.single().copy(name = "ForeignInput")
@@ -1784,6 +2174,7 @@ class DtoAccessorExtensionsTest {
         name: String,
         type: LsiTypeRef,
         ownerTypeId: LsiSymbolId = BASE_TYPE_ID,
+        nullable: Boolean = false,
         list: Boolean = false,
         primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
         associationKind: AssociationKind = AssociationKind.NONE,
@@ -1805,7 +2196,7 @@ class DtoAccessorExtensionsTest {
             overrideChain = emptyList(),
             inherited = false,
             overridden = false,
-            nullable = false,
+            nullable = nullable,
             list = list,
             association = associationKind != AssociationKind.NONE,
             embedded = false,
@@ -1835,15 +2226,20 @@ class DtoAccessorExtensionsTest {
     private fun converter(
         targetType: LsiTypeRef,
         targetNullable: Boolean = false,
+        sourceType: LsiTypeRef = BOOLEAN_TYPE,
     ): ImmutableConverter {
         return ImmutableConverter(
             converterTypeId = LsiSymbolId.type("demo.Converter"),
-            sourceType = BOOLEAN_TYPE,
+            sourceType = sourceType,
             targetType = targetType,
             sourceNullable = false,
             targetNullable = targetNullable,
             propertyNullable = false,
         )
+    }
+
+    private fun generatedTargetType(@Suppress("UNUSED_PARAMETER") prop: DtoProp): LsiDeclaredType {
+        return LsiDeclaredType(LsiSymbolId.type("demo.dto.GeneratedTarget"))
     }
 
     private fun userProp(): DtoUserProp {

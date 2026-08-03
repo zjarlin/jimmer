@@ -39,7 +39,6 @@ import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
-import site.addzero.lsi.jimmer.dto.DtoConverterExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedValueTypeExtensionsKt;
@@ -918,11 +917,13 @@ public class DtoGenerator {
                 lsiGraph,
                 prop.getName()
         );
-        if (isSimpleProp(prop) && DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
+        if (!DtoAccessorExtensionsKt.requiresDtoPropAccessor(
                 lsiProp,
                 lsiGraph,
-                LsiLanguage.JAVA
-        ) == null) {
+                immutableSchema,
+                LsiLanguage.JAVA,
+                this::generatedTargetType
+        )) {
             return;
         }
         addAccessorField(
@@ -974,27 +975,6 @@ public class DtoGenerator {
                 )
         );
         typeBuilder.addField(builder.build());
-    }
-
-    private boolean isSimpleProp(DtoProp<ImmutableType, ImmutableProp> prop) {
-        if (prop.getNextProp() != null) {
-            return false;
-        }
-        if (prop.getBaseProp().isDiscriminator()) {
-            return false;
-        }
-        if ((prop.isNullable() && (!prop.isBaseNullable() || dtoType.getModifiers().contains(DtoModifier.SPECIFICATION))) ||
-                (DtoConverterExtensionsKt.boundImmutableProp(
-                        lsiProp(prop),
-                        lsiGraph,
-                        immutableSchema
-                ).getConverter() != null &&
-                        !dtoType.getModifiers().contains(DtoModifier.INPUT) &&
-                        !dtoType.getModifiers().contains(DtoModifier.SPECIFICATION))
-        ) {
-            return false;
-        }
-        return renderGeneratedValueType(prop).equals(prop.getBaseProp().getTypeName());
     }
 
     private void addField(AbstractProp prop) {
@@ -1294,7 +1274,13 @@ public class DtoGenerator {
                     lsiGraph,
                     LsiLanguage.JAVA
             );
-            boolean simple = isSimpleProp(prop);
+            boolean simple = DtoAccessorExtensionsKt.usesDirectBaseAccess(
+                    lsiProp,
+                    lsiGraph,
+                    immutableSchema,
+                    LsiLanguage.JAVA,
+                    this::generatedTargetType
+            );
             if (simple && stateFieldName == null) {
                 if (prop.isNullable()) {
                     builder.addStatement(
@@ -1399,7 +1385,13 @@ public class DtoGenerator {
             } else if (fuzzy) {
                 builder.beginControlFlow("if (this.$L != null)", prop.getName());
             }
-            if (isSimpleProp(prop)) {
+            if (DtoAccessorExtensionsKt.usesDirectBaseAccess(
+                    lsiProp,
+                    lsiGraph,
+                    immutableSchema,
+                    LsiLanguage.JAVA,
+                    this::generatedTargetType
+            )) {
                 builder.addStatement("__draft.$L(this.$L)", prop.getBaseProp().getSetterName(), prop.getName());
             } else {
                 builder.addCode(

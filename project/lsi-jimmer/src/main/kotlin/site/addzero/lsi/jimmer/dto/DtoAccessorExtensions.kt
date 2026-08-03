@@ -9,6 +9,7 @@ import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.isEntityAssociation
 import site.addzero.lsi.jimmer.targetIdPropOf
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
@@ -280,6 +281,80 @@ fun DtoBaseProp.accessorConversionKind(
         return DtoAccessorConversionKind.CONVERTER
     }
     return DtoAccessorConversionKind.NONE
+}
+
+/** 判断 DTO 属性是否可以直接读取和写入不可变属性。 */
+fun DtoBaseProp.usesDirectBaseAccess(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+    generatedTargetType: (DtoProp) -> LsiDeclaredType,
+): Boolean {
+    requireVisibleProp(graph)
+    val language = targetLanguage.requireDtoTargetLanguage()
+    if (nextPropId != null) {
+        return false
+    }
+    val immutableProp = boundImmutableProp(graph, immutableSchema)
+    if (immutableProp.primaryMapping == PrimaryMapping.DISCRIMINATOR) {
+        return false
+    }
+    val ownerType = graph.typesById.getValue(ownerTypeId)
+    val specification = DtoModifier.SPECIFICATION in ownerType.modifiers
+    if (nullable && (!baseNullable || specification)) {
+        return false
+    }
+    if (
+        immutableProp.converter != null &&
+        DtoModifier.INPUT !in ownerType.modifiers &&
+        !specification
+    ) {
+        return false
+    }
+    val immutableValueType = immutableProp.type
+        .withDtoRootNullability(immutableProp.nullable)
+        .withDtoJavaBoxing(language, force = immutableProp.nullable)
+    return generatedValueType(
+        graph = graph,
+        immutableSchema = immutableSchema,
+        targetLanguage = language,
+        generatedTargetType = generatedTargetType,
+    ).hasSameDtoSourceType(immutableValueType, language)
+}
+
+/** 判断 DTO 属性是否需要生成运行时属性访问器。 */
+fun DtoBaseProp.requiresDtoPropAccessor(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+    generatedTargetType: (DtoProp) -> LsiDeclaredType,
+): Boolean {
+    return !usesDirectBaseAccess(
+        graph = graph,
+        immutableSchema = immutableSchema,
+        targetLanguage = targetLanguage,
+        generatedTargetType = generatedTargetType,
+    ) || requiresDtoLoadedStateStorage(graph)
+}
+
+/** 判断 DTO 类型是否需要生成容纳运行时属性访问器的静态区域。 */
+fun DtoType.hasDtoPropAccessorFields(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+    generatedTargetType: (DtoProp) -> LsiDeclaredType,
+): Boolean {
+    require(graph.typesById[id] == this) {
+        "DTO type does not belong to this graph: ${id.value}"
+    }
+    return basePropsInDeclarationOrder(graph).any { prop ->
+        prop.requiresDtoPropAccessor(
+            graph = graph,
+            immutableSchema = immutableSchema,
+            targetLanguage = targetLanguage,
+            generatedTargetType = generatedTargetType,
+        )
+    } || foldPropsInDeclarationOrder(graph).any { prop -> prop.nullGuardProp(graph) != null }
 }
 
 /** 判断 DTO 属性访问器是否接受 null 作为可写入值。 */
