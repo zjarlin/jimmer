@@ -13,6 +13,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoFoldDraftApplyRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoFoldValueRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
@@ -1292,11 +1293,12 @@ internal class DtoGenerator private constructor(
                     for (prop in dtoType.props) {
                         when (prop) {
                             is FoldProp<*, *> -> {
-                                if (prop.isNullable) {
-                                    addStatement("this.%N?.__applyTo(_draft)", prop.name)
-                                } else {
-                                    addStatement("this.%N.__applyTo(_draft)", prop.name)
-                                }
+                                addCode(
+                                    KspDtoFoldDraftApplyRenderer.render(
+                                        prop = lsiDtoType.foldProp(lsiGraph, prop.name),
+                                        draftParameterName = "_draft",
+                                    ),
+                                )
                             }
 
                             is DtoProp<*, *> -> {

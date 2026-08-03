@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseValueRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoFoldDraftApplyRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoFoldValueRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
@@ -1327,13 +1328,16 @@ public class DtoGenerator {
         for (AbstractProp abstractProp : dtoType.getProps()) {
             if (abstractProp instanceof FoldProp<?, ?>) {
                 FoldProp<ImmutableType, ImmutableProp> foldProp = asFoldProp(abstractProp);
-                if (foldProp.isNullable()) {
-                    builder.beginControlFlow("if (this.$L != null)", foldProp.getName());
-                }
-                builder.addStatement("this.$L.__applyTo(__draft)", foldProp.getName());
-                if (foldProp.isNullable()) {
-                    builder.endControlFlow();
-                }
+                builder.addCode(
+                        AptDtoFoldDraftApplyRenderer.render(
+                                DtoGenerationExtensionsKt.foldProp(
+                                        lsiDtoType,
+                                        lsiGraph,
+                                        foldProp.getName()
+                                ),
+                                "__draft"
+                        )
+                );
                 continue;
             }
             if (!(abstractProp instanceof DtoProp<?, ?>)) {
