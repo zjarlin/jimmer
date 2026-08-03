@@ -99,6 +99,27 @@ fun ImmutableSchema.strictPrimarySubtypesOf(type: ImmutableType): List<Immutable
         .sortedBy(ImmutableType::qualifiedName)
 }
 
+/** 返回指定实体及其主继承链上的可实例化实体，结果按限定名稳定排序。 */
+fun ImmutableSchema.knownConcreteEntityTypesOf(type: ImmutableType): List<ImmutableType> {
+    require(typesById[type.id] == type) {
+        "Immutable type does not belong to this schema: ${type.id.value}"
+    }
+    require(type.kind == ImmutableTypeKind.ENTITY) {
+        "Concrete entity types require an entity base type: ${type.id.value}"
+    }
+    return buildList {
+        if (type.instantiable) {
+            add(type)
+        }
+        addAll(
+            strictPrimarySubtypesOf(type)
+                .filter { candidate ->
+                    candidate.kind == ImmutableTypeKind.ENTITY && candidate.instantiable
+                },
+        )
+    }.sortedBy(ImmutableType::qualifiedName)
+}
+
 /** 返回沿主继承链实际声明同一谱系属性的最近类型。 */
 fun ImmutableSchema.primaryLineageOwner(
     type: ImmutableType,

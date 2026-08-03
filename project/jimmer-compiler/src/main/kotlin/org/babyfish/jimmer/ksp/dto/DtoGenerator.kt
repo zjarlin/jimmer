@@ -35,6 +35,7 @@ import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoToStringRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.knownConcreteEntityTypesOf
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
@@ -57,6 +58,7 @@ import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
+import site.addzero.lsi.jimmer.dto.immutableBaseType
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.nullGuardProp
@@ -1236,7 +1238,7 @@ internal class DtoGenerator private constructor(
         discriminatorProp: DtoBaseProp,
         extraStatement: String?,
     ) {
-        for (concreteType in knownConcreteTypes(baseType)) {
+        for (concreteType in knownConcreteTypes()) {
             val value = concreteType.discriminatorValue ?: continue
             beginControlFlow(
                 "if (%N == %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
@@ -1401,32 +1403,15 @@ internal class DtoGenerator private constructor(
     private val polymorphicRootType: ImmutableType
         get() = baseType.inheritanceRoot ?: baseType
 
-    private fun knownConcreteTypes(baseType: ImmutableType): List<ImmutableType> {
-        val types = mutableListOf<ImmutableType>()
-        if (baseType.isInstantiable) {
-            types += baseType
-        }
-        for (type in ctx.types) {
-            if (type !== baseType &&
-                type.isEntity &&
-                type.isInstantiable &&
-                baseType.isAssignableFrom(type)
-            ) {
-                types += type
+    private fun knownConcreteTypes(): List<ImmutableType> {
+        val lsiBaseType = lsiDtoType.immutableBaseType(immutableSchema)
+        return immutableSchema
+            .knownConcreteEntityTypesOf(lsiBaseType)
+            .map { lsiType ->
+                requireNotNull(ctx.immutableTypeOf(lsiType.qualifiedName)) {
+                    "Immutable DTO concrete type is missing from the KSP context: ${lsiType.qualifiedName}"
+                }
             }
-        }
-        return types.sortedBy { it.qualifiedName }
-    }
-
-    private fun ImmutableType.isAssignableFrom(type: ImmutableType): Boolean {
-        var current: ImmutableType? = type
-        while (current != null) {
-            if (current === this) {
-                return true
-            }
-            current = current.primarySuperType
-        }
-        return false
     }
 
     private fun addEntityType() {

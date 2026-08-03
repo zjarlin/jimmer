@@ -35,6 +35,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import site.addzero.lsi.core.LsiLanguage;
 import site.addzero.lsi.jimmer.ImmutableSchema;
+import site.addzero.lsi.jimmer.ImmutableSchemaExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
@@ -54,6 +55,7 @@ import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
 import java.io.IOException;
 import java.util.*;
 
@@ -1487,7 +1489,7 @@ public class DtoGenerator {
                 lsiGraph,
                 immutableSchema
         ) + "()";
-        List<ImmutableType> concreteTypes = knownConcreteTypes(dtoType.getBaseType());
+        List<ImmutableType> concreteTypes = knownConcreteTypes();
         for (ImmutableType concreteType : concreteTypes) {
             String value = concreteType.getDiscriminatorValue();
             if (value == null) {
@@ -1551,30 +1553,23 @@ public class DtoGenerator {
         return rootType != null ? rootType : dtoType.getBaseType();
     }
 
-    private List<ImmutableType> knownConcreteTypes(ImmutableType baseType) {
+    private List<ImmutableType> knownConcreteTypes() {
+        site.addzero.lsi.jimmer.ImmutableType lsiBaseType =
+                DtoAccessorExtensionsKt.immutableBaseType(lsiDtoType, immutableSchema);
         List<ImmutableType> types = new ArrayList<>();
-        if (baseType.isInstantiable()) {
-            types.add(baseType);
-        }
-        for (ImmutableType type : ctx.getImmutableTypes()) {
-            if (type != baseType &&
-                    type.isEntity() &&
-                    type.isInstantiable() &&
-                    isAssignableFrom(baseType, type)) {
-                types.add(type);
+        for (site.addzero.lsi.jimmer.ImmutableType lsiType :
+                ImmutableSchemaExtensionsKt.knownConcreteEntityTypesOf(immutableSchema, lsiBaseType)) {
+            TypeElement typeElement = ctx.getElements().getTypeElement(lsiType.getQualifiedName());
+            ImmutableType type = typeElement != null ? ctx.getImmutableType(typeElement) : null;
+            if (type == null) {
+                throw new IllegalStateException(
+                        "Immutable DTO concrete type is missing from the APT context: " +
+                                lsiType.getQualifiedName()
+                );
             }
+            types.add(type);
         }
-        types.sort(Comparator.comparing(ImmutableType::getQualifiedName));
         return types;
-    }
-
-    private static boolean isAssignableFrom(ImmutableType base, ImmutableType type) {
-        for (ImmutableType current = type; current != null; current = current.getPrimarySuperType()) {
-            if (current == base) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void addEntityType() {

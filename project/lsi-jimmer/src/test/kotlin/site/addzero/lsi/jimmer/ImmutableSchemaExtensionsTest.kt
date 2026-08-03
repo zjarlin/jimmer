@@ -139,6 +139,67 @@ class ImmutableSchemaExtensionsTest {
     }
 
     @Test
+    fun `resolves concrete primary entity types in stable order`() {
+        val rootId = LsiSymbolId.type("demo.Root")
+        val middleId = LsiSymbolId.type("demo.Middle")
+        val leafBId = LsiSymbolId.type("demo.LeafB")
+        val leafAId = LsiSymbolId.type("demo.LeafA")
+        val mappedId = LsiSymbolId.type("demo.Mapped")
+        val unrelatedId = LsiSymbolId.type("demo.Unrelated")
+        fun inheritanceEntity(
+            id: LsiSymbolId,
+            primarySuperTypeId: LsiSymbolId?,
+            instantiable: Boolean,
+        ): ImmutableType {
+            val idProp = prop(id, "id", primaryMapping = PrimaryMapping.ID)
+            val discriminatorProp = prop(id, "kind", primaryMapping = PrimaryMapping.DISCRIMINATOR)
+            return type(
+                id = id,
+                kind = ImmutableTypeKind.ENTITY,
+                props = listOf(idProp, discriminatorProp),
+                idPropId = idProp.id,
+                primarySuperTypeId = primarySuperTypeId,
+                inheritanceRootTypeId = rootId,
+                inheritanceStrategy = InheritanceStrategy.SINGLE_TABLE.takeIf { id == rootId },
+                joinedTableDissociateAction = JoinedTableDissociateAction.DELETE.takeIf { id == rootId },
+                discriminatorPropId = discriminatorProp.id,
+                instantiable = instantiable,
+            )
+        }
+        val root = inheritanceEntity(rootId, primarySuperTypeId = null, instantiable = false)
+        val middle = inheritanceEntity(middleId, primarySuperTypeId = rootId, instantiable = false)
+        val leafB = inheritanceEntity(leafBId, primarySuperTypeId = middleId, instantiable = true)
+        val leafA = inheritanceEntity(leafAId, primarySuperTypeId = rootId, instantiable = true)
+        val mapped = type(
+            id = mappedId,
+            kind = ImmutableTypeKind.MAPPED_SUPERCLASS,
+            props = emptyList(),
+            primarySuperTypeId = rootId,
+        )
+        val unrelatedIdProp = prop(unrelatedId, "id", primaryMapping = PrimaryMapping.ID)
+        val unrelated = type(
+            id = unrelatedId,
+            kind = ImmutableTypeKind.ENTITY,
+            props = listOf(unrelatedIdProp),
+            idPropId = unrelatedIdProp.id,
+        )
+        val schema = ImmutableSchema(listOf(root, middle, leafB, leafA, mapped, unrelated))
+
+        assertEquals(
+            listOf("demo.LeafA", "demo.LeafB"),
+            schema.knownConcreteEntityTypesOf(root).map(ImmutableType::qualifiedName),
+        )
+        assertEquals(
+            listOf("demo.LeafA"),
+            schema.knownConcreteEntityTypesOf(leafA).map(ImmutableType::qualifiedName),
+        )
+        assertEquals(
+            listOf("demo.Unrelated"),
+            schema.knownConcreteEntityTypesOf(unrelated).map(ImmutableType::qualifiedName),
+        )
+    }
+
+    @Test
     fun `exposes stable property primitives without metadata wrappers`() {
         val ownerId = LsiSymbolId.type("demo.Book")
         val rootPropId = LsiSymbolId.property(LsiSymbolId.type("demo.Base"), "name")
@@ -172,6 +233,12 @@ private fun type(
     kind: ImmutableTypeKind,
     props: List<ImmutableProp>,
     idPropId: LsiSymbolId? = null,
+    primarySuperTypeId: LsiSymbolId? = null,
+    inheritanceRootTypeId: LsiSymbolId? = null,
+    inheritanceStrategy: InheritanceStrategy? = null,
+    joinedTableDissociateAction: JoinedTableDissociateAction? = null,
+    discriminatorPropId: LsiSymbolId? = null,
+    instantiable: Boolean = kind == ImmutableTypeKind.ENTITY,
 ): ImmutableType {
     return ImmutableType(
         id = id,
@@ -180,15 +247,15 @@ private fun type(
         documentation = null,
         annotations = emptyList(),
         typeParameterIds = emptyList(),
-        superTypeIds = emptyList(),
+        superTypeIds = listOfNotNull(primarySuperTypeId),
         props = props,
-        primarySuperTypeId = null,
-        inheritanceRootTypeId = null,
-        inheritanceStrategy = null,
-        joinedTableDissociateAction = null,
-        instantiable = kind == ImmutableTypeKind.ENTITY,
+        primarySuperTypeId = primarySuperTypeId,
+        inheritanceRootTypeId = inheritanceRootTypeId,
+        inheritanceStrategy = inheritanceStrategy,
+        joinedTableDissociateAction = joinedTableDissociateAction,
+        instantiable = instantiable,
         discriminatorValue = null,
-        discriminatorPropId = null,
+        discriminatorPropId = discriminatorPropId,
         idPropId = idPropId,
         versionPropId = null,
         logicalDeletedPropId = null,

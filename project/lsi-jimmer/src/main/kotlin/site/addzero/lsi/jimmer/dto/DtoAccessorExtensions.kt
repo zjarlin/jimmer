@@ -69,24 +69,25 @@ fun DtoType.specificationBaseType(immutableSchema: ImmutableSchema): ImmutableTy
     require(DtoModifier.SPECIFICATION in modifiers) {
         "DTO type is not a specification: ${id.value}"
     }
-    return semanticBaseType(immutableSchema)
+    return immutableBaseType(immutableSchema)
 }
 
-/** 判断 DTO 是否为嵌套在实体 Specification 中的非实体过滤片段。 */
-fun DtoType.isNestedSpecificationFragment(
-    immutableSchema: ImmutableSchema,
-): Boolean {
-    val baseType = semanticBaseType(immutableSchema)
-    return DtoModifier.SPECIFICATION in modifiers && baseType.kind != ImmutableTypeKind.ENTITY
-}
-
-private fun DtoType.semanticBaseType(immutableSchema: ImmutableSchema): ImmutableType {
+/** 返回 DTO 声明绑定的冻结基础不可变类型。 */
+fun DtoType.immutableBaseType(immutableSchema: ImmutableSchema): ImmutableType {
     val baseTypeId = requireNotNull(baseTypeId) {
         "DTO semantic classification requires a base immutable type: ${id.value}"
     }
     return requireNotNull(immutableSchema.typesById[baseTypeId]) {
         "No immutable base type '${baseTypeId.value}' for DTO type: ${id.value}"
     }
+}
+
+/** 判断 DTO 是否为嵌套在实体 Specification 中的非实体过滤片段。 */
+fun DtoType.isNestedSpecificationFragment(
+    immutableSchema: ImmutableSchema,
+): Boolean {
+    val baseType = immutableBaseType(immutableSchema)
+    return DtoModifier.SPECIFICATION in modifiers && baseType.kind != ImmutableTypeKind.ENTITY
 }
 
 /** DTO 生成类需要实现的 Jimmer 基础契约。 */
