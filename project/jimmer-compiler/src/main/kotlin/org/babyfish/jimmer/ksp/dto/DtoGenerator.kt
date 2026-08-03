@@ -8,6 +8,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoAccessorRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseValueRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
@@ -1091,31 +1092,24 @@ internal class DtoGenerator private constructor(
                                     targetLanguage = LsiLanguage.KOTLIN,
                                     generatedTargetType = ::generatedTargetType,
                                 )
-                                if (simple && stateInitializer == null) {
-                                    add("base.%N", dtoProp.baseProp.name)
-                                } else if (!dtoProp.isNullable && dtoProp.isBaseNullable) {
-                                    add(
-                                        "%N.get<%T>(\n",
-                                        accessorFieldName(dtoProp.name),
-                                        propTypeName(dtoProp)
-                                    )
-                                    indent()
-                                    add("base,\n")
-                                    add(
-                                        "%S\n",
-                                        "Cannot convert \"${baseType.className}\" to " +
+                                add(
+                                    "%L",
+                                    KspDtoBaseValueRenderer.render(
+                                        prop = lsiProp,
+                                        graph = lsiGraph,
+                                        immutableSchema = immutableSchema,
+                                        workspace = workspace,
+                                        accessorName = accessorFieldName(dtoProp.name),
+                                        baseParameterName = "base",
+                                        baseValueAccessorName = dtoProp.baseProp.name,
+                                        conversionErrorMessage =
+                                            "Cannot convert \"${baseType.className}\" to " +
                                                 "\"${getDtoClassName()}\" because the cannot get non-null " +
-                                                "value for \"${dtoProp.name}\""
-                                    )
-                                    unindent()
-                                    add(")")
-                                } else {
-                                    add(
-                                        "%N.get<%T>(base)",
-                                        accessorFieldName(dtoProp.name),
-                                        propTypeName(dtoProp)
-                                    )
-                                }
+                                                "value for \"${dtoProp.name}\"",
+                                        generatedTargetType = ::generatedTargetType,
+                                        generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
+                                    ),
+                                )
                                 stateInitializer?.let { initializer ->
                                     add(if (simple) ",\n%L" else ",\n%L\n", initializer)
                                 }

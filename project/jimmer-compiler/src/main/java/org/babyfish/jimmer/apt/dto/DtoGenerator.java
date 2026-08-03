@@ -11,6 +11,7 @@ import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoAccessorRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseValueRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
@@ -30,7 +31,6 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeRefRenderer;
 import org.babyfish.jimmer.dto.compiler.*;
 import org.babyfish.jimmer.impl.util.StringUtil;
-import org.babyfish.jimmer.runtime.ImmutableSpi;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import site.addzero.lsi.core.LsiLanguage;
@@ -1276,58 +1276,30 @@ public class DtoGenerator {
                     lsiGraph,
                     LsiLanguage.JAVA
             );
-            boolean simple = DtoAccessorExtensionsKt.usesDirectBaseAccess(
-                    lsiProp,
-                    lsiGraph,
-                    immutableSchema,
-                    LsiLanguage.JAVA,
-                    this::generatedTargetType
-            );
-            if (simple && stateFieldName == null) {
-                if (prop.isNullable()) {
-                    builder.addStatement(
-                            "this.$L = (($T)base).__isLoaded($T.byIndex($T.$L)) ? base.$L() : null",
-                            prop.getName(),
-                            ImmutableSpi.class,
-                            org.babyfish.jimmer.apt.immutable.generator.Constants.PROP_ID_CLASS_NAME,
+            builder.addStatement(
+                    "this.$L = $L",
+                    prop.getName(),
+                    AptDtoBaseValueRenderer.render(
+                            lsiProp,
+                            lsiGraph,
+                            immutableSchema,
+                            lsiWorkspace,
+                            accessorFieldName(prop.getName()),
+                            "base",
+                            prop.getBaseProp().getGetterName(),
                             dtoType.getBaseType().getProducerClassName(),
                             prop.getBaseProp().getSlotName(),
-                            prop.getBaseProp().getGetterName()
-                    );
-                } else {
-                    builder.addStatement(
-                            "this.$L = base.$L()",
-                            prop.getName(),
-                            prop.getBaseProp().getGetterName()
-                    );
-                }
-            } else {
-                if (!prop.isNullable() && prop.isBaseNullable()) {
-                    builder.addStatement(
-                            "this.$L = $L.get($>\n" +
-                                    "base,\n" +
-                                    "$S\n" +
-                                    "$<)",
-                            prop.getName(),
-                            accessorFieldName(prop.getName()),
                             "Cannot convert \"" +
                                     dtoType.getBaseType().getClassName() +
-                                    "\" to " +
-                                    "\"" +
+                                    "\" to \"" +
                                     getDtoClassName() +
-                                    "\" because the cannot get non-null " +
-                                    "value for \"" +
+                                    "\" because the cannot get non-null value for \"" +
                                     prop.getName() +
-                                    "\""
-                    );
-                } else {
-                    builder.addStatement(
-                            "this.$L = $L.get(base)",
-                            prop.getName(),
-                            accessorFieldName(prop.getName())
-                    );
-                }
-            }
+                                    "\"",
+                            this::generatedTargetType,
+                            generatedDtoTypeIdsByTypeName.keySet()
+                    )
+            );
             if (stateFieldName != null) {
                 CodeBlock stateInitializer = Objects.requireNonNull(
                         AptDtoLoadedStateRenderer.renderBaseInitializer(
