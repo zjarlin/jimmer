@@ -36,7 +36,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import site.addzero.lsi.core.LsiLanguage;
 import site.addzero.lsi.jimmer.ImmutableSchema;
-import site.addzero.lsi.jimmer.ImmutableSchemaExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
@@ -57,7 +56,6 @@ import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
 import java.io.IOException;
 import java.util.*;
 
@@ -1414,7 +1412,22 @@ public class DtoGenerator {
         if (!withId && idOverridable) {
             builder.addStatement("return toEntityById(null)");
         } else if (discriminatorProp != null && isDefaultPolymorphicInputBranch()) {
-            addDefaultPolymorphicInputToEntityBody(builder, baseIdProp, discriminatorProp);
+            builder.addCode(
+                    AptDtoPolymorphicInputRenderer.renderDefaultBranchBody(
+                            lsiDtoType,
+                            Objects.requireNonNull(
+                                    currentLsiPolymorphicBranchOrNull(),
+                                    "Frozen DTO default polymorphic branch is required"
+                            ),
+                            discriminatorProp,
+                            lsiGraph,
+                            immutableSchema,
+                            lsiWorkspace,
+                            getGeneratedDtoPackageName(),
+                            getGeneratedDtoSimpleNames(),
+                            baseIdProp != null ? "id" : null
+                    )
+            );
         } else {
             if (discriminatorProp != null && isTypedPolymorphicInputBranch()) {
                 builder.addCode(
@@ -1449,54 +1462,6 @@ public class DtoGenerator {
         typeBuilder.addMethod(builder.build());
     }
 
-    private void addDefaultPolymorphicInputToEntityBody(
-            MethodSpec.Builder builder,
-            @Nullable ImmutableProp baseIdProp,
-            DtoBaseProp discriminatorProp
-    ) {
-        String discriminatorGetter = "this." + DtoAccessorExtensionsKt.dtoValueAccessorName(
-                discriminatorProp,
-                LsiLanguage.JAVA,
-                lsiGraph,
-                immutableSchema
-        ) + "()";
-        List<ImmutableType> concreteTypes = knownConcreteTypes();
-        for (ImmutableType concreteType : concreteTypes) {
-            String value = concreteType.getDiscriminatorValue();
-            if (value == null) {
-                continue;
-            }
-            builder.beginControlFlow(
-                    "if ($T.equals($L, $T.get($T.class).getInheritanceInfo().discriminatorValue($S)))",
-                    Constants.OBJECTS_CLASS_NAME,
-                    discriminatorGetter,
-                    Constants.RUNTIME_TYPE_CLASS_NAME,
-                    polymorphicRootType().getClassName(),
-                    value
-            );
-            builder.addCode(
-                    "return $T.$L.produce(__draft -> {$>\n",
-                    concreteType.getDraftClassName(),
-                    "$"
-            );
-            builder.addStatement("this.__applyTo(__draft)");
-            if (baseIdProp != null) {
-                builder.beginControlFlow("if (id != null)");
-                builder.addStatement("__draft.$L($L)", baseIdProp.getSetterName(), "id");
-                builder.endControlFlow();
-            }
-            builder.addCode("$<});\n");
-            builder.endControlFlow();
-        }
-        builder.addStatement(
-                "throw new $T($S + $L + $S)",
-                IllegalArgumentException.class,
-                "Illegal discriminator value \"",
-                discriminatorGetter,
-                "\" for polymorphic input DTO branch \"" + getDtoClassName().canonicalName() + "\""
-        );
-    }
-
     @Nullable
     private DtoBaseProp polymorphicInputDiscriminatorProp() {
         if (!polymorphicBranch) {
@@ -1519,29 +1484,6 @@ public class DtoGenerator {
                 lsiPolymorphicBranch.getKind() == site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind.TYPE;
     }
 
-    private ImmutableType polymorphicRootType() {
-        ImmutableType rootType = dtoType.getBaseType().getInheritanceRoot();
-        return rootType != null ? rootType : dtoType.getBaseType();
-    }
-
-    private List<ImmutableType> knownConcreteTypes() {
-        site.addzero.lsi.jimmer.ImmutableType lsiBaseType =
-                DtoAccessorExtensionsKt.immutableBaseType(lsiDtoType, immutableSchema);
-        List<ImmutableType> types = new ArrayList<>();
-        for (site.addzero.lsi.jimmer.ImmutableType lsiType :
-                ImmutableSchemaExtensionsKt.knownConcreteEntityTypesOf(immutableSchema, lsiBaseType)) {
-            TypeElement typeElement = ctx.getElements().getTypeElement(lsiType.getQualifiedName());
-            ImmutableType type = typeElement != null ? ctx.getImmutableType(typeElement) : null;
-            if (type == null) {
-                throw new IllegalStateException(
-                        "Immutable DTO concrete type is missing from the APT context: " +
-                                lsiType.getQualifiedName()
-                );
-            }
-            types.add(type);
-        }
-        return types;
-    }
 
     private void addEntityType() {
         typeBuilder.addMethod(

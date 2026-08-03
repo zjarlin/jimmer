@@ -25,11 +25,13 @@ class ImmutableDraftNamingExtensionsTest {
         val acronymProp = prop("URL")
         val acronymWorkspace = workspace(acronymProp, "getURL", LsiLanguage.JAVA)
         assertEquals("uRL", acronymProp.generatedDraftCodegenName(acronymWorkspace))
+        assertEquals("setURL", acronymProp.generatedJavaDraftSetterName(acronymWorkspace))
         assertEquals("SLOT_U_RL", acronymProp.generatedDraftSlotName(acronymWorkspace))
 
         val bareProp = prop("URLValue")
         val bareWorkspace = workspace(bareProp, "URLValue", LsiLanguage.JAVA)
         assertEquals("URLValue", bareProp.generatedDraftCodegenName(bareWorkspace))
+        assertEquals("setURLValue", bareProp.generatedJavaDraftSetterName(bareWorkspace))
         assertEquals("SLOT_URLVALUE", bareProp.generatedDraftSlotName(bareWorkspace))
     }
 
@@ -41,6 +43,7 @@ class ImmutableDraftNamingExtensionsTest {
         )
         val primitiveWorkspace = workspace(primitiveProp, "isURL", LsiLanguage.JAVA)
         assertEquals("uRL", primitiveProp.generatedDraftCodegenName(primitiveWorkspace))
+        assertEquals("setURL", primitiveProp.generatedJavaDraftSetterName(primitiveWorkspace))
         assertEquals("SLOT_U_RL", primitiveProp.generatedDraftSlotName(primitiveWorkspace))
 
         val boxedProp = prop(
@@ -49,6 +52,7 @@ class ImmutableDraftNamingExtensionsTest {
         )
         val boxedWorkspace = workspace(boxedProp, "isURL", LsiLanguage.JAVA)
         assertEquals("isURL", boxedProp.generatedDraftCodegenName(boxedWorkspace))
+        assertEquals("setIsURL", boxedProp.generatedJavaDraftSetterName(boxedWorkspace))
         assertEquals("SLOT_IS_URL", boxedProp.generatedDraftSlotName(boxedWorkspace))
 
         val lowerCaseProp = prop(
@@ -69,6 +73,7 @@ class ImmutableDraftNamingExtensionsTest {
 
         val missingProp = prop("urlValue")
         assertEquals("urlValue", missingProp.generatedDraftCodegenName(LsiWorkspace()))
+        assertEquals("setUrlValue", missingProp.generatedJavaDraftSetterName(LsiWorkspace()))
         assertEquals("SLOT_URL_VALUE", missingProp.generatedDraftSlotName(LsiWorkspace()))
     }
 

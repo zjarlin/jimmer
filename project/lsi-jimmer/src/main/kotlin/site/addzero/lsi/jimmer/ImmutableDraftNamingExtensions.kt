@@ -31,6 +31,12 @@ fun ImmutableProp.generatedDraftCodegenName(workspace: LsiWorkspace): String {
     return getterName
 }
 
+/** 返回不可变属性在 Java Draft 中生成的写入方法名。 */
+fun ImmutableProp.generatedJavaDraftSetterName(workspace: LsiWorkspace): String {
+    val codegenName = generatedDraftCodegenName(workspace)
+    return "set" + codegenName.replaceFirstChar(Char::uppercaseChar)
+}
+
 /** 返回不可变属性在 Draft Producer 中生成的 slot 常量名。 */
 fun ImmutableProp.generatedDraftSlotName(workspace: LsiWorkspace): String {
     return "SLOT_${generatedDraftCodegenName(workspace).toDraftConstantName()}"

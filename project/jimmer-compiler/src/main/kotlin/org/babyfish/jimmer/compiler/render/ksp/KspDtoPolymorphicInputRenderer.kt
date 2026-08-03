@@ -3,6 +3,7 @@ package org.babyfish.jimmer.compiler.render.ksp
 import com.squareup.kotlinpoet.CodeBlock
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.dtoPolymorphicInputPoetTypeNames
+import org.babyfish.jimmer.compiler.dto.toDefaultPolymorphicInputBodyPoetCodeBlock
 import org.babyfish.jimmer.compiler.dto.toTypedPolymorphicInputDiscriminatorValidationPoetCodeBlock
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -40,7 +41,38 @@ internal object KspDtoPolymorphicInputRenderer {
         )
         return LsiKotlinPoetRenderer().renderCodeBlock(
             codeBlock = codeBlock,
-            typeNames = workspace.dtoPolymorphicInputPoetTypeNames(codeBlock),
+            typeNames = workspace.dtoPolymorphicInputPoetTypeNames(codeBlock, immutableSchema),
+        )
+    }
+
+    fun renderDefaultBranchBody(
+        dtoType: DtoType,
+        branch: DtoPolymorphicBranch,
+        discriminatorProp: DtoBaseProp,
+        graph: DtoGraph,
+        immutableSchema: ImmutableSchema,
+        workspace: LsiWorkspace,
+        generatedPackageName: String,
+        generatedSimpleNames: List<String>,
+        blockParameterName: String?,
+    ): CodeBlock {
+        val generatedDtoTypeName = JimmerDtoPoetTypeNames.create(
+            packageName = generatedPackageName,
+            simpleNames = generatedSimpleNames,
+        )
+        val codeBlock = dtoType.toDefaultPolymorphicInputBodyPoetCodeBlock(
+            targetLanguage = LsiLanguage.KOTLIN,
+            branch = branch,
+            discriminatorProp = discriminatorProp,
+            graph = graph,
+            immutableSchema = immutableSchema,
+            workspace = workspace,
+            generatedDtoTypeName = generatedDtoTypeName,
+            blockParameterName = blockParameterName,
+        )
+        return LsiKotlinPoetRenderer().renderCodeBlock(
+            codeBlock = codeBlock,
+            typeNames = workspace.dtoPolymorphicInputPoetTypeNames(codeBlock, immutableSchema),
         )
     }
 }

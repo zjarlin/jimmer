@@ -69,6 +69,52 @@ class DtoPolymorphicInputPoetTest {
         assertEquals("", fixture.renderKotlin())
     }
 
+    @Test
+    fun `renders default branch entity dispatch exactly`() {
+        val fixture = defaultFixture()
+
+        assertEquals(
+            """
+                if (java.util.Objects.equals(this.getKind(), org.babyfish.jimmer.meta.ImmutableType.get(demo.Client.class).getInheritanceInfo().discriminatorValue("ORG"))) {
+                  return demo.OrganizationDraft.$.produce(__draft -> {
+                    this.__applyTo(__draft);
+                    if (id != null) {
+                      __draft.setId(id);
+                    }
+                  });
+                }
+                if (java.util.Objects.equals(this.getKind(), org.babyfish.jimmer.meta.ImmutableType.get(demo.Client.class).getInheritanceInfo().discriminatorValue("Person"))) {
+                  return demo.PersonDraft.$.produce(__draft -> {
+                    this.__applyTo(__draft);
+                    if (id != null) {
+                      __draft.setId(id);
+                    }
+                  });
+                }
+                throw new java.lang.IllegalArgumentException("Illegal discriminator value \"" + this.getKind() + "\" for polymorphic input DTO branch \"demo.dto.ClientInput.Default\"");
+            """.trimIndent(),
+            fixture.renderDefaultJava().trimEnd(),
+        )
+        assertEquals(
+            """
+                if (kind == org.babyfish.jimmer.meta.ImmutableType.get(demo.Client::class.java).inheritanceInfo!!.discriminatorValue("ORG")) {
+                  return org.babyfish.jimmer.kt.new(demo.Organization::class).by {
+                    toEntityImpl(this)
+                    block(this)
+                  }
+                }
+                if (kind == org.babyfish.jimmer.meta.ImmutableType.get(demo.Client::class.java).inheritanceInfo!!.discriminatorValue("Person")) {
+                  return org.babyfish.jimmer.kt.new(demo.Person::class).by {
+                    toEntityImpl(this)
+                    block(this)
+                  }
+                }
+                throw java.lang.IllegalArgumentException("Illegal discriminator value \"" + kind + "\" for polymorphic input DTO branch \"demo.dto.ClientInput.Default\"")
+            """.trimIndent(),
+            fixture.renderDefaultKotlin(blockParameterName = "block").trimEnd(),
+        )
+    }
+
     private fun fixture(discriminatorValue: String?): Fixture {
         val rootId = idProp(CLIENT_TYPE_ID)
         val rootDiscriminator = discriminatorProp(CLIENT_TYPE_ID)
@@ -163,6 +209,125 @@ class DtoPolymorphicInputPoetTest {
             discriminatorProp = dtoDiscriminator,
             graph = graph,
             schema = schema,
+            generatedSimpleNames = listOf("ClientInput", "Organization"),
+        )
+    }
+
+    private fun defaultFixture(): Fixture {
+        val rootId = idProp(CLIENT_TYPE_ID)
+        val rootDiscriminator = discriminatorProp(CLIENT_TYPE_ID)
+        val rootImmutableType = immutableType(
+            typeId = CLIENT_TYPE_ID,
+            props = listOf(rootId, rootDiscriminator),
+            instantiable = false,
+            inheritanceRootTypeId = CLIENT_TYPE_ID,
+            inheritanceStrategy = InheritanceStrategy.SINGLE_TABLE,
+            joinedTableDissociateAction = JoinedTableDissociateAction.DELETE,
+            discriminatorPropId = rootDiscriminator.id,
+        )
+        val organizationType = concreteType(
+            typeId = ORGANIZATION_TYPE_ID,
+            rootId = rootId,
+            rootDiscriminator = rootDiscriminator,
+            discriminatorValue = "ORG",
+        )
+        val personType = concreteType(
+            typeId = PERSON_TYPE_ID,
+            rootId = rootId,
+            rootDiscriminator = rootDiscriminator,
+            discriminatorValue = "Person",
+        )
+        val schema = ImmutableSchema(listOf(rootImmutableType, organizationType, personType))
+        val dtoDiscriminator = DtoBaseProp(
+            id = DTO_DISCRIMINATOR_PROP_ID,
+            ownerTypeId = MERGED_TYPE_ID,
+            name = "kind",
+            alias = "kind",
+            nullable = false,
+            annotations = emptyList(),
+            documentation = null,
+            aliasLocation = LOCATION,
+            baseLocation = LOCATION,
+            baseProps = listOf(DtoBasePropBinding("kind", rootDiscriminator.id)),
+            basePath = "kind",
+            nextPropId = null,
+            tailPropId = DTO_DISCRIMINATOR_PROP_ID,
+            baseNullable = false,
+            inputModifier = DtoModifier.STATIC,
+            functionName = null,
+            targetTypeId = null,
+            enumType = null,
+            config = null,
+            recursive = false,
+            likeOptions = emptySet(),
+        )
+        val branch = DtoPolymorphicBranch(
+            kind = DtoPolymorphicBranchKind.DEFAULT,
+            targetBaseTypeId = null,
+            declaredClassName = null,
+            className = "Default",
+            bodyTypeId = BODY_TYPE_ID,
+            mergedTypeId = MERGED_TYPE_ID,
+            implicit = false,
+            location = LOCATION,
+        )
+        val rootDtoType = dtoType(
+            id = ROOT_TYPE_ID,
+            baseTypeId = CLIENT_TYPE_ID,
+            name = "ClientInput",
+            polymorphism = DtoPolymorphism(false, listOf(branch)),
+        )
+        val bodyDtoType = dtoType(
+            id = BODY_TYPE_ID,
+            baseTypeId = CLIENT_TYPE_ID,
+            name = null,
+        )
+        val mergedDtoType = dtoType(
+            id = MERGED_TYPE_ID,
+            baseTypeId = CLIENT_TYPE_ID,
+            name = null,
+            propIds = listOf(dtoDiscriminator.id),
+        )
+        val graph = DtoGraph(
+            source = SOURCE,
+            rootTypeIds = listOf(ROOT_TYPE_ID),
+            types = listOf(rootDtoType, bodyDtoType, mergedDtoType).sortedBy(DtoType::id),
+            props = listOf(dtoDiscriminator),
+        )
+        return Fixture(
+            dtoType = mergedDtoType,
+            branch = branch,
+            discriminatorProp = dtoDiscriminator,
+            graph = graph,
+            schema = schema,
+            generatedSimpleNames = listOf("ClientInput", "Default"),
+        )
+    }
+
+    private fun concreteType(
+        typeId: LsiSymbolId,
+        rootId: ImmutableProp,
+        rootDiscriminator: ImmutableProp,
+        discriminatorValue: String,
+    ): ImmutableType {
+        val id = rootId.copy(
+            id = LsiSymbolId.property(typeId, "id"),
+            ownerTypeId = typeId,
+            inherited = true,
+        )
+        val discriminator = rootDiscriminator.copy(
+            id = LsiSymbolId.property(typeId, "kind"),
+            ownerTypeId = typeId,
+            inherited = true,
+        )
+        return immutableType(
+            typeId = typeId,
+            props = listOf(id, discriminator),
+            superTypeIds = listOf(CLIENT_TYPE_ID),
+            primarySuperTypeId = CLIENT_TYPE_ID,
+            inheritanceRootTypeId = CLIENT_TYPE_ID,
+            discriminatorValue = discriminatorValue,
+            discriminatorPropId = discriminator.id,
         )
     }
 
@@ -280,6 +445,7 @@ class DtoPolymorphicInputPoetTest {
         val discriminatorProp: DtoBaseProp,
         val graph: DtoGraph,
         val schema: ImmutableSchema,
+        val generatedSimpleNames: List<String>,
     ) {
         fun renderJava(): String {
             return AptDtoPolymorphicInputRenderer.renderTypedDiscriminatorValidation(
@@ -290,7 +456,7 @@ class DtoPolymorphicInputPoetTest {
                 immutableSchema = schema,
                 workspace = WORKSPACE,
                 generatedPackageName = "demo.dto",
-                generatedSimpleNames = listOf("ClientInput", "Organization"),
+                generatedSimpleNames = generatedSimpleNames,
             ).toString()
         }
 
@@ -303,7 +469,35 @@ class DtoPolymorphicInputPoetTest {
                 immutableSchema = schema,
                 workspace = WORKSPACE,
                 generatedPackageName = "demo.dto",
-                generatedSimpleNames = listOf("ClientInput", "Organization"),
+                generatedSimpleNames = generatedSimpleNames,
+            ).toString()
+        }
+
+        fun renderDefaultJava(): String {
+            return AptDtoPolymorphicInputRenderer.renderDefaultBranchBody(
+                dtoType = dtoType,
+                branch = branch,
+                discriminatorProp = discriminatorProp,
+                graph = graph,
+                immutableSchema = schema,
+                workspace = WORKSPACE,
+                generatedPackageName = "demo.dto",
+                generatedSimpleNames = generatedSimpleNames,
+                idParameterName = "id",
+            ).toString()
+        }
+
+        fun renderDefaultKotlin(blockParameterName: String?): String {
+            return KspDtoPolymorphicInputRenderer.renderDefaultBranchBody(
+                dtoType = dtoType,
+                branch = branch,
+                discriminatorProp = discriminatorProp,
+                graph = graph,
+                immutableSchema = schema,
+                workspace = WORKSPACE,
+                generatedPackageName = "demo.dto",
+                generatedSimpleNames = generatedSimpleNames,
+                blockParameterName = blockParameterName,
             ).toString()
         }
     }
@@ -313,6 +507,7 @@ class DtoPolymorphicInputPoetTest {
         val LOCATION = LsiLocation(SOURCE, LsiPosition(1, 1))
         val CLIENT_TYPE_ID = LsiSymbolId.type("demo.Client")
         val ORGANIZATION_TYPE_ID = LsiSymbolId.type("demo.Organization")
+        val PERSON_TYPE_ID = LsiSymbolId.type("demo.Person")
         val ORGANIZATION_ID_PROP_ID = LsiSymbolId.property(ORGANIZATION_TYPE_ID, "id")
         val ORGANIZATION_DISCRIMINATOR_PROP_ID = LsiSymbolId.property(ORGANIZATION_TYPE_ID, "kind")
         val LONG_TYPE_ID = LsiSymbolId.type("java.lang.Long")

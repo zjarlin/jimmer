@@ -37,7 +37,6 @@ import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoToStringRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableSchema
-import site.addzero.lsi.jimmer.knownConcreteEntityTypesOf
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
@@ -61,7 +60,6 @@ import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
-import site.addzero.lsi.jimmer.dto.immutableBaseType
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.nullGuardProp
@@ -1213,7 +1211,7 @@ internal class DtoGenerator private constructor(
                 .returns(baseType.className)
                 .apply {
                     if (discriminatorProp !== null && isDefaultPolymorphicInputBranch) {
-                        addDefaultPolymorphicInputToEntityBody(discriminatorProp, "block(this)")
+                        addDefaultPolymorphicInputToEntityBody(discriminatorProp, "block")
                     } else {
                         beginControlFlow(
                             "return %M(%T::class).by",
@@ -1234,31 +1232,22 @@ internal class DtoGenerator private constructor(
 
     private fun FunSpec.Builder.addDefaultPolymorphicInputToEntityBody(
         discriminatorProp: DtoBaseProp,
-        extraStatement: String?,
+        blockParameterName: String?,
     ) {
-        for (concreteType in knownConcreteTypes()) {
-            val value = concreteType.discriminatorValue ?: continue
-            beginControlFlow(
-                "if (%N == %T.get(%T::class.java).inheritanceInfo!!.discriminatorValue(%S))",
-                discriminatorProp.name,
-                IMMUTABLE_TYPE_CLASS_NAME,
-                polymorphicRootType.className,
-                value
-            )
-            beginControlFlow("return %M(%T::class).by", NEW, concreteType.className)
-            addStatement("%L(this)", if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl")
-            if (extraStatement != null) {
-                addStatement(extraStatement)
-            }
-            endControlFlow()
-            endControlFlow()
-        }
-        addStatement(
-            "throw %T(%S + %N + %S)",
-            IllegalArgumentException::class,
-            "Illegal discriminator value \"",
-            discriminatorProp.name,
-            "\" for polymorphic input DTO branch \"${getDtoClassName().canonicalName}\""
+        addCode(
+            KspDtoPolymorphicInputRenderer.renderDefaultBranchBody(
+                dtoType = lsiDtoType,
+                branch = requireNotNull(currentLsiPolymorphicBranchOrNull) {
+                    "Frozen DTO default polymorphic branch is required"
+                },
+                discriminatorProp = discriminatorProp,
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                workspace = workspace,
+                generatedPackageName = generatedDtoPackageName,
+                generatedSimpleNames = generatedDtoSimpleNames,
+                blockParameterName = blockParameterName,
+            ),
         )
     }
 
@@ -1385,20 +1374,6 @@ internal class DtoGenerator private constructor(
             }
             return branch
         }
-
-    private val polymorphicRootType: ImmutableType
-        get() = baseType.inheritanceRoot ?: baseType
-
-    private fun knownConcreteTypes(): List<ImmutableType> {
-        val lsiBaseType = lsiDtoType.immutableBaseType(immutableSchema)
-        return immutableSchema
-            .knownConcreteEntityTypesOf(lsiBaseType)
-            .map { lsiType ->
-                requireNotNull(ctx.immutableTypeOf(lsiType.qualifiedName)) {
-                    "Immutable DTO concrete type is missing from the KSP context: ${lsiType.qualifiedName}"
-                }
-            }
-    }
 
     private fun addEntityType() {
         typeBuilder.addFunction(
