@@ -73,6 +73,7 @@ import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
+import site.addzero.lsi.jimmer.dto.requiresFixedInputField
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiresNonNullDraftWriteGuard
@@ -911,11 +912,8 @@ internal class DtoGenerator private constructor(
                                 .build()
                         )
                     }
-                    if (prop is DtoProp<*, *>) {
-                        val dtoProp = prop.asDtoProp()
-                        if (dtoType.modifiers.contains(DtoModifier.INPUT) && dtoProp.inputModifier == DtoModifier.FIXED) {
-                            addAnnotation(FIXED_INPUT_FIELD_CLASS_NAME)
-                        }
+                    if (lsiProp.requiresFixedInputField(lsiGraph)) {
+                        addAnnotation(FIXED_INPUT_FIELD_CLASS_NAME)
                     }
                     addAnnotations(
                         KspDtoPropAnnotationRenderer.renderConcrete(

@@ -84,6 +84,32 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `identifies fixed input fields from the frozen DTO graph`() {
+        val fixedProp = baseProp("fixedValue", DtoModifier.FIXED)
+        val fixedGraph = singlePropGraph(fixedProp)
+
+        assertTrue(fixedProp.requiresFixedInputField(fixedGraph))
+        assertFalse(
+            fixedProp.requiresFixedInputField(
+                singlePropGraph(fixedProp, input = false),
+            ),
+        )
+
+        val staticProp = baseProp("staticValue", DtoModifier.STATIC)
+        assertFalse(staticProp.requiresFixedInputField(singlePropGraph(staticProp)))
+
+        val userProp = userProp()
+        assertFalse(userProp.requiresFixedInputField(singlePropGraph(userProp)))
+
+        val foldProp = foldProp()
+        assertFalse(foldProp.requiresFixedInputField(singlePropGraph(foldProp)))
+
+        assertFailsWith<IllegalArgumentException> {
+            fixedProp.copy(name = "foreign").requiresFixedInputField(fixedGraph)
+        }
+    }
+
+    @Test
     fun `requires Hibernate Validator enhancement only for visible dynamic properties`() {
         val visibleGraph = graph(visibleDynamic = true)
         val visibleType = visibleGraph.types.single()

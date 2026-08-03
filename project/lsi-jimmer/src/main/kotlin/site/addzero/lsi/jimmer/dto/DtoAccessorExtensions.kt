@@ -53,6 +53,17 @@ fun DtoType.requiresInputBuilder(graph: DtoGraph): Boolean {
     }
 }
 
+/** 判断属性是否需要标记为固定输入字段。 */
+fun DtoProp.requiresFixedInputField(graph: DtoGraph): Boolean {
+    require(graph.propsById[id] == this) {
+        "DTO property does not belong to this graph: ${id.value}"
+    }
+    val ownerType = graph.typesById.getValue(ownerTypeId)
+    return this is DtoBaseProp &&
+        DtoModifier.INPUT in ownerType.modifiers &&
+        inputModifier == DtoModifier.FIXED
+}
+
 /** 判断 DTO 是否需要生成 Hibernate Validator 动态属性增强协议。 */
 fun DtoType.requiresHibernateValidatorEnhancement(
     graph: DtoGraph,

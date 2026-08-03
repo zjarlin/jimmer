@@ -1009,16 +1009,14 @@ public class DtoGenerator {
             builder.addJavadoc(doc);
         }
         boolean isBuilderRequired = isBuildRequired();
-        if (prop instanceof DtoProp<?, ?>) {
-            DtoProp<ImmutableType, ImmutableProp> dtoProp = asDtoProp(prop);
-            if (dtoType.getModifiers().contains(DtoModifier.INPUT) &&
-                    dtoProp.getInputModifier() == DtoModifier.FIXED) {
-                builder.addAnnotation(org.babyfish.jimmer.apt.immutable.generator.Constants.FIXED_INPUT_FIELD_CLASS_NAME);
-            }
+        site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
+                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
+        if (DtoAccessorExtensionsKt.requiresFixedInputField(lsiProp, lsiGraph)) {
+            builder.addAnnotation(org.babyfish.jimmer.apt.immutable.generator.Constants.FIXED_INPUT_FIELD_CLASS_NAME);
         }
         builder.addAnnotations(
                 AptDtoPropAnnotationRenderer.renderField(
-                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                        lsiProp,
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
