@@ -81,6 +81,34 @@ class JimmerDtoPoetTypeNamesTest {
                     "demo.dto.RootView.TargetOf_children.TargetOf_shared"
             },
         )
+        val rootOccurrence = batchRootTypeNames.getValue(ROOT_TYPE_ID)
+        assertEquals(
+            "TargetOf_detail",
+            JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                ownerTypeName = rootOccurrence,
+                targetType = fixture.graph.typesById.getValue(DETAIL_TARGET_TYPE_ID),
+                typeIdsByTypeName = generatedTypes,
+            ),
+        )
+        assertEquals(
+            "TargetOf_summary",
+            JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                ownerTypeName = rootOccurrence,
+                targetType = fixture.graph.typesById.getValue(FOLD_TARGET_TYPE_ID),
+                typeIdsByTypeName = generatedTypes,
+            ),
+        )
+        val branchOccurrence = generatedTypes.entries
+            .single { (_, typeId) -> typeId == BRANCH_MERGED_TYPE_ID }
+            .key
+        assertEquals(
+            "TargetOf_children_2",
+            JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                ownerTypeName = branchOccurrence,
+                targetType = fixture.graph.typesById.getValue(BRANCH_NESTED_TARGET_TYPE_ID),
+                typeIdsByTypeName = generatedTypes,
+            ),
+        )
     }
 
     @Test

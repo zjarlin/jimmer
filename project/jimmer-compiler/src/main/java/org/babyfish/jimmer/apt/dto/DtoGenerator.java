@@ -775,7 +775,14 @@ public class DtoGenerator {
                             "Frozen DTO property \"" + prop.getName() + "\" has no generated target"
                     );
                 }
-                String childSimpleName = targetSimpleName(prop);
+                String childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                        JimmerDtoPoetTypeNames.create(
+                                getGeneratedDtoPackageName(),
+                                getGeneratedDtoSimpleNames()
+                        ),
+                        lsiTargetType,
+                        generatedDtoTypeIdsByTypeName
+                );
                 List<String> childSimpleNames = new ArrayList<>(getGeneratedDtoSimpleNames());
                 childSimpleNames.add(childSimpleName);
                 registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
@@ -796,7 +803,14 @@ public class DtoGenerator {
                     DtoGenerationExtensionsKt.foldProp(lsiDtoType, lsiGraph, prop.getName());
             site.addzero.lsi.jimmer.dto.DtoType lsiTargetType =
                     DtoGenerationExtensionsKt.generatedTargetType(lsiProp, lsiGraph);
-            String childSimpleName = targetSimpleName(prop);
+            String childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                    JimmerDtoPoetTypeNames.create(
+                            getGeneratedDtoPackageName(),
+                            getGeneratedDtoSimpleNames()
+                    ),
+                    lsiTargetType,
+                    generatedDtoTypeIdsByTypeName
+            );
             List<String> childSimpleNames = new ArrayList<>(getGeneratedDtoSimpleNames());
             childSimpleNames.add(childSimpleName);
             registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
@@ -1617,57 +1631,12 @@ public class DtoGenerator {
         }
     }
 
-    private String targetSimpleName(DtoProp<ImmutableType, ImmutableProp> prop) {
-        DtoType<ImmutableType, ImmutableProp> targetType = prop.getTargetType();
-        if (targetType == null) {
-            throw new IllegalArgumentException("prop is not association");
-        }
-        if (targetType.getName() != null) {
-            return targetType.getName();
-        }
-        if (prop.isRecursive() && !targetType.isFocusedRecursion()) {
-            return innerClassName != null ? innerClassName : dtoType.getName();
-        }
-        return standardTargetSimpleName("TargetOf_" + prop.getName());
-    }
-
-    private String targetSimpleName(FoldProp<ImmutableType, ImmutableProp> prop) {
-        return standardTargetSimpleName("TargetOf_" + prop.getName());
-    }
-
     private String accessorFieldName(String propName) {
         return StringUtil.snake(propName + "Accessor", StringUtil.SnakeCase.UPPER);
     }
 
     private String foldNullGuardAccessorFieldName(FoldProp<ImmutableType, ImmutableProp> prop) {
         return StringUtil.snake(prop.getName() + "NullGuardAccessor", StringUtil.SnakeCase.UPPER);
-    }
-
-    private String standardTargetSimpleName(String targetSimpleName) {
-        boolean conflict = false;
-        for (DtoGenerator generator = this; generator != null; generator = generator.parent) {
-            if (generator.getSimpleName().equals(targetSimpleName)) {
-                conflict = true;
-                break;
-            }
-        }
-        if (!conflict) {
-            return targetSimpleName;
-        }
-        for (int i = 2; i < 100; i++) {
-            conflict = false;
-            String newTargetSimpleName = targetSimpleName + '_' + i;
-            for (DtoGenerator generator = this; generator != null; generator = generator.parent) {
-                if (generator.getSimpleName().equals(newTargetSimpleName)) {
-                    conflict = true;
-                    break;
-                }
-            }
-            if (!conflict) {
-                return newTargetSimpleName;
-            }
-        }
-        throw new AssertionError("Dto is too deep");
     }
 
     String getterName(AbstractProp prop) {

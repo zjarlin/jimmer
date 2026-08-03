@@ -644,7 +644,14 @@ internal class DtoGenerator private constructor(
                     ?: throw DtoException(
                         "Frozen DTO property \"${prop.name}\" has no generated target"
                     )
-                val childSimpleName = targetSimpleName(prop)
+                val childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                    ownerTypeName = JimmerDtoPoetTypeNames.create(
+                        generatedDtoPackageName,
+                        generatedDtoSimpleNames,
+                    ),
+                    targetType = lsiTargetType,
+                    typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+                )
                 registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
                 DtoGenerator(
                     ctx = ctx,
@@ -663,7 +670,14 @@ internal class DtoGenerator private constructor(
             val lsiTargetType = lsiDtoType
                 .foldProp(lsiGraph, foldProp.name)
                 .generatedTargetType(lsiGraph)
-            val childSimpleName = targetSimpleName(foldProp)
+            val childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                ownerTypeName = JimmerDtoPoetTypeNames.create(
+                    generatedDtoPackageName,
+                    generatedDtoSimpleNames,
+                ),
+                targetType = lsiTargetType,
+                typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+            )
             registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
             DtoGenerator(
                 ctx = ctx,
@@ -1493,17 +1507,6 @@ internal class DtoGenerator private constructor(
         }
     }
 
-    private fun targetSimpleName(prop: DtoProp<ImmutableType, ImmutableProp>): String {
-        val targetType = prop.targetType ?: throw IllegalArgumentException("prop is not association")
-        if (prop.isRecursive && !targetType.isFocusedRecursion) {
-            return innerClassName ?: dtoType.name ?: error("Internal bug: No target simple name")
-        }
-        return standardTargetSimpleName("TargetOf_${prop.name}")
-    }
-
-    private fun targetSimpleName(prop: FoldProp<ImmutableType, ImmutableProp>): String =
-        standardTargetSimpleName("TargetOf_${prop.name}")
-
     private fun polymorphicRootPropOrNull(prop: AbstractProp): LsiDtoProp? {
         val polymorphicOwner = parent
         if (!polymorphicBranch || polymorphicOwner == null) {
@@ -1540,37 +1543,6 @@ internal class DtoGenerator private constructor(
 
     private fun foldNullGuardAccessorFieldName(prop: FoldProp<ImmutableType, ImmutableProp>): String =
         StringUtil.snake("${prop.name}NullGuardAccessor", SnakeCase.UPPER)
-
-    private fun standardTargetSimpleName(targetSimpleName: String): String {
-        var conflict = false
-        var generator: DtoGenerator? = this
-        while (generator != null) {
-            if ((generator.innerClassName ?: generator.dtoType.name) == targetSimpleName) {
-                conflict = true
-                break
-            }
-            generator = generator.parent
-        }
-        if (!conflict) {
-            return targetSimpleName
-        }
-        for (i in 2..99) {
-            conflict = false
-            val newTargetSimpleName = targetSimpleName + '_' + i
-            generator = this
-            while (generator != null) {
-                if ((generator.innerClassName ?: generator.dtoType.name) == newTargetSimpleName) {
-                    conflict = true
-                    break
-                }
-                generator = generator.parent
-            }
-            if (!conflict) {
-                return newTargetSimpleName
-            }
-        }
-        throw AssertionError("Dto is too deep")
-    }
 
     private fun TypeSpec.Builder.addCopy() {
         addFunction(

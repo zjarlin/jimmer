@@ -159,6 +159,20 @@ internal object JimmerDtoPoetTypeNames {
         }
     }
 
+    /** 返回指定生成声明直属目标 occurrence 的最后一级简单名。 */
+    @JvmStatic
+    fun requireDirectChildSimpleName(
+        ownerTypeName: LsiPoetTypeName,
+        targetType: DtoType,
+        typeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+    ): String {
+        return requireDirectChildOccurrence(
+            ownerTypeName = ownerTypeName,
+            targetTypeId = targetType.id,
+            typeIdsByTypeName = typeIdsByTypeName,
+        ).simpleNames.last()
+    }
+
     /** 返回指定生成声明直属子级中的可选目标 occurrence。 */
     @JvmStatic
     fun directChildOccurrenceOrNull(
