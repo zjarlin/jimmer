@@ -62,6 +62,7 @@ import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
+import site.addzero.lsi.jimmer.dto.hasEntityBase
 import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.kotlinByImportPackages
@@ -114,6 +115,8 @@ internal class DtoGenerator private constructor(
     private val baseType: ImmutableType = requireNotNull(dtoType.baseType) {
         "Generated DTO '${dtoType.qualifiedName ?: dtoType.name ?: "<anonymous>"}' has no immutable base type"
     }
+
+    private val entityBase: Boolean = lsiDtoType.hasEntityBase(immutableSchema)
 
     private val polymorphicBranch: Boolean
         get() = lsiPolymorphicBranch != null
@@ -1110,7 +1113,7 @@ internal class DtoGenerator private constructor(
         val discriminatorProp = polymorphicInputDiscriminatorProp()
         typeBuilder.addFunction(
             FunSpec
-                .builder(if (baseType.isEntity) "toEntity" else "toImmutable")
+                .builder(if (entityBase) "toEntity" else "toImmutable")
                 .addModifiers(KModifier.OVERRIDE)
                 .returns(baseType.className)
                 .apply {
@@ -1122,7 +1125,7 @@ internal class DtoGenerator private constructor(
                             NEW,
                             baseType.className,
                             innerClassName ?: dtoType.name!!,
-                            if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl"
+                            if (entityBase) "toEntityImpl" else "toImmutableImpl"
                         )
                     }
                 }
@@ -1134,14 +1137,14 @@ internal class DtoGenerator private constructor(
         val dtoClassName = getDtoClassName()
         addFunction(
             FunSpec
-                .builder(if (baseType.isEntity) "toEntities" else "toImmutables")
+                .builder(if (entityBase) "toEntities" else "toImmutables")
                 .addAnnotation(generatedAnnotation(baseType.className))
                 .receiver(ITERABLE.parameterizedBy(dtoClassName))
                 .returns(LIST.parameterizedBy(baseType.className))
                 .addStatement(
                     "return map(%T::%L)",
                     dtoClassName,
-                    if (baseType.isEntity) "toEntity" else "toImmutable"
+                    if (entityBase) "toEntity" else "toImmutable"
                 )
                 .build()
         )
@@ -1150,7 +1153,7 @@ internal class DtoGenerator private constructor(
     private fun FileSpec.Builder.addToEntitiesEx() {
         addFunction(
             FunSpec
-                .builder(if (baseType.isEntity) "toEntities" else "toImmutables")
+                .builder(if (entityBase) "toEntities" else "toImmutables")
                 .addAnnotation(generatedAnnotation(baseType.className))
                 .receiver(ITERABLE.parameterizedBy(getDtoClassName()))
                 .returns(LIST.parameterizedBy(baseType.className))
@@ -1166,7 +1169,7 @@ internal class DtoGenerator private constructor(
                     beginControlFlow("return map")
                     addStatement(
                         "it.%L(block)",
-                        if (baseType.isEntity) "toEntity" else "toImmutable"
+                        if (entityBase) "toEntity" else "toImmutable"
                     )
                     endControlFlow()
                 }
@@ -1178,7 +1181,7 @@ internal class DtoGenerator private constructor(
         val discriminatorProp = polymorphicInputDiscriminatorProp()
         typeBuilder.addFunction(
             FunSpec
-                .builder(if (baseType.isEntity) "toEntity" else "toImmutable")
+                .builder(if (entityBase) "toEntity" else "toImmutable")
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
@@ -1199,7 +1202,7 @@ internal class DtoGenerator private constructor(
                         )
                         addStatement(
                             "%L(this)",
-                            if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl"
+                            if (entityBase) "toEntityImpl" else "toImmutableImpl"
                         )
                         addStatement("block(this)")
                         endControlFlow()
@@ -1234,7 +1237,7 @@ internal class DtoGenerator private constructor(
         addApplyToDraft()
         typeBuilder.addFunction(
             FunSpec
-                .builder(if (baseType.isEntity) "toEntityImpl" else "toImmutableImpl")
+                .builder(if (entityBase) "toEntityImpl" else "toImmutableImpl")
                 .addKdoc(DOC_EXPLICIT_FUN)
                 .addModifiers(KModifier.PRIVATE)
                 .addParameter("_draft", baseType.draftClassName)

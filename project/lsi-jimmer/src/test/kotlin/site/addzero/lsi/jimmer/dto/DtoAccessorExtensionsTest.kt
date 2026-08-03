@@ -162,6 +162,44 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `identifies entity base from frozen immutable semantics`() {
+        val dtoType = graph(visibleDynamic = false).types.single()
+
+        ImmutableTypeKind.entries.forEach { kind ->
+            val idProp = immutableProp(
+                name = "id",
+                type = STRING_TYPE,
+                primaryMapping = PrimaryMapping.ID,
+            )
+            val entity = kind == ImmutableTypeKind.ENTITY
+            val schema = ImmutableSchema(
+                listOf(
+                    immutableType(
+                        id = BASE_TYPE_ID,
+                        props = if (entity) listOf(idProp) else emptyList(),
+                        kind = kind,
+                        idPropId = idProp.id.takeIf { entity },
+                    ),
+                ),
+            )
+
+            assertEquals(entity, dtoType.hasEntityBase(schema), kind.name)
+            assertEquals(
+                entity,
+                dtoType.copy(id = MERGED_TYPE_ID, name = null).hasEntityBase(schema),
+                "merged ${kind.name}",
+            )
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.copy(baseTypeId = null).hasEntityBase(ImmutableSchema(emptyList()))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.hasEntityBase(ImmutableSchema(emptyList()))
+        }
+    }
+
+    @Test
     fun `identifies nested specification fragments from frozen DTO semantics`() {
         val dtoType = graph(visibleDynamic = false).types.single()
         val specification = dtoType.copy(modifiers = setOf(DtoModifier.SPECIFICATION))

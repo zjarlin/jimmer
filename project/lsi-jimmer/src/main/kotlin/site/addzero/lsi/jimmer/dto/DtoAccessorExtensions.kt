@@ -82,6 +82,11 @@ fun DtoType.immutableBaseType(immutableSchema: ImmutableSchema): ImmutableType {
     }
 }
 
+/** 判断 DTO 是否绑定实体基础类型。 */
+fun DtoType.hasEntityBase(immutableSchema: ImmutableSchema): Boolean {
+    return immutableBaseType(immutableSchema).kind == ImmutableTypeKind.ENTITY
+}
+
 /** 判断 DTO 是否为嵌套在实体 Specification 中的非实体过滤片段。 */
 fun DtoType.isNestedSpecificationFragment(
     immutableSchema: ImmutableSchema,

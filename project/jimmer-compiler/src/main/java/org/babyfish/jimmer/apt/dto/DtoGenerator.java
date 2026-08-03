@@ -1417,16 +1417,17 @@ public class DtoGenerator {
     }
 
     private void addToEntity(boolean withId) {
+        boolean entityBase = DtoAccessorExtensionsKt.hasEntityBase(lsiDtoType, immutableSchema);
         boolean idOverridable =
                 dtoType.getModifiers().contains(DtoModifier.INPUT) &&
-                        dtoType.getBaseType().isEntity();
+                        entityBase;
         if (withId && !idOverridable) {
             return;
         }
         DtoBaseProp discriminatorProp = polymorphicInputDiscriminatorProp();
         ImmutableProp baseIdProp = withId ? dtoType.getBaseType().getIdProp() : null;
         MethodSpec.Builder builder = MethodSpec
-                .methodBuilder(dtoType.getBaseType().isEntity() ?
+                .methodBuilder(entityBase ?
                         (withId ? "toEntityById" : "toEntity") :
                         "toImmutable");
         if (baseIdProp != null) {
