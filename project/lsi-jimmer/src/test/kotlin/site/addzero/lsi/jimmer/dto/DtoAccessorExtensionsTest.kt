@@ -200,6 +200,20 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `identifies specification from frozen DTO modifiers`() {
+        val dtoType = graph(visibleDynamic = false).types.single()
+
+        assertFalse(dtoType.isSpecification())
+        assertTrue(
+            dtoType.copy(
+                id = MERGED_TYPE_ID,
+                name = null,
+                modifiers = setOf(DtoModifier.SPECIFICATION),
+            ).isSpecification(),
+        )
+    }
+
+    @Test
     fun `identifies nested specification fragments from frozen DTO semantics`() {
         val dtoType = graph(visibleDynamic = false).types.single()
         val specification = dtoType.copy(modifiers = setOf(DtoModifier.SPECIFICATION))

@@ -658,12 +658,12 @@ public class DtoGenerator {
 
     private void addMembers() {
 
-        boolean isSpecification = dtoType.getModifiers().contains(DtoModifier.SPECIFICATION);
+        boolean isSpecification = DtoAccessorExtensionsKt.isSpecification(lsiDtoType);
         if (!isSpecification && !polymorphicBranch) {
             addMetadata();
         }
 
-        if (!dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
+        if (!isSpecification) {
             for (DtoProp<ImmutableType, ImmutableProp> prop : dtoType.getDtoProps()) {
                 addAccessorField(prop);
             }
@@ -687,7 +687,7 @@ public class DtoGenerator {
             addAccessors(prop);
         }
 
-        if (dtoType.getModifiers().contains(DtoModifier.SPECIFICATION)) {
+        if (isSpecification) {
             addEntityType();
             addApplyTo();
         } else {

@@ -64,6 +64,7 @@ import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
 import site.addzero.lsi.jimmer.dto.hasEntityBase
 import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
+import site.addzero.lsi.jimmer.dto.isSpecification
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.kotlinByImportPackages
 import site.addzero.lsi.jimmer.dto.mergedType
@@ -468,7 +469,7 @@ internal class DtoGenerator private constructor(
                     .build()
             )
         }
-        val isSpecification = dtoType.modifiers.contains(DtoModifier.SPECIFICATION)
+        val isSpecification = lsiDtoType.isSpecification()
         if (polymorphicSuperInterfaceName != null) {
             typeBuilder.addSuperinterface(polymorphicSuperInterfaceName)
         } else {
@@ -746,7 +747,7 @@ internal class DtoGenerator private constructor(
     }
 
     private fun FileSpec.Builder.addExtensions(includeBlockConverter: Boolean = true) {
-        if (!dtoType.modifiers.contains(DtoModifier.SPECIFICATION)) {
+        if (!lsiDtoType.isSpecification()) {
             addToEntities()
             if (includeBlockConverter) {
                 addToEntitiesEx()
