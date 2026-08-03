@@ -636,32 +636,30 @@ internal class DtoGenerator private constructor(
             if (polymorphicRootPropOrNull(prop) != null) {
                 continue
             }
-            val targetType = prop.targetType ?: continue
-            if (!prop.isRecursive || targetType.isFocusedRecursion) {
-                val lsiTargetType = lsiDtoType
-                    .baseProp(lsiGraph, prop.name)
-                    .generatedTargetType(lsiGraph)
-                    ?: throw DtoException(
-                        "Frozen DTO property \"${prop.name}\" has no generated target"
-                    )
-                val childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
-                    ownerTypeName = JimmerDtoPoetTypeNames.create(
-                        generatedDtoPackageName,
-                        generatedDtoSimpleNames,
-                    ),
-                    targetType = lsiTargetType,
-                    typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
-                )
-                registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
-                DtoGenerator(
-                    ctx = ctx,
-                    mutable = mutable,
-                    dtoType = targetType,
-                    lsiDtoType = lsiTargetType,
-                    parent = this,
-                    innerClassName = childSimpleName,
-                ).generate(emptyList())
-            }
+            val lsiTargetType = lsiDtoType
+                .baseProp(lsiGraph, prop.name)
+                .generatedTargetType(lsiGraph)
+                ?: continue
+            val targetType = prop.targetType ?: throw DtoException(
+                "Compiled DTO property \"${prop.name}\" has no target required by the frozen DTO graph"
+            )
+            val childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                ownerTypeName = JimmerDtoPoetTypeNames.create(
+                    generatedDtoPackageName,
+                    generatedDtoSimpleNames,
+                ),
+                targetType = lsiTargetType,
+                typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
+            )
+            registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
+            DtoGenerator(
+                ctx = ctx,
+                mutable = mutable,
+                dtoType = targetType,
+                lsiDtoType = lsiTargetType,
+                parent = this,
+                innerClassName = childSimpleName,
+            ).generate(emptyList())
         }
         for (foldProp in dtoType.foldProps) {
             if (polymorphicRootPropOrNull(foldProp) != null) {

@@ -762,38 +762,37 @@ public class DtoGenerator {
             if (polymorphicRootPropOrNull(prop) != null) {
                 continue;
             }
-            DtoType<ImmutableType, ImmutableProp> targetType = prop.getTargetType();
-            if (targetType == null) {
+            DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, prop.getName());
+            site.addzero.lsi.jimmer.dto.DtoType lsiTargetType =
+                    DtoGenerationExtensionsKt.generatedTargetType(lsiProp, lsiGraph);
+            if (lsiTargetType == null) {
                 continue;
             }
-            if (!prop.isRecursive() || targetType.isFocusedRecursion()) {
-                DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, prop.getName());
-                site.addzero.lsi.jimmer.dto.DtoType lsiTargetType =
-                        DtoGenerationExtensionsKt.generatedTargetType(lsiProp, lsiGraph);
-                if (lsiTargetType == null) {
-                    throw new DtoException(
-                            "Frozen DTO property \"" + prop.getName() + "\" has no generated target"
-                    );
-                }
-                String childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
-                        JimmerDtoPoetTypeNames.create(
-                                getGeneratedDtoPackageName(),
-                                getGeneratedDtoSimpleNames()
-                        ),
-                        lsiTargetType,
-                        generatedDtoTypeIdsByTypeName
+            DtoType<ImmutableType, ImmutableProp> targetType = prop.getTargetType();
+            if (targetType == null) {
+                throw new DtoException(
+                        "Compiled DTO property \"" + prop.getName() +
+                                "\" has no target required by the frozen DTO graph"
                 );
-                List<String> childSimpleNames = new ArrayList<>(getGeneratedDtoSimpleNames());
-                childSimpleNames.add(childSimpleName);
-                registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
-                new DtoGenerator(
-                        ctx,
-                        targetType,
-                        lsiTargetType,
-                        this,
-                        childSimpleName
-                ).generate();
             }
+            String childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
+                    JimmerDtoPoetTypeNames.create(
+                            getGeneratedDtoPackageName(),
+                            getGeneratedDtoSimpleNames()
+                    ),
+                    lsiTargetType,
+                    generatedDtoTypeIdsByTypeName
+            );
+            List<String> childSimpleNames = new ArrayList<>(getGeneratedDtoSimpleNames());
+            childSimpleNames.add(childSimpleName);
+            registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
+            new DtoGenerator(
+                    ctx,
+                    targetType,
+                    lsiTargetType,
+                    this,
+                    childSimpleName
+            ).generate();
         }
         for (FoldProp<ImmutableType, ImmutableProp> prop : dtoType.getFoldProps()) {
             if (polymorphicRootPropOrNull(prop) != null) {
