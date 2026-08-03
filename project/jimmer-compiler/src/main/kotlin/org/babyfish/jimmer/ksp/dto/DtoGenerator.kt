@@ -63,6 +63,7 @@ import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
+import site.addzero.lsi.jimmer.dto.kotlinByImportPackages
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.nullGuardProp
 import site.addzero.lsi.jimmer.dto.prop
@@ -404,9 +405,7 @@ internal class DtoGenerator private constructor(
     }
 
     private fun FileSpec.Builder.addImports() {
-        val packages = sortedSetOf<String>().also {
-            collectImports(dtoType, it)
-        }
+        val packages = lsiDtoType.kotlinByImportPackages(lsiGraph, immutableSchema)
         val imports = sortedSetOf(
             compareBy<LsiPoetImport>({ it.packageName }, { it.simpleName })
         )
@@ -414,38 +413,6 @@ internal class DtoGenerator private constructor(
         imports += metadataFetcherPoetImports
         for (sourceImport in imports) {
             addImport(sourceImport.packageName, sourceImport.simpleName)
-        }
-    }
-
-    private fun collectImports(
-        dtoType: DtoType<ImmutableType, ImmutableProp>,
-        packages: SortedSet<String>,
-    ) {
-        val dtoBaseType = requireNotNull(dtoType.baseType) {
-            "Generated DTO '${dtoType.qualifiedName ?: dtoType.name ?: "<anonymous>"}' " +
-                "has no immutable base type"
-        }
-        packages += dtoBaseType.className.packageName
-        for (prop in dtoType.dtoProps) {
-            val targetType = prop.targetType
-            if (targetType !== null && (!prop.isRecursive || targetType.isFocusedRecursion)) {
-                collectImports(targetType, packages)
-            } else {
-                prop.baseProp.targetType?.className?.packageName?.let {
-                    packages += it
-                }
-            }
-        }
-        for (foldProp in dtoType.foldProps) {
-            collectImports(foldProp.targetType, packages)
-        }
-        dtoType.polymorphism?.let { polymorphism ->
-            polymorphism.defaultBranch?.let {
-                collectImports(it.dtoType, packages)
-            }
-            for (branch in polymorphism.typeBranches) {
-                collectImports(branch.dtoType, packages)
-            }
         }
     }
 

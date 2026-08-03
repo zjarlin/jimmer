@@ -9,6 +9,15 @@ import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.AssociationKind
+import site.addzero.lsi.jimmer.AssociationStorageKind
+import site.addzero.lsi.jimmer.FormulaKind
+import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.model.LsiDeclaredType
 
 class DtoGenerationExtensionsTest {
 
@@ -70,6 +79,44 @@ class DtoGenerationExtensionsTest {
         assertEquals(
             listOf("Special"),
             rootPolymorphism(graph).typeBranchesInDeclarationOrder().map(DtoPolymorphicBranch::className),
+        )
+    }
+
+    @Test
+    fun `collects Kotlin by import packages from frozen DTO and immutable graphs`() {
+        val sourceGraph = graph()
+        val baseTypeIdsByDtoTypeId = mapOf(
+            NESTED_TYPE_ID to NESTED_BASE_TYPE_ID,
+            FOCUSED_TYPE_ID to FOCUSED_BASE_TYPE_ID,
+            FOLD_TYPE_ID to FOLD_BASE_TYPE_ID,
+            BRANCH_BODY_TYPE_ID to DEFAULT_BRANCH_BASE_TYPE_ID,
+            SECOND_BRANCH_BODY_TYPE_ID to SPECIAL_BRANCH_BASE_TYPE_ID,
+        )
+        val graph = DtoGraph(
+            source = sourceGraph.source,
+            rootTypeIds = sourceGraph.rootTypeIds,
+            types = sourceGraph.types.map { type ->
+                type.copy(baseTypeId = baseTypeIdsByDtoTypeId[type.id] ?: type.baseTypeId)
+            },
+            props = sourceGraph.props,
+        )
+
+        assertEquals(
+            listOf(
+                "binary.model",
+                "branch.default",
+                "branch.special",
+                "demo",
+                "focused.model",
+                "fold.model",
+                "nested.model",
+                "recursive.model",
+                "source.model",
+            ),
+            graph.typesById
+                .getValue(ROOT_TYPE_ID)
+                .kotlinByImportPackages(graph, importSchema())
+                .toList(),
         )
     }
 
@@ -496,6 +543,109 @@ class DtoGenerationExtensionsTest {
         )
     }
 
+    private fun importSchema(): ImmutableSchema {
+        val bookProps = listOf(
+            immutableProp("nested", NESTED_BASE_TYPE_ID),
+            immutableProp(
+                "recursive",
+                RECURSIVE_TARGET_TYPE_ID,
+                association = false,
+                embedded = true,
+            ),
+            immutableProp("focused", FOCUSED_BASE_TYPE_ID),
+            immutableProp("sourceReference", SOURCE_TARGET_TYPE_ID, association = false),
+            immutableProp("binaryReference", BINARY_TARGET_TYPE_ID),
+            immutableProp("scalar", STRING_TYPE_ID, association = false),
+        )
+        return ImmutableSchema(
+            listOf(
+                immutableType(BASE_TYPE_ID, bookProps),
+                immutableType(NESTED_BASE_TYPE_ID),
+                immutableType(FOCUSED_BASE_TYPE_ID),
+                immutableType(FOLD_BASE_TYPE_ID),
+                immutableType(DEFAULT_BRANCH_BASE_TYPE_ID),
+                immutableType(SPECIAL_BRANCH_BASE_TYPE_ID),
+                immutableType(RECURSIVE_TARGET_TYPE_ID, kind = ImmutableTypeKind.EMBEDDABLE),
+                immutableType(SOURCE_TARGET_TYPE_ID),
+                immutableType(BINARY_TARGET_TYPE_ID),
+            ).sortedBy(ImmutableType::id),
+        )
+    }
+
+    private fun immutableType(
+        id: LsiSymbolId,
+        props: List<ImmutableProp> = emptyList(),
+        kind: ImmutableTypeKind = ImmutableTypeKind.IMMUTABLE,
+    ): ImmutableType {
+        return ImmutableType(
+            id = id,
+            qualifiedName = id.requireTypeQualifiedName(),
+            kind = kind,
+            documentation = null,
+            annotations = emptyList(),
+            typeParameterIds = emptyList(),
+            superTypeIds = emptyList(),
+            props = props,
+            primarySuperTypeId = null,
+            inheritanceRootTypeId = null,
+            inheritanceStrategy = null,
+            joinedTableDissociateAction = null,
+            instantiable = false,
+            discriminatorValue = null,
+            discriminatorPropId = null,
+            idPropId = null,
+            versionPropId = null,
+            logicalDeletedPropId = null,
+            acrossMicroServices = false,
+            microServiceName = "",
+        )
+    }
+
+    private fun immutableProp(
+        name: String,
+        targetTypeId: LsiSymbolId?,
+        association: Boolean = targetTypeId != null,
+        embedded: Boolean = false,
+    ): ImmutableProp {
+        val id = LsiSymbolId.property(BASE_TYPE_ID, name)
+        return ImmutableProp(
+            id = id,
+            declarationId = id,
+            ownerTypeId = BASE_TYPE_ID,
+            declaringTypeId = BASE_TYPE_ID,
+            name = name,
+            documentation = null,
+            type = LsiDeclaredType(targetTypeId ?: STRING_TYPE_ID),
+            annotations = emptyList(),
+            overrideChain = emptyList(),
+            inherited = false,
+            overridden = false,
+            nullable = false,
+            list = false,
+            association = association,
+            embedded = embedded,
+            targetTypeId = targetTypeId,
+            primaryMapping = if (association) PrimaryMapping.ASSOCIATION else PrimaryMapping.SCALAR,
+            primaryAnnotationTypeId = null,
+            defaultContract = null,
+            associationKind = if (association) AssociationKind.MANY_TO_ONE else AssociationKind.NONE,
+            formulaKind = FormulaKind.NONE,
+            mappedBy = null,
+            associationStorage = if (association) {
+                AssociationStorageKind.COLUMN
+            } else {
+                AssociationStorageKind.NONE
+            },
+            transientResolver = null,
+            view = null,
+            genericTarget = false,
+            remote = false,
+            recursive = false,
+            validations = emptyList(),
+            converter = null,
+        )
+    }
+
     private fun rootPolymorphism(graph: DtoGraph): DtoPolymorphism {
         return requireNotNull(graph.typesById.getValue(ROOT_TYPE_ID).polymorphism)
     }
@@ -523,6 +673,15 @@ class DtoGenerationExtensionsTest {
         val REFERENCE_SOURCE = LsiSource.of("contract/src/main/dto/External.dto")
         val LOCATION = LsiLocation(SOURCE, LsiPosition(1, 1))
         val BASE_TYPE_ID = LsiSymbolId.type("demo.Book")
+        val NESTED_BASE_TYPE_ID = LsiSymbolId.type("nested.model.Nested")
+        val FOCUSED_BASE_TYPE_ID = LsiSymbolId.type("focused.model.Focused")
+        val FOLD_BASE_TYPE_ID = LsiSymbolId.type("fold.model.Fold")
+        val DEFAULT_BRANCH_BASE_TYPE_ID = LsiSymbolId.type("branch.default.Default")
+        val SPECIAL_BRANCH_BASE_TYPE_ID = LsiSymbolId.type("branch.special.Special")
+        val RECURSIVE_TARGET_TYPE_ID = LsiSymbolId.type("recursive.model.Node")
+        val SOURCE_TARGET_TYPE_ID = LsiSymbolId.type("source.model.Source")
+        val BINARY_TARGET_TYPE_ID = LsiSymbolId.type("binary.model.Binary")
+        val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
         val ROOT_TYPE_ID = DtoTypeId("dto#root")
         val NESTED_TYPE_ID = DtoTypeId("dto#nested")
         val RECURSIVE_TYPE_ID = DtoTypeId("dto#recursive")
