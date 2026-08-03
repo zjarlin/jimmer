@@ -256,7 +256,7 @@ public class DtoGenerator {
     }
 
     public void generate() {
-        if (dtoType.getPolymorphism() != null) {
+        if (DtoAccessorExtensionsKt.isPolymorphicRoot(lsiDtoType)) {
             generatePolymorphic();
             return;
         }

@@ -185,6 +185,9 @@ class DtoAccessorExtensionsTest {
         assertTrue(merged.requiresInputBuilder(graph))
         assertTrue(polymorphicRoot.requiresHibernateValidatorEnhancement(graph, true))
         assertTrue(merged.requiresHibernateValidatorEnhancement(graph, true))
+        assertTrue(polymorphicRoot.isPolymorphicRoot())
+        assertFalse(body.isPolymorphicRoot())
+        assertFalse(merged.isPolymorphicRoot())
     }
 
     @Test

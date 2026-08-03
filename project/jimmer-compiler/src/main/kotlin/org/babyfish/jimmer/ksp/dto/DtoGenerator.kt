@@ -64,6 +64,7 @@ import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
 import site.addzero.lsi.jimmer.dto.hasEntityBase
 import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
+import site.addzero.lsi.jimmer.dto.isPolymorphicRoot
 import site.addzero.lsi.jimmer.dto.isSealed
 import site.addzero.lsi.jimmer.dto.isSpecification
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
@@ -265,7 +266,7 @@ internal class DtoGenerator private constructor(
     }
 
     fun generate(allFiles: List<KSFile>) {
-        if (dtoType.polymorphism != null) {
+        if (lsiDtoType.isPolymorphicRoot()) {
             generatePolymorphic(allFiles)
             return
         }

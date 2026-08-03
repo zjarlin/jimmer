@@ -103,6 +103,11 @@ fun DtoType.isSealed(): Boolean {
     return DtoModifier.SEALED in modifiers
 }
 
+/** 判断 DTO 是否为多态根类型。 */
+fun DtoType.isPolymorphicRoot(): Boolean {
+    return polymorphism != null
+}
+
 /** 判断 DTO 是否绑定实体基础类型。 */
 fun DtoType.hasEntityBase(immutableSchema: ImmutableSchema): Boolean {
     return immutableBaseType(immutableSchema).kind == ImmutableTypeKind.ENTITY
