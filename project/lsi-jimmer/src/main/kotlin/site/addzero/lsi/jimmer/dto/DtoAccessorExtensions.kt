@@ -93,6 +93,11 @@ fun DtoType.immutableBaseType(immutableSchema: ImmutableSchema): ImmutableType {
     }
 }
 
+/** 判断 DTO 是否为输入类型。 */
+fun DtoType.isInput(): Boolean {
+    return DtoModifier.INPUT in modifiers
+}
+
 /** 判断 DTO 是否为 Specification。 */
 fun DtoType.isSpecification(): Boolean {
     return DtoModifier.SPECIFICATION in modifiers

@@ -1170,7 +1170,7 @@ public class DtoGenerator {
                     "if ($L == null)",
                     prop.getName()
             );
-            if (dtoType.getModifiers().contains(DtoModifier.INPUT) &&
+            if (DtoAccessorExtensionsKt.isInput(lsiDtoType) &&
                     typeName instanceof ParameterizedTypeName &&
                     Constants.LIST_CLASS_NAME.equals(((ParameterizedTypeName) typeName).rawType)) {
                 getterBuilder.addComment(
@@ -1417,7 +1417,7 @@ public class DtoGenerator {
     private void addToEntity(boolean withId) {
         boolean entityBase = DtoAccessorExtensionsKt.hasEntityBase(lsiDtoType, immutableSchema);
         boolean idOverridable =
-                dtoType.getModifiers().contains(DtoModifier.INPUT) &&
+                DtoAccessorExtensionsKt.isInput(lsiDtoType) &&
                         entityBase;
         if (withId && !idOverridable) {
             return;

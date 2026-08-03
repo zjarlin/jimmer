@@ -56,6 +56,7 @@ class DtoAccessorExtensionsTest {
         )
         assertTrue(type.requiresDynamicInputSerialization(graph))
         assertTrue(type.requiresInputBuilder(graph))
+        assertTrue(type.isInput())
     }
 
     @Test
@@ -78,6 +79,7 @@ class DtoAccessorExtensionsTest {
 
         assertFalse(type.requiresDynamicInputSerialization(graph))
         assertFalse(type.requiresInputBuilder(graph))
+        assertFalse(type.isInput())
         assertFailsWith<IllegalArgumentException> {
             type.serializerPropsInDeclarationOrder(graph)
         }
