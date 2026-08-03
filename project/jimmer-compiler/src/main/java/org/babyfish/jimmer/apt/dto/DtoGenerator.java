@@ -532,41 +532,40 @@ public class DtoGenerator {
     private site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch lsiPolymorphicBranch(
             DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch
     ) {
-        site.addzero.lsi.jimmer.dto.DtoPolymorphism polymorphism = lsiDtoType.getPolymorphism();
-        if (polymorphism == null) {
-            throw new DtoException("Frozen DTO type is not polymorphic");
-        }
-        site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch matchedBranch = null;
-        for (site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch candidate : polymorphism.getBranches()) {
-            if (candidate.getClassName().equals(branch.getClassName()) &&
-                    candidate.getKind().name().equals(branch.getKind().name())) {
-                if (matchedBranch != null) {
-                    throw new DtoException(
-                            "Frozen DTO polymorphism contains duplicate generated branch \"" +
-                                    branch.getClassName() + "\""
-                    );
-                }
-                matchedBranch = candidate;
-            }
-        }
-        if (matchedBranch == null) {
+        try {
+            return DtoGenerationExtensionsKt.generatedPolymorphicBranch(
+                    lsiDtoType,
+                    branch.getClassName(),
+                    site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind.valueOf(branch.getKind().name())
+            );
+        } catch (IllegalArgumentException ex) {
             throw new DtoException(
-                    "Frozen DTO polymorphism does not contain generated branch \"" +
-                            branch.getClassName() + "\""
+                    ex.getMessage() != null ? ex.getMessage() :
+                            "Cannot resolve frozen DTO polymorphic branch \"" + branch.getClassName() + "\"",
+                    ex
             );
         }
-        return matchedBranch;
     }
 
     private site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch currentLsiPolymorphicBranchOrNull() {
         if (!polymorphicBranch) {
             return null;
         }
-        if (lsiPolymorphicBranch == null ||
-                !DtoGenerationExtensionsKt.mergedType(lsiPolymorphicBranch, lsiGraph).equals(lsiDtoType)) {
+        if (lsiPolymorphicBranch == null) {
             throw new DtoException("Frozen DTO polymorphic branch does not match generated branch");
         }
-        return lsiPolymorphicBranch;
+        try {
+            return DtoGenerationExtensionsKt.requireGeneratedMergedType(
+                    lsiPolymorphicBranch,
+                    lsiGraph,
+                    lsiDtoType
+            );
+        } catch (IllegalArgumentException ex) {
+            throw new DtoException(
+                    "Frozen DTO polymorphic branch does not match generated branch",
+                    ex
+            );
+        }
     }
 
     public String getSimpleName() {

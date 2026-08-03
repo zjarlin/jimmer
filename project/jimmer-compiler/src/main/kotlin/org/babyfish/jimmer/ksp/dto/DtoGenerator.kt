@@ -57,6 +57,7 @@ import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
+import site.addzero.lsi.jimmer.dto.generatedPolymorphicBranch
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
@@ -71,6 +72,7 @@ import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
 import site.addzero.lsi.jimmer.dto.requiresNonNullDraftWriteGuard
 import site.addzero.lsi.jimmer.dto.requiresDtoPropAccessor
+import site.addzero.lsi.jimmer.dto.requireGeneratedMergedType
 import site.addzero.lsi.jimmer.dto.requiredPropNames
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
 import site.addzero.lsi.jimmer.dto.userProp
@@ -746,17 +748,17 @@ internal class DtoGenerator private constructor(
     private fun lsiPolymorphicBranch(
         branch: DtoPolymorphicBranch<ImmutableType, ImmutableProp>,
     ): site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch {
-        val polymorphism = lsiDtoType.polymorphism
-            ?: throw DtoException("Frozen DTO type is not polymorphic")
-        val matches = polymorphism.branches.filter { candidate ->
-            candidate.className == branch.className && candidate.kind.name == branch.kind.name
-        }
-        if (matches.size != 1) {
+        return try {
+            lsiDtoType.generatedPolymorphicBranch(
+                branch.className,
+                DtoPolymorphicBranchKind.valueOf(branch.kind.name),
+            )
+        } catch (ex: IllegalArgumentException) {
             throw DtoException(
-                "Frozen DTO polymorphism must contain exactly one generated branch \"${branch.className}\""
+                ex.message ?: "Cannot resolve frozen DTO polymorphic branch \"${branch.className}\"",
+                ex,
             )
         }
-        return matches.single()
     }
 
     private fun FileSpec.Builder.addExtensions(includeBlockConverter: Boolean = true) {
@@ -1371,10 +1373,14 @@ internal class DtoGenerator private constructor(
                 return null
             }
             val branch = requireNotNull(lsiPolymorphicBranch)
-            if (branch.mergedTypeId != lsiDtoType.id) {
-                throw DtoException("Frozen DTO polymorphic branch does not match generated branch")
+            return try {
+                branch.requireGeneratedMergedType(lsiGraph, lsiDtoType)
+            } catch (ex: IllegalArgumentException) {
+                throw DtoException(
+                    "Frozen DTO polymorphic branch does not match generated branch",
+                    ex,
+                )
             }
-            return branch
         }
 
     private fun addEntityType() {

@@ -134,6 +134,27 @@ fun DtoPolymorphism.typeBranchesInDeclarationOrder(): List<DtoPolymorphicBranch>
     return branches.filter { branch -> branch.kind == DtoPolymorphicBranchKind.TYPE }
 }
 
+/** 按生成类名和分支类型返回唯一冻结多态分支。 */
+fun DtoType.generatedPolymorphicBranch(
+    className: String,
+    kind: DtoPolymorphicBranchKind,
+): DtoPolymorphicBranch {
+    require(className.isNotBlank()) { "DTO polymorphic branch class name cannot be blank" }
+    val polymorphism = requireNotNull(polymorphism) {
+        "DTO type is not polymorphic: ${id.value}"
+    }
+    val matches = polymorphism.branches.filter { branch ->
+        branch.className == className && branch.kind == kind
+    }
+    require(matches.isNotEmpty()) {
+        "DTO polymorphism does not contain generated branch '$className' of kind ${kind.name}: ${id.value}"
+    }
+    require(matches.size == 1) {
+        "DTO polymorphism contains duplicate generated branch '$className' of kind ${kind.name}: ${id.value}"
+    }
+    return matches.single()
+}
+
 /** 返回多态分支自身的语义类型。 */
 fun DtoPolymorphicBranch.bodyType(graph: DtoGraph): DtoType {
     return graph.typesById.getValue(bodyTypeId)
@@ -142,6 +163,20 @@ fun DtoPolymorphicBranch.bodyType(graph: DtoGraph): DtoType {
 /** 返回多态根与分支合并后的生成语义类型。 */
 fun DtoPolymorphicBranch.mergedType(graph: DtoGraph): DtoType {
     return graph.typesById.getValue(mergedTypeId)
+}
+
+/** 校验冻结分支与当前生成的合并类型一致，并返回该分支。 */
+fun DtoPolymorphicBranch.requireGeneratedMergedType(
+    graph: DtoGraph,
+    generatedType: DtoType,
+): DtoPolymorphicBranch {
+    require(graph.typesById[generatedType.id] == generatedType) {
+        "DTO generated merged type does not belong to this graph: ${generatedType.id.value}"
+    }
+    require(mergedTypeId == generatedType.id) {
+        "DTO polymorphic branch does not match generated merged type: ${generatedType.id.value}"
+    }
+    return this
 }
 
 /** 返回多态分支属性复用的根 DTO 属性；该属性需要生成分支共享的嵌套类型。 */

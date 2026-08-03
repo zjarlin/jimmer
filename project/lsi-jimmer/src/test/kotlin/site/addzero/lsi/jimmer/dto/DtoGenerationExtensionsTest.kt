@@ -74,6 +74,98 @@ class DtoGenerationExtensionsTest {
     }
 
     @Test
+    fun `resolves generated polymorphic branches and validates their merged types`() {
+        val graph = graph()
+        val root = graph.typesById.getValue(ROOT_TYPE_ID)
+        val defaultBranch = root.generatedPolymorphicBranch(
+            "Default",
+            DtoPolymorphicBranchKind.DEFAULT,
+        )
+        val typeBranch = root.generatedPolymorphicBranch(
+            "Special",
+            DtoPolymorphicBranchKind.TYPE,
+        )
+
+        assertEquals(rootPolymorphism(graph).defaultBranch(), defaultBranch)
+        assertEquals(rootPolymorphism(graph).typeBranchesInDeclarationOrder().single(), typeBranch)
+        assertEquals(
+            defaultBranch,
+            defaultBranch.requireGeneratedMergedType(
+                graph,
+                graph.typesById.getValue(BRANCH_MERGED_TYPE_ID),
+            ),
+        )
+        assertEquals(
+            typeBranch,
+            typeBranch.requireGeneratedMergedType(
+                graph,
+                graph.typesById.getValue(SECOND_BRANCH_MERGED_TYPE_ID),
+            ),
+        )
+    }
+
+    @Test
+    fun `rejects missing or kind mismatched generated polymorphic branches`() {
+        val root = graph().typesById.getValue(ROOT_TYPE_ID)
+
+        assertFailsWith<IllegalArgumentException> {
+            root.copy(polymorphism = null).generatedPolymorphicBranch(
+                "Default",
+                DtoPolymorphicBranchKind.DEFAULT,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            root.generatedPolymorphicBranch("Missing", DtoPolymorphicBranchKind.DEFAULT)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            root.generatedPolymorphicBranch("Default", DtoPolymorphicBranchKind.TYPE)
+        }
+    }
+
+    @Test
+    fun `rejects duplicate generated polymorphic branches`() {
+        val graph = graph()
+        val root = graph.typesById.getValue(ROOT_TYPE_ID)
+        val typeBranch = rootPolymorphism(graph).typeBranchesInDeclarationOrder().single()
+        val duplicateRoot = root.copy(
+            polymorphism = DtoPolymorphism(
+                exhaustive = true,
+                branches = rootPolymorphism(graph).branches + typeBranch.copy(
+                    bodyTypeId = DtoTypeId("dto#duplicate-branch-body"),
+                    mergedTypeId = DtoTypeId("dto#duplicate-branch-merged"),
+                ),
+            ),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            duplicateRoot.generatedPolymorphicBranch("Special", DtoPolymorphicBranchKind.TYPE)
+        }
+    }
+
+    @Test
+    fun `rejects generated polymorphic branch with mismatched merged type`() {
+        val graph = graph()
+        val root = graph.typesById.getValue(ROOT_TYPE_ID)
+        val defaultBranch = root.generatedPolymorphicBranch(
+            "Default",
+            DtoPolymorphicBranchKind.DEFAULT,
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            defaultBranch.requireGeneratedMergedType(
+                graph,
+                graph.typesById.getValue(SECOND_BRANCH_MERGED_TYPE_ID),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            defaultBranch.requireGeneratedMergedType(
+                graph,
+                graph.typesById.getValue(BRANCH_MERGED_TYPE_ID).copy(name = "ForeignMergedType"),
+            )
+        }
+    }
+
+    @Test
     fun `promotes only root properties with shared generated targets`() {
         val graph = graph()
         val root = graph.typesById.getValue(ROOT_TYPE_ID)
