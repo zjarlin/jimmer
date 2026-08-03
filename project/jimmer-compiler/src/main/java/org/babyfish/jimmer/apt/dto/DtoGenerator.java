@@ -391,7 +391,7 @@ public class DtoGenerator {
         typeBuilder = TypeSpec
                 .interfaceBuilder(simpleName)
                 .addModifiers(Modifier.PUBLIC);
-        if (dtoType.getModifiers().contains(DtoModifier.SEALED)) {
+        if (DtoAccessorExtensionsKt.isSealed(lsiDtoType)) {
             typeBuilder.addModifiers(sealedModifier());
         }
         typeBuilder.addSuperinterface(

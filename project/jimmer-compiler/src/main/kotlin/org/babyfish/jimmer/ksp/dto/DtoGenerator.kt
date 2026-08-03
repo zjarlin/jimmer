@@ -64,6 +64,7 @@ import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
 import site.addzero.lsi.jimmer.dto.hasEntityBase
 import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
+import site.addzero.lsi.jimmer.dto.isSealed
 import site.addzero.lsi.jimmer.dto.isSpecification
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.kotlinByImportPackages
@@ -379,7 +380,7 @@ internal class DtoGenerator private constructor(
         val builder = TypeSpec
             .interfaceBuilder(innerClassName ?: dtoType.name!!)
             .apply {
-                if (dtoType.modifiers.contains(DtoModifier.SEALED)) {
+                if (lsiDtoType.isSealed()) {
                     addModifiers(KModifier.SEALED)
                 }
             }

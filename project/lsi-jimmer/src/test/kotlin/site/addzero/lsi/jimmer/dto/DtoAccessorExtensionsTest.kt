@@ -240,6 +240,18 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `identifies sealed polymorphic roots from frozen DTO modifiers`() {
+        val dtoType = graph(visibleDynamic = false).types.single()
+
+        assertFalse(dtoType.isSealed())
+        assertTrue(
+            dtoType.copy(
+                modifiers = dtoType.modifiers + DtoModifier.SEALED,
+            ).isSealed(),
+        )
+    }
+
+    @Test
     fun `identifies nested specification fragments from frozen DTO semantics`() {
         val dtoType = graph(visibleDynamic = false).types.single()
         val specification = dtoType.copy(modifiers = setOf(DtoModifier.SPECIFICATION))

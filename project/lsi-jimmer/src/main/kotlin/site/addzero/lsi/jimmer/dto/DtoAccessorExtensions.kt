@@ -98,6 +98,11 @@ fun DtoType.isSpecification(): Boolean {
     return DtoModifier.SPECIFICATION in modifiers
 }
 
+/** 判断 DTO 是否声明为密封多态根。 */
+fun DtoType.isSealed(): Boolean {
+    return DtoModifier.SEALED in modifiers
+}
+
 /** 判断 DTO 是否绑定实体基础类型。 */
 fun DtoType.hasEntityBase(immutableSchema: ImmutableSchema): Boolean {
     return immutableBaseType(immutableSchema).kind == ImmutableTypeKind.ENTITY
