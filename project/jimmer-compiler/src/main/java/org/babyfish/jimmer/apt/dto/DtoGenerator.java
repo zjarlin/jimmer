@@ -15,6 +15,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseValueRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoEqualityRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoFoldValueRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
@@ -1246,20 +1247,23 @@ public class DtoGenerator {
         for (AbstractProp abstractProp : dtoType.getProps()) {
             if (abstractProp instanceof FoldProp<?, ?>) {
                 FoldProp<ImmutableType, ImmutableProp> foldProp = asFoldProp(abstractProp);
-                if (foldProp.getNullGuardProp() != null) {
-                    builder.addStatement(
-                            "this.$L = $L.get(base) != null ? new $T(base) : null",
-                            foldProp.getName(),
-                            foldNullGuardAccessorFieldName(foldProp),
-                            renderGeneratedValueType(foldProp)
-                    );
-                } else {
-                    builder.addStatement(
-                            "this.$L = new $T(base)",
-                            foldProp.getName(),
-                            renderGeneratedValueType(foldProp)
-                    );
-                }
+                builder.addStatement(
+                        "this.$L = $L",
+                        foldProp.getName(),
+                        AptDtoFoldValueRenderer.render(
+                                DtoGenerationExtensionsKt.foldProp(
+                                        lsiDtoType,
+                                        lsiGraph,
+                                        foldProp.getName()
+                                ),
+                                lsiGraph,
+                                lsiWorkspace,
+                                "base",
+                                foldNullGuardAccessorFieldName(foldProp),
+                                this::generatedTargetType,
+                                generatedDtoTypeIdsByTypeName.keySet()
+                        )
+                );
                 continue;
             }
             if (!(abstractProp instanceof DtoProp<?, ?>)) {

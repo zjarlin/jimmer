@@ -13,6 +13,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoFoldValueRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
@@ -1067,16 +1068,18 @@ internal class DtoGenerator private constructor(
                         .apply {
                             if (prop is FoldProp<*, *>) {
                                 val foldProp = prop.asFoldProp()
-                                if (foldProp.nullGuardProp != null) {
-                                    add(
-                                        "%N.get<%T>(base)?.let { %T(base) }",
-                                        foldNullGuardAccessorFieldName(foldProp),
-                                        ANY.copy(nullable = true),
-                                        propTypeName(foldProp).copy(nullable = false)
-                                    )
-                                } else {
-                                    add("%T(base)", propTypeName(foldProp).copy(nullable = false))
-                                }
+                                add(
+                                    "%L",
+                                    KspDtoFoldValueRenderer.render(
+                                        prop = lsiDtoType.foldProp(lsiGraph, foldProp.name),
+                                        graph = lsiGraph,
+                                        workspace = workspace,
+                                        baseParameterName = "base",
+                                        nullGuardAccessorName = foldNullGuardAccessorFieldName(foldProp),
+                                        generatedTargetType = ::generatedTargetType,
+                                        generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
+                                    ),
+                                )
                             } else if (prop is DtoProp<*, *>) {
                                 val dtoProp = prop.asDtoProp()
                                 val lsiProp = lsiDtoType.baseProp(lsiGraph, dtoProp.name)
