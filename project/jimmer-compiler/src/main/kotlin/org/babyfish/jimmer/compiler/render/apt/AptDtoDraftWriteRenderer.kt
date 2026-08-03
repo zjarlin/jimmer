@@ -7,6 +7,8 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoProp
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
@@ -22,6 +24,8 @@ internal object AptDtoDraftWriteRenderer {
         accessorName: String,
         draftName: String,
         valueName: String,
+        baseValueWriterName: String,
+        generatedTargetType: (DtoProp) -> LsiDeclaredType,
     ): CodeBlock {
         val codeBlock = prop.toDraftWritePoetCodeBlock(
             graph = graph,
@@ -30,6 +34,8 @@ internal object AptDtoDraftWriteRenderer {
             accessorName = accessorName,
             draftName = draftName,
             valueName = valueName,
+            baseValueWriterName = baseValueWriterName,
+            generatedTargetType = generatedTargetType,
         )
         return LsiJavaPoetRenderer().renderCodeBlock(
             codeBlock = codeBlock,

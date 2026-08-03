@@ -1345,28 +1345,19 @@ internal class DtoGenerator private constructor(
         valueName: String,
     ) {
         val baseProp = prop.toTailProp().baseProp
-        if (
-            lsiProp.usesDirectBaseAccess(
+        addCode(
+            KspDtoDraftWriteRenderer.render(
+                prop = lsiProp,
                 graph = lsiGraph,
                 immutableSchema = immutableSchema,
-                targetLanguage = LsiLanguage.KOTLIN,
+                workspace = workspace,
+                accessorName = accessorFieldName(prop.name),
+                draftName = "_draft",
+                valueName = valueName,
+                baseValueWriterName = baseProp.name,
                 generatedTargetType = ::generatedTargetType,
-            )
-        ) {
-            addStatement("_draft.%N = %N", baseProp.name, valueName)
-        } else {
-            addCode(
-                KspDtoDraftWriteRenderer.render(
-                    prop = lsiProp,
-                    graph = lsiGraph,
-                    immutableSchema = immutableSchema,
-                    workspace = workspace,
-                    accessorName = accessorFieldName(prop.name),
-                    draftName = "_draft",
-                    valueName = valueName,
-                ),
-            )
-        }
+            ),
+        )
     }
 
     private fun polymorphicInputDiscriminatorProp(): DtoBaseProp? {

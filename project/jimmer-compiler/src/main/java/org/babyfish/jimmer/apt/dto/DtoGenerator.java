@@ -1363,27 +1363,19 @@ public class DtoGenerator {
             } else if (fuzzy) {
                 builder.beginControlFlow("if (this.$L != null)", prop.getName());
             }
-            if (DtoAccessorExtensionsKt.usesDirectBaseAccess(
-                    lsiProp,
-                    lsiGraph,
-                    immutableSchema,
-                    LsiLanguage.JAVA,
-                    this::generatedTargetType
-            )) {
-                builder.addStatement("__draft.$L(this.$L)", prop.getBaseProp().getSetterName(), prop.getName());
-            } else {
-                builder.addCode(
-                        AptDtoDraftWriteRenderer.render(
-                                lsiProp,
-                                lsiGraph,
-                                immutableSchema,
-                                lsiWorkspace,
-                                accessorFieldName(prop.getName()),
-                                "__draft",
-                                prop.getName()
-                        )
-                );
-            }
+            builder.addCode(
+                    AptDtoDraftWriteRenderer.render(
+                            lsiProp,
+                            lsiGraph,
+                            immutableSchema,
+                            lsiWorkspace,
+                            accessorFieldName(prop.getName()),
+                            "__draft",
+                            prop.getName(),
+                            prop.getBaseProp().getSetterName(),
+                            this::generatedTargetType
+                    )
+            );
             if (stateFieldName != null || fuzzy) {
                 builder.endControlFlow();
             }

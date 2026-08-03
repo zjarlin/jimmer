@@ -5,11 +5,14 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.hasEntityAssociationListDraftTarget
 import site.addzero.lsi.jimmer.dto.requiresEmptyAssociationListDraftFallback
+import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetCodeBlock
+import site.addzero.lsi.poet.LsiPoetCodeBuilder
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -22,46 +25,106 @@ internal fun DtoBaseProp.toDraftWritePoetCodeBlock(
     accessorName: String,
     draftName: String,
     valueName: String,
+    baseValueWriterName: String,
+    generatedTargetType: (DtoProp) -> LsiDeclaredType,
 ): LsiPoetCodeBlock {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO draft write requires Java or Kotlin target language: $targetLanguage"
     }
-    val emptyListFallback = when (targetLanguage) {
-        LsiLanguage.JAVA -> hasEntityAssociationListDraftTarget(graph, immutableSchema)
-        LsiLanguage.KOTLIN -> requiresEmptyAssociationListDraftFallback(graph, immutableSchema)
-        LsiLanguage.UNKNOWN -> error("Unreachable")
-    }
+    val direct = usesDirectBaseAccess(
+        graph = graph,
+        immutableSchema = immutableSchema,
+        targetLanguage = targetLanguage,
+        generatedTargetType = generatedTargetType,
+    )
     return LsiPoetCodeBlock.build {
         statement {
-            name(accessorName)
-            text(".set(")
-            name(draftName)
-            text(", ")
-            when (targetLanguage) {
-                LsiLanguage.JAVA -> {
-                    text("this.")
-                    name(valueName)
-                    if (emptyListFallback) {
-                        text(" != null ? this.")
-                        name(valueName)
-                        text(" : ")
-                        type(COLLECTIONS_TYPE)
-                        text(".emptyList()")
-                    }
-                }
-                LsiLanguage.KOTLIN -> {
-                    name(valueName)
-                    if (emptyListFallback) {
-                        text(".")
-                        topLevelMember(KOTLIN_COLLECTIONS_PACKAGE, "orEmpty", extension = true)
-                        text("()")
-                    }
-                }
-                LsiLanguage.UNKNOWN -> error("Unreachable")
+            if (direct) {
+                directDraftWrite(
+                    targetLanguage = targetLanguage,
+                    draftName = draftName,
+                    valueName = valueName,
+                    baseValueWriterName = baseValueWriterName,
+                )
+            } else {
+                accessorDraftWrite(
+                    prop = this@toDraftWritePoetCodeBlock,
+                    graph = graph,
+                    immutableSchema = immutableSchema,
+                    targetLanguage = targetLanguage,
+                    accessorName = accessorName,
+                    draftName = draftName,
+                    valueName = valueName,
+                )
             }
-            text(")")
         }
     }
+}
+
+private fun LsiPoetCodeBuilder.directDraftWrite(
+    targetLanguage: LsiLanguage,
+    draftName: String,
+    valueName: String,
+    baseValueWriterName: String,
+) {
+    name(draftName)
+    text(".")
+    name(baseValueWriterName)
+    when (targetLanguage) {
+        LsiLanguage.JAVA -> {
+            text("(this.")
+            name(valueName)
+            text(")")
+        }
+        LsiLanguage.KOTLIN -> {
+            text(" = ")
+            name(valueName)
+        }
+        LsiLanguage.UNKNOWN -> error("Unreachable")
+    }
+}
+
+private fun LsiPoetCodeBuilder.accessorDraftWrite(
+    prop: DtoBaseProp,
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+    accessorName: String,
+    draftName: String,
+    valueName: String,
+) {
+    val emptyListFallback = when (targetLanguage) {
+        LsiLanguage.JAVA -> prop.hasEntityAssociationListDraftTarget(graph, immutableSchema)
+        LsiLanguage.KOTLIN -> prop.requiresEmptyAssociationListDraftFallback(graph, immutableSchema)
+        LsiLanguage.UNKNOWN -> error("Unreachable")
+    }
+    name(accessorName)
+    text(".set(")
+    name(draftName)
+    text(", ")
+    when (targetLanguage) {
+        LsiLanguage.JAVA -> {
+            text("this.")
+            name(valueName)
+            if (emptyListFallback) {
+                text(" != null ? this.")
+                name(valueName)
+                text(" : ")
+                type(COLLECTIONS_TYPE)
+                text(".emptyList()")
+            }
+        }
+        LsiLanguage.KOTLIN -> {
+            name(valueName)
+            if (emptyListFallback) {
+                text(".")
+                topLevelMember(KOTLIN_COLLECTIONS_PACKAGE, "orEmpty", extension = true)
+                text("()")
+            }
+        }
+        LsiLanguage.UNKNOWN -> error("Unreachable")
+    }
+    text(")")
 }
 
 /** 为 DTO Draft 写回代码解析完整源码类型名。 */

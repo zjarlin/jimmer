@@ -30,6 +30,14 @@ import site.addzero.lsi.model.LsiWorkspace
 class DtoDraftWritePoetTest {
 
     @Test
+    fun `renders direct scalar draft write for both target languages`() {
+        val direct = fixture(DtoModifier.STATIC, nullable = false, list = false, direct = true)
+
+        assertEquals("__draft.setName(this.name);\n", direct.renderApt())
+        assertEquals("_draft.name = name\n", direct.renderKsp())
+    }
+
+    @Test
     fun `renders platform-specific entity list fallback boundaries`() {
         val dynamicList = fixture(DtoModifier.DYNAMIC, nullable = true, list = true)
         assertEquals(
@@ -68,24 +76,27 @@ class DtoDraftWritePoetTest {
         modifier: DtoModifier,
         nullable: Boolean,
         list: Boolean,
+        direct: Boolean = false,
     ): Fixture {
+        val propName = if (direct) "name" else "authorIds"
+        val immutablePropId = LsiSymbolId.property(IMMUTABLE_TYPE_ID, if (direct) "name" else "authors")
         val dtoProp = DtoBaseProp(
             id = DTO_PROP_ID,
             ownerTypeId = DTO_TYPE_ID,
-            name = "authorIds",
-            alias = "authorIds",
+            name = propName,
+            alias = propName,
             nullable = nullable,
             annotations = emptyList(),
             documentation = null,
             aliasLocation = LOCATION,
             baseLocation = LOCATION,
-            baseProps = listOf(DtoBasePropBinding("authors", IMMUTABLE_PROP_ID)),
-            basePath = "authors",
+            baseProps = listOf(DtoBasePropBinding(if (direct) "name" else "authors", immutablePropId)),
+            basePath = propName,
             nextPropId = null,
             tailPropId = DTO_PROP_ID,
             baseNullable = false,
             inputModifier = modifier,
-            functionName = "id",
+            functionName = if (direct) null else "id",
             targetTypeId = null,
             enumType = null,
             config = null,
@@ -114,32 +125,32 @@ class DtoDraftWritePoetTest {
             props = listOf(dtoProp),
         )
         val immutableProp = ImmutableProp(
-            id = IMMUTABLE_PROP_ID,
-            declarationId = IMMUTABLE_PROP_ID,
+            id = immutablePropId,
+            declarationId = immutablePropId,
             ownerTypeId = IMMUTABLE_TYPE_ID,
             declaringTypeId = IMMUTABLE_TYPE_ID,
-            name = "authors",
+            name = if (direct) "name" else "authors",
             documentation = null,
-            type = LsiDeclaredType(LsiSymbolId.type("demo.Author")),
+            type = LsiDeclaredType(if (direct) LsiSymbolId.type("java.lang.String") else LsiSymbolId.type("demo.Author")),
             annotations = emptyList(),
             overrideChain = emptyList(),
             inherited = false,
             overridden = false,
             nullable = false,
-            list = list,
-            association = true,
+            list = if (direct) false else list,
+            association = !direct,
             embedded = false,
             targetTypeId = null,
-            primaryMapping = PrimaryMapping.ASSOCIATION,
+            primaryMapping = if (direct) PrimaryMapping.SCALAR else PrimaryMapping.ASSOCIATION,
             primaryAnnotationTypeId = null,
             defaultContract = null,
-            associationKind = if (list) AssociationKind.MANY_TO_MANY else AssociationKind.MANY_TO_ONE,
+            associationKind = if (direct) AssociationKind.NONE else if (list) AssociationKind.MANY_TO_MANY else AssociationKind.MANY_TO_ONE,
             formulaKind = FormulaKind.NONE,
             mappedBy = null,
-            associationStorage = if (list) AssociationStorageKind.MIDDLE_TABLE else AssociationStorageKind.COLUMN,
+            associationStorage = if (direct) AssociationStorageKind.NONE else if (list) AssociationStorageKind.MIDDLE_TABLE else AssociationStorageKind.COLUMN,
             transientResolver = null,
             view = null,
-            genericTarget = true,
+            genericTarget = !direct,
             remote = false,
             recursive = false,
             validations = emptyList(),
@@ -176,9 +187,11 @@ class DtoDraftWritePoetTest {
             graph = graph,
             immutableSchema = schema,
             workspace = LsiWorkspace.EMPTY,
-            accessorName = "AUTHOR_IDS_ACCESSOR",
+            accessorName = if (prop.name == "name") "NAME_ACCESSOR" else "AUTHOR_IDS_ACCESSOR",
             draftName = "__draft",
-            valueName = "authorIds",
+            valueName = prop.name,
+            baseValueWriterName = if (prop.name == "name") "setName" else "setAuthors",
+            generatedTargetType = { LsiDeclaredType(LsiSymbolId.type("demo.AuthorDto")) },
         ).toString()
     }
 
@@ -188,9 +201,11 @@ class DtoDraftWritePoetTest {
             graph = graph,
             immutableSchema = schema,
             workspace = LsiWorkspace.EMPTY,
-            accessorName = "AUTHOR_IDS_ACCESSOR",
+            accessorName = if (prop.name == "name") "NAME_ACCESSOR" else "AUTHOR_IDS_ACCESSOR",
             draftName = "_draft",
-            valueName = "authorIds",
+            valueName = prop.name,
+            baseValueWriterName = if (prop.name == "name") "name" else "authors",
+            generatedTargetType = { LsiDeclaredType(LsiSymbolId.type("demo.AuthorDto")) },
         ).toString()
     }
 
@@ -204,7 +219,6 @@ class DtoDraftWritePoetTest {
         val SOURCE = LsiSource.of("src/main/dto/demo/Book.dto", LsiLanguage.UNKNOWN)
         val LOCATION = LsiLocation(SOURCE, LsiPosition(1, 1), LsiPosition(1, 1))
         val IMMUTABLE_TYPE_ID = LsiSymbolId.type("demo.Book")
-        val IMMUTABLE_PROP_ID = LsiSymbolId.property(IMMUTABLE_TYPE_ID, "authors")
         val DTO_TYPE_ID = DtoTypeId("demo.dto.BookInput#root")
         val DTO_PROP_ID = DtoPropId("demo.dto.BookInput#prop:authorIds")
     }
