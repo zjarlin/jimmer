@@ -710,6 +710,56 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `derives Java setters from final DTO value semantics`() {
+        assertEquals("setActive", valueSetterName("active"))
+        assertEquals("setEnabled", valueSetterName("isEnabled"))
+        assertEquals("setEnabled", valueSetterName("enabled", immutableType = STRING_TYPE))
+        assertEquals("setIsEnabled", valueSetterName("isEnabled", nullable = true))
+        assertEquals("setURL", valueSetterName("URL", immutableType = STRING_TYPE))
+        assertEquals("set_1", valueSetterName("_1", immutableType = STRING_TYPE))
+        assertEquals(
+            "setNullableType",
+            valueSetterName(
+                name = "nullableType",
+                immutableType = BOOLEAN_TYPE.copy(nullability = LsiNullability.NULLABLE),
+            ),
+        )
+        assertEquals(
+            "setConverted",
+            valueSetterName(
+                name = "converted",
+                converter = converter(STRING_TYPE),
+            ),
+        )
+        assertEquals(
+            "setConvertedBoolean",
+            valueSetterName(
+                name = "convertedBoolean",
+                converter = converter(BOOLEAN_TYPE),
+            ),
+        )
+        assertEquals(
+            "setNullableConverted",
+            valueSetterName(
+                name = "nullableConverted",
+                converter = converter(BOOLEAN_TYPE, targetNullable = true),
+            ),
+        )
+        assertEquals(
+            "setBooleanList",
+            valueSetterName(
+                name = "booleanList",
+                immutableList = true,
+            ),
+        )
+        val nullCheck = baseProp(name = "isMissing", baseName = "name")
+            .copy(functionName = "null")
+        val nullCheckGraph = singlePropGraph(nullCheck)
+        val nullCheckSchema = immutableSchema(immutableProp("name", STRING_TYPE))
+        assertEquals("setMissing", nullCheck.javaValueSetterName(nullCheckGraph, nullCheckSchema))
+    }
+
+    @Test
     fun `derives Hibernate Validator getter names from final target language semantics`() {
         fun assertBaseGetterNames(
             name: String,
@@ -1241,6 +1291,9 @@ class DtoAccessorExtensionsTest {
         assertFailsWith<IllegalArgumentException> {
             prop.dtoValueAccessorName(LsiLanguage.JAVA, graph, schema)
         }
+        assertFailsWith<IllegalArgumentException> {
+            prop.javaValueSetterName(graph, schema)
+        }
 
         val consistentProp = prop.copy(
             baseProps = listOf(
@@ -1261,6 +1314,7 @@ class DtoAccessorExtensionsTest {
                 consistentSchema,
             ),
         )
+        assertEquals("setMixed", consistentProp.javaValueSetterName(consistentGraph, consistentSchema))
     }
 
     @Test
@@ -1270,9 +1324,13 @@ class DtoAccessorExtensionsTest {
         val schema = immutableSchema(immutableProp("value", STRING_TYPE))
 
         assertEquals("getValue", prop.dtoValueAccessorName(LsiLanguage.JAVA, graph, schema))
+        assertEquals("setValue", prop.javaValueSetterName(graph, schema))
         assertEquals("value", prop.dtoValueAccessorName(LsiLanguage.KOTLIN, graph, schema))
         assertFailsWith<IllegalArgumentException> {
             prop.dtoValueAccessorName(LsiLanguage.UNKNOWN, graph, schema)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            prop.copy(name = "foreign").javaValueSetterName(graph, schema)
         }
     }
 
@@ -2043,6 +2101,26 @@ class DtoAccessorExtensionsTest {
             ),
         )
         return prop.dtoValueAccessorName(LsiLanguage.JAVA, graph, schema)
+    }
+
+    private fun valueSetterName(
+        name: String,
+        nullable: Boolean = false,
+        immutableType: LsiTypeRef = BOOLEAN_TYPE,
+        immutableList: Boolean = false,
+        converter: ImmutableConverter? = null,
+    ): String {
+        val prop = baseProp(name = name, nullable = nullable)
+        val graph = singlePropGraph(prop)
+        val schema = immutableSchema(
+            immutableProp(
+                name = name,
+                type = immutableType,
+                list = immutableList,
+                converter = converter,
+            ),
+        )
+        return prop.javaValueSetterName(graph, schema)
     }
 
     private fun singlePropGraph(

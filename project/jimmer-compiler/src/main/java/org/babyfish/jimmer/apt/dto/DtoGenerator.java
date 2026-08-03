@@ -1074,7 +1074,14 @@ public class DtoGenerator {
         site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
                 DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
         MethodSpec.Builder getterBuilder = MethodSpec
-                .methodBuilder(getterName(prop))
+                .methodBuilder(
+                        DtoAccessorExtensionsKt.dtoValueAccessorName(
+                                lsiProp,
+                                LsiLanguage.JAVA,
+                                lsiGraph,
+                                immutableSchema
+                        )
+                )
                 .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
                 .returns(typeName);
         AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiProp, lsiGraph);
@@ -1104,10 +1111,19 @@ public class DtoGenerator {
         TypeName typeName = renderGeneratedValueType(prop);
         site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
                 DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
-        String getterName = getterName(prop);
-        String setterName = setterName(prop);
+        String getterName = DtoAccessorExtensionsKt.dtoValueAccessorName(
+                lsiProp,
+                LsiLanguage.JAVA,
+                lsiGraph,
+                immutableSchema
+        );
+        String setterName = DtoAccessorExtensionsKt.javaValueSetterName(
+                lsiProp,
+                lsiGraph,
+                immutableSchema
+        );
         String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                lsiProp,
                 lsiGraph,
                 LsiLanguage.JAVA
         );
@@ -1636,33 +1652,6 @@ public class DtoGenerator {
 
     private String foldNullGuardAccessorFieldName(FoldProp<ImmutableType, ImmutableProp> prop) {
         return StringUtil.snake(prop.getName() + "NullGuardAccessor", StringUtil.SnakeCase.UPPER);
-    }
-
-    String getterName(AbstractProp prop) {
-        TypeName typeName = renderGeneratedValueType(prop);
-        String suffix = prop.getAlias();
-        if (suffix.startsWith("is") &&
-                suffix.length() > 2 &&
-                Character.isUpperCase(suffix.charAt(2)) &&
-                typeName.equals(TypeName.BOOLEAN)) {
-            suffix = suffix.substring(2);
-        }
-        return StringUtil.identifier(
-                typeName.equals(TypeName.BOOLEAN) ? "is" : "get",
-                suffix
-        );
-    }
-
-    private String setterName(AbstractProp prop) {
-        TypeName typeName = renderGeneratedValueType(prop);
-        String suffix = prop.getAlias();
-        if (suffix.startsWith("is") &&
-                suffix.length() > 2 &&
-                Character.isUpperCase(suffix.charAt(2)) &&
-                typeName.equals(TypeName.BOOLEAN)) {
-            suffix = suffix.substring(2);
-        }
-        return StringUtil.identifier("set", suffix);
     }
 
     private static int docKeyIndex(int originalIndex, String doc, String key) {

@@ -465,6 +465,14 @@ fun DtoProp.dtoValueAccessorName(
     }
 }
 
+/** 返回 Java 修改 DTO 属性值时使用的 setter 方法名。 */
+fun DtoProp.javaValueSetterName(
+    graph: DtoGraph,
+    immutableSchema: ImmutableSchema,
+): String {
+    return javaValueSetterName(hasPrimitiveBooleanValue(graph, immutableSchema))
+}
+
 /** 判断 DTO 属性的最终值是否为非空原生 Boolean。 */
 fun DtoProp.hasPrimitiveBooleanValue(
     graph: DtoGraph,
@@ -539,12 +547,18 @@ private fun DtoBaseProp.hasPrimitiveBooleanBaseValue(
 }
 
 private fun DtoProp.javaValueAccessorName(primitiveBoolean: Boolean): String {
-    val suffix = if (primitiveBoolean && name.hasJavaIsPrefix()) {
-        name.substring(2)
-    } else {
-        name
-    }
-    return dtoIdentifier(if (primitiveBoolean) "is" else "get", suffix)
+    return dtoIdentifier(
+        if (primitiveBoolean) "is" else "get",
+        javaValueAccessorSuffix(primitiveBoolean),
+    )
+}
+
+private fun DtoProp.javaValueSetterName(primitiveBoolean: Boolean): String {
+    return dtoIdentifier("set", javaValueAccessorSuffix(primitiveBoolean))
+}
+
+private fun DtoProp.javaValueAccessorSuffix(primitiveBoolean: Boolean): String {
+    return if (primitiveBoolean && name.hasJavaIsPrefix()) name.substring(2) else name
 }
 
 private fun String.hasJavaIsPrefix(): Boolean {
