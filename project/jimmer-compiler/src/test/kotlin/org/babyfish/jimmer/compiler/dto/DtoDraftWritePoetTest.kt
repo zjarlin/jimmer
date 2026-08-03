@@ -204,7 +204,6 @@ class DtoDraftWritePoetTest {
             accessorName = if (prop.name == "name") "NAME_ACCESSOR" else "AUTHOR_IDS_ACCESSOR",
             draftName = "_draft",
             valueName = prop.name,
-            baseValueWriterName = if (prop.name == "name") "name" else "authors",
             generatedTargetType = { LsiDeclaredType(LsiSymbolId.type("demo.AuthorDto")) },
         ).toString()
     }

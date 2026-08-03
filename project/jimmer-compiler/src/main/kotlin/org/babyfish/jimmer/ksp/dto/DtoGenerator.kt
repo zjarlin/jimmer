@@ -41,7 +41,7 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
-import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
+import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
@@ -62,12 +62,14 @@ import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
+import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
 import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.kotlinByImportPackages
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.nullGuardProp
 import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
+import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.requiresHibernateValidatorEnhancement
 import site.addzero.lsi.jimmer.dto.requiresInputBuilder
@@ -1271,37 +1273,36 @@ internal class DtoGenerator private constructor(
                                 )
                             )
                         }
-                    for (prop in dtoType.props) {
+                    for (prop in lsiDtoType.propsInDeclarationOrder(lsiGraph)) {
                         when (prop) {
-                            is FoldProp<*, *> -> {
+                            is DtoFoldProp -> {
                                 addCode(
                                     KspDtoFoldDraftApplyRenderer.render(
-                                        prop = lsiDtoType.foldProp(lsiGraph, prop.name),
+                                        prop = prop,
                                         draftParameterName = "_draft",
                                     ),
                                 )
                             }
 
-                            is DtoProp<*, *> -> {
-                                val dtoProp = prop.asDtoProp()
-                                val lsiProp = lsiDtoType.baseProp(lsiGraph, dtoProp.name)
-                                if (lsiProp.isDraftWriteSkipped(lsiGraph, immutableSchema, LsiLanguage.KOTLIN)) {
+                            is DtoBaseProp -> {
+                                if (prop.isDraftWriteSkipped(lsiGraph, immutableSchema, LsiLanguage.KOTLIN)) {
                                     continue
                                 }
-                                val baseProp = dtoProp.toTailProp().baseProp
-                                val statePropName = lsiProp
+                                val statePropName = prop
                                     .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
-                                val nonNullGuard = lsiProp.requiresNonNullDraftWriteGuard(lsiGraph)
+                                val nonNullGuard = prop.requiresNonNullDraftWriteGuard(lsiGraph)
                                 if (statePropName != null) {
                                     beginControlFlow("if (%N)", statePropName)
                                 } else if (nonNullGuard) {
-                                    beginControlFlow("if (%N != null)", dtoProp.name)
+                                    beginControlFlow("if (%N != null)", prop.name)
                                 }
-                                addDraftAssignment(dtoProp, lsiProp, dtoProp.name)
+                                addDraftAssignment(prop, prop.name)
                                 if (statePropName != null || nonNullGuard) {
                                     endControlFlow()
                                 }
                             }
+
+                            is DtoUserProp -> Unit
                         }
                     }
                 }
@@ -1310,21 +1311,18 @@ internal class DtoGenerator private constructor(
     }
 
     private fun FunSpec.Builder.addDraftAssignment(
-        prop: DtoProp<ImmutableType, ImmutableProp>,
-        lsiProp: DtoBaseProp,
+        prop: DtoBaseProp,
         valueName: String,
     ) {
-        val baseProp = prop.toTailProp().baseProp
         addCode(
             KspDtoDraftWriteRenderer.render(
-                prop = lsiProp,
+                prop = prop,
                 graph = lsiGraph,
                 immutableSchema = immutableSchema,
                 workspace = workspace,
                 accessorName = accessorFieldName(prop.name),
                 draftName = "_draft",
                 valueName = valueName,
-                baseValueWriterName = baseProp.name,
                 generatedTargetType = ::generatedTargetType,
             ),
         )

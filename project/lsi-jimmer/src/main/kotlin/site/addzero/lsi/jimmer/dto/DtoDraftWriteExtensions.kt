@@ -24,3 +24,8 @@ fun DtoBaseProp.isDraftWriteSkipped(
     return nextPropId == null &&
         tailProp(graph).boundImmutableProp(graph, immutableSchema).primaryMapping == PrimaryMapping.DISCRIMINATOR
 }
+
+/** 返回 Kotlin Draft 直接写回最终基础属性时使用的成员名。 */
+fun DtoBaseProp.kotlinDraftValueWriterName(graph: DtoGraph): String {
+    return tailProp(graph).baseProps.first().name
+}

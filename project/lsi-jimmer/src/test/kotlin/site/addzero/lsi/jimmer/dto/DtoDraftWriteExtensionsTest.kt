@@ -1,7 +1,9 @@
 package site.addzero.lsi.jimmer.dto
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
@@ -50,6 +52,19 @@ class DtoDraftWriteExtensionsTest {
         val flat = fixture(flat = true, tailMapping = PrimaryMapping.DISCRIMINATOR)
         assertFalse(flat.dtoProp.isDraftWriteSkipped(flat.graph, flat.schema, LsiLanguage.JAVA))
         assertFalse(flat.dtoProp.isDraftWriteSkipped(flat.graph, flat.schema, LsiLanguage.KOTLIN))
+    }
+
+    @Test
+    fun `resolves Kotlin Draft writer from the frozen tail binding`() {
+        val direct = fixture()
+        assertEquals("head", direct.dtoProp.kotlinDraftValueWriterName(direct.graph))
+
+        val flat = fixture(flat = true)
+        assertEquals("tail", flat.dtoProp.kotlinDraftValueWriterName(flat.graph))
+
+        assertFailsWith<IllegalArgumentException> {
+            direct.dtoProp.copy(name = "foreign").kotlinDraftValueWriterName(direct.graph)
+        }
     }
 
     private fun fixture(
