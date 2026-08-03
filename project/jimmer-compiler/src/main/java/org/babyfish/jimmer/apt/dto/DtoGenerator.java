@@ -45,6 +45,7 @@ import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedValueTypeExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
+import site.addzero.lsi.jimmer.dto.DtoDraftWriteExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
@@ -1341,17 +1342,19 @@ public class DtoGenerator {
                 continue;
             }
             DtoProp<ImmutableType, ImmutableProp> prop = asDtoProp(abstractProp);
-            if (prop.getBaseProp().isJavaFormula()) {
-                continue;
-            }
-            if (prop.getNextProp() == null && prop.getBaseProp().isDiscriminator()) {
-                continue;
-            }
             DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
                     lsiDtoType,
                     lsiGraph,
                     prop.getName()
             );
+            if (DtoDraftWriteExtensionsKt.isDraftWriteSkipped(
+                    lsiProp,
+                    lsiGraph,
+                    immutableSchema,
+                    LsiLanguage.JAVA
+            )) {
+                continue;
+            }
             String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
                     lsiProp,
                     lsiGraph,

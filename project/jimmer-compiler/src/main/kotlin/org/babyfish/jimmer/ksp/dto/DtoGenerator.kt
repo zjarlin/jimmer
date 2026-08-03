@@ -41,6 +41,7 @@ import site.addzero.lsi.jimmer.knownConcreteEntityTypesOf
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
+import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
@@ -1311,14 +1312,11 @@ internal class DtoGenerator private constructor(
 
                             is DtoProp<*, *> -> {
                                 val dtoProp = prop.asDtoProp()
-                                val baseProp = dtoProp.toTailProp().baseProp
-                                if (baseProp.isKotlinFormula) {
-                                    continue
-                                }
-                                if (dtoProp.nextProp == null && dtoProp.baseProp.isDiscriminator) {
-                                    continue
-                                }
                                 val lsiProp = lsiDtoType.baseProp(lsiGraph, dtoProp.name)
+                                if (lsiProp.isDraftWriteSkipped(lsiGraph, immutableSchema, LsiLanguage.KOTLIN)) {
+                                    continue
+                                }
+                                val baseProp = dtoProp.toTailProp().baseProp
                                 val statePropName = lsiProp
                                     .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                                 val nonNullGuard = lsiProp.requiresNonNullDraftWriteGuard(lsiGraph)

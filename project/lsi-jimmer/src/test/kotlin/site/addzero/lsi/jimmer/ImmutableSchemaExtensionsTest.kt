@@ -7,6 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiDeclaredType
@@ -226,6 +227,27 @@ class ImmutableSchemaExtensionsTest {
         assertSame(scalarProp.type, scalarProp.elementTypeOrSelf())
         assertEquals(elementType, listProp.elementTypeOrSelf())
     }
+
+    @Test
+    fun `resolves language formula semantics for each target language`() {
+        val ownerTypeId = LsiSymbolId.type("demo.Book")
+        val languageFormula = prop(ownerTypeId, "languageFormula", formulaKind = FormulaKind.LANGUAGE)
+        val abstractFormula = prop(ownerTypeId, "abstractFormula", formulaKind = FormulaKind.ABSTRACT)
+        val sqlFormula = prop(ownerTypeId, "sqlFormula", formulaKind = FormulaKind.SQL)
+        val scalar = prop(ownerTypeId, "scalar")
+
+        assertTrue(languageFormula.isLanguageFormula(LsiLanguage.JAVA))
+        assertTrue(languageFormula.isLanguageFormula(LsiLanguage.KOTLIN))
+        assertTrue(abstractFormula.isLanguageFormula(LsiLanguage.JAVA))
+        assertFalse(abstractFormula.isLanguageFormula(LsiLanguage.KOTLIN))
+        assertFalse(sqlFormula.isLanguageFormula(LsiLanguage.JAVA))
+        assertFalse(sqlFormula.isLanguageFormula(LsiLanguage.KOTLIN))
+        assertFalse(scalar.isLanguageFormula(LsiLanguage.JAVA))
+        assertFalse(scalar.isLanguageFormula(LsiLanguage.KOTLIN))
+        assertFailsWith<IllegalArgumentException> {
+            scalar.isLanguageFormula(LsiLanguage.UNKNOWN)
+        }
+    }
 }
 
 private fun type(
@@ -275,6 +297,7 @@ private fun prop(
     associationKind: AssociationKind = AssociationKind.NONE,
     targetTypeId: LsiSymbolId? = null,
     genericTarget: Boolean = false,
+    formulaKind: FormulaKind = FormulaKind.NONE,
 ): ImmutableProp {
     val id = LsiSymbolId.property(ownerTypeId, name)
     return ImmutableProp(
@@ -298,7 +321,7 @@ private fun prop(
         primaryAnnotationTypeId = null,
         defaultContract = null,
         associationKind = associationKind,
-        formulaKind = FormulaKind.NONE,
+        formulaKind = formulaKind,
         mappedBy = null,
         associationStorage = AssociationStorageKind.NONE,
         transientResolver = null,

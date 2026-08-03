@@ -1,5 +1,6 @@
 package site.addzero.lsi.jimmer
 
+import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeRef
@@ -34,6 +35,15 @@ fun ImmutableSchema.generatedPropsTypeOf(prop: ImmutableProp): LsiDeclaredType {
         "Immutable property declaring type does not exist: ${prop.declaringTypeId.value}"
     }
     return declaringType.generatedPropsType()
+}
+
+/** 判断属性是否为指定源码语言实现的公式属性。 */
+fun ImmutableProp.isLanguageFormula(language: LsiLanguage): Boolean {
+    require(language == LsiLanguage.JAVA || language == LsiLanguage.KOTLIN) {
+        "Language formula check requires Java or Kotlin: $language"
+    }
+    return formulaKind == FormulaKind.LANGUAGE ||
+        formulaKind == FormulaKind.ABSTRACT && language == LsiLanguage.JAVA
 }
 
 /** 返回属性在生成 Props 类型中的常量名。 */
