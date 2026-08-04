@@ -76,6 +76,8 @@ class ImmutableSchemaExtensionsTest {
             LsiDeclaredType(LsiSymbolId.type("demo.BookDraft.Producer")),
             bookType.generatedDraftProducerType(),
         )
+        assertSame(bookIdProp, schema.idPropOf(bookType))
+        assertNull(schema.idPropOf(baseType))
         assertEquals(baseType.generatedPropsType(), schema.generatedPropsTypeOf(inheritedProp))
         assertEquals("URL_VALUE", inheritedProp.generatedPropsConstantName())
         assertEquals(
@@ -91,6 +93,9 @@ class ImmutableSchemaExtensionsTest {
         }
         assertFailsWith<IllegalArgumentException> {
             schema.generatedPropsTypeOf(inheritedProp.copy(name = "foreign"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            schema.idPropOf(bookType.copy(documentation = "foreign"))
         }
     }
 

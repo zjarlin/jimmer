@@ -38,6 +38,7 @@ import org.jspecify.annotations.Nullable;
 import site.addzero.lsi.core.LsiLanguage;
 import site.addzero.lsi.jimmer.ImmutableDraftNamingExtensionsKt;
 import site.addzero.lsi.jimmer.ImmutableSchema;
+import site.addzero.lsi.jimmer.ImmutableSchemaExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
@@ -1425,7 +1426,12 @@ public class DtoGenerator {
             return;
         }
         DtoBaseProp discriminatorProp = polymorphicInputDiscriminatorProp();
-        ImmutableProp baseIdProp = withId ? dtoType.getBaseType().getIdProp() : null;
+        site.addzero.lsi.jimmer.ImmutableProp baseIdProp = withId ?
+                ImmutableSchemaExtensionsKt.idPropOf(
+                        immutableSchema,
+                        DtoAccessorExtensionsKt.immutableBaseType(lsiDtoType, immutableSchema)
+                ) :
+                null;
         MethodSpec.Builder builder = MethodSpec
                 .methodBuilder(entityBase ?
                         (withId ? "toEntityById" : "toEntity") :
@@ -1433,7 +1439,7 @@ public class DtoGenerator {
         if (baseIdProp != null) {
             builder.addParameter(
                     ParameterSpec.builder(
-                            baseIdProp.getTypeName().box(),
+                            AptDtoTypeRefRenderer.render(baseIdProp.getType(), lsiWorkspace).box(),
                             "id"
                     ).addAnnotation(Nullable.class).build()
             );
@@ -1487,7 +1493,14 @@ public class DtoGenerator {
             builder.addStatement("this.__applyTo(__draft)");
             if (baseIdProp != null) {
                 builder.beginControlFlow("if (id != null)");
-                builder.addStatement("__draft.$L($L)", baseIdProp.getSetterName(), "id");
+                builder.addStatement(
+                        "__draft.$L($L)",
+                        ImmutableDraftNamingExtensionsKt.generatedJavaDraftSetterName(
+                                baseIdProp,
+                                lsiWorkspace
+                        ),
+                        "id"
+                );
                 builder.endControlFlow();
             }
             builder.addCode("$<});\n");

@@ -42,6 +42,18 @@ fun ImmutableSchema.generatedPropsTypeOf(prop: ImmutableProp): LsiDeclaredType {
     return declaringType.generatedPropsType()
 }
 
+/** 返回不可变类型的有效主键属性；没有主键时返回空。 */
+fun ImmutableSchema.idPropOf(type: ImmutableType): ImmutableProp? {
+    require(typesById[type.id] == type) {
+        "Immutable type does not belong to this schema: ${type.id.value}"
+    }
+    return type.idPropId?.let { idPropId ->
+        requireNotNull(propsById[idPropId]) {
+            "Immutable id property does not exist: ${idPropId.value}"
+        }
+    }
+}
+
 /** 判断属性是否为指定源码语言实现的公式属性。 */
 fun ImmutableProp.isLanguageFormula(language: LsiLanguage): Boolean {
     require(language == LsiLanguage.JAVA || language == LsiLanguage.KOTLIN) {
