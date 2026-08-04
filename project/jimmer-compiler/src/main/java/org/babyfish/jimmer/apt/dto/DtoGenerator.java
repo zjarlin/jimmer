@@ -430,7 +430,8 @@ public class DtoGenerator {
                         getGeneratedDtoSimpleNames()
                 )
         );
-        for (AbstractProp prop : dtoType.getProps()) {
+        for (site.addzero.lsi.jimmer.dto.DtoProp prop :
+                DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph)) {
             addAccessorDeclaration(prop);
         }
         generateNestedDtoTypes();
@@ -1060,14 +1061,12 @@ public class DtoGenerator {
         }
     }
 
-    private void addAccessorDeclaration(AbstractProp prop) {
+    private void addAccessorDeclaration(site.addzero.lsi.jimmer.dto.DtoProp prop) {
         TypeName typeName = renderGeneratedValueType(prop);
-        site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
         MethodSpec.Builder getterBuilder = MethodSpec
                 .methodBuilder(
                         DtoAccessorExtensionsKt.dtoValueAccessorName(
-                                lsiProp,
+                                prop,
                                 LsiLanguage.JAVA,
                                 lsiGraph,
                                 immutableSchema
@@ -1075,12 +1074,12 @@ public class DtoGenerator {
                 )
                 .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
                 .returns(typeName);
-        AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiProp, lsiGraph);
+        AnnotationSpec description = AptDtoDescriptionRenderer.render(prop, lsiGraph);
         if (description != null) {
             getterBuilder.addAnnotation(description);
         }
         if (!typeName.isPrimitive()) {
-            if (prop.isNullable()) {
+            if (prop.getNullable()) {
                 getterBuilder.addAnnotation(Nullable.class);
             } else {
                 getterBuilder.addAnnotation(NonNull.class);
@@ -1088,7 +1087,7 @@ public class DtoGenerator {
         }
         getterBuilder.addAnnotations(
                 AptDtoPropAnnotationRenderer.renderGetter(
-                        lsiProp,
+                        prop,
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
@@ -1531,10 +1530,14 @@ public class DtoGenerator {
     }
 
     private TypeName renderGeneratedValueType(AbstractProp prop) {
-        site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
+        return renderGeneratedValueType(
+                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName())
+        );
+    }
+
+    private TypeName renderGeneratedValueType(site.addzero.lsi.jimmer.dto.DtoProp prop) {
         LsiTypeRef type = DtoGeneratedValueTypeExtensionsKt.generatedValueType(
-                lsiProp,
+                prop,
                 lsiGraph,
                 immutableSchema,
                 LsiLanguage.JAVA,
