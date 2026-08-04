@@ -9,6 +9,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.jetbrains.kotlin.cli.common.ExitCode
@@ -61,8 +62,8 @@ class TypedTupleRendererTest {
         assertEquals(setOf(fixture.tupleSource), mapperArtifact.dependencySources)
         assertEquals(mapperArtifact.originatingSymbols, tableArtifact.originatingSymbols)
         assertEquals(mapperArtifact.dependencySymbols, tableArtifact.dependencySymbols)
-        assertEquals(golden("BookSummaryMapper.java"), mapperArtifact.content)
-        assertEquals(golden("BookSummaryTable.java"), tableArtifact.content)
+        assertContentEquals(golden("BookSummaryMapper.java"), mapperArtifact.content.encodeToByteArray())
+        assertContentEquals(golden("BookSummaryTable.java"), tableArtifact.content.encodeToByteArray())
         compileJava(mapperArtifact.content, tableArtifact.content)
     }
 
@@ -81,7 +82,7 @@ class TypedTupleRendererTest {
         assertEquals(setOf(fixture.tupleSource), artifact.originatingSources)
         assertEquals(fixture.dependencySymbols, artifact.dependencySymbols)
         assertEquals(setOf(fixture.tupleSource), artifact.dependencySources)
-        assertEquals(golden("BookSummaryMapper.kt"), artifact.content)
+        assertContentEquals(golden("BookSummaryMapper.kt"), artifact.content.encodeToByteArray())
         compileKotlin(artifact.content)
     }
 
@@ -210,8 +211,8 @@ class TypedTupleRendererTest {
         )
     }
 
-    private fun golden(name: String): String {
-        return requireNotNull(javaClass.getResource("/tuple/$name")).readText()
+    private fun golden(name: String): ByteArray {
+        return requireNotNull(javaClass.getResource("/tuple/$name")).readBytes()
     }
 
     private fun compileJava(

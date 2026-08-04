@@ -21,6 +21,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
@@ -47,9 +48,9 @@ class TypedTupleCompilerParityTest {
         val kspSchema = ksp.sourceWorkspace().toTypedTupleSchema()
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
 
-        assertEquals(golden("BookSummaryMapper.java"), apt.generatedSource(JAVA_MAPPER_GENERATED_PATH))
-        assertEquals(golden("BookSummaryTable.java"), apt.generatedSource(JAVA_TABLE_GENERATED_PATH))
-        assertEquals(golden("BookSummaryMapper.kt"), ksp.generatedSource())
+        assertContentEquals(golden("BookSummaryMapper.java"), apt.generatedSource(JAVA_MAPPER_GENERATED_PATH))
+        assertContentEquals(golden("BookSummaryTable.java"), apt.generatedSource(JAVA_TABLE_GENERATED_PATH))
+        assertContentEquals(golden("BookSummaryMapper.kt"), ksp.generatedSource())
     }
 
     private fun compileApt(sources: Map<String, String>): AptCompilationResult {
@@ -199,10 +200,10 @@ class TypedTupleCompilerParityTest {
             return workspaces.first { workspace -> workspace[TUPLE_ID] != null }
         }
 
-        fun generatedSource(path: String): String {
+        fun generatedSource(path: String): ByteArray {
             val file = generatedDir.resolve(path)
             assertTrue(file.isFile, "Missing generated TypedTuple source: ${file.absolutePath}")
-            return file.readText()
+            return file.readBytes()
         }
     }
 
@@ -216,15 +217,15 @@ class TypedTupleCompilerParityTest {
             return workspaces.first { workspace -> workspace[TUPLE_ID] != null }
         }
 
-        fun generatedSource(): String {
+        fun generatedSource(): ByteArray {
             val file = kotlinOutputDir.resolve(KOTLIN_GENERATED_PATH)
             assertTrue(file.isFile, "Missing generated TypedTuple source: ${file.absolutePath}\n${logger.text()}")
-            return file.readText()
+            return file.readBytes()
         }
     }
 
-    private fun golden(name: String): String {
-        return requireNotNull(javaClass.getResource("/tuple/$name")).readText()
+    private fun golden(name: String): ByteArray {
+        return requireNotNull(javaClass.getResource("/tuple/$name")).readBytes()
     }
 
     private fun DiagnosticCollector<JavaFileObject>.errorMessage(): String {
