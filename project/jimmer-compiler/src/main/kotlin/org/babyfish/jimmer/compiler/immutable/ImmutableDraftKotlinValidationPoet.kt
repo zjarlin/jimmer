@@ -314,19 +314,18 @@ internal object ImmutableDraftKotlinValidationPoet {
         valueName: String,
         failure: ImmutableDraftValidationFailure,
     ) {
+        if (!failure.usesDefaultMessage) {
+            return
+        }
         statement {
             text("throw ")
             type(LsiDeclaredType(failure.exceptionTypeId))
             text("(")
-            if (failure.usesDefaultMessage) {
-                string("Illegal value'")
-                text(" + ")
-                name(valueName)
-                text(" + ")
-                string("'for property '${typePlan.qualifiedName}.${prop.name}', ${failure.defaultMessage}")
-            } else {
-                string(failure.declaredMessage)
-            }
+            string("Illegal value'")
+            text(" + ")
+            name(valueName)
+            text(" + ")
+            string("'for property '${typePlan.qualifiedName}.${prop.name}', ${failure.defaultMessage}")
             text(")")
         }
     }
