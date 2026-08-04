@@ -497,10 +497,10 @@ internal class DtoGenerator private constructor(
             addConverterConstructor()
         }
 
-        for (prop in dtoType.props) {
+        for (prop in lsiDtoType.propsInDeclarationOrder(lsiGraph)) {
             addProp(prop)
-            if (prop is DtoProp<*, *>) {
-                addStateProp(prop.asDtoProp())
+            if (prop is DtoBaseProp) {
+                addStateProp(prop)
             }
         }
         if (isSpecification) {
@@ -697,7 +697,7 @@ internal class DtoGenerator private constructor(
                 KspDtoHibernateValidatorRenderer.renderEnhancedBeanType(workspace),
             )
         }
-        for (prop in dtoType.props) {
+        for (prop in lsiDtoType.propsInDeclarationOrder(lsiGraph)) {
             typeBuilder.addAccessorDeclaration(prop)
         }
         generateNestedDtoTypes()
@@ -875,18 +875,16 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    private fun addStateProp(prop: DtoProp<ImmutableType, ImmutableProp>) {
+    private fun addStateProp(prop: DtoBaseProp) {
         KspDtoLoadedStateRenderer.renderStorageProperty(
-            prop = lsiDtoType.prop(lsiGraph, prop.name),
+            prop = prop,
             graph = lsiGraph,
             mutable = mutable,
         )?.let(typeBuilder::addProperty)
     }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun addProp(prop: AbstractProp) {
+    private fun addProp(prop: LsiDtoProp) {
         val typeName = propTypeName(prop)
-        val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
         typeBuilder.addProperty(
             PropertySpec
                 .builder(prop.name, typeName)
@@ -895,12 +893,12 @@ internal class DtoGenerator private constructor(
                     if (interfacePropNames.contains(prop.name)) {
                         addModifiers(KModifier.OVERRIDE)
                     }
-                    KspDtoDescriptionRenderer.render(lsiProp, lsiGraph)?.let { annotation ->
+                    KspDtoDescriptionRenderer.render(prop, lsiGraph)?.let { annotation ->
                         addAnnotation(annotation)
                     }
                     if (
                         !isBuilderRequired &&
-                        lsiProp.annotations.none { annotation ->
+                        prop.annotations.none { annotation ->
                             annotation.typeId.value == ctx.jacksonTypes.jsonProperty.reflectionName()
                         }
                     ) {
@@ -917,12 +915,12 @@ internal class DtoGenerator private constructor(
                                 .build()
                         )
                     }
-                    if (lsiProp.requiresFixedInputField(lsiGraph)) {
+                    if (prop.requiresFixedInputField(lsiGraph)) {
                         addAnnotation(FIXED_INPUT_FIELD_CLASS_NAME)
                     }
                     addAnnotations(
                         KspDtoPropAnnotationRenderer.renderConcrete(
-                            dtoProp = lsiProp,
+                            dtoProp = prop,
                             annotationContract = annotationContract,
                             immutableSchema = immutableSchema,
                             workspace = workspace,
@@ -935,7 +933,7 @@ internal class DtoGenerator private constructor(
                     )
                     initializer("%N", prop.name)
                     if (mutable) {
-                        lsiProp
+                        prop
                             .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                             ?.let { stateProp ->
                             val name = prop.name.takeIf { it != "field" } ?: "value"
@@ -954,9 +952,8 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    private fun TypeSpec.Builder.addAccessorDeclaration(prop: AbstractProp) {
+    private fun TypeSpec.Builder.addAccessorDeclaration(prop: LsiDtoProp) {
         val typeName = propTypeName(prop)
-        val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
         addProperty(
             PropertySpec
                 .builder(prop.name, typeName)
@@ -965,12 +962,12 @@ internal class DtoGenerator private constructor(
                     if (interfacePropNames.contains(prop.name)) {
                         addModifiers(KModifier.OVERRIDE)
                     }
-                    KspDtoDescriptionRenderer.render(lsiProp, lsiGraph)?.let { annotation ->
+                    KspDtoDescriptionRenderer.render(prop, lsiGraph)?.let { annotation ->
                         addAnnotation(annotation)
                     }
                     addAnnotations(
                         KspDtoPropAnnotationRenderer.renderAbstractAccessor(
-                            dtoProp = lsiProp,
+                            dtoProp = prop,
                             annotationContract = annotationContract,
                             immutableSchema = immutableSchema,
                             workspace = workspace,
@@ -1451,14 +1448,6 @@ internal class DtoGenerator private constructor(
             workspace = workspace,
             generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
         )
-
-    @Suppress("UNCHECKED_CAST")
-    private fun AbstractProp.asDtoProp(): DtoProp<ImmutableType, ImmutableProp> =
-        this as DtoProp<ImmutableType, ImmutableProp>
-
-    @Suppress("UNCHECKED_CAST")
-    private fun AbstractProp.asFoldProp(): FoldProp<ImmutableType, ImmutableProp> =
-        this as FoldProp<ImmutableType, ImmutableProp>
 
     private fun collectNames(list: MutableList<String>) {
         if (parent == null) {
