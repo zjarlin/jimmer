@@ -19,6 +19,7 @@ class ImmutableDraftNamingExtensionsTest {
     fun `derives Java Draft names from frozen getter semantics`() {
         val beanProp = prop("bookStore")
         val beanWorkspace = workspace(beanProp, "getBookStore", LsiLanguage.JAVA)
+        assertEquals("getBookStore", beanProp.sourceGetterName(beanWorkspace))
         assertEquals("bookStore", beanProp.generatedDraftCodegenName(beanWorkspace))
         assertEquals("SLOT_BOOK_STORE", beanProp.generatedDraftSlotName(beanWorkspace))
 
@@ -68,10 +69,12 @@ class ImmutableDraftNamingExtensionsTest {
     fun `keeps Kotlin names and falls back when declaration is absent`() {
         val kotlinProp = prop("URLValue")
         val kotlinWorkspace = workspace(kotlinProp, "getIgnored", LsiLanguage.KOTLIN)
+        assertEquals("getIgnored", kotlinProp.sourceGetterName(kotlinWorkspace))
         assertEquals("URLValue", kotlinProp.generatedDraftCodegenName(kotlinWorkspace))
         assertEquals("SLOT_URLVALUE", kotlinProp.generatedDraftSlotName(kotlinWorkspace))
 
         val missingProp = prop("urlValue")
+        assertEquals("urlValue", missingProp.sourceGetterName(LsiWorkspace()))
         assertEquals("urlValue", missingProp.generatedDraftCodegenName(LsiWorkspace()))
         assertEquals("setUrlValue", missingProp.generatedJavaDraftSetterName(LsiWorkspace()))
         assertEquals("SLOT_URL_VALUE", missingProp.generatedDraftSlotName(LsiWorkspace()))

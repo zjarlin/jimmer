@@ -1,12 +1,12 @@
 package org.babyfish.jimmer.compiler.render.apt
 
-import com.squareup.javapoet.ClassName
 import com.squareup.javapoet.CodeBlock
 import org.babyfish.jimmer.compiler.dto.toBaseValuePoetCodeBlock
 import org.babyfish.jimmer.compiler.dto.dtoBaseValuePoetTypeNames
 import site.addzero.lsi.core.LsiLanguage
-import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.generatedDraftProducerType
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
@@ -14,6 +14,7 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
+import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 /** 将 immutable-to-DTO Java 属性读取语义渲染为 JavaPoet 表达式。 */
 internal object AptDtoBaseValueRenderer {
@@ -27,13 +28,20 @@ internal object AptDtoBaseValueRenderer {
         accessorName: String,
         baseParameterName: String,
         baseValueAccessorName: String,
-        baseProducerClassName: ClassName,
+        baseType: ImmutableType,
         baseSlotName: String,
         conversionErrorMessage: String,
         generatedTargetType: (DtoProp) -> LsiDeclaredType,
         generatedTypeNames: Collection<LsiPoetTypeName>,
     ): CodeBlock {
-        val producerTypeName = baseProducerClassName.toLsiPoetTypeName()
+        val producerType = baseType.generatedDraftProducerType()
+        val baseTypeName = workspace.toLsiPoetTypeNames(listOf(baseType.id)).single()
+        val producerTypeName = LsiPoetTypeName(
+            typeId = producerType.declarationId,
+            packageName = baseTypeName.packageName,
+            simpleNames = baseTypeName.simpleNames.dropLast(1) +
+                listOf("${baseTypeName.simpleNames.last()}Draft", "Producer"),
+        )
         val initializer = prop.toBaseValuePoetCodeBlock(
             graph = graph,
             immutableSchema = immutableSchema,
@@ -43,7 +51,7 @@ internal object AptDtoBaseValueRenderer {
             accessorName = accessorName,
             baseValueAccessorName = baseValueAccessorName,
             conversionErrorMessage = conversionErrorMessage,
-            javaBaseProducerType = LsiDeclaredType(producerTypeName.typeId),
+            javaBaseProducerType = producerType,
             javaBaseSlotName = baseSlotName,
         )
         return LsiJavaPoetRenderer().renderCodeBlock(
@@ -54,12 +62,4 @@ internal object AptDtoBaseValueRenderer {
             ),
         )
     }
-}
-
-private fun ClassName.toLsiPoetTypeName(): LsiPoetTypeName {
-    return LsiPoetTypeName(
-        typeId = LsiSymbolId.type(canonicalName()),
-        packageName = packageName(),
-        simpleNames = simpleNames(),
-    )
 }

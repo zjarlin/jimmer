@@ -26,6 +26,11 @@ fun ImmutableType.generatedTableType(): LsiDeclaredType {
     return generatedQueryType("${simpleName}Table")
 }
 
+/** 返回不可变类型对应的 Draft Producer 类型。 */
+fun ImmutableType.generatedDraftProducerType(): LsiDeclaredType {
+    return LsiDeclaredType(LsiSymbolId.type("${qualifiedName}Draft.Producer"))
+}
+
 /** 返回属性声明类型对应的生成 Props 类型。 */
 fun ImmutableSchema.generatedPropsTypeOf(prop: ImmutableProp): LsiDeclaredType {
     require(propsById[prop.id] == prop) {

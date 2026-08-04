@@ -6,6 +6,11 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiWorkspace
 
+/** 返回不可变属性在源码中冻结的 getter 名称。 */
+fun ImmutableProp.sourceGetterName(workspace: LsiWorkspace): String {
+    return (workspace[declarationId] as? LsiProperty)?.getterName ?: name
+}
+
 /** 返回不可变属性在 Draft 源码中的实际成员名。 */
 fun ImmutableProp.generatedDraftCodegenName(workspace: LsiWorkspace): String {
     val declaration = workspace[declarationId] as? LsiProperty ?: return name

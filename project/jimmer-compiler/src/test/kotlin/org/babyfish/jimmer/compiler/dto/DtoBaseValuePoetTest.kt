@@ -1,12 +1,13 @@
 package org.babyfish.jimmer.compiler.dto
 
-import com.squareup.javapoet.ClassName
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseValueRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseValueRenderer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
+import site.addzero.lsi.core.LsiOrigin
+import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
@@ -26,6 +27,8 @@ import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
 class DtoBaseValuePoetTest {
@@ -82,11 +85,11 @@ class DtoBaseValuePoetTest {
                 prop = prop,
                 graph = graph,
                 immutableSchema = schema,
-                workspace = LsiWorkspace.EMPTY,
+                workspace = WORKSPACE,
                 accessorName = "VALUE_ACCESSOR",
                 baseParameterName = "base",
                 baseValueAccessorName = "getValue",
-                baseProducerClassName = ClassName.get("demo", "BookDraft", "Producer"),
+                baseType = schema.typesById.getValue(IMMUTABLE_TYPE_ID),
                 baseSlotName = "SLOT_VALUE",
                 conversionErrorMessage = ERROR_MESSAGE,
                 generatedTargetType = { LsiDeclaredType(STRING_TYPE_ID) },
@@ -117,6 +120,20 @@ class DtoBaseValuePoetTest {
         val DTO_TYPE_ID = DtoTypeId("demo.dto.BookView#root")
         val DTO_PROP_ID = DtoPropId("demo.dto.BookView#prop:value")
         val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
+        val WORKSPACE = LsiWorkspace(
+            declarations = listOf(
+                LsiTypeDeclaration(
+                    id = IMMUTABLE_TYPE_ID,
+                    name = "Book",
+                    qualifiedName = "demo.Book",
+                    kind = LsiTypeDeclarationKind.INTERFACE,
+                    origin = LsiOrigin(
+                        kind = LsiOriginKind.SYNTHETIC,
+                        language = LsiLanguage.JAVA,
+                    ),
+                ),
+            ),
+        )
         const val ERROR_MESSAGE =
             "Cannot convert \"demo.Book\" to \"demo.dto.BookView\" because the cannot get non-null value for \"value\""
 

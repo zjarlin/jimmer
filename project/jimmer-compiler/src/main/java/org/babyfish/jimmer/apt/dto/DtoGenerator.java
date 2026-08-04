@@ -1225,6 +1225,8 @@ public class DtoGenerator {
     }
 
     private void addConverterConstructor() {
+        site.addzero.lsi.jimmer.ImmutableType immutableBaseType =
+                DtoAccessorExtensionsKt.immutableBaseType(lsiDtoType, immutableSchema);
         ParameterSpec.Builder parameterBuilder =
                 ParameterSpec.builder(
                         dtoType.getBaseType().getClassName().annotated(
@@ -1236,37 +1238,34 @@ public class DtoGenerator {
                 .constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(parameterBuilder.build());
-        for (AbstractProp abstractProp : dtoType.getProps()) {
-            if (abstractProp instanceof FoldProp<?, ?>) {
-                FoldProp<ImmutableType, ImmutableProp> foldProp = asFoldProp(abstractProp);
+        for (site.addzero.lsi.jimmer.dto.DtoProp prop :
+                DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph)) {
+            if (prop instanceof site.addzero.lsi.jimmer.dto.DtoFoldProp) {
                 builder.addStatement(
                         "this.$L = $L",
-                        foldProp.getName(),
+                        prop.getName(),
                         AptDtoFoldValueRenderer.render(
-                                DtoGenerationExtensionsKt.foldProp(
-                                        lsiDtoType,
-                                        lsiGraph,
-                                        foldProp.getName()
-                                ),
+                                (site.addzero.lsi.jimmer.dto.DtoFoldProp) prop,
                                 lsiGraph,
                                 lsiWorkspace,
                                 "base",
-                                foldNullGuardAccessorFieldName(foldProp.getName()),
+                                foldNullGuardAccessorFieldName(prop.getName()),
                                 this::generatedTargetType,
                                 generatedDtoTypeIdsByTypeName.keySet()
                         )
                 );
                 continue;
             }
-            if (!(abstractProp instanceof DtoProp<?, ?>)) {
+            if (!(prop instanceof DtoBaseProp)) {
                 continue;
             }
-            DtoProp<ImmutableType, ImmutableProp> prop = asDtoProp(abstractProp);
-            DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
-                    lsiDtoType,
-                    lsiGraph,
-                    prop.getName()
-            );
+            DtoBaseProp lsiProp = (DtoBaseProp) prop;
+            site.addzero.lsi.jimmer.ImmutableProp immutableProp =
+                    DtoConverterExtensionsKt.boundImmutableProp(
+                            lsiProp,
+                            lsiGraph,
+                            immutableSchema
+                    );
             String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
                     lsiProp,
                     lsiGraph,
@@ -1282,9 +1281,15 @@ public class DtoGenerator {
                             lsiWorkspace,
                             accessorFieldName(prop.getName()),
                             "base",
-                            prop.getBaseProp().getGetterName(),
-                            dtoType.getBaseType().getProducerClassName(),
-                            prop.getBaseProp().getSlotName(),
+                            ImmutableDraftNamingExtensionsKt.sourceGetterName(
+                                    immutableProp,
+                                    lsiWorkspace
+                            ),
+                            immutableBaseType,
+                            ImmutableDraftNamingExtensionsKt.generatedDraftSlotName(
+                                    immutableProp,
+                                    lsiWorkspace
+                            ),
                             "Cannot convert \"" +
                                     dtoType.getBaseType().getClassName() +
                                     "\" to \"" +
@@ -1520,16 +1525,6 @@ public class DtoGenerator {
                 lsiWorkspace,
                 generatedDtoTypeIdsByTypeName.keySet()
         );
-    }
-
-    @SuppressWarnings("unchecked")
-    private DtoProp<ImmutableType, ImmutableProp> asDtoProp(AbstractProp prop) {
-        return (DtoProp<ImmutableType, ImmutableProp>) prop;
-    }
-
-    @SuppressWarnings("unchecked")
-    private FoldProp<ImmutableType, ImmutableProp> asFoldProp(AbstractProp prop) {
-        return (FoldProp<ImmutableType, ImmutableProp>) prop;
     }
 
     private void addHashCode() {

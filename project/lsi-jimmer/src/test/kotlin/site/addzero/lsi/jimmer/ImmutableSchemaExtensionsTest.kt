@@ -72,6 +72,10 @@ class ImmutableSchemaExtensionsTest {
             LsiDeclaredType(LsiSymbolId.type("demo.BookTable")),
             bookType.generatedTableType(),
         )
+        assertEquals(
+            LsiDeclaredType(LsiSymbolId.type("demo.BookDraft.Producer")),
+            bookType.generatedDraftProducerType(),
+        )
         assertEquals(baseType.generatedPropsType(), schema.generatedPropsTypeOf(inheritedProp))
         assertEquals("URL_VALUE", inheritedProp.generatedPropsConstantName())
         assertEquals(
