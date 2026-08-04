@@ -52,10 +52,8 @@ import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
-import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.basePropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.contractFor
-import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.foldPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
@@ -612,15 +610,20 @@ internal class DtoGenerator private constructor(
     }
 
     private fun generateNestedDtoTypes() {
-        for (prop in dtoType.dtoProps) {
+        val nativeBaseTargetsByPropName = buildMap {
+            for (nativeProp in dtoType.dtoProps) {
+                val targetType = nativeProp.targetType ?: continue
+                check(put(nativeProp.name, targetType) == null) {
+                    "Compiled DTO type contains duplicate base property \"${nativeProp.name}\""
+                }
+            }
+        }
+        for (prop in lsiDtoType.basePropsInDeclarationOrder(lsiGraph)) {
             if (polymorphicRootPropOrNull(prop) != null) {
                 continue
             }
-            val lsiTargetType = lsiDtoType
-                .baseProp(lsiGraph, prop.name)
-                .generatedTargetType(lsiGraph)
-                ?: continue
-            val targetType = prop.targetType ?: throw DtoException(
+            val lsiTargetType = prop.generatedTargetType(lsiGraph) ?: continue
+            val targetType = nativeBaseTargetsByPropName[prop.name] ?: throw DtoException(
                 "Compiled DTO property \"${prop.name}\" has no target required by the frozen DTO graph"
             )
             val childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
@@ -641,13 +644,21 @@ internal class DtoGenerator private constructor(
                 innerClassName = childSimpleName,
             ).generate(emptyList())
         }
-        for (foldProp in dtoType.foldProps) {
-            if (polymorphicRootPropOrNull(foldProp) != null) {
+        val nativeFoldTargetsByPropName = buildMap {
+            for (nativeProp in dtoType.foldProps) {
+                check(put(nativeProp.name, nativeProp.targetType) == null) {
+                    "Compiled DTO type contains duplicate fold property \"${nativeProp.name}\""
+                }
+            }
+        }
+        for (prop in lsiDtoType.foldPropsInDeclarationOrder(lsiGraph)) {
+            if (polymorphicRootPropOrNull(prop) != null) {
                 continue
             }
-            val lsiTargetType = lsiDtoType
-                .foldProp(lsiGraph, foldProp.name)
-                .generatedTargetType(lsiGraph)
+            val lsiTargetType = prop.generatedTargetType(lsiGraph)
+            val targetType = nativeFoldTargetsByPropName[prop.name] ?: throw DtoException(
+                "Compiled DTO fold property \"${prop.name}\" has no target required by the frozen DTO graph"
+            )
             val childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
                 ownerTypeName = JimmerDtoPoetTypeNames.create(
                     generatedDtoPackageName,
@@ -660,7 +671,7 @@ internal class DtoGenerator private constructor(
             DtoGenerator(
                 ctx = ctx,
                 mutable = mutable,
-                dtoType = foldProp.targetType,
+                dtoType = targetType,
                 lsiDtoType = lsiTargetType,
                 parent = this,
                 innerClassName = childSimpleName,
@@ -1458,14 +1469,14 @@ internal class DtoGenerator private constructor(
         }
     }
 
-    private fun polymorphicRootPropOrNull(prop: AbstractProp): LsiDtoProp? {
+    private fun polymorphicRootPropOrNull(prop: LsiDtoProp): LsiDtoProp? {
         val polymorphicOwner = parent
         if (!polymorphicBranch || polymorphicOwner == null) {
             return null
         }
         return polymorphicOwner.lsiDtoType.promotedPolymorphicRootPropOrNull(
             lsiGraph,
-            lsiDtoType.prop(lsiGraph, prop.name),
+            prop,
         )
     }
 

@@ -762,17 +762,30 @@ public class DtoGenerator {
     }
 
     private void generateNestedDtoTypes() {
-        for (DtoProp<ImmutableType, ImmutableProp> prop : dtoType.getDtoProps()) {
+        Map<String, DtoType<ImmutableType, ImmutableProp>> nativeBaseTargetsByPropName =
+                new LinkedHashMap<>();
+        for (DtoProp<ImmutableType, ImmutableProp> nativeProp : dtoType.getDtoProps()) {
+            DtoType<ImmutableType, ImmutableProp> targetType = nativeProp.getTargetType();
+            if (targetType != null &&
+                    nativeBaseTargetsByPropName.put(nativeProp.getName(), targetType) != null) {
+                throw new DtoException(
+                        "Compiled DTO type contains duplicate base property \"" +
+                                nativeProp.getName() + "\""
+                );
+            }
+        }
+        for (DtoBaseProp prop :
+                DtoAccessorExtensionsKt.basePropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
             if (polymorphicRootPropOrNull(prop) != null) {
                 continue;
             }
-            DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(lsiDtoType, lsiGraph, prop.getName());
             site.addzero.lsi.jimmer.dto.DtoType lsiTargetType =
-                    DtoGenerationExtensionsKt.generatedTargetType(lsiProp, lsiGraph);
+                    DtoGenerationExtensionsKt.generatedTargetType(prop, lsiGraph);
             if (lsiTargetType == null) {
                 continue;
             }
-            DtoType<ImmutableType, ImmutableProp> targetType = prop.getTargetType();
+            DtoType<ImmutableType, ImmutableProp> targetType =
+                    nativeBaseTargetsByPropName.get(prop.getName());
             if (targetType == null) {
                 throw new DtoException(
                         "Compiled DTO property \"" + prop.getName() +
@@ -798,14 +811,34 @@ public class DtoGenerator {
                     childSimpleName
             ).generate();
         }
-        for (FoldProp<ImmutableType, ImmutableProp> prop : dtoType.getFoldProps()) {
+        Map<String, DtoType<ImmutableType, ImmutableProp>> nativeFoldTargetsByPropName =
+                new LinkedHashMap<>();
+        for (FoldProp<ImmutableType, ImmutableProp> nativeProp : dtoType.getFoldProps()) {
+            if (nativeFoldTargetsByPropName.put(
+                    nativeProp.getName(),
+                    nativeProp.getTargetType()
+            ) != null) {
+                throw new DtoException(
+                        "Compiled DTO type contains duplicate fold property \"" +
+                                nativeProp.getName() + "\""
+                );
+            }
+        }
+        for (site.addzero.lsi.jimmer.dto.DtoFoldProp prop :
+                DtoGenerationExtensionsKt.foldPropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
             if (polymorphicRootPropOrNull(prop) != null) {
                 continue;
             }
-            site.addzero.lsi.jimmer.dto.DtoFoldProp lsiProp =
-                    DtoGenerationExtensionsKt.foldProp(lsiDtoType, lsiGraph, prop.getName());
             site.addzero.lsi.jimmer.dto.DtoType lsiTargetType =
-                    DtoGenerationExtensionsKt.generatedTargetType(lsiProp, lsiGraph);
+                    DtoGenerationExtensionsKt.generatedTargetType(prop, lsiGraph);
+            DtoType<ImmutableType, ImmutableProp> targetType =
+                    nativeFoldTargetsByPropName.get(prop.getName());
+            if (targetType == null) {
+                throw new DtoException(
+                        "Compiled DTO fold property \"" + prop.getName() +
+                                "\" has no target required by the frozen DTO graph"
+                );
+            }
             String childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
                     JimmerDtoPoetTypeNames.create(
                             getGeneratedDtoPackageName(),
@@ -819,7 +852,7 @@ public class DtoGenerator {
             registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
             new DtoGenerator(
                     ctx,
-                    prop.getTargetType(),
+                    targetType,
                     lsiTargetType,
                     this,
                     childSimpleName
@@ -1559,19 +1592,16 @@ public class DtoGenerator {
         return name;
     }
 
-    private site.addzero.lsi.jimmer.dto.DtoProp polymorphicRootPropOrNull(AbstractProp prop) {
+    private site.addzero.lsi.jimmer.dto.DtoProp polymorphicRootPropOrNull(
+            site.addzero.lsi.jimmer.dto.DtoProp prop
+    ) {
         if (!polymorphicBranch || parent == null) {
             return null;
         }
-        site.addzero.lsi.jimmer.dto.DtoProp mergedProp = DtoGenerationExtensionsKt.prop(
-                lsiDtoType,
-                lsiGraph,
-                prop.getName()
-        );
         return DtoGenerationExtensionsKt.promotedPolymorphicRootPropOrNull(
                 parent.lsiDtoType,
                 lsiGraph,
-                mergedProp
+                prop
         );
     }
 
