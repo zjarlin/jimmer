@@ -3104,6 +3104,16 @@ class ImmutableWorkspaceExtensionsTest {
         val scalarSchema = compile(rawInt, boxedInt)
         assertEquals(rawInt, scalarSchema.types.single().props.single().type)
 
+        val javaList = LsiDeclaredType(
+            declarationId = LsiSymbolId.type("java.util.List"),
+            arguments = listOf(LsiTypeArgument.invariant(boxedInt)),
+        )
+        val kotlinMutableList = javaList.copy(
+            declarationId = LsiSymbolId.type("kotlin.collections.MutableList"),
+        )
+        val listSchema = compile(javaList, kotlinMutableList)
+        assertEquals(javaList, listSchema.types.single().props.single().type)
+
         val failure = assertFailsWith<ImmutablePrecompileException> {
             compile(
                 propertyType = LsiArrayType(rawInt),

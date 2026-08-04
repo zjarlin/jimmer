@@ -2552,7 +2552,13 @@ private fun LsiTypeRef.boxedTypeSignature(
                 }
             }
             ?: buildString {
-                append(if (declarationId in LIST_TYPE_IDS) CONVERTER_LIST_TYPE.value else declarationId.value)
+                append(
+                    if (declarationId in LIST_TYPE_IDS || declarationId == KOTLIN_MUTABLE_LIST_TYPE_ID) {
+                        CONVERTER_LIST_TYPE.value
+                    } else {
+                        declarationId.value
+                    },
+                )
                 if (arguments.isNotEmpty()) {
                     append('<')
                     append(arguments.joinToString(",") { argument -> argument.boxedTypeSignature() })
