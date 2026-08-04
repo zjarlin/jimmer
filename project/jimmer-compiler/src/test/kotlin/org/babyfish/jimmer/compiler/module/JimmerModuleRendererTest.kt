@@ -9,6 +9,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -48,7 +49,10 @@ class JimmerModuleRendererTest {
             assertEquals(ArtifactAggregationMode.AGGREGATING, artifact.aggregationMode)
             assertEquals(ENTITY_IDS.toSet(), artifact.originatingSymbols)
             assertEquals(fixture.sources.toSet(), artifact.originatingSources)
-            assertEquals(golden("apt/${artifact.path.substringAfterLast('/')}"), artifact.content)
+            assertContentEquals(
+                golden("apt/${artifact.path.substringAfterLast('/')}"),
+                artifact.content.encodeToByteArray(),
+            )
         }
         compileJava(artifacts)
     }
@@ -64,7 +68,7 @@ class JimmerModuleRendererTest {
         assertEquals("demo/JimmerModule.kt", artifact.path)
         assertEquals(ENTITY_IDS.toSet(), artifact.originatingSymbols)
         assertEquals(fixture.sources.toSet(), artifact.originatingSources)
-        assertEquals(golden("ksp/JimmerModule.kt"), artifact.content)
+        assertContentEquals(golden("ksp/JimmerModule.kt"), artifact.content.encodeToByteArray())
         compileKotlin(artifact)
     }
 
@@ -79,14 +83,14 @@ class JimmerModuleRendererTest {
             listOf("META-INF/jimmer/entities", "META-INF/jimmer/immutables"),
             aptArtifacts.map(GeneratedArtifact::path),
         )
-        assertEquals(golden("resources/entities.txt"), aptArtifacts[0].content)
+        assertContentEquals(golden("resources/entities.txt"), aptArtifacts[0].content.encodeToByteArray())
         assertEquals(ENTITY_IDS.toSet(), aptArtifacts[0].originatingSymbols)
         assertEquals(aptFixture.sources.toSet(), aptArtifacts[0].originatingSources)
-        assertEquals("", aptArtifacts[1].content)
+        assertContentEquals(byteArrayOf(), aptArtifacts[1].content.encodeToByteArray())
         assertTrue(aptArtifacts[1].originatingSymbols.isEmpty())
         assertTrue(aptArtifacts[1].originatingSources.isEmpty())
         assertEquals("META-INF/jimmer/entities", kspArtifact.path)
-        assertEquals(golden("resources/entities.txt"), kspArtifact.content)
+        assertContentEquals(golden("resources/entities.txt"), kspArtifact.content.encodeToByteArray())
         assertEquals(ENTITY_IDS.toSet(), kspArtifact.originatingSymbols)
         assertEquals(kspFixture.sources.toSet(), kspArtifact.originatingSources)
         assertTrue((aptArtifacts + kspArtifact).all { artifact ->
@@ -163,8 +167,10 @@ class JimmerModuleRendererTest {
         )
     }
 
-    private fun golden(path: String): String {
-        return requireNotNull(javaClass.getResource("/module/$path")).readText()
+    private fun golden(path: String): ByteArray {
+        return requireNotNull(javaClass.getResourceAsStream("/module/$path")).use { input ->
+            input.readBytes()
+        }
     }
 
     private fun compileJava(artifacts: List<GeneratedArtifact>) {
