@@ -107,7 +107,6 @@ internal class DtoProcessor(
             DtoGenerator(
                 ctx = ctx,
                 mutable = mutable,
-                dtoType = dtoType,
                 codeGenerator = ctx.environment.codeGenerator,
                 lsiGraph = graph,
                 lsiDtoType = lsiDtoType,

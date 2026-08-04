@@ -577,6 +577,9 @@ data class DtoPolymorphism(
         require(branches.count { branch -> branch.kind == DtoPolymorphicBranchKind.DEFAULT } <= 1) {
             "DTO polymorphism cannot contain multiple default branches"
         }
+        require(branches.map(DtoPolymorphicBranch::className).distinct().size == branches.size) {
+            "DTO polymorphism cannot contain duplicate generated branch class names"
+        }
         require(branches.map(DtoPolymorphicBranch::bodyTypeId).distinct().size == branches.size) {
             "DTO polymorphism cannot contain duplicate branch body type ids"
         }

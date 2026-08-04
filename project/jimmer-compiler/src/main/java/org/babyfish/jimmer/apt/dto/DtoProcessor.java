@@ -188,7 +188,6 @@ public class DtoProcessor {
             }
             new DtoGenerator(
                     context,
-                    dtoType,
                     graph,
                     DtoGenerationExtensionsKt.rootType(graph, qualifiedName),
                     annotationContract,

@@ -172,21 +172,18 @@ class DtoGenerationExtensionsTest {
     @Test
     fun `rejects duplicate generated polymorphic branches`() {
         val graph = graph()
-        val root = graph.typesById.getValue(ROOT_TYPE_ID)
         val typeBranch = rootPolymorphism(graph).typeBranchesInDeclarationOrder().single()
-        val duplicateRoot = root.copy(
-            polymorphism = DtoPolymorphism(
+
+        val ex = assertFailsWith<IllegalArgumentException> {
+            DtoPolymorphism(
                 exhaustive = true,
                 branches = rootPolymorphism(graph).branches + typeBranch.copy(
                     bodyTypeId = DtoTypeId("dto#duplicate-branch-body"),
                     mergedTypeId = DtoTypeId("dto#duplicate-branch-merged"),
                 ),
-            ),
-        )
-
-        assertFailsWith<IllegalArgumentException> {
-            duplicateRoot.generatedPolymorphicBranch("Special", DtoPolymorphicBranchKind.TYPE)
+            )
         }
+        assertTrue(ex.message.orEmpty().contains("duplicate generated branch class names"))
     }
 
     @Test

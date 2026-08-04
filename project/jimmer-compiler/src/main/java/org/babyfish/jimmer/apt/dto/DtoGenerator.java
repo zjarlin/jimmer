@@ -4,8 +4,6 @@ import com.squareup.javapoet.*;
 import org.babyfish.jimmer.apt.Context;
 import org.babyfish.jimmer.apt.GeneratorException;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
-import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
-import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
@@ -33,7 +31,6 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoSpecificationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoToStringRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeRefRenderer;
-import org.babyfish.jimmer.dto.compiler.*;
 import org.babyfish.jimmer.impl.util.StringUtil;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -70,8 +67,6 @@ public class DtoGenerator {
     private static final String[] EMPTY_STR_ARR = new String[0];
 
     public final Context ctx;
-
-    final DtoType<ImmutableType, ImmutableProp> dtoType;
 
     private final DtoGraph lsiGraph;
 
@@ -122,7 +117,6 @@ public class DtoGenerator {
 
     public DtoGenerator(
             Context ctx,
-            DtoType<ImmutableType, ImmutableProp> dtoType,
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
@@ -136,7 +130,6 @@ public class DtoGenerator {
     ) {
         this(
                 ctx,
-                dtoType,
                 lsiGraph,
                 lsiDtoType,
                 annotationContract,
@@ -156,14 +149,12 @@ public class DtoGenerator {
 
     private DtoGenerator(
             Context ctx,
-            DtoType<ImmutableType, ImmutableProp> dtoType,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoGenerator parent,
             String innerClassName
     ) {
         this(
                 ctx,
-                dtoType,
                 parent.lsiGraph,
                 lsiDtoType,
                 parent.annotationContract,
@@ -183,7 +174,6 @@ public class DtoGenerator {
 
     private DtoGenerator(
             Context ctx,
-            DtoType<ImmutableType, ImmutableProp> dtoType,
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
@@ -203,7 +193,6 @@ public class DtoGenerator {
             throw new IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same");
         }
         this.ctx = ctx;
-        this.dtoType = dtoType;
         this.lsiGraph = lsiGraph;
         this.lsiDtoType = lsiDtoType;
         this.parent = parent;
@@ -315,7 +304,9 @@ public class DtoGenerator {
             );
         }
         if (parent == null) {
-            typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation(dtoType.getDtoFile()));
+            typeBuilder.addAnnotation(
+                    GeneratedAnnotation.generatedAnnotation(lsiGraph.getSource().getPath())
+            );
         } else {
             typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation());
         }
@@ -427,7 +418,9 @@ public class DtoGenerator {
             );
         }
         if (parent == null) {
-            typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation(dtoType.getDtoFile()));
+            typeBuilder.addAnnotation(
+                    GeneratedAnnotation.generatedAnnotation(lsiGraph.getSource().getPath())
+            );
         } else {
             typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation());
             typeBuilder.addModifiers(Modifier.STATIC);
@@ -439,8 +432,10 @@ public class DtoGenerator {
         typeBuilder.addAnnotations(
                 AptDtoTypeAnnotationRenderer.render(lsiDtoType, annotationContract, lsiWorkspace)
         );
-        DtoPolymorphism<ImmutableType, ImmutableProp> polymorphism = dtoType.getPolymorphism();
-        assert polymorphism != null;
+        site.addzero.lsi.jimmer.dto.DtoPolymorphism polymorphism = Objects.requireNonNull(
+                lsiDtoType.getPolymorphism(),
+                "Frozen DTO polymorphic root has no polymorphism: " + getDtoClassName()
+        );
         typeBuilder.addAnnotations(
                 AptDtoJacksonPolymorphismRenderer.renderRootAnnotations(
                         lsiDtoType,
@@ -459,11 +454,13 @@ public class DtoGenerator {
 
         addPolymorphicMetadata();
         ClassName superInterfaceName = getDtoClassName();
-        DtoPolymorphicBranch<ImmutableType, ImmutableProp> defaultBranch = polymorphism.getDefaultBranch();
+        site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch defaultBranch =
+                DtoGenerationExtensionsKt.defaultBranch(polymorphism);
         if (defaultBranch != null) {
             generatePolymorphicBranch(defaultBranch, superInterfaceName);
         }
-        for (DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch : polymorphism.getTypeBranches()) {
+        for (site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch branch :
+                DtoGenerationExtensionsKt.typeBranchesInDeclarationOrder(polymorphism)) {
             generatePolymorphicBranch(branch, superInterfaceName);
         }
 
@@ -506,15 +503,13 @@ public class DtoGenerator {
     }
 
     private void generatePolymorphicBranch(
-            DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch,
+            site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch branch,
             TypeName superInterfaceName
     ) {
-        site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch lsiBranch = lsiPolymorphicBranch(branch);
         new DtoGenerator(
                 ctx,
-                dtoType.mergedWith(branch.getDtoType()),
                 lsiGraph,
-                DtoGenerationExtensionsKt.mergedType(lsiBranch, lsiGraph),
+                DtoGenerationExtensionsKt.mergedType(branch, lsiGraph),
                 annotationContract,
                 interfaceContractResolution,
                 configContractResolution,
@@ -526,26 +521,8 @@ public class DtoGenerator {
                 this,
                 branch.getClassName(),
                 superInterfaceName,
-                lsiBranch
+                branch
         ).generate();
-    }
-
-    private site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch lsiPolymorphicBranch(
-            DtoPolymorphicBranch<ImmutableType, ImmutableProp> branch
-    ) {
-        try {
-            return DtoGenerationExtensionsKt.generatedPolymorphicBranch(
-                    lsiDtoType,
-                    branch.getClassName(),
-                    site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind.valueOf(branch.getKind().name())
-            );
-        } catch (IllegalArgumentException ex) {
-            throw new DtoException(
-                    ex.getMessage() != null ? ex.getMessage() :
-                            "Cannot resolve frozen DTO polymorphic branch \"" + branch.getClassName() + "\"",
-                    ex
-            );
-        }
     }
 
     private site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch currentLsiPolymorphicBranchOrNull() {
@@ -743,18 +720,6 @@ public class DtoGenerator {
     }
 
     private void generateNestedDtoTypes() {
-        Map<String, DtoType<ImmutableType, ImmutableProp>> nativeBaseTargetsByPropName =
-                new LinkedHashMap<>();
-        for (DtoProp<ImmutableType, ImmutableProp> nativeProp : dtoType.getDtoProps()) {
-            DtoType<ImmutableType, ImmutableProp> targetType = nativeProp.getTargetType();
-            if (targetType != null &&
-                    nativeBaseTargetsByPropName.put(nativeProp.getName(), targetType) != null) {
-                throw new DtoException(
-                        "Compiled DTO type contains duplicate base property \"" +
-                                nativeProp.getName() + "\""
-                );
-            }
-        }
         for (DtoBaseProp prop :
                 DtoAccessorExtensionsKt.basePropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
             if (polymorphicRootPropOrNull(prop) != null) {
@@ -765,14 +730,6 @@ public class DtoGenerator {
             if (lsiTargetType == null) {
                 continue;
             }
-            DtoType<ImmutableType, ImmutableProp> targetType =
-                    nativeBaseTargetsByPropName.get(prop.getName());
-            if (targetType == null) {
-                throw new DtoException(
-                        "Compiled DTO property \"" + prop.getName() +
-                                "\" has no target required by the frozen DTO graph"
-                );
-            }
             String childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
                     JimmerDtoPoetTypeNames.create(
                             getGeneratedDtoPackageName(),
@@ -786,24 +743,10 @@ public class DtoGenerator {
             registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
             new DtoGenerator(
                     ctx,
-                    targetType,
                     lsiTargetType,
                     this,
                     childSimpleName
             ).generate();
-        }
-        Map<String, DtoType<ImmutableType, ImmutableProp>> nativeFoldTargetsByPropName =
-                new LinkedHashMap<>();
-        for (FoldProp<ImmutableType, ImmutableProp> nativeProp : dtoType.getFoldProps()) {
-            if (nativeFoldTargetsByPropName.put(
-                    nativeProp.getName(),
-                    nativeProp.getTargetType()
-            ) != null) {
-                throw new DtoException(
-                        "Compiled DTO type contains duplicate fold property \"" +
-                                nativeProp.getName() + "\""
-                );
-            }
         }
         for (site.addzero.lsi.jimmer.dto.DtoFoldProp prop :
                 DtoGenerationExtensionsKt.foldPropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
@@ -812,14 +755,6 @@ public class DtoGenerator {
             }
             site.addzero.lsi.jimmer.dto.DtoType lsiTargetType =
                     DtoGenerationExtensionsKt.generatedTargetType(prop, lsiGraph);
-            DtoType<ImmutableType, ImmutableProp> targetType =
-                    nativeFoldTargetsByPropName.get(prop.getName());
-            if (targetType == null) {
-                throw new DtoException(
-                        "Compiled DTO fold property \"" + prop.getName() +
-                                "\" has no target required by the frozen DTO graph"
-                );
-            }
             String childSimpleName = JimmerDtoPoetTypeNames.requireDirectChildSimpleName(
                     JimmerDtoPoetTypeNames.create(
                             getGeneratedDtoPackageName(),
@@ -833,7 +768,6 @@ public class DtoGenerator {
             registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
             new DtoGenerator(
                     ctx,
-                    targetType,
                     lsiTargetType,
                     this,
                     childSimpleName

@@ -4,7 +4,6 @@ import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
-import org.babyfish.jimmer.dto.compiler.DtoFile;
 
 public class GeneratedAnnotation {
     private GeneratedAnnotation() {
@@ -27,13 +26,13 @@ public class GeneratedAnnotation {
         return generatedAnnotation(type.getClassName());
     }
 
-    public static AnnotationSpec generatedAnnotation(DtoFile dtoFile) {
+    public static AnnotationSpec generatedAnnotation(String sourcePath) {
         return AnnotationSpec
                 .builder(Constants.GENERATED_BY_CLASS_NAME)
                 .addMember(
                         "file",
                         "$S",
-                        dtoFile.getSourcePath()
+                        sourcePath
                 )
                 .build();
     }
