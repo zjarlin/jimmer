@@ -385,6 +385,50 @@ class ImmutableDraftPoetTest {
         assertEquals(2, "@Description".toRegex().findAll(kotlinContent).count())
     }
 
+    @Test
+    fun `kotlin draft implementation keeps discriminator writable for runtime assignment`() {
+        val source = source("src/main/kotlin/demo/Account.kt", LsiLanguage.KOTLIN)
+        val accountId = typeId("demo.Account")
+        val idPropId = LsiSymbolId.property(accountId, "id")
+        val typePropId = LsiSymbolId.property(accountId, "type")
+        val origin = origin(source)
+        val workspace = LsiWorkspace(
+            sources = listOf(source),
+            declarations = listOf(
+                LsiTypeDeclaration(
+                    id = accountId,
+                    name = "Account",
+                    qualifiedName = "demo.Account",
+                    kind = LsiTypeDeclarationKind.INTERFACE,
+                    memberIds = listOf(idPropId, typePropId),
+                    annotations = listOf(LsiAnnotation(ENTITY), LsiAnnotation(INHERITANCE)),
+                    origin = origin,
+                ),
+                property(
+                    id = idPropId,
+                    ownerId = accountId,
+                    type = LONG_TYPE,
+                    annotations = listOf(LsiAnnotation(ID)),
+                    origin = origin,
+                ),
+                property(
+                    id = typePropId,
+                    ownerId = accountId,
+                    type = LsiDeclaredType(STRING),
+                    annotations = listOf(LsiAnnotation(DISCRIMINATOR)),
+                    origin = origin,
+                ),
+            ),
+        )
+        val artifact = workspace.draftArtifacts(accountId)
+            .single { candidate -> candidate.file.language == LsiLanguage.KOTLIN }
+
+        val content = LsiKotlinPoetRenderer().render(artifact).content
+
+        assertContains(content, "override var type: String")
+        assertContains(content, "this.type = value as String?")
+    }
+
     private fun LsiWorkspace.draftArtifacts(typeId: LsiSymbolId): List<LsiPoetArtifact> {
         val schema = toImmutableSchema()
         val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
@@ -475,9 +519,10 @@ class ImmutableDraftPoetTest {
 
     private fun source(
         path: String,
+        language: LsiLanguage = LsiLanguage.JAVA,
         kind: LsiSourceKind = LsiSourceKind.SOURCE,
     ): LsiSource {
-        return LsiSource.of(path, LsiLanguage.JAVA, kind)
+        return LsiSource.of(path, language, kind)
     }
 
     private fun origin(
@@ -504,6 +549,8 @@ class ImmutableDraftPoetTest {
         val LONG_TYPE = LsiPrimitiveType(LsiPrimitiveKind.LONG)
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
         val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
+        val INHERITANCE = LsiSymbolId.type("org.babyfish.jimmer.sql.Inheritance")
+        val DISCRIMINATOR = LsiSymbolId.type("org.babyfish.jimmer.sql.Discriminator")
         val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         val LIST = LsiSymbolId.type("java.util.List")
         val STRING = LsiSymbolId.type("java.lang.String")

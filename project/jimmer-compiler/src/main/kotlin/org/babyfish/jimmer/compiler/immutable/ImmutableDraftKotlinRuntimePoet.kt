@@ -854,14 +854,15 @@ internal class ImmutableDraftKotlinRuntimePoet(
     }
 
     private fun draftImplProperty(prop: JimmerImmutableDraftPropPlan): LsiPoetProperty {
+        val mutable = prop.writable || prop.isDiscriminator
         return LsiPoetProperty(
             name = prop.name,
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
             type = context.propType(prop),
-            mutable = prop.writable,
+            mutable = mutable,
             modifiers = setOf(LsiPoetModifier.OVERRIDE),
             getter = LsiPoetAccessor(body = draftGetter(prop)),
-            setter = if (prop.writable) {
+            setter = if (mutable) {
                 LsiPoetAccessor(
                     setterParameterName = prop.name,
                     setterParameterNameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
@@ -1134,7 +1135,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
     }
 
     private fun setExpression(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
-        if (!prop.writable) {
+        if (!prop.writable && !prop.isDiscriminator) {
             return draftCode { text("Unit") }
         }
         return draftCode {

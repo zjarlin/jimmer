@@ -223,6 +223,12 @@ internal data class JimmerImmutableAssociatedIdContract(
     }
 }
 
+internal val JimmerImmutableDraftPropPlan.isDiscriminator: Boolean
+    get() = !writable &&
+        !languageFormula &&
+        manyToManyBasePropId == null &&
+        valueState.hasValue
+
 internal enum class JimmerImmutableDraftPropRole {
     INHERITED_PRIMARY,
     REDEFINED,

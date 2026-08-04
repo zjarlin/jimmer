@@ -2328,12 +2328,6 @@ private val JimmerImmutableDraftPropPlan.isJavaBeanStyle: Boolean
 private val JimmerImmutableDraftPropPlan.forcedLoadedStateName: String
     get() = loadedStateFieldName ?: "__${codegenName}Loaded"
 
-private val JimmerImmutableDraftPropPlan.isDiscriminator: Boolean
-    get() = !writable &&
-        !languageFormula &&
-        manyToManyBasePropId == null &&
-        valueState.hasValue
-
 private val JimmerImmutableDraftPropPlan.unloadedValueLiteral: LsiPoetCodeBlock
     get() {
         val primitiveType = type as? LsiPrimitiveType ?: return draftCode { text("null") }
