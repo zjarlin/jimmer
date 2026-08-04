@@ -484,7 +484,166 @@ class CompilerSessionTest {
     }
 
     @Test
-    fun `最终轮禁止生成源码`() {
+    fun `源码静默功能等待其他功能本轮真正新增的源码`() {
+        val immutableSource = generatedSource(
+            content = "immutable",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.BookDraft",
+        )
+        val dtoSource = generatedSource(
+            content = "dto",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.BookView",
+        )
+        val dtoResource = GeneratedArtifact.create(
+            kind = ArtifactKind.RESOURCE,
+            path = "META-INF/jimmer/dto",
+            content = "dto",
+            aggregationMode = ArtifactAggregationMode.AGGREGATING,
+        )
+        val session = CompilerSession(
+            "source-quiescence",
+            listOf(
+                resultFeature("immutable", listOf(immutableSource)),
+                resultFeature(
+                    id = "dto",
+                    artifacts = listOf(dtoSource, dtoResource),
+                    requiresSourceQuiescence = true,
+                ),
+            ),
+        )
+
+        val first = session.execute(emptyRound(0))
+        val second = session.execute(emptyRound(1))
+
+        assertEquals(listOf(immutableSource, dtoResource).sortedBy(GeneratedArtifact::key), first.newArtifacts)
+        assertEquals(listOf(dtoSource), second.newArtifacts)
+        assertEquals(
+            listOf(immutableSource, dtoSource, dtoResource).sortedBy(GeneratedArtifact::key),
+            session.artifacts(),
+        )
+    }
+
+    @Test
+    fun `稳定源码本轮成熟时继续阻止源码静默功能`() {
+        val firstSource = generatedSource(
+            content = "first",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.FirstDraft",
+        )
+        val stableSource = generatedSource(
+            content = "stable",
+            emissionMode = ArtifactEmissionMode.STABLE,
+            qualifiedName = "example.StableDraft",
+        )
+        val dtoSource = generatedSource(
+            content = "dto",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.BookView",
+        )
+        val session = CompilerSession(
+            "stable-source-quiescence",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    if (round == 0) listOf(firstSource, stableSource) else listOf(stableSource)
+                },
+                resultFeature("dto", listOf(dtoSource), requiresSourceQuiescence = true),
+            ),
+        )
+
+        assertEquals(listOf(firstSource), session.execute(emptyRound(0)).newArtifacts)
+        assertEquals(listOf(stableSource), session.execute(emptyRound(1)).newArtifacts)
+        assertEquals(listOf(dtoSource), session.execute(emptyRound(2)).newArtifacts)
+    }
+
+    @Test
+    fun `普通稳定源码首轮候选不阻止源码静默功能`() {
+        val stableSource = generatedSource(
+            content = "stable",
+            emissionMode = ArtifactEmissionMode.STABLE,
+            qualifiedName = "example.StableDraft",
+        )
+        val dtoSource = generatedSource(
+            content = "dto",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.BookView",
+        )
+        val session = CompilerSession(
+            "stable-candidate-source-quiescence",
+            listOf(
+                resultFeature("immutable", listOf(stableSource)),
+                resultFeature("dto", listOf(dtoSource), requiresSourceQuiescence = true),
+            ),
+        )
+
+        assertEquals(listOf(dtoSource), session.execute(emptyRound(0)).newArtifacts)
+        assertEquals(listOf(stableSource), session.execute(emptyRound(1)).newArtifacts)
+    }
+
+    @Test
+    fun `多个源码静默功能在同一静默轮一起写出`() {
+        val dtoSource = generatedSource(
+            content = "dto",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.BookView",
+        )
+        val moduleSource = generatedSource(
+            content = "module",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.JimmerModule",
+        )
+        val session = CompilerSession(
+            "shared-source-quiescence",
+            listOf(
+                resultFeature("dto", listOf(dtoSource), requiresSourceQuiescence = true),
+                resultFeature("module", listOf(moduleSource), requiresSourceQuiescence = true),
+            ),
+        )
+
+        assertEquals(
+            listOf(dtoSource, moduleSource).sortedBy(GeneratedArtifact::key),
+            session.execute(emptyRound(0)).newArtifacts,
+        )
+    }
+
+    @Test
+    fun `被阻止的成熟静默稳定源码刷新当前轮候选`() {
+        val triggerSource = generatedSource(
+            content = "trigger",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.TriggerView",
+        )
+        val immutableSource = generatedSource(
+            content = "immutable",
+            emissionMode = ArtifactEmissionMode.IMMEDIATE,
+            qualifiedName = "example.BookDraft",
+        )
+        val stableDtoSource = generatedSource(
+            content = "dto",
+            emissionMode = ArtifactEmissionMode.STABLE,
+            qualifiedName = "example.BookView",
+        )
+        val session = CompilerSession(
+            "mature-stable-quiescent-source",
+            listOf(
+                roundResultFeature("immutable") { round ->
+                    if (round == 1) listOf(immutableSource) else emptyList()
+                },
+                resultFeature(
+                    "dto",
+                    listOf(triggerSource, stableDtoSource),
+                    requiresSourceQuiescence = true,
+                ),
+            ),
+        )
+
+        assertEquals(listOf(triggerSource), session.execute(emptyRound(0)).newArtifacts)
+        assertEquals(listOf(immutableSource), session.execute(emptyRound(1)).newArtifacts)
+        assertEquals(listOf(stableDtoSource), session.execute(emptyRound(2)).newArtifacts)
+    }
+
+    @Test
+    fun `最终轮禁止源码静默功能生成源码`() {
         val sourceId = LsiSymbolId.type("example.Book")
         val source = GeneratedArtifact.source(
             kind = ArtifactKind.JAVA_SOURCE,
@@ -495,7 +654,7 @@ class CompilerSessionTest {
         )
         val session = CompilerSession(
             "final-source",
-            listOf(resultFeature("immutable", listOf(source))),
+            listOf(resultFeature("dto", listOf(source), requiresSourceQuiescence = true)),
         )
 
         val exception = assertFailsWith<FinalRoundSourceGenerationException> {
@@ -504,7 +663,7 @@ class CompilerSessionTest {
             )
         }
 
-        assertEquals("immutable", exception.featureId)
+        assertEquals("dto", exception.featureId)
         assertEquals(listOf(source), exception.artifacts)
     }
 
@@ -627,8 +786,12 @@ class CompilerSessionTest {
     private fun resultFeature(
         id: String,
         artifacts: List<GeneratedArtifact>,
+        requiresSourceQuiescence: Boolean = false,
     ): JimmerCompilerFeatureProvider = object : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(id)
+        override val descriptor = JimmerCompilerFeatureDescriptor(
+            id = id,
+            requiresSourceQuiescence = requiresSourceQuiescence,
+        )
 
         override fun precompile(
             context: JimmerCompilerPrecompileContext,
@@ -661,10 +824,11 @@ class CompilerSessionTest {
     private fun generatedSource(
         content: String,
         emissionMode: ArtifactEmissionMode,
+        qualifiedName: String = "example.BookDraft",
     ): GeneratedArtifact {
         return GeneratedArtifact.source(
             kind = ArtifactKind.JAVA_SOURCE,
-            qualifiedName = "example.BookDraft",
+            qualifiedName = qualifiedName,
             content = content,
             aggregationMode = ArtifactAggregationMode.AGGREGATING,
             emissionMode = emissionMode,

@@ -10,6 +10,8 @@ data class JimmerCompilerFeatureDescriptor(
     val classpathTypeIds: Set<LsiSymbolId> = emptySet(),
     val inputResourcePaths: Set<String> = emptySet(),
     val inputDocumentKinds: Set<CompilerInputDocumentKind> = emptySet(),
+    /** 其他功能在当前轮实际写出源码时，将此功能的源码延后到下一真实轮。 */
+    val requiresSourceQuiescence: Boolean = false,
 ) {
 
     init {

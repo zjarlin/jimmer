@@ -210,6 +210,10 @@ class CompilerSession(
     private val classpathTypeIds = orderedProviders
         .flatMapTo(sortedSetOf()) { provider -> provider.descriptor.classpathTypeIds }
 
+    private val sourceQuiescentFeatureIds = orderedProviders
+        .filter { provider -> provider.descriptor.requiresSourceQuiescence }
+        .mapTo(sortedSetOf()) { provider -> provider.descriptor.id }
+
     private val artifactSet = GeneratedArtifactSet()
 
     private val stableArtifactCandidates = linkedMapOf<GeneratedArtifactKey, StableArtifactCandidate>()
@@ -237,10 +241,21 @@ class CompilerSession(
         val stagedStableCandidates = LinkedHashMap(stableArtifactCandidates)
         val newArtifacts = mutableListOf<GeneratedArtifact>()
         val diagnostics = mutableListOf<LsiDiagnostic>()
+        val quiescentSourceKeys = mutableSetOf<GeneratedArtifactKey>()
+        val firstPhaseSourceKeys = mutableSetOf<GeneratedArtifactKey>()
         for ((featureId, result) in featureResults) {
             validateFinalRoundOutput(round, featureId, result)
             roundArtifactSet.registerAll(result.artifacts)
             diagnostics += result.diagnostics
+            val sourceKeys = result.artifacts
+                .asSequence()
+                .filter { artifact -> artifact.kind.isSource }
+                .mapTo(mutableSetOf()) { artifact -> artifact.key }
+            if (featureId in sourceQuiescentFeatureIds) {
+                quiescentSourceKeys += sourceKeys
+            } else {
+                firstPhaseSourceKeys += sourceKeys
+            }
         }
         if (round.isFinal && stagedStableCandidates.isNotEmpty()) {
             throw PendingStableSourceArtifactsException(
@@ -250,37 +265,31 @@ class CompilerSession(
             )
         }
         val currentStableKeys = mutableSetOf<GeneratedArtifactKey>()
-        for (artifact in roundArtifactSet.snapshot()) {
-            when (artifact.emissionMode) {
-                ArtifactEmissionMode.IMMEDIATE -> {
-                    if (stagedArtifactSet.register(artifact) == ArtifactRegistration.ADDED) {
-                        newArtifacts += artifact
-                    }
-                }
-                ArtifactEmissionMode.STABLE -> {
-                    currentStableKeys += artifact.key
-                    val emitted = stagedArtifactSet[artifact.key]
-                    if (emitted != null) {
-                        if (emitted.stableEmissionFingerprint() != artifact.stableEmissionFingerprint()) {
-                            throw GeneratedArtifactConflictException(emitted, artifact)
-                        }
-                        stagedStableCandidates.remove(artifact.key)
-                        continue
-                    }
-                    val candidate = stagedStableCandidates[artifact.key]
-                    if (
-                        candidate != null &&
-                        candidate.roundNumber == round.number - 1 &&
-                        candidate.artifact.stableEmissionFingerprint() == artifact.stableEmissionFingerprint()
-                    ) {
-                        stagedArtifactSet.register(artifact)
-                        stagedStableCandidates.remove(artifact.key)
-                        newArtifacts += artifact
-                    } else {
-                        stagedStableCandidates[artifact.key] = StableArtifactCandidate(artifact, round.number)
-                    }
-                }
-            }
+        val exclusivelyQuiescentSourceKeys = quiescentSourceKeys - firstPhaseSourceKeys
+        val (quiescentSources, firstPhaseArtifacts) = roundArtifactSet
+            .snapshot()
+            .partition { artifact -> artifact.key in exclusivelyQuiescentSourceKeys }
+        val firstPhaseSourceEmitted = firstPhaseArtifacts.fold(false) { sourceEmitted, artifact ->
+            stageArtifact(
+                artifact = artifact,
+                roundNumber = round.number,
+                allowEmission = true,
+                stagedArtifactSet = stagedArtifactSet,
+                stagedStableCandidates = stagedStableCandidates,
+                currentStableKeys = currentStableKeys,
+                newArtifacts = newArtifacts,
+            ) || sourceEmitted
+        }
+        for (artifact in quiescentSources) {
+            stageArtifact(
+                artifact = artifact,
+                roundNumber = round.number,
+                allowEmission = !firstPhaseSourceEmitted,
+                stagedArtifactSet = stagedArtifactSet,
+                stagedStableCandidates = stagedStableCandidates,
+                currentStableKeys = currentStableKeys,
+                newArtifacts = newArtifacts,
+            )
         }
         if (!round.isFinal) {
             stagedStableCandidates.keys.retainAll(currentStableKeys)
@@ -320,6 +329,60 @@ class CompilerSession(
     fun pendingStableSourceOriginatingSymbols(): Set<LsiSymbolId> {
         return stableArtifactCandidates.values
             .flatMapTo(sortedSetOf()) { candidate -> candidate.artifact.originatingSymbols }
+    }
+
+    private fun stageArtifact(
+        artifact: GeneratedArtifact,
+        roundNumber: Int,
+        allowEmission: Boolean,
+        stagedArtifactSet: GeneratedArtifactSet,
+        stagedStableCandidates: MutableMap<GeneratedArtifactKey, StableArtifactCandidate>,
+        currentStableKeys: MutableSet<GeneratedArtifactKey>,
+        newArtifacts: MutableList<GeneratedArtifact>,
+    ): Boolean {
+        return when (artifact.emissionMode) {
+            ArtifactEmissionMode.IMMEDIATE -> {
+                if (!allowEmission) {
+                    val emitted = stagedArtifactSet[artifact.key]
+                    if (emitted != null && emitted != artifact) {
+                        throw GeneratedArtifactConflictException(emitted, artifact)
+                    }
+                    false
+                } else if (stagedArtifactSet.register(artifact) == ArtifactRegistration.ADDED) {
+                    newArtifacts += artifact
+                    artifact.kind.isSource
+                } else {
+                    false
+                }
+            }
+            ArtifactEmissionMode.STABLE -> {
+                currentStableKeys += artifact.key
+                val emitted = stagedArtifactSet[artifact.key]
+                if (emitted != null) {
+                    if (emitted.stableEmissionFingerprint() != artifact.stableEmissionFingerprint()) {
+                        throw GeneratedArtifactConflictException(emitted, artifact)
+                    }
+                    stagedStableCandidates.remove(artifact.key)
+                    false
+                } else {
+                    val candidate = stagedStableCandidates[artifact.key]
+                    if (
+                        allowEmission &&
+                        candidate != null &&
+                        candidate.roundNumber == roundNumber - 1 &&
+                        candidate.artifact.stableEmissionFingerprint() == artifact.stableEmissionFingerprint()
+                    ) {
+                        stagedArtifactSet.register(artifact)
+                        stagedStableCandidates.remove(artifact.key)
+                        newArtifacts += artifact
+                        true
+                    } else {
+                        stagedStableCandidates[artifact.key] = StableArtifactCandidate(artifact, roundNumber)
+                        false
+                    }
+                }
+            }
+        }
     }
 
     private fun collect(
