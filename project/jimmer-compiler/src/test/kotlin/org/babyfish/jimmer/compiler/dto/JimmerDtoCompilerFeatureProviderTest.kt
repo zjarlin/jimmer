@@ -74,6 +74,9 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 import site.addzero.lsi.jimmer.dto.fingerprint
 import site.addzero.lsi.jimmer.dto.normalizedSnapshot
+import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactEmissionMode
+import site.addzero.lsi.codegen.ArtifactKind
 
 class JimmerDtoCompilerFeatureProviderTest {
     @Test
@@ -85,6 +88,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         assertEquals(setOf(IMMUTABLE_FEATURE_ID), provider.descriptor.dependsOn)
         assertEquals(setOf(JACKSON_3_OBJECT_MAPPER_TYPE_ID), provider.descriptor.classpathTypeIds)
         assertEquals(setOf(CompilerInputDocumentKind.DTO), provider.descriptor.inputDocumentKinds)
+        assertTrue(provider.descriptor.requiresSourceQuiescence)
         assertTrue(featureIds.indexOf(IMMUTABLE_FEATURE_ID) < featureIds.indexOf(DTO_FEATURE_ID))
     }
 
@@ -1140,7 +1144,15 @@ class JimmerDtoCompilerFeatureProviderTest {
             },
         )
         assertEquals(setOf(BOOK_ID), second.dtoResult().processedSymbols)
-        assertTrue(second.dtoResult().artifacts.isEmpty())
+        val artifact = second.dtoResult().artifacts.single()
+        assertEquals(ArtifactKind.JAVA_SOURCE, artifact.kind)
+        assertEquals("demo/dto/BookView.java", artifact.path)
+        assertEquals(ArtifactAggregationMode.AGGREGATING, artifact.aggregationMode)
+        assertEquals(ArtifactEmissionMode.IMMEDIATE, artifact.emissionMode)
+        assertTrue(secondGraph.source in artifact.originatingSources)
+        assertTrue(secondGraph.source in artifact.dependencySources)
+        assertTrue(BOOK_ID in artifact.dependencySymbols)
+        assertTrue("public class BookView" in artifact.content)
     }
 
     @Test
@@ -1244,6 +1256,15 @@ class JimmerDtoCompilerFeatureProviderTest {
             },
         )
         assertEquals(setOf(BOOK_ID), second.dtoResult().processedSymbols)
+        val artifact = second.dtoResult().artifacts.single()
+        assertEquals(ArtifactKind.KOTLIN_SOURCE, artifact.kind)
+        assertEquals("demo/dto/BookView.kt", artifact.path)
+        assertEquals(ArtifactAggregationMode.AGGREGATING, artifact.aggregationMode)
+        assertEquals(ArtifactEmissionMode.IMMEDIATE, artifact.emissionMode)
+        assertTrue(secondGraph.source in artifact.originatingSources)
+        assertTrue(secondGraph.source in artifact.dependencySources)
+        assertTrue(BOOK_ID in artifact.dependencySymbols)
+        assertTrue("class BookView" in artifact.content)
     }
 
     @Test
@@ -1264,8 +1285,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         assertEquals(JimmerDtoCompilerFeatureStatus.INPUT_PENDING, active.dtoState().status)
         assertTrue(active.dtoResult().processedSymbols.isEmpty())
         assertTrue(active.diagnostics.isEmpty())
-        assertTrue(!active.dtoGenerationReady())
-        assertTrue(!active.dtoGenerationTerminal())
+        assertTrue(active.dtoResult().artifacts.isEmpty())
 
         val final = session("dto-ksp-input-discovery-final").execute(
             round(

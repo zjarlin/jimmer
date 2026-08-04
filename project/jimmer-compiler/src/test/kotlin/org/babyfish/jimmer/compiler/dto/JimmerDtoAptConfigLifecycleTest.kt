@@ -35,9 +35,12 @@ class JimmerDtoAptConfigLifecycleTest {
         val classesDir = projectDir.resolve("build/classes")
         val generatedDir = projectDir.resolve("build/generated")
         val sourceFiles = listOf(
-            sourceDir.resolve("demo/Models.java").also { file ->
+            sourceDir.resolve("demo/Author.java").also { file ->
                 file.parentFile.mkdirs()
-                file.writeText(JAVA_SOURCE)
+                file.writeText(AUTHOR_SOURCE)
+            },
+            sourceDir.resolve("demo/Book.java").also { file ->
+                file.writeText(BOOK_SOURCE)
             },
             sourceDir.resolve("demo/AuthorFilter.java").also { file ->
                 file.writeText(FILTER_SOURCE)
@@ -236,7 +239,20 @@ class JimmerDtoAptConfigLifecycleTest {
             }
         """.trimIndent()
 
-        val JAVA_SOURCE = """
+        val AUTHOR_SOURCE = """
+            package demo;
+
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.Id;
+
+            @Entity
+            public interface Author {
+                @Id
+                long id();
+            }
+        """.trimIndent()
+
+        val BOOK_SOURCE = """
             package demo;
 
             import java.util.List;
@@ -245,13 +261,7 @@ class JimmerDtoAptConfigLifecycleTest {
             import org.babyfish.jimmer.sql.ManyToMany;
 
             @Entity
-            interface Author {
-                @Id
-                long id();
-            }
-
-            @Entity
-            interface Book {
+            public interface Book {
                 @Id
                 long id();
 

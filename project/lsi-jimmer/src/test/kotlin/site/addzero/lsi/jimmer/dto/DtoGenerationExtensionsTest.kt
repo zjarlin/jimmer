@@ -56,7 +56,7 @@ class DtoGenerationExtensionsTest {
         assertNull(baseProps[4].targetTypeId)
         assertEquals("contract.ExternalView", baseProps[4].targetTypeReference?.qualifiedName)
         assertNull(baseProps[5].generatedTargetType(graph))
-        assertTrue(REFERENCE_SOURCE in graph.originatingSources())
+        assertTrue(REFERENCE_SOURCE in graph.dependencySources())
         assertEquals(listOf("folded"), foldProps.map(DtoFoldProp::name))
         assertEquals(FOLD_TYPE_ID, foldProps.single().generatedTargetType(graph).id)
         assertEquals(NESTED_PROP_ID, foldProps.single().nullGuardProp(graph)?.id)

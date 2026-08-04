@@ -1,13 +1,15 @@
 package org.babyfish.jimmer.apt.dto;
 
 import com.squareup.javapoet.*;
-import org.babyfish.jimmer.apt.Context;
 import org.babyfish.jimmer.apt.GeneratorException;
+import org.babyfish.jimmer.apt.JacksonTypes;
 import org.babyfish.jimmer.apt.immutable.generator.Constants;
 import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
 import org.babyfish.jimmer.client.ApiIgnore;
+import org.babyfish.jimmer.compiler.dto.JimmerDtoFieldVisibility;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
+import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoAccessorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseContractRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseValueRenderer;
@@ -59,14 +61,11 @@ import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
 import javax.lang.model.element.Modifier;
-import java.io.IOException;
 import java.util.*;
 
 public class DtoGenerator {
 
     private static final String[] EMPTY_STR_ARR = new String[0];
-
-    public final Context ctx;
 
     private final DtoGraph lsiGraph;
 
@@ -92,6 +91,10 @@ public class DtoGenerator {
 
     private final boolean hibernateValidatorEnhancement;
 
+    private final JacksonTypes jacksonTypes;
+
+    private final Modifier dtoFieldModifier;
+
     private final DtoGenerator parent;
 
     private final String innerClassName;
@@ -116,7 +119,6 @@ public class DtoGenerator {
     private TypeSpec.Builder typeBuilder;
 
     public DtoGenerator(
-            Context ctx,
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
@@ -125,11 +127,9 @@ public class DtoGenerator {
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
-            JimmerDtoJacksonVersion jacksonVersion,
-            boolean hibernateValidatorEnhancement
+            JimmerDtoRendererOptions rendererOptions
     ) {
         this(
-                ctx,
                 lsiGraph,
                 lsiDtoType,
                 annotationContract,
@@ -138,8 +138,7 @@ public class DtoGenerator {
                 immutableSchema,
                 lsiWorkspace,
                 batchRootDtoTypeNames,
-                jacksonVersion,
-                hibernateValidatorEnhancement,
+                rendererOptions,
                 null,
                 null,
                 null,
@@ -148,13 +147,11 @@ public class DtoGenerator {
     }
 
     private DtoGenerator(
-            Context ctx,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoGenerator parent,
             String innerClassName
     ) {
         this(
-                ctx,
                 parent.lsiGraph,
                 lsiDtoType,
                 parent.annotationContract,
@@ -163,8 +160,7 @@ public class DtoGenerator {
                 parent.immutableSchema,
                 parent.lsiWorkspace,
                 parent.batchRootDtoTypeNames,
-                parent.jacksonVersion,
-                parent.hibernateValidatorEnhancement,
+                null,
                 parent,
                 innerClassName,
                 null,
@@ -173,7 +169,6 @@ public class DtoGenerator {
     }
 
     private DtoGenerator(
-            Context ctx,
             DtoGraph lsiGraph,
             site.addzero.lsi.jimmer.dto.DtoType lsiDtoType,
             DtoAnnotationContract annotationContract,
@@ -182,8 +177,7 @@ public class DtoGenerator {
             ImmutableSchema immutableSchema,
             LsiWorkspace lsiWorkspace,
             Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames,
-            JimmerDtoJacksonVersion jacksonVersion,
-            boolean hibernateValidatorEnhancement,
+            JimmerDtoRendererOptions rendererOptions,
             DtoGenerator parent,
             String innerClassName,
             @Nullable TypeName polymorphicSuperInterfaceName,
@@ -192,7 +186,6 @@ public class DtoGenerator {
         if ((parent == null) != (innerClassName == null)) {
             throw new IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same");
         }
-        this.ctx = ctx;
         this.lsiGraph = lsiGraph;
         this.lsiDtoType = lsiDtoType;
         this.parent = parent;
@@ -241,10 +234,18 @@ public class DtoGenerator {
                         this.batchRootDtoTypeNames
         );
         this.readOnlyGeneratedDtoTypeNames = Collections.unmodifiableMap(generatedDtoTypeNames);
-        this.jacksonVersion = parent != null ? parent.jacksonVersion : jacksonVersion;
+        this.jacksonVersion = parent != null ?
+                parent.jacksonVersion :
+                Objects.requireNonNull(rendererOptions, "rendererOptions").getJacksonVersion();
         this.hibernateValidatorEnhancement = parent != null ?
                 parent.hibernateValidatorEnhancement :
-                hibernateValidatorEnhancement;
+                rendererOptions.getHibernateValidatorEnhancement();
+        this.jacksonTypes = parent != null ?
+                parent.jacksonTypes :
+                jacksonTypes(rendererOptions.getJacksonVersion());
+        this.dtoFieldModifier = parent != null ?
+                parent.dtoFieldModifier :
+                dtoFieldModifier(rendererOptions.getAptFieldVisibility());
         this.polymorphicSuperInterfaceName = polymorphicSuperInterfaceName;
         this.polymorphicBranch = lsiPolymorphicBranch != null;
         this.lsiPolymorphicBranch = lsiPolymorphicBranch;
@@ -265,7 +266,19 @@ public class DtoGenerator {
         registerGeneratedDtoTypeName();
     }
 
-    public void generate() {
+    public String generate() {
+        if (parent != null) {
+            throw new IllegalStateException("Only root DTO types can produce generated artifacts");
+        }
+        generateType();
+        JavaFile javaFile = JavaFile
+                .builder(generatedDtoPackageName, typeBuilder.build())
+                .indent("    ")
+                .build();
+        return javaFile.toString();
+    }
+
+    private void generateType() {
         if (DtoAccessorExtensionsKt.isPolymorphicRoot(lsiDtoType)) {
             generatePolymorphic();
             return;
@@ -313,7 +326,7 @@ public class DtoGenerator {
         if (isSerializerRequired()) {
             typeBuilder.addAnnotation(
                     AnnotationSpec
-                            .builder(ctx.getJacksonTypes().jsonSerialize)
+                            .builder(jacksonTypes.jsonSerialize)
                             .addMember(
                                     "using",
                                     "$T.class",
@@ -325,7 +338,7 @@ public class DtoGenerator {
         if (isBuildRequired()) {
             typeBuilder.addAnnotation(
                     AnnotationSpec
-                            .builder(ctx.getJacksonTypes().jsonDeserialize)
+                            .builder(jacksonTypes.jsonDeserialize)
                             .addMember(
                                     "builder",
                                     "$T.class",
@@ -367,26 +380,6 @@ public class DtoGenerator {
         if (innerClassName != null) {
             assert parent != null;
             parent.typeBuilder.addType(typeBuilder.build());
-        } else {
-            try {
-                JavaFile
-                        .builder(
-                                generatedDtoPackageName,
-                                typeBuilder.build()
-                        )
-                        .indent("    ")
-                        .build()
-                        .writeTo(ctx.getFiler());
-            } catch (IOException ex) {
-                throw new GeneratorException(
-                        String.format(
-                                "Cannot generate dto type '%s' for '%s'",
-                                getSimpleName(),
-                                immutableBaseType().getQualifiedName()
-                        ),
-                        ex
-                );
-            }
         }
     }
 
@@ -467,26 +460,6 @@ public class DtoGenerator {
         if (innerClassName != null) {
             assert parent != null;
             parent.typeBuilder.addType(typeBuilder.build());
-        } else {
-            try {
-                JavaFile
-                        .builder(
-                                generatedDtoPackageName,
-                                typeBuilder.build()
-                        )
-                        .indent("    ")
-                        .build()
-                        .writeTo(ctx.getFiler());
-            } catch (IOException ex) {
-                throw new GeneratorException(
-                        String.format(
-                                "Cannot generate dto type '%s' for '%s'",
-                                getSimpleName(),
-                                immutableBaseType().getQualifiedName()
-                        ),
-                        ex
-                );
-            }
         }
     }
 
@@ -507,7 +480,6 @@ public class DtoGenerator {
             TypeName superInterfaceName
     ) {
         new DtoGenerator(
-                ctx,
                 lsiGraph,
                 DtoGenerationExtensionsKt.mergedType(branch, lsiGraph),
                 annotationContract,
@@ -516,13 +488,56 @@ public class DtoGenerator {
                 immutableSchema,
                 lsiWorkspace,
                 batchRootDtoTypeNames,
-                jacksonVersion,
-                hibernateValidatorEnhancement,
+                null,
                 this,
                 branch.getClassName(),
                 superInterfaceName,
                 branch
-        ).generate();
+        ).generateType();
+    }
+
+    private static JacksonTypes jacksonTypes(JimmerDtoJacksonVersion jacksonVersion) {
+        if (jacksonVersion == JimmerDtoJacksonVersion.JACKSON_3) {
+            return new JacksonTypes(
+                    ClassName.get("com.fasterxml.jackson.annotation", "JsonIgnore"),
+                    ClassName.get("com.fasterxml.jackson.annotation", "JsonValue"),
+                    ClassName.get("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
+                    ClassName.get("com.fasterxml.jackson.annotation", "JsonFormat"),
+                    ClassName.get("tools.jackson.databind", "ValueSerializer"),
+                    ClassName.get("tools.jackson.databind.annotation", "JsonSerialize"),
+                    ClassName.get("tools.jackson.databind.annotation", "JsonDeserialize"),
+                    ClassName.get("tools.jackson.databind.annotation", "JsonPOJOBuilder"),
+                    ClassName.get("tools.jackson.databind.annotation", "JsonNaming"),
+                    ClassName.get("tools.jackson.core", "JsonGenerator"),
+                    ClassName.get("tools.jackson.databind", "SerializationContext")
+            );
+        }
+        return new JacksonTypes(
+                ClassName.get("com.fasterxml.jackson.annotation", "JsonIgnore"),
+                ClassName.get("com.fasterxml.jackson.annotation", "JsonValue"),
+                ClassName.get("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
+                ClassName.get("com.fasterxml.jackson.annotation", "JsonFormat"),
+                ClassName.get("com.fasterxml.jackson.databind", "JsonSerializer"),
+                ClassName.get("com.fasterxml.jackson.databind.annotation", "JsonSerialize"),
+                ClassName.get("com.fasterxml.jackson.databind.annotation", "JsonDeserialize"),
+                ClassName.get("com.fasterxml.jackson.databind.annotation", "JsonPOJOBuilder"),
+                ClassName.get("com.fasterxml.jackson.databind.annotation", "JsonNaming"),
+                ClassName.get("com.fasterxml.jackson.core", "JsonGenerator"),
+                ClassName.get("com.fasterxml.jackson.databind", "SerializerProvider")
+        );
+    }
+
+    private static Modifier dtoFieldModifier(JimmerDtoFieldVisibility visibility) {
+        switch (visibility) {
+            case PRIVATE:
+                return Modifier.PRIVATE;
+            case PROTECTED:
+                return Modifier.PROTECTED;
+            case PUBLIC:
+                return Modifier.PUBLIC;
+            default:
+                throw new AssertionError("Unexpected DTO field visibility: " + visibility);
+        }
     }
 
     private site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch currentLsiPolymorphicBranchOrNull() {
@@ -742,11 +757,10 @@ public class DtoGenerator {
             childSimpleNames.add(childSimpleName);
             registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
             new DtoGenerator(
-                    ctx,
                     lsiTargetType,
                     this,
                     childSimpleName
-            ).generate();
+            ).generateType();
         }
         for (site.addzero.lsi.jimmer.dto.DtoFoldProp prop :
                 DtoGenerationExtensionsKt.foldPropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
@@ -767,11 +781,10 @@ public class DtoGenerator {
             childSimpleNames.add(childSimpleName);
             registerGeneratedDtoTypeName(lsiTargetType, childSimpleNames);
             new DtoGenerator(
-                    ctx,
                     lsiTargetType,
                     this,
                     childSimpleName
-            ).generate();
+            ).generateType();
         }
     }
 
@@ -947,7 +960,7 @@ public class DtoGenerator {
                         null;
         FieldSpec.Builder builder = FieldSpec
                 .builder(typeName, prop.getName())
-                .addModifiers(ctx.getDtoFieldModifier());
+                .addModifiers(dtoFieldModifier);
         if (userProp != null) {
             String defaultValueText = userProp.getDefaultValueText();
             if (defaultValueText != null) {
@@ -968,7 +981,7 @@ public class DtoGenerator {
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
-                        isBuilderRequired ? ctx.getJacksonTypes().jsonDeserialize.reflectionName() : null
+                        isBuilderRequired ? jacksonTypes.jsonDeserialize.reflectionName() : null
                 )
         );
         typeBuilder.addField(builder.build());
@@ -978,7 +991,7 @@ public class DtoGenerator {
         FieldSpec stateField = AptDtoLoadedStateRenderer.renderStorageField(
                 prop,
                 lsiGraph,
-                ctx.getDtoFieldModifier()
+                dtoFieldModifier
         );
         if (stateField != null) {
             typeBuilder.addField(stateField);
@@ -1065,7 +1078,7 @@ public class DtoGenerator {
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
-                        isBuilderRequired ? ctx.getJacksonTypes().jsonDeserialize.reflectionName() : null
+                        isBuilderRequired ? jacksonTypes.jsonDeserialize.reflectionName() : null
                 )
         );
         if (stateFieldName != null) {
@@ -1135,7 +1148,7 @@ public class DtoGenerator {
                     .returns(TypeName.BOOLEAN)
                     .addModifiers(Modifier.PUBLIC)
                     .addAnnotation(ApiIgnore.class)
-                    .addAnnotation(ctx.getJacksonTypes().jsonIgnore)
+                    .addAnnotation(jacksonTypes.jsonIgnore)
                     .addStatement("return this.$L", stateFieldName);
             typeBuilder.addMethod(isLoadedBuilder.build());
             MethodSpec.Builder setLoadedBuilder = MethodSpec

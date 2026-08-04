@@ -1,24 +1,17 @@
 package org.babyfish.jimmer.compiler.apt
 
-import org.babyfish.jimmer.apt.Context
 import org.babyfish.jimmer.apt.MetaException
-import org.babyfish.jimmer.apt.dto.DtoProcessor
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
-import org.babyfish.jimmer.compiler.dto.dtoStateOrNull
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
-import org.babyfish.jimmer.compiler.immutable.immutableStateOrNull
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
-import org.babyfish.jimmer.dto.compiler.SourceTypeFilter
 import org.babyfish.jimmer.sql.EnableDtoGeneration
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
 import javax.annotation.processing.SupportedAnnotationTypes
 import javax.lang.model.SourceVersion
-import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 
@@ -41,13 +34,7 @@ class JimmerProcessor : AbstractProcessor() {
 
     private lateinit var lsiDriver: AptLsiCompilerDriver
 
-    private lateinit var context: Context
-
     private lateinit var messager: javax.annotation.processing.Messager
-
-    private var dtoGenerated = false
-
-    private lateinit var dtoFieldModifier: Modifier
 
     override fun getSupportedSourceVersion(): SourceVersion = SourceVersion.latest()
 
@@ -62,31 +49,6 @@ class JimmerProcessor : AbstractProcessor() {
         super.init(processingEnv)
         lsiDriver = AptLsiCompilerDriver(processingEnv)
         messager = processingEnv.messager
-        val includes = processingEnv.options["jimmer.source.includes"]
-        val excludes = processingEnv.options["jimmer.source.excludes"]
-        dtoFieldModifier = when (val visibility = processingEnv.options["jimmer.dto.fieldVisibility"]) {
-            null, "private" -> Modifier.PRIVATE
-            "protected" -> Modifier.PROTECTED
-            "public" -> Modifier.PUBLIC
-            else -> throw IllegalArgumentException(
-                "The apt options `jimmer.dto.fieldVisibility` can only be " +
-                    "\"private\", \"protected\" or \"public\"",
-            )
-        }
-        context = Context(
-            processingEnv.elementUtils,
-            processingEnv.typeUtils,
-            processingEnv.filer,
-            processingEnv.options["jimmer.keepIsPrefix"] == "true",
-            SourceTypeFilter(includes, excludes),
-            detectIsJackson3(processingEnv),
-            processingEnv.options["jimmer.entry.immutables"],
-            processingEnv.options["jimmer.entry.tables"],
-            processingEnv.options["jimmer.entry.tableExes"],
-            processingEnv.options["jimmer.entry.fetchers"],
-            processingEnv.options["jimmer.buddy.ignoreResourceGeneration"] == "true",
-            dtoFieldModifier,
-        )
     }
 
     override fun process(
@@ -94,36 +56,7 @@ class JimmerProcessor : AbstractProcessor() {
         roundEnv: RoundEnvironment,
     ): Boolean {
         try {
-            val lsiRoundResult = lsiDriver.process(roundEnv)
-            var generated = lsiRoundResult.generatedSources
-            if (
-                !roundEnv.processingOver() &&
-                !generated &&
-                !dtoGenerated &&
-                lsiRoundResult.dtoGenerationReady()
-            ) {
-                dtoGenerated = true
-                val dtoState = requireNotNull(lsiRoundResult.dtoStateOrNull()) {
-                    "DTO generation requires the frozen DTO compiler state"
-                }
-                val immutableState = requireNotNull(lsiRoundResult.immutableStateOrNull()) {
-                    "DTO generation requires the frozen immutable compiler state"
-                }
-                generated = DtoProcessor(
-                    context,
-                    dtoState.graphs,
-                    dtoState.annotationContractsBySource,
-                    dtoState.interfaceContractsBySource,
-                    dtoState.configContractsBySource,
-                    immutableState.schema,
-                    lsiRoundResult.round.workspace,
-                    dtoState.rendererOptions.jacksonVersion,
-                    dtoState.rendererOptions.hibernateValidatorEnhancement,
-                ).process()
-            }
-            if (generated) {
-                return true
-            }
+            lsiDriver.process(roundEnv)
         } catch (ex: MetaException) {
             messager.printMessage(
                 Diagnostic.Kind.ERROR,
@@ -169,15 +102,6 @@ class JimmerProcessor : AbstractProcessor() {
             "jimmer.source.excludes",
             "jimmer.source.includes",
         )
-
-        private fun detectIsJackson3(processingEnv: ProcessingEnvironment): Boolean {
-            val jackson3 = processingEnv.options["jimmer.jackson3"]
-            return if (jackson3.isNullOrEmpty()) {
-                processingEnv.elementUtils.getTypeElement("tools.jackson.databind.ObjectMapper") != null
-            } else {
-                jackson3 == "true"
-            }
-        }
 
     }
 }

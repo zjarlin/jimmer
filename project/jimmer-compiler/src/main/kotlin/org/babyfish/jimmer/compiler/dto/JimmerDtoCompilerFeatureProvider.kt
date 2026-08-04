@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
+import org.babyfish.jimmer.apt.dto.DtoProcessor as AptDtoProcessor
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
@@ -10,12 +11,12 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
-import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import org.babyfish.jimmer.dto.compiler.DtoModifier
+import org.babyfish.jimmer.ksp.dto.DtoProcessor as KspDtoProcessor
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
@@ -33,6 +34,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         dependsOn = setOf(IMMUTABLE_FEATURE_ID),
         classpathTypeIds = setOf(JACKSON_3_OBJECT_MAPPER_TYPE_ID),
         inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+        requiresSourceQuiescence = true,
     )
 
     override fun precompile(
@@ -116,7 +118,49 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult {
-        if (!context.round.isFinal || !context.round.inputDocumentDiscoveryComplete) {
+        if (context.round.isFinal) {
+            return renderInputDocumentBundle(context)
+        }
+        val state = requireNotNull(context.state as? JimmerDtoCompilerFeatureState) {
+            "DTO feature render requires the frozen DTO compiler state"
+        }
+        if (state.status != JimmerDtoCompilerFeatureStatus.RESOLVED) {
+            return JimmerCompilerFeatureRenderResult()
+        }
+        val immutableState = requireNotNull(
+            context.dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
+        ) {
+            "DTO feature render requires immutable compiler state"
+        }
+        val artifacts = when (context.round.platform) {
+            CompilerPlatform.APT -> AptDtoProcessor(
+                state.graphs,
+                state.annotationContractsBySource,
+                state.interfaceContractsBySource,
+                state.configContractsBySource,
+                immutableState.schema,
+                context.round.workspace,
+                state.rendererOptions,
+            ).process()
+            CompilerPlatform.KSP -> KspDtoProcessor(
+                graphs = state.graphs,
+                immutableSchema = immutableState.schema,
+                rendererOptions = state.rendererOptions,
+                effectiveMutableByRootTypeId = state.effectiveKspMutableByRootTypeId,
+                workspace = context.round.workspace,
+                annotationContractsBySource = state.annotationContractsBySource,
+                interfaceContractsBySource = state.interfaceContractsBySource,
+                configContractsBySource = state.configContractsBySource,
+            ).process()
+            CompilerPlatform.UNKNOWN -> emptyList()
+        }
+        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+    }
+
+    private fun renderInputDocumentBundle(
+        context: JimmerCompilerRenderContext,
+    ): JimmerCompilerFeatureRenderResult {
+        if (!context.round.inputDocumentDiscoveryComplete) {
             return JimmerCompilerFeatureRenderResult()
         }
         val bundleId = context.round.options[CompilerInputDocumentBundleRenderer.BUNDLE_ID_OPTION]
@@ -496,24 +540,3 @@ internal const val DTO_FEATURE_ID = "dto"
 private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val DEFAULT_NULLABLE_INPUT_MODIFIER_OPTION = "jimmer.dto.defaultNullableInputModifier"
 internal val JACKSON_3_OBJECT_MAPPER_TYPE_ID = LsiSymbolId.type("tools.jackson.databind.ObjectMapper")
-
-internal fun CompilerRoundResult.dtoStateOrNull(): JimmerDtoCompilerFeatureState? {
-    return featureResults[DTO_FEATURE_ID]?.state as? JimmerDtoCompilerFeatureState
-}
-
-internal fun CompilerRoundResult.dtoGenerationReady(): Boolean {
-    return dtoStateOrNull()?.status?.let { status ->
-        status == JimmerDtoCompilerFeatureStatus.RESOLVED
-    } ?: true
-}
-
-internal fun CompilerRoundResult.dtoGenerationTerminal(): Boolean {
-    return dtoStateOrNull()?.status?.let { status ->
-        status !in setOf(
-            JimmerDtoCompilerFeatureStatus.DEFERRED,
-            JimmerDtoCompilerFeatureStatus.PENDING,
-            JimmerDtoCompilerFeatureStatus.INPUT_PENDING,
-            JimmerDtoCompilerFeatureStatus.DEPENDENCY_DEFERRED,
-        )
-    } ?: true
-}

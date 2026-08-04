@@ -1,8 +1,11 @@
 package org.babyfish.jimmer.ksp.dto
 
-import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
-import org.babyfish.jimmer.ksp.Context
+import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
+import site.addzero.lsi.codegen.ArtifactAggregationMode
+import site.addzero.lsi.codegen.ArtifactEmissionMode
+import site.addzero.lsi.codegen.ArtifactKind
+import site.addzero.lsi.codegen.GeneratedArtifact
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
@@ -10,16 +13,16 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.jimmer.dto.dependencySources
+import site.addzero.lsi.jimmer.dto.dependencySymbols
 import site.addzero.lsi.jimmer.dto.rootTypesInDeclarationOrder
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 
 internal class DtoProcessor(
-    private val ctx: Context,
     graphs: Collection<DtoGraph>,
     private val immutableSchema: ImmutableSchema,
-    private val jacksonVersion: JimmerDtoJacksonVersion,
-    private val hibernateValidatorEnhancement: Boolean,
+    private val rendererOptions: JimmerDtoRendererOptions,
     private val effectiveMutableByRootTypeId: Map<DtoTypeId, Boolean>,
     private val workspace: LsiWorkspace,
     private val annotationContractsBySource: Map<LsiSource, DtoAnnotationContract>,
@@ -31,9 +34,7 @@ internal class DtoProcessor(
     private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName> =
         JimmerDtoPoetTypeNames.roots(graphs)
 
-    fun process(): Boolean {
-        val allFiles = ctx.resolver.getAllFiles().toList()
-        var generated = false
+    fun process(): List<GeneratedArtifact> = buildList {
         for (graph in graphs) {
             val annotationContract = annotationContractsBySource[graph.source]
                 ?: throw DtoException(
@@ -47,25 +48,35 @@ internal class DtoProcessor(
                 ?: throw DtoException(
                     "No frozen DTO config contract for \"${graph.source.path}\""
                 )
+            val dependencySymbols = graph.dependencySymbols()
             for (rootType in graph.rootTypesInDeclarationOrder()) {
-                DtoGenerator(
-                    ctx = ctx,
+                val rootTypeName = rootDtoTypeNamesByTypeId.getValue(rootType.id)
+                val content = DtoGenerator(
                     mutable = effectiveMutableByRootTypeId.getValue(rootType.id),
-                    codeGenerator = ctx.environment.codeGenerator,
                     lsiGraph = graph,
                     lsiDtoType = rootType,
                     immutableSchema = immutableSchema,
-                    jacksonVersion = jacksonVersion,
-                    hibernateValidatorEnhancement = hibernateValidatorEnhancement,
+                    rendererOptions = rendererOptions,
                     workspace = workspace,
                     annotationContract = annotationContract,
                     interfaceContractResolution = interfaceContractResolution,
                     configContractResolution = configContractResolution,
                     rootDtoTypeNamesByTypeId = rootDtoTypeNamesByTypeId,
-                ).generate(allFiles)
-                generated = true
+                ).generate()
+                add(
+                    GeneratedArtifact.source(
+                        kind = ArtifactKind.KOTLIN_SOURCE,
+                        qualifiedName = rootTypeName.canonicalName,
+                        content = content,
+                        aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                        emissionMode = ArtifactEmissionMode.IMMEDIATE,
+                        originatingSymbols = emptySet(),
+                        originatingSources = setOf(graph.source),
+                        dependencySymbols = dependencySymbols,
+                        dependencySources = graph.dependencySources(),
+                    )
+                )
             }
         }
-        return generated
     }
 }

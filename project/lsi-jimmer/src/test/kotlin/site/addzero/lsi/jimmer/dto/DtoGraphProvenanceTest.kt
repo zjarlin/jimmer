@@ -180,7 +180,19 @@ class DtoGraphProvenanceTest {
             props = listOf(baseProp, foldProp, userProp).sortedBy(DtoProp::id),
         )
 
-        assertEquals(sources.values.toSortedSet(), graph.originatingSources())
+        assertEquals(sources.values.toSortedSet(), graph.dependencySources())
+        assertEquals(
+            setOf(
+                LsiSymbolId.type("demo.Entity"),
+                LsiSymbolId.type("demo.Filter"),
+                LsiSymbolId.type("demo.Marker"),
+                LsiSymbolId.type("demo.Nested"),
+                LsiSymbolId.type("demo.PropMarker"),
+                LsiSymbolId.type("demo.Recursion"),
+                LsiSymbolId.property(LsiSymbolId.type("demo.Entity"), "base"),
+            ),
+            graph.dependencySymbols(),
+        )
     }
 
     private fun simpleType(id: DtoTypeId, source: LsiSource): DtoType {

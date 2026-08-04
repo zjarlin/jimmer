@@ -1,12 +1,10 @@
 package org.babyfish.jimmer.ksp.dto
 
-import com.google.devtools.ksp.processing.CodeGenerator
-import com.google.devtools.ksp.processing.Dependencies
-import com.google.devtools.ksp.symbol.KSFile
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
+import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoAccessorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseContractRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseValueRenderer
@@ -31,7 +29,6 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeAnnotationRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeRefRenderer
 import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.impl.util.StringUtil.SnakeCase
-import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.immutable.generator.*
 import org.babyfish.jimmer.ksp.util.generatedAnnotation
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoToStringRenderer
@@ -89,18 +86,14 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetImport
 import site.addzero.lsi.poet.LsiPoetTypeName
-import java.io.OutputStreamWriter
 import java.util.*
 
 internal class DtoGenerator private constructor(
-    val ctx: Context,
     private val mutable: Boolean,
-    private val codeGenerator: CodeGenerator?,
     private val lsiGraph: DtoGraph,
     private val lsiDtoType: LsiDtoType,
     private val immutableSchema: ImmutableSchema,
-    private val jacksonVersion: JimmerDtoJacksonVersion,
-    private val hibernateValidatorEnhancement: Boolean,
+    private val rendererOptions: JimmerDtoRendererOptions,
     private val workspace: LsiWorkspace,
     private val annotationContract: DtoAnnotationContract,
     private val interfaceContractResolution: DtoInterfaceContractResolution,
@@ -122,6 +115,23 @@ internal class DtoGenerator private constructor(
     private val baseDraftTypeName = KspImmutableTypeNameRenderer.renderDraft(lsiBaseType, workspace)
 
     private val entityBase: Boolean = lsiDtoType.hasEntityBase(immutableSchema)
+
+    private val jsonSerializeTypeName: ClassName = rendererOptions.jacksonVersion.className(
+        jackson2PackageName = "com.fasterxml.jackson.databind.annotation",
+        jackson3PackageName = "tools.jackson.databind.annotation",
+        simpleName = "JsonSerialize",
+    )
+
+    private val jsonDeserializeTypeName: ClassName = rendererOptions.jacksonVersion.className(
+        jackson2PackageName = "com.fasterxml.jackson.databind.annotation",
+        jackson3PackageName = "tools.jackson.databind.annotation",
+        simpleName = "JsonDeserialize",
+    )
+
+    private val jsonPropertyTypeName = ClassName(
+        "com.fasterxml.jackson.annotation",
+        "JsonProperty",
+    )
 
     private val polymorphicBranch: Boolean
         get() = lsiPolymorphicBranch != null
@@ -152,9 +162,6 @@ internal class DtoGenerator private constructor(
         }
 
     init {
-        if ((codeGenerator === null) == (parent === null)) {
-            throw IllegalArgumentException("The nullity values of `codeGenerator` and `parent` cannot be same")
-        }
         if ((parent === null) != (innerClassName === null)) {
             throw IllegalArgumentException("The nullity values of `parent` and `innerClassName` must be same")
         }
@@ -169,28 +176,22 @@ internal class DtoGenerator private constructor(
     private var _typeBuilder: TypeSpec.Builder? = null
 
     constructor(
-        ctx: Context,
         mutable: Boolean,
-        codeGenerator: CodeGenerator?,
         lsiGraph: DtoGraph,
         lsiDtoType: LsiDtoType,
         immutableSchema: ImmutableSchema,
-        jacksonVersion: JimmerDtoJacksonVersion,
-        hibernateValidatorEnhancement: Boolean,
+        rendererOptions: JimmerDtoRendererOptions,
         workspace: LsiWorkspace,
         annotationContract: DtoAnnotationContract,
         interfaceContractResolution: DtoInterfaceContractResolution,
         configContractResolution: DtoConfigContractResolution,
         rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     ) : this(
-        ctx,
         mutable,
-        codeGenerator,
         lsiGraph,
         lsiDtoType,
         immutableSchema,
-        jacksonVersion,
-        hibernateValidatorEnhancement,
+        rendererOptions,
         workspace,
         annotationContract,
         interfaceContractResolution,
@@ -203,7 +204,6 @@ internal class DtoGenerator private constructor(
     )
 
     private constructor(
-        ctx: Context,
         mutable: Boolean,
         lsiDtoType: LsiDtoType,
         parent: DtoGenerator,
@@ -211,14 +211,11 @@ internal class DtoGenerator private constructor(
         polymorphicSuperInterfaceName: TypeName? = null,
         lsiPolymorphicBranch: LsiDtoPolymorphicBranch? = null,
     ) : this(
-        ctx = ctx,
         mutable = mutable,
-        codeGenerator = null,
         lsiGraph = parent.lsiGraph,
         lsiDtoType = lsiDtoType,
         immutableSchema = parent.immutableSchema,
-        jacksonVersion = parent.jacksonVersion,
-        hibernateValidatorEnhancement = parent.hibernateValidatorEnhancement,
+        rendererOptions = parent.rendererOptions,
         workspace = parent.workspace,
         annotationContract = parent.annotationContract,
         interfaceContractResolution = parent.interfaceContractResolution,
@@ -251,114 +248,106 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    fun generate(allFiles: List<KSFile>) {
+    fun generate(): String {
+        check(parent == null) { "Only a root DTO generator can render a source file" }
         if (lsiDtoType.isPolymorphicRoot()) {
-            generatePolymorphic(allFiles)
-            return
+            return generatePolymorphic()
         }
-        if (codeGenerator != null) {
-            codeGenerator.createNewFile(
-                Dependencies(true, *allFiles.toTypedArray()),
+        return FileSpec
+            .builder(
                 generatedDtoPackageName,
                 generatedDtoSimpleName,
-            ).use {
-                val fileSpec = FileSpec
-                    .builder(
-                        generatedDtoPackageName,
-                        generatedDtoSimpleName,
-                    ).apply {
-                        indent("    ")
-                        val builder = TypeSpec
-                            .classBuilder(generatedDtoSimpleName)
-                            .apply {
-                                if (!polymorphicBranch) {
-                                    addModifiers(KModifier.OPEN)
-                                }
-                            }
-                        if (parent == null) {
-                            builder.addAnnotation(generatedAnnotation(lsiGraph.source.path, mutable))
+            ).apply {
+                indent("    ")
+                val builder = TypeSpec
+                    .classBuilder(generatedDtoSimpleName)
+                    .apply {
+                        if (!polymorphicBranch) {
+                            addModifiers(KModifier.OPEN)
                         }
-                        builder.addTypeAnnotations()
-                        builder.addJacksonPolymorphicTypeNameIfNecessary()
-                        _typeBuilder = builder
-                        try {
-                            addDoc()
-                            addMembers()
-                            addType(builder.build())
-                            addExtensions()
-                        } finally {
-                            _typeBuilder = null
-                        }
-                        addImports()
-                    }.build()
-                val writer = OutputStreamWriter(it, Charsets.UTF_8)
-                fileSpec.writeTo(writer)
-                writer.flush()
-            }
-        } else if (innerClassName !== null && parent !== null) {
-            val builder = TypeSpec
-                .classBuilder(generatedDtoSimpleName)
-                .apply {
-                    if (!polymorphicBranch) {
-                        addModifiers(KModifier.OPEN)
-                    } else {
-                        val polymorphicRootGenerator = requireNotNull(parent) {
-                            "Generated polymorphic branch has no parent generator"
-                        }
-                        addAnnotation(
-                            KspDtoPolymorphicBranchRenderer.render(
-                                rootType = polymorphicRootGenerator.lsiDtoType,
-                                branch = requireNotNull(lsiPolymorphicBranch),
-                                generatedPackageName = generatedDtoPackageName,
-                                generatedRootSimpleNames = polymorphicRootGenerator.generatedDtoSimpleNames,
-                            )
-                        )
                     }
+                builder.addAnnotation(generatedAnnotation(lsiGraph.source.path, mutable))
+                builder.addTypeAnnotations()
+                builder.addJacksonPolymorphicTypeNameIfNecessary()
+                _typeBuilder = builder
+                try {
+                    addDoc()
+                    addMembers()
+                    addType(builder.build())
+                    addExtensions()
+                } finally {
+                    _typeBuilder = null
                 }
-                .addAnnotation(generatedAnnotation())
-            builder.addTypeAnnotations()
-            builder.addJacksonPolymorphicTypeNameIfNecessary()
-            _typeBuilder = builder
-            try {
-                addDoc()
-                addMembers()
-                parent.typeBuilder.addType(builder.build())
-            } finally {
-                _typeBuilder = null
+                addImports()
             }
+            .build()
+            .toString()
+    }
+
+    private fun generateNested() {
+        val parent = requireNotNull(parent) { "Nested DTO generator requires a parent" }
+        if (lsiDtoType.isPolymorphicRoot()) {
+            generateNestedPolymorphic(parent)
+            return
+        }
+        val builder = TypeSpec
+            .classBuilder(generatedDtoSimpleName)
+            .apply {
+                if (!polymorphicBranch) {
+                    addModifiers(KModifier.OPEN)
+                } else {
+                    addAnnotation(
+                        KspDtoPolymorphicBranchRenderer.render(
+                            rootType = parent.lsiDtoType,
+                            branch = requireNotNull(lsiPolymorphicBranch),
+                            generatedPackageName = generatedDtoPackageName,
+                            generatedRootSimpleNames = parent.generatedDtoSimpleNames,
+                        )
+                    )
+                }
+            }
+            .addAnnotation(generatedAnnotation())
+        builder.addTypeAnnotations()
+        builder.addJacksonPolymorphicTypeNameIfNecessary()
+        _typeBuilder = builder
+        try {
+            addDoc()
+            addMembers()
+            parent.typeBuilder.addType(builder.build())
+        } finally {
+            _typeBuilder = null
         }
     }
 
-    private fun generatePolymorphic(allFiles: List<KSFile>) {
+    private fun generatePolymorphic(): String {
+        check(parent == null) { "Only a root polymorphic DTO generator can render a source file" }
+        val baseContractKind = requirePolymorphicBaseContractKind()
+        return FileSpec
+            .builder(
+                generatedDtoPackageName,
+                generatedDtoSimpleName,
+            ).apply {
+                indent("    ")
+                addType(buildPolymorphicType(baseContractKind))
+                addExtensions(includeBlockConverter = false)
+                addImports()
+            }
+            .build()
+            .toString()
+    }
+
+    private fun generateNestedPolymorphic(parent: DtoGenerator) {
+        parent.typeBuilder.addType(buildPolymorphicType(requirePolymorphicBaseContractKind()))
+    }
+
+    private fun requirePolymorphicBaseContractKind(): DtoGeneratedBaseContractKind {
         val baseContractKind = lsiDtoType.generatedBaseContractKind(immutableSchema)
         if (baseContractKind != DtoGeneratedBaseContractKind.ENTITY_INPUT &&
             baseContractKind != DtoGeneratedBaseContractKind.ENTITY_VIEW
         ) {
             throw DtoException("Polymorphic DTO generation is only supported for entity types")
         }
-        if (codeGenerator != null) {
-            codeGenerator.createNewFile(
-                Dependencies(true, *allFiles.toTypedArray()),
-                generatedDtoPackageName,
-                generatedDtoSimpleName,
-            ).use {
-                val fileSpec = FileSpec
-                    .builder(
-                        generatedDtoPackageName,
-                        generatedDtoSimpleName,
-                    ).apply {
-                        indent("    ")
-                        addType(buildPolymorphicType(baseContractKind))
-                        addExtensions(includeBlockConverter = false)
-                        addImports()
-                    }.build()
-                val writer = OutputStreamWriter(it, Charsets.UTF_8)
-                fileSpec.writeTo(writer)
-                writer.flush()
-            }
-        } else if (innerClassName !== null && parent !== null) {
-            parent.typeBuilder.addType(buildPolymorphicType(baseContractKind))
-        }
+        return baseContractKind
     }
 
     private fun buildPolymorphicType(
@@ -445,7 +434,7 @@ internal class DtoGenerator private constructor(
         if (isSerializerRequired) {
             typeBuilder.addAnnotation(
                 AnnotationSpec
-                    .builder(ctx.jacksonTypes.jsonSerialize)
+                    .builder(jsonSerializeTypeName)
                     .addMember("using = %T::class", getDtoClassName("Serializer"))
                     .build()
             )
@@ -453,7 +442,7 @@ internal class DtoGenerator private constructor(
         if (isBuilderRequired) {
             typeBuilder.addAnnotation(
                 AnnotationSpec
-                    .builder(ctx.jacksonTypes.jsonDeserialize)
+                    .builder(jsonDeserializeTypeName)
                     .addMember("builder = %T::class", getDtoClassName("Builder"))
                     .build()
             )
@@ -560,7 +549,7 @@ internal class DtoGenerator private constructor(
                     dtoType = lsiDtoType,
                     graph = lsiGraph,
                     immutableSchema = immutableSchema,
-                    jacksonVersion = jacksonVersion,
+                    jacksonVersion = rendererOptions.jacksonVersion,
                     generatedDtoPackageName = generatedDtoPackageName,
                     generatedDtoSimpleNames = generatedDtoSimpleNames,
                 )
@@ -574,7 +563,7 @@ internal class DtoGenerator private constructor(
                     immutableSchema = immutableSchema,
                     annotationContract = annotationContract,
                     workspace = workspace,
-                    jacksonVersion = jacksonVersion,
+                    jacksonVersion = rendererOptions.jacksonVersion,
                     generatedDtoPackageName = generatedDtoPackageName,
                     generatedDtoSimpleNames = generatedDtoSimpleNames,
                     generatedDtoTypeNamesByTypeId = generatedDtoTypeNamesByTypeId,
@@ -606,12 +595,11 @@ internal class DtoGenerator private constructor(
             )
             registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
             DtoGenerator(
-                ctx = ctx,
                 mutable = mutable,
                 lsiDtoType = lsiTargetType,
                 parent = this,
                 innerClassName = childSimpleName,
-            ).generate(emptyList())
+            ).generateNested()
         }
         for (prop in lsiDtoType.foldPropsInDeclarationOrder(lsiGraph)) {
             if (polymorphicRootPropOrNull(prop) != null) {
@@ -628,12 +616,11 @@ internal class DtoGenerator private constructor(
             )
             registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
             DtoGenerator(
-                ctx = ctx,
                 mutable = mutable,
                 lsiDtoType = lsiTargetType,
                 parent = this,
                 innerClassName = childSimpleName,
-            ).generate(emptyList())
+            ).generateNested()
         }
     }
 
@@ -696,14 +683,13 @@ internal class DtoGenerator private constructor(
         superInterfaceName: TypeName,
     ) {
         DtoGenerator(
-            ctx = ctx,
             mutable = mutable,
             lsiDtoType = branch.mergedType(lsiGraph),
             parent = this,
             innerClassName = branch.className,
             polymorphicSuperInterfaceName = superInterfaceName,
             lsiPolymorphicBranch = branch,
-        ).generate(emptyList())
+        ).generateNested()
     }
 
     private fun FileSpec.Builder.addExtensions(includeBlockConverter: Boolean = true) {
@@ -853,12 +839,12 @@ internal class DtoGenerator private constructor(
                     if (
                         !isBuilderRequired &&
                         prop.annotations.none { annotation ->
-                            annotation.typeId.value == ctx.jacksonTypes.jsonProperty.reflectionName()
+                            annotation.typeId.value == jsonPropertyTypeName.reflectionName()
                         }
                     ) {
                         addAnnotation(
                             AnnotationSpec
-                                .builder(ctx.jacksonTypes.jsonProperty)
+                                .builder(jsonPropertyTypeName)
                                 .useSiteTarget(AnnotationSpec.UseSiteTarget.PARAM)
                                 .apply {
                                     addMember("%S", prop.name)
@@ -879,7 +865,7 @@ internal class DtoGenerator private constructor(
                             immutableSchema = immutableSchema,
                             workspace = workspace,
                             excludedAnnotationQualifiedName = if (isBuilderRequired) {
-                                ctx.jacksonTypes.jsonDeserialize.reflectionName()
+                                jsonDeserializeTypeName.reflectionName()
                             } else {
                                 null
                             },
@@ -1513,7 +1499,7 @@ internal class DtoGenerator private constructor(
     private val isHibernateValidatorEnhancementRequired: Boolean by lazy {
         lsiDtoType.requiresHibernateValidatorEnhancement(
             graph = lsiGraph,
-            enhancementEnabled = hibernateValidatorEnhancement,
+            enhancementEnabled = rendererOptions.hibernateValidatorEnhancement,
         )
     }
 
@@ -1553,3 +1539,15 @@ internal class DtoGenerator private constructor(
 
     }
 }
+
+private fun JimmerDtoJacksonVersion.className(
+    jackson2PackageName: String,
+    jackson3PackageName: String,
+    simpleName: String,
+): ClassName = ClassName(
+    when (this) {
+        JimmerDtoJacksonVersion.JACKSON_2 -> jackson2PackageName
+        JimmerDtoJacksonVersion.JACKSON_3 -> jackson3PackageName
+    },
+    simpleName,
+)
