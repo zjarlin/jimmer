@@ -1,12 +1,8 @@
 package org.babyfish.jimmer.apt.dto;
 
 import org.babyfish.jimmer.apt.Context;
-import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
-import org.babyfish.jimmer.apt.immutable.meta.ImmutableType;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
-import org.babyfish.jimmer.dto.compiler.*;
-import site.addzero.lsi.core.LsiLanguage;
 import site.addzero.lsi.core.LsiSource;
 import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
@@ -14,30 +10,21 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
-import site.addzero.lsi.jimmer.dto.DtoTypeInfoExtensionsKt;
 import site.addzero.lsi.model.LsiWorkspace;
 import site.addzero.lsi.poet.LsiPoetTypeName;
 
-import javax.lang.model.util.Elements;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class DtoProcessor {
 
     private final Context context;
 
-    private final Elements elements;
-
-    private final Collection<DtoFile> dtoFiles;
-
-    private final DtoModifier defaultNullableInputModifier;
-
-    private final Map<String, DtoGraph> graphBySourcePath;
+    private final List<DtoGraph> graphs;
 
     private final Map<LsiSource, DtoAnnotationContract> annotationContractsBySource;
 
@@ -57,9 +44,6 @@ public class DtoProcessor {
 
     public DtoProcessor(
             Context context,
-            Elements elements,
-            Collection<DtoFile> dtoFiles,
-            DtoModifier defaultNullableInputModifier,
             Collection<DtoGraph> graphs,
             Map<LsiSource, DtoAnnotationContract> annotationContractsBySource,
             Map<LsiSource, DtoInterfaceContractResolution> interfaceContractsBySource,
@@ -70,18 +54,7 @@ public class DtoProcessor {
             boolean hibernateValidatorEnhancement
     ) {
         this.context = context;
-        this.elements = elements;
-        this.dtoFiles = dtoFiles;
-        this.defaultNullableInputModifier = defaultNullableInputModifier;
-        this.graphBySourcePath = new LinkedHashMap<>();
-        for (DtoGraph graph : graphs) {
-            DtoGraph conflict = graphBySourcePath.put(graph.getSource().getPath(), graph);
-            if (conflict != null) {
-                throw new IllegalArgumentException(
-                        "Duplicate frozen DTO graph source path: " + graph.getSource().getPath()
-                );
-            }
-        }
+        this.graphs = Collections.unmodifiableList(new ArrayList<>(graphs));
         this.annotationContractsBySource = Collections.unmodifiableMap(
                 new LinkedHashMap<>(annotationContractsBySource)
         );
@@ -99,73 +72,8 @@ public class DtoProcessor {
     }
 
     public boolean process() {
-        return generateDtoTypes(parseDtoTypes());
-    }
-
-    private List<DtoType<ImmutableType, ImmutableProp>> parseDtoTypes() {
-        List<AptDtoCompiler> compilers = new ArrayList<>();
-        AptDtoCompiler compiler;
-
-        for (DtoFile dtoFile : dtoFiles) {
-            try {
-                compiler = new AptDtoCompiler(
-                        dtoFile,
-                        context,
-                        elements,
-                        defaultNullableInputModifier,
-                        immutableSchema
-                );
-            } catch (DtoAstException ex) {
-                throw new DtoException(
-                        "Failed to parse \"" +
-                                dtoFile.getSourcePath() +
-                                "\": " +
-                                ex.getMessage(),
-                        ex
-                );
-            } catch (Throwable ex) {
-                throw new DtoException(
-                        "Failed to read \"" +
-                                dtoFile.getSourcePath() +
-                                "\": " +
-                                ex.getMessage(),
-                        ex
-                );
-            }
-            compilers.add(compiler);
-        }
-        List<DtoType<ImmutableType, ImmutableProp>> dtoTypes = DtoCompiler
-                .compileAll(compilers, context::includeDtoTarget)
-                .values()
-                .stream()
-                .flatMap(Collection::stream)
-                .collect(Collectors.toList());
-        DtoTypeLinker.link(dtoTypes, this::resolveDtoType);
-        return dtoTypes;
-    }
-
-    private DtoTypeInfo resolveDtoType(String qualifiedName) {
-        return DtoTypeInfoExtensionsKt.resolveDtoTypeInfo(
-                lsiWorkspace,
-                immutableSchema,
-                qualifiedName,
-                LsiLanguage.JAVA
-        );
-    }
-
-    private boolean generateDtoTypes(List<DtoType<ImmutableType, ImmutableProp>> dtoTypes) {
         boolean result = false;
-        for (DtoType<ImmutableType, ImmutableProp> dtoType : dtoTypes) {
-            DtoGraph graph = graphBySourcePath.get(dtoType.getDtoFile().getSourcePath());
-            if (graph == null) {
-                throw new DtoException(
-                        "No frozen DTO graph for \"" + dtoType.getDtoFile().getSourcePath() + "\""
-                );
-            }
-            String qualifiedName = dtoType.getQualifiedName();
-            if (qualifiedName == null) {
-                throw new DtoException("Root DTO type must have a qualified name");
-            }
+        for (DtoGraph graph : graphs) {
             DtoAnnotationContract annotationContract = annotationContractsBySource.get(graph.getSource());
             if (annotationContract == null) {
                 throw new DtoException(
@@ -186,20 +94,23 @@ public class DtoProcessor {
                         "No frozen DTO config contract for \"" + graph.getSource().getPath() + "\""
                 );
             }
-            new DtoGenerator(
-                    context,
-                    graph,
-                    DtoGenerationExtensionsKt.rootType(graph, qualifiedName),
-                    annotationContract,
-                    interfaceContractResolution,
-                    configContractResolution,
-                    immutableSchema,
-                    lsiWorkspace,
-                    batchRootDtoTypeNames,
-                    jacksonVersion,
-                    hibernateValidatorEnhancement
-            ).generate();
-            result = true;
+            for (site.addzero.lsi.jimmer.dto.DtoType rootType :
+                    DtoGenerationExtensionsKt.rootTypesInDeclarationOrder(graph)) {
+                new DtoGenerator(
+                        context,
+                        graph,
+                        rootType,
+                        annotationContract,
+                        interfaceContractResolution,
+                        configContractResolution,
+                        immutableSchema,
+                        lsiWorkspace,
+                        batchRootDtoTypeNames,
+                        jacksonVersion,
+                        hibernateValidatorEnhancement
+                ).generate();
+                result = true;
+            }
         }
         return result;
     }

@@ -3,13 +3,11 @@ package org.babyfish.jimmer.compiler.apt
 import org.babyfish.jimmer.apt.Context
 import org.babyfish.jimmer.apt.MetaException
 import org.babyfish.jimmer.apt.dto.DtoProcessor
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.dto.dtoGenerationReady
 import org.babyfish.jimmer.compiler.dto.dtoStateOrNull
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
-import org.babyfish.jimmer.compiler.input.toDtoFile
 import org.babyfish.jimmer.compiler.immutable.immutableStateOrNull
 import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
@@ -22,7 +20,6 @@ import javax.annotation.processing.SupportedAnnotationTypes
 import javax.lang.model.SourceVersion
 import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
-import javax.lang.model.util.Elements
 import javax.tools.Diagnostic
 
 @SupportedAnnotationTypes(
@@ -45,8 +42,6 @@ class JimmerProcessor : AbstractProcessor() {
     private lateinit var lsiDriver: AptLsiCompilerDriver
 
     private lateinit var context: Context
-
-    private lateinit var elements: Elements
 
     private lateinit var messager: javax.annotation.processing.Messager
 
@@ -92,7 +87,6 @@ class JimmerProcessor : AbstractProcessor() {
             processingEnv.options["jimmer.buddy.ignoreResourceGeneration"] == "true",
             dtoFieldModifier,
         )
-        elements = processingEnv.elementUtils
     }
 
     override fun process(
@@ -117,14 +111,6 @@ class JimmerProcessor : AbstractProcessor() {
                 }
                 generated = DtoProcessor(
                     context,
-                    elements,
-                    lsiRoundResult.round.inputDocumentSnapshots
-                        .asSequence()
-                        .map { snapshot -> snapshot.document }
-                        .filter { document -> document.kind == CompilerInputDocumentKind.DTO }
-                        .map { document -> document.toDtoFile() }
-                        .toList(),
-                    dtoState.defaultNullableInputModifier,
                     dtoState.graphs,
                     dtoState.annotationContractsBySource,
                     dtoState.interfaceContractsBySource,
