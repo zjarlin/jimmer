@@ -49,7 +49,11 @@ class KspGeneratedArtifactWriter(
         currentRoundSourceFiles: Collection<KSFile>,
     ): Dependencies {
         val allFiles = currentRoundSourceFiles.distinct()
-        if (aggregationMode == ArtifactAggregationMode.AGGREGATING && allFiles.isEmpty()) {
+        val hasNoExplicitDependencies = dependencySymbols.isEmpty() && dependencySources.isEmpty()
+        if (
+            aggregationMode == ArtifactAggregationMode.AGGREGATING &&
+            (allFiles.isEmpty() || hasNoExplicitDependencies)
+        ) {
             return Dependencies.ALL_FILES
         }
         val filesBySourcePath = allFiles.associateBy { file ->

@@ -140,6 +140,29 @@ class KspGeneratedArtifactWriterTest {
     }
 
     @Test
+    fun `writes dependency free aggregating artifact with all files dependency`() {
+        val codeGenerator = CapturingCodeGenerator()
+        val writer = KspGeneratedArtifactWriter(codeGenerator)
+        val currentFile = file("/workspace/Book.kt")
+
+        writer.write(
+            GeneratedArtifact.create(
+                kind = ArtifactKind.RESOURCE,
+                path = "META-INF/jimmer/module",
+                content = "module",
+                aggregationMode = ArtifactAggregationMode.AGGREGATING,
+            ),
+            currentRoundFiles = emptyMap(),
+            currentRoundSourceFiles = listOf(currentFile),
+        )
+
+        val dependencies = codeGenerator.calls.single().dependencies
+        assertTrue(dependencies.isAllSources)
+        assertTrue(dependencies.aggregating)
+        assertTrue(dependencies.originatingFiles.isEmpty())
+    }
+
+    @Test
     fun `rejects java source and missing isolating file`() {
         val codeGenerator = CapturingCodeGenerator()
         val writer = KspGeneratedArtifactWriter(codeGenerator)
