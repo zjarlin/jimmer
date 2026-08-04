@@ -685,7 +685,8 @@ public class DtoGenerator {
             addConverterConstructor();
         }
 
-        for (AbstractProp prop : dtoType.getProps()) {
+        for (site.addzero.lsi.jimmer.dto.DtoProp prop :
+                DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph)) {
             addAccessors(prop);
         }
 
@@ -1097,23 +1098,21 @@ public class DtoGenerator {
         typeBuilder.addMethod(getterBuilder.build());
     }
 
-    private void addAccessors(AbstractProp prop) {
+    private void addAccessors(site.addzero.lsi.jimmer.dto.DtoProp prop) {
         TypeName typeName = renderGeneratedValueType(prop);
-        site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
         String getterName = DtoAccessorExtensionsKt.dtoValueAccessorName(
-                lsiProp,
+                prop,
                 LsiLanguage.JAVA,
                 lsiGraph,
                 immutableSchema
         );
         String setterName = DtoAccessorExtensionsKt.javaValueSetterName(
-                lsiProp,
+                prop,
                 lsiGraph,
                 immutableSchema
         );
         String stateFieldName = DtoAccessorExtensionsKt.dtoLoadedStateStorageNameOrNull(
-                lsiProp,
+                prop,
                 lsiGraph,
                 LsiLanguage.JAVA
         );
@@ -1125,12 +1124,12 @@ public class DtoGenerator {
         if (interfaceMethodNames.contains(getterName)) {
             getterBuilder.addAnnotation(Override.class);
         }
-        AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiProp, lsiGraph);
+        AnnotationSpec description = AptDtoDescriptionRenderer.render(prop, lsiGraph);
         if (description != null) {
             getterBuilder.addAnnotation(description);
         }
         if (!typeName.isPrimitive()) {
-            if (prop.isNullable()) {
+            if (prop.getNullable()) {
                 getterBuilder.addAnnotation(Nullable.class);
             } else {
                 getterBuilder.addAnnotation(NonNull.class);
@@ -1139,7 +1138,7 @@ public class DtoGenerator {
         boolean isBuilderRequired = isBuildRequired();
         getterBuilder.addAnnotations(
                 AptDtoPropAnnotationRenderer.renderGetter(
-                        lsiProp,
+                        prop,
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
@@ -1157,7 +1156,7 @@ public class DtoGenerator {
             );
             getterBuilder.endControlFlow();
         }
-        if (!prop.isNullable() && isFieldNullable(prop)) {
+        if (!prop.getNullable() && DtoAccessorExtensionsKt.hasNullableJavaBackingField(prop)) {
             getterBuilder.beginControlFlow(
                     "if ($L == null)",
                     prop.getName()
@@ -1188,7 +1187,7 @@ public class DtoGenerator {
 
         ParameterSpec.Builder parameterBuilder = ParameterSpec.builder(typeName, prop.getName());
         if (!typeName.isPrimitive()) {
-            if (prop.isNullable()) {
+            if (prop.getNullable()) {
                 parameterBuilder.addAnnotation(Nullable.class);
             } else {
                 parameterBuilder.addAnnotation(NonNull.class);

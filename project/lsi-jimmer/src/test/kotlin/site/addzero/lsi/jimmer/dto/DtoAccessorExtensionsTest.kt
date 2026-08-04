@@ -855,6 +855,23 @@ class DtoAccessorExtensionsTest {
     }
 
     @Test
+    fun `classifies nullable Java backing fields from frozen DTO semantics`() {
+        assertFalse(
+            baseProp("isMissing", baseName = "name")
+                .copy(functionName = "null")
+                .hasNullableJavaBackingField(),
+        )
+        assertFalse(
+            baseProp("isPresent", baseName = "name")
+                .copy(functionName = "notNull")
+                .hasNullableJavaBackingField(),
+        )
+        assertTrue(baseProp("name").hasNullableJavaBackingField())
+        assertTrue(userProp().hasNullableJavaBackingField())
+        assertTrue(foldProp().hasNullableJavaBackingField())
+    }
+
+    @Test
     fun `derives Hibernate Validator getter names from final target language semantics`() {
         fun assertBaseGetterNames(
             name: String,

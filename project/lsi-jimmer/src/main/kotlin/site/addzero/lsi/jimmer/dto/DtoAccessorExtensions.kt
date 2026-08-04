@@ -528,6 +528,11 @@ fun DtoProp.hasPrimitiveBooleanValue(
     }
 }
 
+/** 判断 Java DTO backing field 是否需要使用可空 boxed 类型。 */
+fun DtoProp.hasNullableJavaBackingField(): Boolean {
+    return this !is DtoBaseProp || (functionName != "null" && functionName != "notNull")
+}
+
 /** 返回 Hibernate Validator 查询属性 getter 时使用的真实 JVM 方法名。 */
 fun DtoProp.hibernateValidatorGetterName(
     targetLanguage: LsiLanguage,
