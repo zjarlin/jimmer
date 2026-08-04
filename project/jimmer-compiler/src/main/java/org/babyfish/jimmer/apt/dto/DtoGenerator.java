@@ -673,11 +673,10 @@ public class DtoGenerator {
                 addFoldNullGuardAccessorField(prop);
             }
         }
-        for (AbstractProp prop : dtoType.getProps()) {
+        for (site.addzero.lsi.jimmer.dto.DtoProp prop :
+                DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph)) {
             addField(prop);
-            if (prop instanceof DtoProp<?, ?>) {
-                addStateField(asDtoProp(prop));
-            }
+            addStateField(prop);
         }
 
         addDefaultConstructor();
@@ -987,31 +986,35 @@ public class DtoGenerator {
         typeBuilder.addField(builder.build());
     }
 
-    private void addField(AbstractProp prop) {
-        if (prop instanceof UserProp) {
-            addField((UserProp) prop);
-            return;
-        }
+    private void addField(site.addzero.lsi.jimmer.dto.DtoProp prop) {
         TypeName typeName = renderGeneratedValueType(prop);
-        if (isFieldNullable(prop)) {
+        if (DtoAccessorExtensionsKt.hasNullableJavaBackingField(prop)) {
             typeName = typeName.box();
         }
+        site.addzero.lsi.jimmer.dto.DtoUserProp userProp =
+                prop instanceof site.addzero.lsi.jimmer.dto.DtoUserProp ?
+                        (site.addzero.lsi.jimmer.dto.DtoUserProp) prop :
+                        null;
         FieldSpec.Builder builder = FieldSpec
                 .builder(typeName, prop.getName())
                 .addModifiers(ctx.getDtoFieldModifier());
+        if (userProp != null) {
+            String defaultValueText = userProp.getDefaultValueText();
+            if (defaultValueText != null) {
+                builder.initializer(defaultValueText);
+            }
+        }
         String doc = doc(prop, true);
         if (doc != null) {
             builder.addJavadoc(doc);
         }
         boolean isBuilderRequired = isBuildRequired();
-        site.addzero.lsi.jimmer.dto.DtoProp lsiProp =
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
-        if (DtoAccessorExtensionsKt.requiresFixedInputField(lsiProp, lsiGraph)) {
+        if (DtoAccessorExtensionsKt.requiresFixedInputField(prop, lsiGraph)) {
             builder.addAnnotation(org.babyfish.jimmer.apt.immutable.generator.Constants.FIXED_INPUT_FIELD_CLASS_NAME);
         }
         builder.addAnnotations(
                 AptDtoPropAnnotationRenderer.renderField(
-                        lsiProp,
+                        prop,
                         annotationContract,
                         immutableSchema,
                         lsiWorkspace,
@@ -1021,39 +1024,9 @@ public class DtoGenerator {
         typeBuilder.addField(builder.build());
     }
 
-    private void addField(UserProp prop) {
-        TypeName typeName = renderGeneratedValueType(prop);
-        if (isFieldNullable(prop)) {
-            typeName = typeName.box();
-        }
-        FieldSpec.Builder builder = FieldSpec
-                .builder(typeName, prop.getAlias())
-                .addModifiers(ctx.getDtoFieldModifier());
-        String defaultValueText = DtoGenerationExtensionsKt
-                .userProp(lsiDtoType, lsiGraph, prop.getName())
-                .getDefaultValueText();
-        if (defaultValueText != null) {
-            builder.initializer(defaultValueText);
-        }
-        String doc = doc(prop, true);
-        if (doc != null) {
-            builder.addJavadoc(doc);
-        }
-        builder.addAnnotations(
-                AptDtoPropAnnotationRenderer.renderField(
-                        DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
-                        annotationContract,
-                        immutableSchema,
-                        lsiWorkspace,
-                        isBuildRequired() ? ctx.getJacksonTypes().jsonDeserialize.reflectionName() : null
-                )
-        );
-        typeBuilder.addField(builder.build());
-    }
-
-    private void addStateField(DtoProp<ImmutableType, ImmutableProp> prop) {
+    private void addStateField(site.addzero.lsi.jimmer.dto.DtoProp prop) {
         FieldSpec stateField = AptDtoLoadedStateRenderer.renderStorageField(
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()),
+                prop,
                 lsiGraph,
                 ctx.getDtoFieldModifier()
         );
@@ -1223,8 +1196,8 @@ public class DtoGenerator {
         }
     }
 
-    private String doc(AbstractProp prop, boolean contentOnly) {
-        String doc = propDocumentation(prop);
+    private String doc(site.addzero.lsi.jimmer.dto.DtoProp prop, boolean contentOnly) {
+        String doc = escapedDocumentation(prop.getDocumentation());
         if (doc == null) {
             return null;
         }
@@ -1658,12 +1631,6 @@ public class DtoGenerator {
         return originalIndex;
     }
 
-    private String propDocumentation(AbstractProp prop) {
-        return escapedDocumentation(
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName()).getDocumentation()
-        );
-    }
-
     private static String escapedDocumentation(@Nullable String documentation) {
         return documentation != null && !documentation.isEmpty() ?
                 documentation.replace("$", "$$") :
@@ -1672,14 +1639,6 @@ public class DtoGenerator {
 
     TypeSpec.Builder getTypeBuilder() {
         return typeBuilder;
-    }
-
-    private static boolean isFieldNullable(AbstractProp prop) {
-        if (prop instanceof DtoProp<?, ?>) {
-            String funcName = prop.getFuncName();
-            return !"null".equals(funcName) && !"notNull".equals(funcName);
-        }
-        return true;
     }
 
     private boolean isSerializerRequired() {
