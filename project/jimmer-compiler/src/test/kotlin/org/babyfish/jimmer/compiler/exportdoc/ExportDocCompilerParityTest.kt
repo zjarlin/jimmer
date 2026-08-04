@@ -45,6 +45,8 @@ class ExportDocCompilerParityTest {
         val aptBytes = aptResult.docBytes()
         val kspBytes = kspResult.docBytes()
 
+        assertMigrationGolden("apt", aptBytes)
+        assertMigrationGolden("ksp", kspBytes)
         assertContentEquals(aptBytes, kspBytes)
         assertNoTimestamp(aptBytes)
         val docs = aptBytes.loadProperties()
@@ -316,6 +318,14 @@ class ExportDocCompilerParityTest {
         return properties.stringPropertyNames()
             .sorted()
             .associateWith { name -> requireNotNull(properties.getProperty(name)) }
+    }
+
+    private fun assertMigrationGolden(platform: String, actual: ByteArray) {
+        val resourcePath = "/exportdoc/$platform/doc.properties"
+        val expected = requireNotNull(javaClass.getResourceAsStream(resourcePath)) {
+            "Missing ExportDoc migration golden: $resourcePath"
+        }.use { stream -> stream.readBytes() }
+        assertContentEquals(expected, actual, "ExportDoc $platform resource differs from migration golden")
     }
 
     private fun assertNoTimestamp(bytes: ByteArray) {
