@@ -1,6 +1,5 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.apt.dto.DtoProcessor as AptDtoProcessor
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
@@ -15,8 +14,9 @@ import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
-import org.babyfish.jimmer.dto.compiler.DtoModifier
+import org.babyfish.jimmer.compiler.render.apt.AptDtoProcessor
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoProcessor
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId

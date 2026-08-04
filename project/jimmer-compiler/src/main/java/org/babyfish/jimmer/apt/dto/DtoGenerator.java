@@ -1,10 +1,9 @@
 package org.babyfish.jimmer.apt.dto;
 
 import com.squareup.javapoet.*;
-import org.babyfish.jimmer.apt.GeneratorException;
-import org.babyfish.jimmer.apt.JacksonTypes;
-import org.babyfish.jimmer.apt.immutable.generator.Constants;
-import org.babyfish.jimmer.apt.util.GeneratedAnnotation;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoException;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoPoetSupport;
+import org.babyfish.jimmer.compiler.render.apt.AptJacksonTypes;
 import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoFieldVisibility;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
@@ -91,7 +90,7 @@ public class DtoGenerator {
 
     private final boolean hibernateValidatorEnhancement;
 
-    private final JacksonTypes jacksonTypes;
+    private final AptJacksonTypes jacksonTypes;
 
     private final Modifier dtoFieldModifier;
 
@@ -318,10 +317,10 @@ public class DtoGenerator {
         }
         if (parent == null) {
             typeBuilder.addAnnotation(
-                    GeneratedAnnotation.generatedAnnotation(lsiGraph.getSource().getPath())
+                    AptDtoPoetSupport.generatedAnnotation(lsiGraph.getSource().getPath())
             );
         } else {
-            typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation());
+            typeBuilder.addAnnotation(AptDtoPoetSupport.generatedAnnotation());
         }
         if (isSerializerRequired()) {
             typeBuilder.addAnnotation(
@@ -387,7 +386,7 @@ public class DtoGenerator {
         DtoGeneratedBaseContractKind baseContractKind = generatedBaseContractKind();
         if (baseContractKind != DtoGeneratedBaseContractKind.ENTITY_INPUT &&
                 baseContractKind != DtoGeneratedBaseContractKind.ENTITY_VIEW) {
-            throw new GeneratorException(
+            throw new AptDtoException(
                     "Polymorphic DTO generation is only supported for entity types",
                     null
             );
@@ -412,10 +411,10 @@ public class DtoGenerator {
         }
         if (parent == null) {
             typeBuilder.addAnnotation(
-                    GeneratedAnnotation.generatedAnnotation(lsiGraph.getSource().getPath())
+                    AptDtoPoetSupport.generatedAnnotation(lsiGraph.getSource().getPath())
             );
         } else {
-            typeBuilder.addAnnotation(GeneratedAnnotation.generatedAnnotation());
+            typeBuilder.addAnnotation(AptDtoPoetSupport.generatedAnnotation());
             typeBuilder.addModifiers(Modifier.STATIC);
         }
         AnnotationSpec description = AptDtoDescriptionRenderer.render(lsiDtoType);
@@ -496,9 +495,9 @@ public class DtoGenerator {
         ).generateType();
     }
 
-    private static JacksonTypes jacksonTypes(JimmerDtoJacksonVersion jacksonVersion) {
+    private static AptJacksonTypes jacksonTypes(JimmerDtoJacksonVersion jacksonVersion) {
         if (jacksonVersion == JimmerDtoJacksonVersion.JACKSON_3) {
-            return new JacksonTypes(
+            return new AptJacksonTypes(
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonIgnore"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonValue"),
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
@@ -512,7 +511,7 @@ public class DtoGenerator {
                     ClassName.get("tools.jackson.databind", "SerializationContext")
             );
         }
-        return new JacksonTypes(
+        return new AptJacksonTypes(
                 ClassName.get("com.fasterxml.jackson.annotation", "JsonIgnore"),
                 ClassName.get("com.fasterxml.jackson.annotation", "JsonValue"),
                 ClassName.get("com.fasterxml.jackson.annotation", "JsonPropertyOrder"),
@@ -545,7 +544,7 @@ public class DtoGenerator {
             return null;
         }
         if (lsiPolymorphicBranch == null) {
-            throw new DtoException("Frozen DTO polymorphic branch does not match generated branch");
+            throw new AptDtoException("Frozen DTO polymorphic branch does not match generated branch");
         }
         try {
             return DtoGenerationExtensionsKt.requireGeneratedMergedType(
@@ -554,7 +553,7 @@ public class DtoGenerator {
                     lsiDtoType
             );
         } catch (IllegalArgumentException ex) {
-            throw new DtoException(
+            throw new AptDtoException(
                     "Frozen DTO polymorphic branch does not match generated branch",
                     ex
             );
@@ -569,7 +568,7 @@ public class DtoGenerator {
         try {
             return Modifier.valueOf("SEALED");
         } catch (IllegalArgumentException ex) {
-            throw new GeneratorException(
+            throw new AptDtoException(
                     "The modifier 'sealed' requires the annotation processor to run on Java 17 or later",
                     ex
             );
@@ -792,7 +791,7 @@ public class DtoGenerator {
         FieldSpec.Builder builder = FieldSpec
                 .builder(
                         ParameterizedTypeName.get(
-                                org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
+                                AptDtoPoetSupport.DTO_METADATA_CLASS_NAME,
                                 immutableBaseTypeName(),
                                 getDtoClassName()
                         ),
@@ -805,7 +804,7 @@ public class DtoGenerator {
                 .add("\n")
                 .add(
                         "new $T<$T, $T>(\n",
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
+                        AptDtoPoetSupport.DTO_METADATA_CLASS_NAME,
                         immutableBaseTypeName(),
                         getDtoClassName()
                 )
@@ -839,7 +838,7 @@ public class DtoGenerator {
         FieldSpec.Builder builder = FieldSpec
                 .builder(
                         ParameterizedTypeName.get(
-                                org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
+                                AptDtoPoetSupport.DTO_METADATA_CLASS_NAME,
                                 immutableBaseTypeName(),
                                 getDtoClassName()
                         ),
@@ -852,7 +851,7 @@ public class DtoGenerator {
                 .add("\n")
                 .add(
                         "new $T<$T, $T>(\n",
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
+                        AptDtoPoetSupport.DTO_METADATA_CLASS_NAME,
                         immutableBaseTypeName(),
                         getDtoClassName()
                 )
@@ -928,7 +927,7 @@ public class DtoGenerator {
             boolean withConverters
     ) {
         FieldSpec.Builder builder = FieldSpec.builder(
-                org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_PROP_ACCESSOR_CLASS_NAME,
+                AptDtoPoetSupport.DTO_PROP_ACCESSOR_CLASS_NAME,
                 fieldName,
                 Modifier.PRIVATE,
                 Modifier.STATIC,
@@ -973,7 +972,7 @@ public class DtoGenerator {
         }
         boolean isBuilderRequired = isBuildRequired();
         if (DtoAccessorExtensionsKt.requiresFixedInputField(prop, lsiGraph)) {
-            builder.addAnnotation(org.babyfish.jimmer.apt.immutable.generator.Constants.FIXED_INPUT_FIELD_CLASS_NAME);
+            builder.addAnnotation(AptDtoPoetSupport.FIXED_INPUT_FIELD_CLASS_NAME);
         }
         builder.addAnnotations(
                 AptDtoPropAnnotationRenderer.renderField(
@@ -1099,7 +1098,7 @@ public class DtoGenerator {
             );
             if (DtoAccessorExtensionsKt.isInput(lsiDtoType) &&
                     typeName instanceof ParameterizedTypeName &&
-                    Constants.LIST_CLASS_NAME.equals(((ParameterizedTypeName) typeName).rawType)) {
+                    AptDtoPoetSupport.LIST_CLASS_NAME.equals(((ParameterizedTypeName) typeName).rawType)) {
                 getterBuilder.addComment(
                         "GraphQLInput requires `obj." +
                                 getterName +
@@ -1108,7 +1107,7 @@ public class DtoGenerator {
                 getterBuilder.addStatement(
                         "return this.$L = new $T<>()",
                         prop.getName(),
-                        Constants.ARRAY_LIST_CLASS_NAME
+                        AptDtoPoetSupport.ARRAY_LIST_CLASS_NAME
                 );
             } else {
                 getterBuilder.addStatement(
