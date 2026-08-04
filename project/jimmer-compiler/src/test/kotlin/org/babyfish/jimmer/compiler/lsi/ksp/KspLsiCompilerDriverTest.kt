@@ -631,7 +631,9 @@ class KspLsiCompilerDriverTest {
         val rounds = mutableListOf<JimmerCompilerCollectContext>()
 
         override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
-            rounds += context
+            if (rounds.lastOrNull()?.round?.number != context.round.number) {
+                rounds += context
+            }
             return JimmerCompilerFeatureCollection()
         }
 
@@ -695,7 +697,9 @@ class KspLsiCompilerDriverTest {
         }
 
         override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
-            rounds += context
+            if (rounds.lastOrNull()?.round?.number != context.round.number) {
+                rounds += context
+            }
             return JimmerCompilerFeatureCollection()
         }
     }
@@ -709,7 +713,9 @@ class KspLsiCompilerDriverTest {
         val rounds = mutableListOf<JimmerCompilerCollectContext>()
 
         override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
-            rounds += context
+            if (rounds.lastOrNull()?.round?.number != context.round.number) {
+                rounds += context
+            }
             return JimmerCompilerFeatureCollection()
         }
 
@@ -728,7 +734,9 @@ class KspLsiCompilerDriverTest {
         val rounds = mutableListOf<JimmerCompilerCollectContext>()
 
         override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
-            rounds += context
+            if (rounds.lastOrNull()?.round?.number != context.round.number) {
+                rounds += context
+            }
             return JimmerCompilerFeatureCollection()
         }
 

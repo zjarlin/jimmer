@@ -233,9 +233,8 @@ class CompilerSession(
         validateRound(round)
 
         val sessionSnapshot = snapshot()
-        val collections = collect(sessionSnapshot, round)
-        val fixedPoint = precompile(sessionSnapshot, round, collections)
-        val featureResults = render(sessionSnapshot, round, collections, fixedPoint.results)
+        val fixedPoint = fixedPoint(sessionSnapshot, round)
+        val featureResults = fixedPoint.results
         val roundArtifactSet = GeneratedArtifactSet()
         val stagedArtifactSet = GeneratedArtifactSet(artifactSet.snapshot())
         val stagedStableCandidates = LinkedHashMap(stableArtifactCandidates)
@@ -385,6 +384,101 @@ class CompilerSession(
         }
     }
 
+    /**
+     * 收集、预编译和渲染必须观察同一个稳定状态。
+     *
+     * 预编译结果会影响渲染结果，渲染结果又会决定下一轮真正可见的源码，
+     * 因此不能只对预编译状态做固定点判断后就把第一次渲染交给 filer。
+     */
+    private fun fixedPoint(
+        session: CompilerSessionSnapshot,
+        round: CompilerRound,
+    ): FixedPointResult {
+        var previousPrecompiledResults = roundResults.lastOrNull()?.featureResults
+            ?.mapValues { (_, result) -> result.precompiled }
+            .orEmpty()
+        var previousFingerprint = if (orderedProviders.isEmpty()) {
+            emptyMap()
+        } else {
+            roundResults.lastOrNull()
+                ?.featureResults
+                ?.let(::phaseFingerprint)
+        }
+        repeat(maximumFixedPointIterations) { iteration ->
+            val collections = collect(session, round)
+            val currentPrecompiledResults = precompile(
+                session = session,
+                round = round,
+                collections = collections,
+                previousResults = previousPrecompiledResults,
+            )
+            val currentResults = render(session, round, collections, currentPrecompiledResults)
+            val currentFingerprint = phaseFingerprint(currentResults)
+            if (previousFingerprint != null && previousFingerprint == currentFingerprint) {
+                return FixedPointResult(iteration + 1, currentResults)
+            }
+            previousPrecompiledResults = currentPrecompiledResults
+            previousFingerprint = currentFingerprint
+        }
+        throw CompilerFixedPointException(id, round.number, maximumFixedPointIterations)
+    }
+
+    private fun precompile(
+        session: CompilerSessionSnapshot,
+        round: CompilerRound,
+        collections: Map<String, JimmerCompilerFeatureCollection>,
+        previousResults: Map<String, JimmerCompilerFeaturePrecompileResult>,
+    ): Map<String, JimmerCompilerFeaturePrecompileResult> {
+        val currentResults = linkedMapOf<String, JimmerCompilerFeaturePrecompileResult>()
+        for (provider in orderedProviders) {
+            val descriptor = provider.descriptor
+            val dependencyStates = descriptor.dependsOn
+                .sorted()
+                .associateWith { dependencyId -> requireNotNull(currentResults[dependencyId]).state }
+            val previousState = previousResults[descriptor.id]?.state
+            currentResults[descriptor.id] = provider.precompile(
+                JimmerCompilerPrecompileContext(
+                    session = session,
+                    round = round,
+                    collection = requireNotNull(collections[descriptor.id]),
+                    previousState = previousState,
+                    dependencyStates = dependencyStates,
+                ),
+            )
+        }
+        return currentResults
+    }
+
+    private fun phaseFingerprint(
+        featureResults: Map<String, JimmerCompilerFeatureResult>,
+    ): Map<String, FeaturePhaseFingerprint> {
+        return featureResults
+            .toSortedMap()
+            .mapValues { (_, result) ->
+                FeaturePhaseFingerprint(
+                    collectionState = result.collection.state.fingerprint,
+                    collectionDiagnostics = result.collection.diagnostics,
+                    state = result.precompiled.state.fingerprint,
+                    precompileDiagnostics = result.precompiled.diagnostics,
+                    processedSymbols = result.precompiled.processedSymbols.sorted(),
+                    unresolvedSymbols = result.precompiled.unresolvedSymbols.sorted(),
+                    artifacts = result.rendered.artifacts.sortedBy(GeneratedArtifact::key),
+                    renderDiagnostics = result.rendered.diagnostics,
+                )
+            }
+    }
+
+    private data class FeaturePhaseFingerprint(
+        val collectionState: String,
+        val collectionDiagnostics: List<LsiDiagnostic>,
+        val state: String,
+        val precompileDiagnostics: List<LsiDiagnostic>,
+        val processedSymbols: List<LsiSymbolId>,
+        val unresolvedSymbols: List<LsiSymbolId>,
+        val artifacts: List<GeneratedArtifact>,
+        val renderDiagnostics: List<LsiDiagnostic>,
+    )
+
     private fun collect(
         session: CompilerSessionSnapshot,
         round: CompilerRound,
@@ -392,44 +486,6 @@ class CompilerSession(
         return orderedProviders.associate { provider ->
             provider.descriptor.id to provider.collect(JimmerCompilerCollectContext(session, round))
         }
-    }
-
-    private fun precompile(
-        session: CompilerSessionSnapshot,
-        round: CompilerRound,
-        collections: Map<String, JimmerCompilerFeatureCollection>,
-    ): FixedPointResult {
-        var previousResults = roundResults.lastOrNull()?.featureResults
-            ?.mapValues { (_, result) -> result.precompiled }
-            .orEmpty()
-        repeat(maximumFixedPointIterations) { iteration ->
-            val currentResults = linkedMapOf<String, JimmerCompilerFeaturePrecompileResult>()
-            for (provider in orderedProviders) {
-                val descriptor = provider.descriptor
-                val dependencyStates = descriptor.dependsOn
-                    .sorted()
-                    .associateWith { dependencyId -> requireNotNull(currentResults[dependencyId]).state }
-                val previousState = previousResults[descriptor.id]?.state
-                currentResults[descriptor.id] = provider.precompile(
-                    JimmerCompilerPrecompileContext(
-                        session = session,
-                        round = round,
-                        collection = requireNotNull(collections[descriptor.id]),
-                        previousState = previousState,
-                        dependencyStates = dependencyStates,
-                    ),
-                )
-            }
-            val stable = orderedProviders.all { provider ->
-                val id = provider.descriptor.id
-                previousResults[id]?.state?.fingerprint == currentResults[id]?.state?.fingerprint
-            }
-            if (stable) {
-                return FixedPointResult(iteration + 1, currentResults)
-            }
-            previousResults = currentResults
-        }
-        throw CompilerFixedPointException(id, round.number, maximumFixedPointIterations)
     }
 
     private fun render(
@@ -496,7 +552,7 @@ class CompilerSession(
 
     private data class FixedPointResult(
         val iterations: Int,
-        val results: Map<String, JimmerCompilerFeaturePrecompileResult>,
+        val results: Map<String, JimmerCompilerFeatureResult>,
     )
 
     private data class StableArtifactCandidate(

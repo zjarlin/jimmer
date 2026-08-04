@@ -335,7 +335,9 @@ class AptLsiCompilerDriverTest {
         override fun collect(
             context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
         ): JimmerCompilerFeatureCollection {
-            rounds += context.round
+            if (rounds.lastOrNull()?.number != context.round.number) {
+                rounds += context.round
+            }
             return JimmerCompilerFeatureCollection()
         }
     }
@@ -359,7 +361,9 @@ class AptLsiCompilerDriverTest {
         override fun collect(
             context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
         ): JimmerCompilerFeatureCollection {
-            rounds += context.round
+            if (rounds.lastOrNull()?.number != context.round.number) {
+                rounds += context.round
+            }
             return JimmerCompilerFeatureCollection()
         }
     }
@@ -376,7 +380,9 @@ class AptLsiCompilerDriverTest {
         override fun collect(
             context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
         ): JimmerCompilerFeatureCollection {
-            rounds += context.round
+            if (rounds.lastOrNull()?.number != context.round.number) {
+                rounds += context.round
+            }
             return JimmerCompilerFeatureCollection()
         }
 

@@ -47,7 +47,11 @@ class CompilerClasspathTypeProbeTest {
         session.execute(round(1, setOf(availableTypeId), isFinal = true))
 
         assertEquals(
-            listOf(setOf(availableTypeId), setOf(availableTypeId)),
+            listOf(
+                setOf(availableTypeId),
+                setOf(availableTypeId),
+                setOf(availableTypeId),
+            ),
             rounds.map(CompilerRound::availableTypeIds),
         )
     }

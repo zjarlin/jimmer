@@ -114,6 +114,18 @@ class CompilerSessionTest {
     }
 
     @Test
+    fun `空功能图在一次固定点迭代内完成`() {
+        val result = CompilerSession(
+            id = "empty-feature-graph",
+            providers = emptyList(),
+            maximumFixedPointIterations = 1,
+        ).execute(emptyRound(0))
+
+        assertEquals(1, result.fixedPointIterations)
+        assertTrue(result.featureResults.isEmpty())
+    }
+
+    @Test
     fun `round exposes frozen input resources to features`() {
         val provider = object : JimmerCompilerFeatureProvider {
             override val descriptor = JimmerCompilerFeatureDescriptor(
@@ -192,6 +204,10 @@ class CompilerSessionTest {
             listOf(
                 "immutable:0:0:",
                 "client:0:0:immutable",
+                "immutable:0:0:",
+                "client:0:0:immutable",
+                "immutable:1:1:",
+                "client:1:1:immutable",
                 "immutable:1:1:",
                 "client:1:1:immutable",
             ),
@@ -225,6 +241,54 @@ class CompilerSessionTest {
         assertEquals(4, result.fixedPointIterations)
         assertEquals(4, invocations)
         assertEquals("2", result.featureResults.getValue("immutable").state.fingerprint)
+    }
+
+    @Test
+    fun `收集和渲染也必须达到稳定固定点`() {
+        var collectInvocations = 0
+        var renderInvocations = 0
+        val provider = object : JimmerCompilerFeatureProvider {
+            override val descriptor = JimmerCompilerFeatureDescriptor("all-phases")
+
+            override fun collect(
+                context: JimmerCompilerCollectContext,
+            ): JimmerCompilerFeatureCollection {
+                val value = min(collectInvocations++, 2).toString()
+                return JimmerCompilerFeatureCollection(TextState(value))
+            }
+
+            override fun precompile(
+                context: JimmerCompilerPrecompileContext,
+            ): JimmerCompilerFeaturePrecompileResult {
+                return JimmerCompilerFeaturePrecompileResult(context.collection.state)
+            }
+
+            override fun render(
+                context: JimmerCompilerRenderContext,
+            ): JimmerCompilerFeatureRenderResult {
+                renderInvocations++
+                return JimmerCompilerFeatureRenderResult(
+                    artifacts = listOf(
+                        GeneratedArtifact.create(
+                            kind = ArtifactKind.RESOURCE,
+                            path = "META-INF/jimmer/all-phases",
+                            content = context.state.fingerprint,
+                            aggregationMode = ArtifactAggregationMode.AGGREGATING,
+                        ),
+                    ),
+                )
+            }
+        }
+
+        val result = CompilerSession("all-phases", listOf(provider)).execute(emptyRound(0))
+
+        assertEquals(4, result.fixedPointIterations)
+        assertEquals(4, collectInvocations)
+        assertEquals(4, renderInvocations)
+        assertEquals(
+            "2",
+            result.featureResults.getValue("all-phases").artifacts.single().content,
+        )
     }
 
     @Test
