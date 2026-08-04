@@ -9,6 +9,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -49,7 +50,7 @@ class ErrorRendererTest {
         assertEquals(workspace.sources.toSet(), artifact.originatingSources)
         assertDependencyContract(schema, artifact.dependencySymbols)
         assertEquals(workspace.sources.toSet(), artifact.dependencySources)
-        assertEquals(golden("apt/BookException.java"), artifact.content)
+        assertContentEquals(golden("apt/BookException.java"), artifact.content.encodeToByteArray())
         compileJava(artifact.content)
     }
 
@@ -67,7 +68,7 @@ class ErrorRendererTest {
         assertEquals(workspace.sources.toSet(), artifact.originatingSources)
         assertDependencyContract(schema, artifact.dependencySymbols)
         assertEquals(workspace.sources.toSet(), artifact.dependencySources)
-        assertEquals(golden("ksp/BookException.kt"), artifact.content)
+        assertContentEquals(golden("ksp/BookException.kt"), artifact.content.encodeToByteArray())
         compileKotlin(artifact.content)
     }
 
@@ -239,8 +240,10 @@ class ErrorRendererTest {
         assertEquals(ExitCode.OK, exitCode, messages.toString(StandardCharsets.UTF_8))
     }
 
-    private fun golden(path: String): String {
-        return requireNotNull(javaClass.getResource("/error/$path")).readText()
+    private fun golden(path: String): ByteArray {
+        return requireNotNull(javaClass.getResourceAsStream("/error/$path")).use { input ->
+            input.readBytes()
+        }
     }
 
     private fun assertDependencyContract(

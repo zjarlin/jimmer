@@ -21,6 +21,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
@@ -49,8 +50,16 @@ class ErrorCompilerParityTest {
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
         assertEquals(aptSchema.fingerprint(), kspSchema.fingerprint())
 
-        assertEquals(golden("apt/BookException.java"), apt.generatedSource())
-        assertEquals(golden("ksp/BookException.kt"), ksp.generatedSource())
+        assertContentEquals(
+            goldenBytes("apt/BookException.java"),
+            apt.generatedSourceBytes(),
+            "apt/BookException.java",
+        )
+        assertContentEquals(
+            goldenBytes("ksp/BookException.kt"),
+            ksp.generatedSourceBytes(),
+            "ksp/BookException.kt",
+        )
     }
 
     private fun compileApt(source: String): AptCompilationResult {
@@ -202,10 +211,10 @@ class ErrorCompilerParityTest {
             }
         }
 
-        fun generatedSource(): String {
+        fun generatedSourceBytes(): ByteArray {
             val file = generatedDir.resolve(JAVA_GENERATED_PATH)
             assertTrue(file.isFile, "Missing generated Error source: ${file.absolutePath}")
-            return file.readText()
+            return file.readBytes()
         }
     }
 
@@ -221,15 +230,17 @@ class ErrorCompilerParityTest {
             }
         }
 
-        fun generatedSource(): String {
+        fun generatedSourceBytes(): ByteArray {
             val file = kotlinOutputDir.resolve(KOTLIN_GENERATED_PATH)
             assertTrue(file.isFile, "Missing generated Error source: ${file.absolutePath}\n${logger.text()}")
-            return file.readText()
+            return file.readBytes()
         }
     }
 
-    private fun golden(path: String): String {
-        return requireNotNull(javaClass.getResource("/error/$path")).readText()
+    private fun goldenBytes(path: String): ByteArray {
+        return requireNotNull(javaClass.getResourceAsStream("/error/$path")).use { stream ->
+            stream.readBytes()
+        }
     }
 
     private fun DiagnosticCollector<JavaFileObject>.errorMessage(): String {
