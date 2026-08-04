@@ -1,39 +1,10 @@
-package org.babyfish.jimmer.ksp.dto
+package org.babyfish.jimmer.compiler.render.ksp
 
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
-import org.babyfish.jimmer.compiler.render.ksp.DTO_METADATA_CLASS_NAME
-import org.babyfish.jimmer.compiler.render.ksp.DTO_PROP_ACCESSOR
-import org.babyfish.jimmer.compiler.render.ksp.FIXED_INPUT_FIELD_CLASS_NAME
-import org.babyfish.jimmer.compiler.render.ksp.JVM_FIELD_CLASS_NAME
-import org.babyfish.jimmer.compiler.render.ksp.JVM_STATIC_CLASS_NAME
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoAccessorRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseContractRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseValueRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoDraftWriteRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoEqualityRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoFoldDraftApplyRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoFoldValueRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoLoadedStateRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicBranchRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicInputRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicMetadataConverterRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoPropAnnotationRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoSerializerRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoSpecificationRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoToStringRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeAnnotationRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspDtoTypeRefRenderer
-import org.babyfish.jimmer.compiler.render.ksp.KspImmutableTypeNameRenderer
-import org.babyfish.jimmer.compiler.render.ksp.generatedAnnotation
 import org.babyfish.jimmer.impl.util.StringUtil
 import org.babyfish.jimmer.impl.util.StringUtil.SnakeCase
 import site.addzero.lsi.core.LsiLanguage
@@ -92,7 +63,7 @@ import site.addzero.lsi.poet.LsiPoetImport
 import site.addzero.lsi.poet.LsiPoetTypeName
 import java.util.*
 
-internal class DtoGenerator private constructor(
+internal class KspDtoGenerator private constructor(
     private val mutable: Boolean,
     private val lsiGraph: DtoGraph,
     private val lsiDtoType: LsiDtoType,
@@ -105,12 +76,12 @@ internal class DtoGenerator private constructor(
     private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
     private val generatedDtoPackageName: String,
     private val generatedDtoSimpleNames: List<String>,
-    private val parent: DtoGenerator?,
+    private val parent: KspDtoGenerator?,
     private val innerClassName: String?,
     private val polymorphicSuperInterfaceName: TypeName? = null,
     private val lsiPolymorphicBranch: LsiDtoPolymorphicBranch? = null,
 ) {
-    private val root: DtoGenerator = parent?.root ?: this
+    private val root: KspDtoGenerator = parent?.root ?: this
 
     private val lsiBaseType = lsiDtoType.immutableBaseType(immutableSchema)
 
@@ -210,7 +181,7 @@ internal class DtoGenerator private constructor(
     private constructor(
         mutable: Boolean,
         lsiDtoType: LsiDtoType,
-        parent: DtoGenerator,
+        parent: KspDtoGenerator,
         innerClassName: String,
         polymorphicSuperInterfaceName: TypeName? = null,
         lsiPolymorphicBranch: LsiDtoPolymorphicBranch? = null,
@@ -340,7 +311,7 @@ internal class DtoGenerator private constructor(
             .toString()
     }
 
-    private fun generateNestedPolymorphic(parent: DtoGenerator) {
+    private fun generateNestedPolymorphic(parent: KspDtoGenerator) {
         parent.typeBuilder.addType(buildPolymorphicType(requirePolymorphicBaseContractKind()))
     }
 
@@ -349,7 +320,7 @@ internal class DtoGenerator private constructor(
         if (baseContractKind != DtoGeneratedBaseContractKind.ENTITY_INPUT &&
             baseContractKind != DtoGeneratedBaseContractKind.ENTITY_VIEW
         ) {
-            throw DtoException("Polymorphic DTO generation is only supported for entity types")
+            throw KspDtoException("Polymorphic DTO generation is only supported for entity types")
         }
         return baseContractKind
     }
@@ -598,7 +569,7 @@ internal class DtoGenerator private constructor(
                 typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
             )
             registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
-            DtoGenerator(
+            KspDtoGenerator(
                 mutable = mutable,
                 lsiDtoType = lsiTargetType,
                 parent = this,
@@ -619,7 +590,7 @@ internal class DtoGenerator private constructor(
                 typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
             )
             registerGeneratedDtoTypeName(lsiTargetType, generatedDtoSimpleNames + childSimpleName)
-            DtoGenerator(
+            KspDtoGenerator(
                 mutable = mutable,
                 lsiDtoType = lsiTargetType,
                 parent = this,
@@ -686,7 +657,7 @@ internal class DtoGenerator private constructor(
         branch: LsiDtoPolymorphicBranch,
         superInterfaceName: TypeName,
     ) {
-        DtoGenerator(
+        KspDtoGenerator(
             mutable = mutable,
             lsiDtoType = branch.mergedType(lsiGraph),
             parent = this,
@@ -1295,7 +1266,7 @@ internal class DtoGenerator private constructor(
             return try {
                 branch.requireGeneratedMergedType(lsiGraph, lsiDtoType)
             } catch (ex: IllegalArgumentException) {
-                throw DtoException(
+                throw KspDtoException(
                     "Frozen DTO polymorphic branch does not match generated branch",
                     ex,
                 )

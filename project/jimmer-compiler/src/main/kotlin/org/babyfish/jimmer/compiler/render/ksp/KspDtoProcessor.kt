@@ -1,4 +1,4 @@
-package org.babyfish.jimmer.ksp.dto
+package org.babyfish.jimmer.compiler.render.ksp
 
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
@@ -19,7 +19,7 @@ import site.addzero.lsi.jimmer.dto.rootTypesInDeclarationOrder
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 
-internal class DtoProcessor(
+internal class KspDtoProcessor(
     graphs: Collection<DtoGraph>,
     private val immutableSchema: ImmutableSchema,
     private val rendererOptions: JimmerDtoRendererOptions,
@@ -37,21 +37,21 @@ internal class DtoProcessor(
     fun process(): List<GeneratedArtifact> = buildList {
         for (graph in graphs) {
             val annotationContract = annotationContractsBySource[graph.source]
-                ?: throw DtoException(
+                ?: throw KspDtoException(
                     "No frozen DTO annotation contract for \"${graph.source.path}\""
                 )
             val interfaceContractResolution = interfaceContractsBySource[graph.source]
-                ?: throw DtoException(
+                ?: throw KspDtoException(
                     "No frozen DTO interface contract for \"${graph.source.path}\""
                 )
             val configContractResolution = configContractsBySource[graph.source]
-                ?: throw DtoException(
+                ?: throw KspDtoException(
                     "No frozen DTO config contract for \"${graph.source.path}\""
                 )
             val dependencySymbols = graph.dependencySymbols()
             for (rootType in graph.rootTypesInDeclarationOrder()) {
                 val rootTypeName = rootDtoTypeNamesByTypeId.getValue(rootType.id)
-                val content = DtoGenerator(
+                val content = KspDtoGenerator(
                     mutable = effectiveMutableByRootTypeId.getValue(rootType.id),
                     lsiGraph = graph,
                     lsiDtoType = rootType,
