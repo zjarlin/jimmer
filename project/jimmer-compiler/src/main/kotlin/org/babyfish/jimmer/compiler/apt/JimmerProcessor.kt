@@ -1,6 +1,5 @@
 package org.babyfish.jimmer.compiler.apt
 
-import org.babyfish.jimmer.apt.MetaException
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
@@ -57,12 +56,6 @@ class JimmerProcessor : AbstractProcessor() {
     ): Boolean {
         try {
             lsiDriver.process(roundEnv)
-        } catch (ex: MetaException) {
-            messager.printMessage(
-                Diagnostic.Kind.ERROR,
-                ex.message ?: ex.javaClass.name,
-                ex.element,
-            )
         } catch (ex: DtoAstException) {
             val annotatedElements = roundEnv.getElementsAnnotatedWith(EnableDtoGeneration::class.java)
             if (annotatedElements.isEmpty()) {
