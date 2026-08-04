@@ -36,16 +36,18 @@ import org.babyfish.jimmer.impl.util.StringUtil;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import site.addzero.lsi.core.LsiLanguage;
+import site.addzero.lsi.jimmer.ImmutableDraftNamingExtensionsKt;
 import site.addzero.lsi.jimmer.ImmutableSchema;
 import site.addzero.lsi.jimmer.dto.DtoAccessorExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract;
 import site.addzero.lsi.jimmer.dto.DtoBaseProp;
 import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution;
+import site.addzero.lsi.jimmer.dto.DtoConverterExtensionsKt;
+import site.addzero.lsi.jimmer.dto.DtoDraftWriteExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGenerationExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind;
 import site.addzero.lsi.jimmer.dto.DtoGeneratedValueTypeExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoGraph;
-import site.addzero.lsi.jimmer.dto.DtoDraftWriteExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractExtensionsKt;
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution;
@@ -1315,30 +1317,21 @@ public class DtoGenerator {
                 .methodBuilder("__applyTo")
                 .addModifiers(Modifier.PRIVATE)
                 .addParameter(dtoType.getBaseType().getDraftClassName(), "__draft");
-        for (AbstractProp abstractProp : dtoType.getProps()) {
-            if (abstractProp instanceof FoldProp<?, ?>) {
-                FoldProp<ImmutableType, ImmutableProp> foldProp = asFoldProp(abstractProp);
+        for (site.addzero.lsi.jimmer.dto.DtoProp prop :
+                DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph)) {
+            if (prop instanceof site.addzero.lsi.jimmer.dto.DtoFoldProp) {
                 builder.addCode(
                         AptDtoFoldDraftApplyRenderer.render(
-                                DtoGenerationExtensionsKt.foldProp(
-                                        lsiDtoType,
-                                        lsiGraph,
-                                        foldProp.getName()
-                                ),
+                                (site.addzero.lsi.jimmer.dto.DtoFoldProp) prop,
                                 "__draft"
                         )
                 );
                 continue;
             }
-            if (!(abstractProp instanceof DtoProp<?, ?>)) {
+            if (!(prop instanceof DtoBaseProp)) {
                 continue;
             }
-            DtoProp<ImmutableType, ImmutableProp> prop = asDtoProp(abstractProp);
-            DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
-                    lsiDtoType,
-                    lsiGraph,
-                    prop.getName()
-            );
+            DtoBaseProp lsiProp = (DtoBaseProp) prop;
             if (DtoDraftWriteExtensionsKt.isDraftWriteSkipped(
                     lsiProp,
                     lsiGraph,
@@ -1367,7 +1360,14 @@ public class DtoGenerator {
                             accessorFieldName(prop.getName()),
                             "__draft",
                             prop.getName(),
-                            prop.getBaseProp().getSetterName(),
+                            ImmutableDraftNamingExtensionsKt.generatedJavaDraftSetterName(
+                                    DtoConverterExtensionsKt.boundImmutableProp(
+                                            lsiProp,
+                                            lsiGraph,
+                                            immutableSchema
+                                    ),
+                                    lsiWorkspace
+                            ),
                             this::generatedTargetType
                     )
             );
