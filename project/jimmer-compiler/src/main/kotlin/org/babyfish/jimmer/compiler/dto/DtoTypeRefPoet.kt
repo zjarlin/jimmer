@@ -1,10 +1,15 @@
 package org.babyfish.jimmer.compiler.dto
 
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.generatedTableType
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.collectTypeRefDependencies
 import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.poet.generatedSiblingPoetTypeName
 import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 /** 为冻结的 DTO 类型引用解析完整且精确的源码名称表。 */
@@ -18,6 +23,29 @@ internal fun LsiWorkspace.dtoTypeRefPoetTypeNames(
     return toLsiPoetTypeNames(
         typeIds = typeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + generatedTypeNames,
+    )
+}
+
+/** 为 DTO 基础契约补齐当前轮尚未进入 workspace 的生成查询类型名。 */
+internal fun LsiWorkspace.dtoBaseContractPoetTypeNames(
+    contractType: LsiDeclaredType,
+    baseType: ImmutableType,
+): List<LsiPoetTypeName> {
+    val generatedTypeNames = if (baseType.kind == ImmutableTypeKind.ENTITY) {
+        val tableType = baseType.generatedTableType()
+        listOf(
+            generatedSiblingPoetTypeName(
+                sourceTypeId = baseType.id,
+                generatedTypeId = tableType.declarationId,
+                simpleNameSuffix = "Table",
+            ),
+        )
+    } else {
+        emptyList()
+    }
+    return dtoTypeRefPoetTypeNames(
+        contractType,
+        DTO_BASE_CONTRACT_POET_TYPE_NAMES + generatedTypeNames,
     )
 }
 
@@ -45,4 +73,17 @@ internal val DTO_COMMON_POET_TYPE_NAMES = listOf(
     JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("MutableSet")),
     JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("Map")),
     JimmerDtoPoetTypeNames.create("kotlin.collections", listOf("MutableMap")),
+)
+
+private val DTO_BASE_CONTRACT_POET_TYPE_NAMES = listOf(
+    JimmerDtoPoetTypeNames.create("org.babyfish.jimmer", listOf("View")),
+    JimmerDtoPoetTypeNames.create("org.babyfish.jimmer", listOf("EmbeddableDto")),
+    JimmerDtoPoetTypeNames.create(
+        "org.babyfish.jimmer.sql.ast.query.specification",
+        listOf("JSpecification"),
+    ),
+    JimmerDtoPoetTypeNames.create(
+        "org.babyfish.jimmer.sql.kt.ast.query.specification",
+        listOf("KSpecification"),
+    ),
 )

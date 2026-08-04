@@ -371,6 +371,60 @@ class DtoAccessorExtensionsTest {
             )
         }
 
+        fun contract(typeName: String, vararg arguments: LsiTypeRef): LsiDeclaredType {
+            return LsiDeclaredType(
+                declarationId = LsiSymbolId.type(typeName),
+                arguments = arguments.map(LsiTypeArgument::invariant),
+            )
+        }
+        val entitySchema = schema(ImmutableTypeKind.ENTITY)
+        val baseTypeRef = LsiDeclaredType(BASE_TYPE_ID)
+        assertEquals(
+            contract("org.babyfish.jimmer.Input", baseTypeRef),
+            dtoType.copy(modifiers = setOf(DtoModifier.INPUT))
+                .generatedBaseContractType(entitySchema, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            contract("org.babyfish.jimmer.View", baseTypeRef),
+            dtoType.copy(modifiers = emptySet())
+                .generatedBaseContractType(entitySchema, LsiLanguage.KOTLIN),
+        )
+        val specification = dtoType.copy(modifiers = setOf(DtoModifier.SPECIFICATION))
+        assertEquals(
+            contract(
+                "org.babyfish.jimmer.sql.ast.query.specification.JSpecification",
+                baseTypeRef,
+                LsiDeclaredType(
+                    LsiSymbolId.type("${BASE_TYPE_ID.requireTypeQualifiedName()}Table"),
+                ),
+            ),
+            specification.generatedBaseContractType(entitySchema, LsiLanguage.JAVA),
+        )
+        assertEquals(
+            contract(
+                "org.babyfish.jimmer.sql.kt.ast.query.specification.KSpecification",
+                baseTypeRef,
+            ),
+            specification.generatedBaseContractType(entitySchema, LsiLanguage.KOTLIN),
+        )
+        assertEquals(
+            contract("org.babyfish.jimmer.EmbeddableDto", baseTypeRef),
+            dtoType.generatedBaseContractType(
+                schema(ImmutableTypeKind.EMBEDDABLE),
+                LsiLanguage.JAVA,
+            ),
+        )
+        assertEquals(
+            null,
+            dtoType.generatedBaseContractType(
+                schema(ImmutableTypeKind.IMMUTABLE),
+                LsiLanguage.KOTLIN,
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            dtoType.generatedBaseContractType(entitySchema, LsiLanguage.UNKNOWN)
+        }
+
         val branch = DtoPolymorphicBranch(
             kind = DtoPolymorphicBranchKind.DEFAULT,
             targetBaseTypeId = null,
@@ -431,7 +485,6 @@ class DtoAccessorExtensionsTest {
             branch.mergedType(viewGraph).generatedBaseContractKind(schema(ImmutableTypeKind.ENTITY)),
         )
 
-        val entitySchema = schema(ImmutableTypeKind.ENTITY)
         assertFailsWith<IllegalArgumentException> {
             dtoType.generatedBaseContractKind(ImmutableSchema(emptyList()))
         }

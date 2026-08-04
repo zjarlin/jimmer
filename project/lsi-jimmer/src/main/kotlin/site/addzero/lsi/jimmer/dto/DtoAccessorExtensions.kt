@@ -1,18 +1,21 @@
 package site.addzero.lsi.jimmer.dto
 
 import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableView
 import site.addzero.lsi.jimmer.PrimaryMapping
+import site.addzero.lsi.jimmer.generatedTableType
 import site.addzero.lsi.jimmer.isEntityAssociation
 import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 
 /** 按 DTO 声明顺序返回全部可见属性。 */
@@ -159,6 +162,39 @@ fun DtoType.generatedBaseContractKind(
         ImmutableTypeKind.MAPPED_SUPERCLASS,
         -> null
     }
+}
+
+/** 返回指定源码语言下 DTO 生成类需要实现的完整基础契约类型。 */
+fun DtoType.generatedBaseContractType(
+    immutableSchema: ImmutableSchema,
+    targetLanguage: LsiLanguage,
+): LsiDeclaredType? {
+    require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
+        "DTO base contract type requires Java or Kotlin: $targetLanguage"
+    }
+    val kind = generatedBaseContractKind(immutableSchema) ?: return null
+    val baseType = immutableBaseType(immutableSchema)
+    val baseTypeRef = LsiDeclaredType(baseType.id)
+    val rawTypeId = when (kind) {
+        DtoGeneratedBaseContractKind.ENTITY_INPUT -> INPUT_CONTRACT_TYPE_ID
+        DtoGeneratedBaseContractKind.ENTITY_VIEW -> VIEW_CONTRACT_TYPE_ID
+        DtoGeneratedBaseContractKind.ENTITY_SPECIFICATION -> when (targetLanguage) {
+            LsiLanguage.JAVA -> JAVA_SPECIFICATION_CONTRACT_TYPE_ID
+            LsiLanguage.KOTLIN -> KOTLIN_SPECIFICATION_CONTRACT_TYPE_ID
+            LsiLanguage.UNKNOWN -> error("Unreachable")
+        }
+        DtoGeneratedBaseContractKind.EMBEDDABLE -> EMBEDDABLE_DTO_CONTRACT_TYPE_ID
+    }
+    val arguments = buildList {
+        add(LsiTypeArgument.invariant(baseTypeRef))
+        if (
+            kind == DtoGeneratedBaseContractKind.ENTITY_SPECIFICATION &&
+            targetLanguage == LsiLanguage.JAVA
+        ) {
+            add(LsiTypeArgument.invariant(baseType.generatedTableType()))
+        }
+    }
+    return LsiDeclaredType(rawTypeId, arguments)
 }
 
 /** 判断 DTO 是否为需要生成多态输入注解的实体根类型。 */
@@ -657,6 +693,18 @@ private val COLLECTION_VALUE_FUNCTIONS = setOf(
     "associatedIdIn",
     "associatedIdNotIn",
 )
+
+private val INPUT_CONTRACT_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.Input")
+
+private val VIEW_CONTRACT_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.View")
+
+private val EMBEDDABLE_DTO_CONTRACT_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.EmbeddableDto")
+
+private val JAVA_SPECIFICATION_CONTRACT_TYPE_ID =
+    LsiSymbolId.type("org.babyfish.jimmer.sql.ast.query.specification.JSpecification")
+
+private val KOTLIN_SPECIFICATION_CONTRACT_TYPE_ID =
+    LsiSymbolId.type("org.babyfish.jimmer.sql.kt.ast.query.specification.KSpecification")
 
 internal fun dtoIdentifier(vararg parts: String): String = buildString {
     var previousPartEndsWithLowerCase = false

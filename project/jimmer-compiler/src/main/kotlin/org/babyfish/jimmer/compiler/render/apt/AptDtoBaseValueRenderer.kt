@@ -13,8 +13,8 @@ import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.poet.generatedSiblingPoetTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
-import site.addzero.lsi.poet.toLsiPoetTypeNames
 
 /** 将 immutable-to-DTO Java 属性读取语义渲染为 JavaPoet 表达式。 */
 internal object AptDtoBaseValueRenderer {
@@ -35,12 +35,11 @@ internal object AptDtoBaseValueRenderer {
         generatedTypeNames: Collection<LsiPoetTypeName>,
     ): CodeBlock {
         val producerType = baseType.generatedDraftProducerType()
-        val baseTypeName = workspace.toLsiPoetTypeNames(listOf(baseType.id)).single()
-        val producerTypeName = LsiPoetTypeName(
-            typeId = producerType.declarationId,
-            packageName = baseTypeName.packageName,
-            simpleNames = baseTypeName.simpleNames.dropLast(1) +
-                listOf("${baseTypeName.simpleNames.last()}Draft", "Producer"),
+        val producerTypeName = workspace.generatedSiblingPoetTypeName(
+            sourceTypeId = baseType.id,
+            generatedTypeId = producerType.declarationId,
+            simpleNameSuffix = "Draft",
+            nestedSimpleNames = listOf("Producer"),
         )
         val initializer = prop.toBaseValuePoetCodeBlock(
             graph = graph,

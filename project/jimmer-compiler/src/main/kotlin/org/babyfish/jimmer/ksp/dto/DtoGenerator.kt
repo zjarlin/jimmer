@@ -8,6 +8,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoAccessorRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseContractRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoBaseValueRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoDescriptionRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoMetadataFetcherRenderer
@@ -600,13 +601,10 @@ internal class DtoGenerator private constructor(
     }
 
     private fun generatedBaseContractTypeName(kind: DtoGeneratedBaseContractKind): TypeName {
-        val rawType = when (kind) {
-            DtoGeneratedBaseContractKind.ENTITY_INPUT -> INPUT_CLASS_NAME
-            DtoGeneratedBaseContractKind.ENTITY_VIEW -> VIEW_CLASS_NAME
-            DtoGeneratedBaseContractKind.ENTITY_SPECIFICATION -> K_SPECIFICATION_CLASS_NAME
-            DtoGeneratedBaseContractKind.EMBEDDABLE -> EMBEDDED_DTO_CLASS_NAME
+        check(lsiDtoType.generatedBaseContractKind(immutableSchema) == kind) {
+            "Unexpected DTO base contract kind: $kind"
         }
-        return rawType.parameterizedBy(baseType.className)
+        return KspDtoBaseContractRenderer.render(lsiDtoType, immutableSchema, workspace)
     }
 
     private fun generateNestedDtoTypes() {

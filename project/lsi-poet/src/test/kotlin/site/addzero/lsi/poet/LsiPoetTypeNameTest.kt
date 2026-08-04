@@ -98,6 +98,40 @@ class LsiPoetTypeNameTest {
     }
 
     @Test
+    fun `从冻结嵌套声明派生同级生成类型名`() {
+        val outerId = LsiSymbolId.type("Demo.API.order")
+        val nestedId = LsiSymbolId.type("Demo.API.order.item")
+        val generatedId = LsiSymbolId.type("Demo.API.order.itemTable.Remote")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                typeDeclaration(outerId, "order"),
+                typeDeclaration(nestedId, "item", outerId),
+            ),
+        )
+
+        assertEquals(
+            LsiPoetTypeName(
+                typeId = generatedId,
+                packageName = "Demo.API",
+                simpleNames = listOf("order", "itemTable", "Remote"),
+            ),
+            workspace.generatedSiblingPoetTypeName(
+                sourceTypeId = nestedId,
+                generatedTypeId = generatedId,
+                simpleNameSuffix = "Table",
+                nestedSimpleNames = listOf("Remote"),
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            workspace.generatedSiblingPoetTypeName(
+                sourceTypeId = nestedId,
+                generatedTypeId = generatedId,
+                simpleNameSuffix = "Table.Remote",
+            )
+        }
+    }
+
+    @Test
     fun `忽略未请求的显式名称并拒绝与声明边界冲突`() {
         val typeId = LsiSymbolId.type("demo.order.item")
         val workspace = LsiWorkspace(

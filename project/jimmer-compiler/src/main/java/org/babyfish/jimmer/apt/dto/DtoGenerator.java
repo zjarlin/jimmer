@@ -11,6 +11,7 @@ import org.babyfish.jimmer.client.ApiIgnore;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames;
 import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoAccessorRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseContractRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoBaseValueRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDescriptionRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoDraftWriteRenderer;
@@ -481,31 +482,10 @@ public class DtoGenerator {
     }
 
     private TypeName generatedBaseContractTypeName(DtoGeneratedBaseContractKind kind) {
-        switch (kind) {
-            case ENTITY_INPUT:
-                return ParameterizedTypeName.get(
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.INPUT_CLASS_NAME,
-                        dtoType.getBaseType().getClassName()
-                );
-            case ENTITY_VIEW:
-                return ParameterizedTypeName.get(
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.VIEW_CLASS_NAME,
-                        dtoType.getBaseType().getClassName()
-                );
-            case ENTITY_SPECIFICATION:
-                return ParameterizedTypeName.get(
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.JSPECIFICATION_CLASS_NAME,
-                        dtoType.getBaseType().getClassName(),
-                        dtoType.getBaseType().getTableClassName()
-                );
-            case EMBEDDABLE:
-                return ParameterizedTypeName.get(
-                        org.babyfish.jimmer.apt.immutable.generator.Constants.EMBEDDABLE_DTO_CLASS_NAME,
-                        dtoType.getBaseType().getClassName()
-                );
-            default:
-                throw new AssertionError("Unexpected DTO base contract kind: " + kind);
+        if (generatedBaseContractKind() != kind) {
+            throw new AssertionError("Unexpected DTO base contract kind: " + kind);
         }
+        return AptDtoBaseContractRenderer.render(lsiDtoType, immutableSchema, lsiWorkspace);
     }
 
     private void generatePolymorphicBranch(
