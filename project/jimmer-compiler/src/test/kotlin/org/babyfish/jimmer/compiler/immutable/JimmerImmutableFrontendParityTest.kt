@@ -2541,16 +2541,10 @@ class JimmerImmutableFrontendParityTest {
 
                     import org.babyfish.jimmer.client.Description;
 
+                    @Description("binary type")
                     public interface BinaryBookDraft {
-                        class Producer {
-                            @Description("binary type")
-                            public static class Impl {
-                                @Description("binary property")
-                                public String name() {
-                                    return "";
-                                }
-                            }
-                        }
+                        @Description("binary property")
+                        BinaryBookDraft setName(String name);
                     }
                 """.trimIndent()
             )
@@ -2601,15 +2595,10 @@ class JimmerImmutableFrontendParityTest {
                         val name: String
                     }
 
+                    @Description("binary type")
                     interface BinaryBookDraft {
-                        class `${'$'}` {
-                            @Description("binary type")
-                            class Impl {
-                                @Description("binary property")
-                                val name: String
-                                    get() = ""
-                            }
-                        }
+                        @Description("binary property")
+                        val name: String
                     }
                 """.trimIndent()
             )
