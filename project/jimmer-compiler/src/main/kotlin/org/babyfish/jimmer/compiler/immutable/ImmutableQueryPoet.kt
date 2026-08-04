@@ -1592,7 +1592,7 @@ private fun LsiTypeRef.toQueryKotlinType(): LsiTypeRef {
             parameterTypes = parameterTypes.map(LsiTypeRef::toQueryKotlinType),
             annotations = emptyList(),
         )
-        is LsiPrimitiveType -> copy(boxed = false, annotations = emptyList())
+        is LsiPrimitiveType -> copy(annotations = emptyList())
         is LsiTypeParameterRef -> copy(annotations = emptyList())
         is LsiUnresolvedType -> copy(annotations = emptyList())
     }
@@ -1601,7 +1601,8 @@ private fun LsiTypeRef.toQueryKotlinType(): LsiTypeRef {
 private fun LsiTypeRef.toQueryJavaType(): LsiTypeRef {
     return when (this) {
         is LsiArrayType -> copy(
-            elementType = elementType.toQueryJavaType(),
+            // Java 数组分量保留原始类型，只有泛型实参需要装箱。
+            elementType = elementType.toQueryJavaArrayElementType(),
             annotations = emptyList(),
         )
         is LsiDeclaredType -> copy(
@@ -1619,6 +1620,17 @@ private fun LsiTypeRef.toQueryJavaType(): LsiTypeRef {
         is LsiPrimitiveType -> copy(boxed = true, annotations = emptyList())
         is LsiTypeParameterRef -> copy(annotations = emptyList())
         is LsiUnresolvedType -> copy(annotations = emptyList())
+    }
+}
+
+private fun LsiTypeRef.toQueryJavaArrayElementType(): LsiTypeRef {
+    return when (this) {
+        is LsiArrayType -> copy(
+            elementType = elementType.toQueryJavaArrayElementType(),
+            annotations = emptyList(),
+        )
+        is LsiPrimitiveType -> copy(annotations = emptyList())
+        else -> toQueryJavaType()
     }
 }
 

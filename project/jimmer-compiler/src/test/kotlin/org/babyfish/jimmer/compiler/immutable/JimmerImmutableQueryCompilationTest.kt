@@ -65,6 +65,8 @@ class JimmerImmutableQueryCompilationTest {
         assertContains(bookTable, "implements BookProps, PolymorphicTable<Book>")
         assertContains(bookTable, "StoreTable store()")
         assertContains(bookTable, "LocationPropExpression location()")
+        assertContains(bookTable, "PropExpression<int[]> scores()")
+        assertContains(bookTable, "PropExpression<Integer[]> ratings()")
         assertContains(bookTable, "static class Remote")
         assertContains(bookTableEx, " TT weakJoin(")
 
@@ -326,6 +328,10 @@ class JimmerImmutableQueryCompilationTest {
                     String kind();
 
                     String name();
+
+                    int[] scores();
+
+                    Integer[] ratings();
 
                     @ManyToOne
                     @Nullable

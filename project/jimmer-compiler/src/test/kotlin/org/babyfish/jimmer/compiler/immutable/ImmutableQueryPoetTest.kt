@@ -25,6 +25,7 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
@@ -39,9 +40,43 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetArtifact
 import site.addzero.lsi.poet.LsiPoetFileNameStyle
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class ImmutableQueryPoetTest {
+
+    @Test
+    fun `java query preserves primitive and boxed array elements`() {
+        val source = source("demo/ArrayEntity.java")
+        val typeId = typeId("demo.ArrayEntity")
+        val id = scalarProp(typeId, "id", LONG_TYPE, PrimaryMapping.ID)
+        val primitiveValues = scalarProp(
+            typeId,
+            "primitiveValues",
+            LsiArrayType(LsiPrimitiveType(LsiPrimitiveKind.INT)),
+        )
+        val boxedValues = scalarProp(
+            typeId,
+            "boxedValues",
+            LsiArrayType(LsiPrimitiveType(LsiPrimitiveKind.INT, boxed = true)),
+        )
+        val type = immutableType(typeId, listOf(id, primitiveValues, boxedValues), idPropId = id.id)
+        val schema = ImmutableSchema(listOf(type))
+        val workspace = workspace(
+            types = listOf(type to source),
+            props = listOf(id to source, primitiveValues to source, boxedValues to source),
+        )
+
+        val tableArtifact = schema.toQueryPoetArtifacts(
+            types = listOf(type),
+            language = LsiLanguage.JAVA,
+            workspace = workspace,
+        ).single { artifact -> artifact.qualifiedFileName == "demo.ArrayEntityTable" }
+        val sourceText = LsiJavaPoetRenderer().render(tableArtifact).content
+
+        assertTrue("PropExpression<int[]> primitiveValues()" in sourceText)
+        assertTrue("PropExpression<Integer[]> boxedValues()" in sourceText)
+    }
 
     @Test
     fun `same source query artifacts are isolating and immediate`() {
