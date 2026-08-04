@@ -983,11 +983,10 @@ internal class DtoGenerator private constructor(
             FunSpec
                 .constructorBuilder()
                 .apply {
-                    for (prop in dtoType.props) {
-                        val lsiProp = lsiDtoType.prop(lsiGraph, prop.name)
-                        val typeName = propTypeName(prop)
+                    for (lsiProp in lsiDtoType.propsInDeclarationOrder(lsiGraph)) {
+                        val typeName = propTypeName(lsiProp)
                         addParameter(
-                            ParameterSpec.builder(prop.name, typeName)
+                            ParameterSpec.builder(lsiProp.name, typeName)
                                 .apply {
                                     val defaultValueText = (lsiProp as? DtoUserProp)?.defaultValueText
                                     if (defaultValueText != null) {
@@ -1007,8 +1006,8 @@ internal class DtoGenerator private constructor(
                                     ParameterSpec
                                         .builder(statePropName, BOOLEAN)
                                         .apply {
-                                            if (prop.isNullable) {
-                                                defaultValue("%N !== null", prop.name)
+                                            if (lsiProp.nullable) {
+                                                defaultValue("%N !== null", lsiProp.name)
                                             } else {
                                                 defaultValue("true")
                                             }
@@ -1436,15 +1435,16 @@ internal class DtoGenerator private constructor(
     }
 
     private fun propTypeName(prop: AbstractProp): TypeName =
+        propTypeName(lsiDtoType.prop(lsiGraph, prop.name))
+
+    private fun propTypeName(prop: LsiDtoProp): TypeName =
         KspDtoTypeRefRenderer.render(
-            type = lsiDtoType
-                .prop(lsiGraph, prop.name)
-                .generatedValueType(
-                    graph = lsiGraph,
-                    immutableSchema = immutableSchema,
-                    targetLanguage = LsiLanguage.KOTLIN,
-                    generatedTargetType = ::generatedTargetType,
-                ),
+            type = prop.generatedValueType(
+                graph = lsiGraph,
+                immutableSchema = immutableSchema,
+                targetLanguage = LsiLanguage.KOTLIN,
+                generatedTargetType = ::generatedTargetType,
+            ),
             workspace = workspace,
             generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
         )
