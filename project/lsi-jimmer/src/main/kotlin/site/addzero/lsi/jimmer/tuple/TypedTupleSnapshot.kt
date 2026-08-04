@@ -35,6 +35,16 @@ fun TypedTupleSchema.normalizedSnapshot(): String {
                     property.typeDependencyIds.joinToString(",") { typeId -> typeId.value },
                 )
             }
+            tuple.baseTableProjection?.selections.orEmpty().forEach { selection ->
+                appendRecord(
+                    "base-table-selection",
+                    tuple.id.value,
+                    selection.propertyIndex.toString(),
+                    selection.kind.name,
+                    selection.entityTableTypeId?.value.orEmpty(),
+                    selection.scalarCategory?.name.orEmpty(),
+                )
+            }
         }
     }
 }
@@ -74,6 +84,16 @@ private fun TypedTupleSchema.renderSnapshot(): String {
                     property.type.stableSignature(),
                     property.nullable.toString(),
                     property.typeDependencyIds.joinToString(",") { typeId -> typeId.value },
+                )
+            }
+            tuple.baseTableProjection?.selections.orEmpty().forEach { selection ->
+                appendRecord(
+                    "render-base-table-selection",
+                    tuple.id.value,
+                    selection.propertyIndex.toString(),
+                    selection.kind.name,
+                    selection.entityTableTypeId?.value.orEmpty(),
+                    selection.scalarCategory?.name.orEmpty(),
                 )
             }
             appendConstruction(tuple)

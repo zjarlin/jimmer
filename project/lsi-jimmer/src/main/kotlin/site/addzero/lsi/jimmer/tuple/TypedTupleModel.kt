@@ -26,6 +26,7 @@ data class TypedTupleType(
     val sourceLanguage: LsiLanguage,
     val properties: List<TypedTupleProperty>,
     val construction: TypedTupleConstruction,
+    val baseTableProjection: TypedTupleBaseTableProjection? = null,
     val dependencies: TypedTupleDependencies,
 ) {
     init {
@@ -58,6 +59,12 @@ data class TypedTupleType(
         ) {
             "Typed tuple construction does not match source language '$sourceLanguage': ${id.value}"
         }
+        require(
+            baseTableProjection == null ||
+                baseTableProjection.selections.map(TypedTupleBaseTableSelection::propertyIndex) == properties.indices.toList()
+        ) {
+            "Typed tuple base-table projection must describe every property in declaration order: ${id.value}"
+        }
     }
 }
 
@@ -76,6 +83,60 @@ data class TypedTupleProperty(
         get() = sortedSetOf<LsiSymbolId>()
             .apply { collectTypeRefDependencies(type) }
             .toList()
+}
+
+/** TypedTuple 作为具名 base-table facade 时的稳定选择布局。 */
+data class TypedTupleBaseTableProjection(
+    val selections: List<TypedTupleBaseTableSelection>,
+) {
+    init {
+        require(selections.isNotEmpty()) {
+            "Typed tuple base-table projection must contain at least one selection"
+        }
+        require(selections.map(TypedTupleBaseTableSelection::propertyIndex) == selections.indices.toList()) {
+            "Typed tuple base-table selections must use contiguous zero-based indexes"
+        }
+    }
+}
+
+/** 单个 base-table 选择的表/表达式类别及 Java 表达式能力。 */
+data class TypedTupleBaseTableSelection(
+    val propertyIndex: Int,
+    val kind: TypedTupleBaseTableSelectionKind,
+    val entityTableTypeId: LsiSymbolId? = null,
+    val scalarCategory: TypedTupleScalarCategory? = null,
+) {
+    init {
+        require(propertyIndex >= 0) { "Typed tuple base-table property index cannot be negative" }
+        require((entityTableTypeId != null) == kind.table) {
+            "Typed tuple table selection must declare exactly one generated entity table type"
+        }
+        require((scalarCategory != null) == !kind.table) {
+            "Typed tuple expression selection must declare exactly one scalar category"
+        }
+        entityTableTypeId?.requireTypeQualifiedName()
+    }
+}
+
+/** base-table 选择的结构类别，与运行时 selection layout 一一对应。 */
+enum class TypedTupleBaseTableSelectionKind(
+    val table: Boolean,
+    val nullable: Boolean,
+) {
+    NON_NULL_TABLE(true, false),
+    NULLABLE_TABLE(true, true),
+    NON_NULL_EXPRESSION(false, false),
+    NULLABLE_EXPRESSION(false, true),
+}
+
+/** Java facade 为标量选择暴露的表达式能力。 */
+enum class TypedTupleScalarCategory {
+    GENERIC,
+    STRING,
+    NUMERIC,
+    DATE,
+    TEMPORAL,
+    COMPARABLE,
 }
 
 /** TypedTuple 实例化时消费属性的稳定契约。 */

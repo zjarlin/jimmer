@@ -69,6 +69,50 @@ class TypedTupleWorkspaceExtensionsTest {
     }
 
     @Test
+    fun `base table projection freezes entity scalar and dto roles`() {
+        val origin = sourceOrigin(LsiLanguage.JAVA, "demo/ProjectionTuple.java")
+        val tupleId = LsiSymbolId.type("demo.ProjectionTuple")
+        val entityId = LsiSymbolId.type("demo.Book")
+        val dtoId = LsiSymbolId.type("demo.BookView")
+        val viewId = LsiSymbolId.type("org.babyfish.jimmer.View")
+        val book = field(tupleId, "book", LsiDeclaredType(entityId), origin = origin)
+        val count = field(tupleId, "count", LONG_TYPE, origin = origin)
+        val tuple = type(
+            qualifiedName = "demo.ProjectionTuple",
+            annotations = listOf(annotation(TYPED_TUPLE)),
+            memberIds = listOf(book.id, count.id),
+            origin = origin,
+        )
+        val entity = type(
+            qualifiedName = "demo.Book",
+            kind = LsiTypeDeclarationKind.INTERFACE,
+            annotations = listOf(annotation(ENTITY)),
+        )
+        val dto = type(
+            qualifiedName = "demo.BookView",
+            superTypes = listOf(LsiDeclaredType(viewId)),
+        )
+        val projectionModel = LsiWorkspace(declarations = listOf(entity, book, count, tuple))
+            .toTypedTupleSchema()
+            .tuples
+            .single()
+        val selections = requireNotNull(projectionModel.baseTableProjection).selections
+
+        assertEquals(TypedTupleBaseTableSelectionKind.NON_NULL_TABLE, selections[0].kind)
+        assertEquals(LsiSymbolId.type("demo.BookTable"), selections[0].entityTableTypeId)
+        assertEquals(TypedTupleBaseTableSelectionKind.NON_NULL_EXPRESSION, selections[1].kind)
+        assertEquals(TypedTupleScalarCategory.NUMERIC, selections[1].scalarCategory)
+
+        val dtoField = field(tupleId, "book", LsiDeclaredType(dtoId), origin = origin)
+        val dtoTuple = tuple.copy(memberIds = listOf(dtoField.id, count.id))
+        val dtoModel = LsiWorkspace(declarations = listOf(dto, dtoField, count, dtoTuple))
+            .toTypedTupleSchema()
+            .tuples
+            .single()
+        assertEquals(null, dtoModel.baseTableProjection)
+    }
+
+    @Test
     fun `java full constructor binds arguments by parameter name and type`() {
         val origin = sourceOrigin(LsiLanguage.JAVA, "demo/ReorderedTuple.java")
         val tupleId = LsiSymbolId.type("demo.ReorderedTuple")
@@ -543,6 +587,7 @@ class TypedTupleWorkspaceExtensionsTest {
 
     companion object {
         private val TYPED_TUPLE = LsiSymbolId.type("org.babyfish.jimmer.sql.TypedTuple")
+        private val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
         private val LOMBOK_BUILDER = LsiSymbolId.type("lombok.Builder")
         private val LOMBOK_DATA = LsiSymbolId.type("lombok.Data")
         private val OBJECT_TYPE = LsiSymbolId.type("java.lang.Object")

@@ -8,8 +8,16 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
+import site.addzero.lsi.jimmer.ImmutableType
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.dto.DtoGraph
+import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.jimmer.dto.qualifiedNameOrNull
 import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
 import site.addzero.lsi.jimmer.tuple.TypedTupleValidationException
 import site.addzero.lsi.jimmer.tuple.fingerprint
@@ -30,7 +38,21 @@ class TypedTupleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         context: JimmerCompilerPrecompileContext,
     ): JimmerCompilerFeaturePrecompileResult {
         return try {
-            val schema = context.round.workspace.toTypedTupleSchema()
+            val immutableState = context.dependencyStates[IMMUTABLE_FEATURE_ID]
+                as? JimmerImmutableCompilerFeatureState
+            val dtoState = context.dependencyStates[DTO_FEATURE_ID]
+                as? JimmerDtoCompilerFeatureState
+            val entityTypeIds = immutableState?.schema?.types.orEmpty()
+                .filter { type -> type.kind == ImmutableTypeKind.ENTITY }
+                .mapTo(sortedSetOf(), ImmutableType::id)
+            val dtoTypeIds = dtoState?.graphs.orEmpty()
+                .flatMap(DtoGraph::types)
+                .mapNotNull(DtoType::qualifiedNameOrNull)
+                .mapTo(sortedSetOf()) { qualifiedName -> LsiSymbolId.type(qualifiedName) }
+            val schema = context.round.workspace.toTypedTupleSchema(
+                entityTypeIds = entityTypeIds,
+                dtoTypeIds = dtoTypeIds,
+            )
             schema.validateCodegenNames()
             JimmerCompilerFeaturePrecompileResult(
                 state = TypedTupleCompilerFeatureState(schema),

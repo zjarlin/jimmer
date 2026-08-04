@@ -21,10 +21,14 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.tuple.TypedTupleConstructorArgument
+import site.addzero.lsi.jimmer.tuple.TypedTupleBaseTableProjection
+import site.addzero.lsi.jimmer.tuple.TypedTupleBaseTableSelection
+import site.addzero.lsi.jimmer.tuple.TypedTupleBaseTableSelectionKind
 import site.addzero.lsi.jimmer.tuple.TypedTupleDependencies
 import site.addzero.lsi.jimmer.tuple.TypedTupleJavaSetterConstruction
 import site.addzero.lsi.jimmer.tuple.TypedTupleKotlinConstructorConstruction
 import site.addzero.lsi.jimmer.tuple.TypedTupleProperty
+import site.addzero.lsi.jimmer.tuple.TypedTupleScalarCategory
 import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
 import site.addzero.lsi.jimmer.tuple.TypedTupleSetterAssignment
 import site.addzero.lsi.jimmer.tuple.TypedTupleType
@@ -42,20 +46,24 @@ class TypedTupleRendererTest {
     @Test
     fun `java renderer matches legacy golden and compiles`() {
         val fixture = fixture(LsiLanguage.JAVA)
-        val artifact = fixture.schema
+        val artifacts = fixture.schema
             .toLsiPoetArtifacts(fixture.workspace)
             .map(LsiJavaPoetRenderer()::render)
-            .single()
+            .associateBy { artifact -> artifact.path }
+        val mapperArtifact = artifacts.getValue("demo/BookSummaryMapper.java")
+        val tableArtifact = artifacts.getValue("demo/BookSummaryTable.java")
 
-        assertEquals(ArtifactKind.JAVA_SOURCE, artifact.kind)
-        assertEquals(ArtifactAggregationMode.ISOLATING, artifact.aggregationMode)
-        assertEquals("demo/BookSummaryMapper.java", artifact.path)
-        assertEquals(setOf(TUPLE_ID), artifact.originatingSymbols)
-        assertEquals(setOf(fixture.tupleSource), artifact.originatingSources)
-        assertEquals(fixture.dependencySymbols, artifact.dependencySymbols)
-        assertEquals(setOf(fixture.tupleSource), artifact.dependencySources)
-        assertEquals(golden("BookSummaryMapper.java"), artifact.content)
-        compileJava(artifact.content)
+        assertEquals(ArtifactKind.JAVA_SOURCE, mapperArtifact.kind)
+        assertEquals(ArtifactAggregationMode.ISOLATING, mapperArtifact.aggregationMode)
+        assertEquals(setOf(TUPLE_ID), mapperArtifact.originatingSymbols)
+        assertEquals(setOf(fixture.tupleSource), mapperArtifact.originatingSources)
+        assertEquals(fixture.dependencySymbols, mapperArtifact.dependencySymbols)
+        assertEquals(setOf(fixture.tupleSource), mapperArtifact.dependencySources)
+        assertEquals(mapperArtifact.originatingSymbols, tableArtifact.originatingSymbols)
+        assertEquals(mapperArtifact.dependencySymbols, tableArtifact.dependencySymbols)
+        assertEquals(golden("BookSummaryMapper.java"), mapperArtifact.content)
+        assertEquals(golden("BookSummaryTable.java"), tableArtifact.content)
+        compileJava(mapperArtifact.content, tableArtifact.content)
     }
 
     @Test
@@ -169,6 +177,20 @@ class TypedTupleRendererTest {
                     sourceLanguage = language,
                     properties = properties,
                     construction = construction,
+                    baseTableProjection = TypedTupleBaseTableProjection(
+                        selections = listOf(
+                            TypedTupleBaseTableSelection(
+                                propertyIndex = 0,
+                                kind = TypedTupleBaseTableSelectionKind.NON_NULL_EXPRESSION,
+                                scalarCategory = TypedTupleScalarCategory.GENERIC,
+                            ),
+                            TypedTupleBaseTableSelection(
+                                propertyIndex = 1,
+                                kind = TypedTupleBaseTableSelectionKind.NON_NULL_EXPRESSION,
+                                scalarCategory = TypedTupleScalarCategory.NUMERIC,
+                            ),
+                        ),
+                    ),
                     dependencies = TypedTupleDependencies(
                         typeIds = listOf(TUPLE_ID, BOOK_VIEW_ID).sorted(),
                         memberIds = dependencyMembers,
@@ -192,13 +214,17 @@ class TypedTupleRendererTest {
         return requireNotNull(javaClass.getResource("/tuple/$name")).readText()
     }
 
-    private fun compileJava(content: String) {
+    private fun compileJava(
+        mapperContent: String,
+        tableContent: String,
+    ) {
         val projectDir = createTempDirectory(prefix = "jimmer-tuple-renderer-test").toFile()
         val sourceRoot = projectDir.resolve("src/demo")
         val output = projectDir.resolve("classes")
         sourceRoot.mkdirs()
         output.mkdirs()
-        val mapperSource = sourceRoot.resolve("BookSummaryMapper.java").apply { writeText(content) }
+        val mapperSource = sourceRoot.resolve("BookSummaryMapper.java").apply { writeText(mapperContent) }
+        val tableSource = sourceRoot.resolve("BookSummaryTable.java").apply { writeText(tableContent) }
         val tupleSource = sourceRoot.resolve("BookSummary.java").apply {
             writeText(
                 "package demo; public class BookSummary { " +
@@ -219,7 +245,7 @@ class TypedTupleRendererTest {
                 diagnostics,
                 listOf("-classpath", System.getProperty("java.class.path")),
                 null,
-                manager.getJavaFileObjects(mapperSource, tupleSource, bookSource),
+                manager.getJavaFileObjects(mapperSource, tableSource, tupleSource, bookSource),
             ).call()
         }
         assertTrue(success, diagnostics.diagnostics.joinToString("\n"))

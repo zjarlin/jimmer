@@ -7,9 +7,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.babyfish.jimmer.sql.ast.Selection;
+import org.babyfish.jimmer.sql.ast.query.BaseTableProjection;
+import org.babyfish.jimmer.sql.ast.table.spi.BaseTableFactory;
 import org.babyfish.jimmer.sql.runtime.TupleMapper;
 
-public class BookSummaryMapper implements TupleMapper<BookSummary> {
+public class BookSummaryMapper implements TupleMapper<BookSummary>, BaseTableProjection<BookSummaryTable> {
     private final Selection<?>[] selections;
 
     BookSummaryMapper(Selection<?>[] selections) {
@@ -19,6 +21,11 @@ public class BookSummaryMapper implements TupleMapper<BookSummary> {
     @Override
     public List<Selection<?>> getSelections() {
         return Collections.unmodifiableList(Arrays.asList(selections));
+    }
+
+    @Override
+    public BaseTableFactory<BookSummaryTable, BookSummaryTable> getBaseTableFactory() {
+        return BookSummaryTable.FACTORY;
     }
 
     @Override

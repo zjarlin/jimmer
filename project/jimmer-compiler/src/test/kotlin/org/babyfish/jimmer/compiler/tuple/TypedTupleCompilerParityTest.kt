@@ -47,7 +47,8 @@ class TypedTupleCompilerParityTest {
         val kspSchema = ksp.sourceWorkspace().toTypedTupleSchema()
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
 
-        assertEquals(golden("BookSummaryMapper.java"), apt.generatedSource())
+        assertEquals(golden("BookSummaryMapper.java"), apt.generatedSource(JAVA_MAPPER_GENERATED_PATH))
+        assertEquals(golden("BookSummaryTable.java"), apt.generatedSource(JAVA_TABLE_GENERATED_PATH))
         assertEquals(golden("BookSummaryMapper.kt"), ksp.generatedSource())
     }
 
@@ -198,8 +199,8 @@ class TypedTupleCompilerParityTest {
             return workspaces.first { workspace -> workspace[TUPLE_ID] != null }
         }
 
-        fun generatedSource(): String {
-            val file = generatedDir.resolve(JAVA_GENERATED_PATH)
+        fun generatedSource(path: String): String {
+            val file = generatedDir.resolve(path)
             assertTrue(file.isFile, "Missing generated TypedTuple source: ${file.absolutePath}")
             return file.readText()
         }
@@ -240,7 +241,8 @@ class TypedTupleCompilerParityTest {
 
     private companion object {
         val TUPLE_ID = LsiSymbolId.type("demo.BookSummary")
-        const val JAVA_GENERATED_PATH = "demo/BookSummaryMapper.java"
+        const val JAVA_MAPPER_GENERATED_PATH = "demo/BookSummaryMapper.java"
+        const val JAVA_TABLE_GENERATED_PATH = "demo/BookSummaryTable.java"
         const val KOTLIN_GENERATED_PATH = "demo/BookSummaryMapper.kt"
 
         val JAVA_SOURCES = linkedMapOf(

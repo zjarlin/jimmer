@@ -15,6 +15,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
@@ -27,8 +28,11 @@ class TypedTupleValidationException(
 ) : IllegalArgumentException(message)
 
 /** 将冻结的 LSI 工作区解析为 TypedTuple 共享语义。 */
-fun LsiWorkspace.toTypedTupleSchema(): TypedTupleSchema {
-    return TypedTupleSchemaBuilder(this).build()
+fun LsiWorkspace.toTypedTupleSchema(
+    entityTypeIds: Set<LsiSymbolId> = emptySet(),
+    dtoTypeIds: Set<LsiSymbolId> = emptySet(),
+): TypedTupleSchema {
+    return TypedTupleSchemaBuilder(this, entityTypeIds, dtoTypeIds).build()
 }
 
 /** 返回当前工作区直接声明的全部 TypedTuple 类型符号。 */
@@ -40,7 +44,16 @@ fun LsiWorkspace.typedTupleTypeIds(): Set<LsiSymbolId> {
 
 private class TypedTupleSchemaBuilder(
     private val workspace: LsiWorkspace,
+    entityTypeIds: Set<LsiSymbolId>,
+    private val dtoTypeIds: Set<LsiSymbolId>,
 ) {
+    private val typeSystem = LsiTypeSystem(workspace)
+
+    private val entityTypeIds = entityTypeIds + workspace
+        .declarationsOfType<LsiTypeDeclaration>()
+        .filter { type -> type.hasAnnotation(ENTITY_ANNOTATION) }
+        .map(LsiTypeDeclaration::id)
+
     fun build(): TypedTupleSchema {
         val tuples = workspace.declarationsOfType<LsiTypeDeclaration>()
             .asSequence()
@@ -79,6 +92,10 @@ private class TypedTupleSchemaBuilder(
                 type = property.type,
             )
         }
+        val baseTableProjection = properties
+            .takeUnless { tupleProperties -> tupleProperties.any(::isDtoProperty) }
+            ?.mapIndexed { index, property -> property.toBaseTableSelection(index) }
+            ?.let(::TypedTupleBaseTableProjection)
         val dependencies = TypedTupleDependencies(
             typeIds = (listOf(type.id) + properties.flatMap(TypedTupleProperty::typeDependencyIds))
                 .distinct()
@@ -96,8 +113,92 @@ private class TypedTupleSchemaBuilder(
             sourceLanguage = sourceLanguage,
             properties = properties,
             construction = preparedType.construction,
+            baseTableProjection = baseTableProjection,
             dependencies = dependencies,
         )
+    }
+
+    private fun isDtoProperty(property: TypedTupleProperty): Boolean {
+        val declaredType = property.type as? LsiDeclaredType ?: return false
+        return declaredType.declarationId in dtoTypeIds || DTO_SUPER_TYPE_IDS.any { dtoSuperTypeId ->
+            typeSystem.resolveSuperType(declaredType, dtoSuperTypeId) != null
+        }
+    }
+
+    private fun TypedTupleProperty.toBaseTableSelection(
+        expectedIndex: Int,
+    ): TypedTupleBaseTableSelection {
+        check(index == expectedIndex) {
+            "Typed tuple property order changed while compiling base-table projection: ${id.value}"
+        }
+        val declaredType = type as? LsiDeclaredType
+        val entityTypeId = declaredType?.declarationId?.takeIf(entityTypeIds::contains)
+        if (entityTypeId != null) {
+            val entityTypeName = workspace.typeHierarchyEntry(entityTypeId)?.qualifiedName
+                ?: entityTypeId.requireTypeQualifiedName()
+            val packageName = entityTypeName.substringBeforeLast('.', missingDelimiterValue = "")
+            val simpleName = entityTypeName.substringAfterLast('.')
+            val tableQualifiedName = if (packageName.isEmpty()) {
+                "${simpleName}Table"
+            } else {
+                "$packageName.${simpleName}Table"
+            }
+            return TypedTupleBaseTableSelection(
+                propertyIndex = index,
+                kind = if (nullable) {
+                    TypedTupleBaseTableSelectionKind.NULLABLE_TABLE
+                } else {
+                    TypedTupleBaseTableSelectionKind.NON_NULL_TABLE
+                },
+                entityTableTypeId = LsiSymbolId.type(tableQualifiedName),
+            )
+        }
+        return TypedTupleBaseTableSelection(
+            propertyIndex = index,
+            kind = if (nullable) {
+                TypedTupleBaseTableSelectionKind.NULLABLE_EXPRESSION
+            } else {
+                TypedTupleBaseTableSelectionKind.NON_NULL_EXPRESSION
+            },
+            scalarCategory = type.scalarCategory(),
+        )
+    }
+
+    private fun LsiTypeRef.scalarCategory(): TypedTupleScalarCategory {
+        return when (this) {
+            is LsiPrimitiveType -> when (kind) {
+                LsiPrimitiveKind.BYTE,
+                LsiPrimitiveKind.SHORT,
+                LsiPrimitiveKind.INT,
+                LsiPrimitiveKind.LONG,
+                LsiPrimitiveKind.FLOAT,
+                LsiPrimitiveKind.DOUBLE,
+                -> TypedTupleScalarCategory.NUMERIC
+                LsiPrimitiveKind.BOOLEAN,
+                LsiPrimitiveKind.CHAR,
+                -> TypedTupleScalarCategory.COMPARABLE
+                LsiPrimitiveKind.UNIT,
+                LsiPrimitiveKind.VOID,
+                -> TypedTupleScalarCategory.GENERIC
+            }
+            is LsiDeclaredType -> when {
+                declarationId == STRING_TYPE_ID -> TypedTupleScalarCategory.STRING
+                isSubtypeOf(NUMBER_TYPE_ID) -> TypedTupleScalarCategory.NUMERIC
+                isSubtypeOf(DATE_TYPE_ID) -> TypedTupleScalarCategory.DATE
+                isSubtypeOf(TEMPORAL_TYPE_ID) -> TypedTupleScalarCategory.TEMPORAL
+                isSubtypeOf(COMPARABLE_TYPE_ID) -> TypedTupleScalarCategory.COMPARABLE
+                else -> TypedTupleScalarCategory.GENERIC
+            }
+            is LsiArrayType,
+            is LsiFunctionType,
+            is LsiTypeParameterRef,
+            is LsiUnresolvedType,
+            -> TypedTupleScalarCategory.GENERIC
+        }
+    }
+
+    private fun LsiDeclaredType.isSubtypeOf(superTypeId: LsiSymbolId): Boolean {
+        return declarationId == superTypeId || typeSystem.resolveSuperType(this, superTypeId) != null
     }
 
     private fun determineSourceLanguage(
@@ -471,6 +572,17 @@ private fun identifierName(vararg parts: String): String {
 }
 
 private val TYPED_TUPLE_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.TypedTuple")
+private val ENTITY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
+private val DTO_SUPER_TYPE_IDS = setOf(
+    LsiSymbolId.type("org.babyfish.jimmer.View"),
+    LsiSymbolId.type("org.babyfish.jimmer.Input"),
+    LsiSymbolId.type("org.babyfish.jimmer.Specification"),
+)
+private val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
+private val NUMBER_TYPE_ID = LsiSymbolId.type("java.lang.Number")
+private val DATE_TYPE_ID = LsiSymbolId.type("java.util.Date")
+private val TEMPORAL_TYPE_ID = LsiSymbolId.type("java.time.temporal.Temporal")
+private val COMPARABLE_TYPE_ID = LsiSymbolId.type("java.lang.Comparable")
 private val LOMBOK_BUILDER_ANNOTATION = LsiSymbolId.type("lombok.Builder")
 private val LOMBOK_ALL_ARGS_CONSTRUCTOR_ANNOTATION = LsiSymbolId.type("lombok.AllArgsConstructor")
 private val LOMBOK_NO_ARGS_CONSTRUCTOR_ANNOTATION = LsiSymbolId.type("lombok.NoArgsConstructor")

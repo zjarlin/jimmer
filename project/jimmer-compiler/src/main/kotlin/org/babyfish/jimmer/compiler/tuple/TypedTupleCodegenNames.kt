@@ -15,6 +15,19 @@ internal val TypedTupleType.mapperQualifiedName: String
         "$packageName.$mapperSimpleName"
     }
 
+internal val TypedTupleType.tableSimpleName: String
+    get() = simpleName + "Table"
+
+internal val TypedTupleType.tableQualifiedName: String
+    get() = if (packageName.isEmpty()) {
+        tableSimpleName
+    } else {
+        "$packageName.$tableSimpleName"
+    }
+
+internal val TypedTupleProperty.javaGetterName: String
+    get() = "get${typeName(name)}"
+
 internal val TypedTupleProperty.builderSimpleName: String
     get() = typeName(name, "Builder")
 
