@@ -12,6 +12,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -25,9 +26,14 @@ class JimmerDdlCompilerFrontendParityTest {
         val apt = compileApt()
         val ksp = compileKsp()
 
-        assertContains(apt.sql, "\"status\" INTEGER NOT NULL DEFAULT 1")
-        assertEquals(apt.sql, ksp.sql)
-        assertEquals(apt.snapshot, ksp.snapshot)
+        assertContains(apt.sqlText, "\"status\" INTEGER NOT NULL DEFAULT 1")
+        assertMigrationGolden("apt", apt)
+        assertMigrationGolden("ksp", ksp)
+        assertContentEquals(apt.sqlBytes, ksp.sqlBytes)
+        assertEquals(apt.snapshotBytes.keys, ksp.snapshotBytes.keys)
+        apt.snapshotBytes.forEach { (name, bytes) ->
+            assertContentEquals(bytes, ksp.snapshotBytes.getValue(name), name)
+        }
     }
 
     private fun compileApt(): DdlOutput {
@@ -128,9 +134,33 @@ class JimmerDdlCompilerFrontendParityTest {
     }
 
     private data class DdlOutput(
-        val sql: String,
-        val snapshot: Map<String, String>,
-    )
+        val sqlBytes: ByteArray,
+        val snapshotBytes: Map<String, ByteArray>,
+    ) {
+        val sqlText: String
+            get() = String(sqlBytes, StandardCharsets.UTF_8)
+    }
+
+    private fun assertMigrationGolden(platform: String, output: DdlOutput) {
+        assertContentEquals(
+            migrationGolden("/ddl/$platform/generated.sql"),
+            output.sqlBytes,
+            "DDL $platform SQL differs from migration golden",
+        )
+        output.snapshotBytes.forEach { (name, bytes) ->
+            assertContentEquals(
+                migrationGolden("/ddl/$platform/$name"),
+                bytes,
+                "DDL $platform snapshot '$name' differs from migration golden",
+            )
+        }
+    }
+
+    private fun migrationGolden(path: String): ByteArray {
+        return requireNotNull(javaClass.getResourceAsStream(path)) {
+            "Missing DDL migration golden: $path"
+        }.use { stream -> stream.readBytes() }
+    }
 
     private companion object {
         val JAVA_SOURCE = """
@@ -223,8 +253,8 @@ class JimmerDdlCompilerFrontendParityTest {
             val snapshot = snapshotDirectory.listFiles { file -> file.isFile && file.extension == "properties" }
                 .orEmpty()
                 .sortedBy(File::getName)
-                .associate { file -> file.name to file.readText() }
-            return DdlOutput(sqlFile.readText(), snapshot)
+                .associate { file -> file.name to file.readBytes() }
+            return DdlOutput(sqlFile.readBytes(), snapshot)
         }
 
         fun DiagnosticCollector<JavaFileObject>.toErrorMessage(): String {

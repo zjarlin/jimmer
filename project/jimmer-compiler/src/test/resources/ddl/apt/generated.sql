@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS "book" (
+  "status" INTEGER NOT NULL DEFAULT 1,
+  "title" VARCHAR(255) NOT NULL,
+  "id" BIGINT NOT NULL,
+  PRIMARY KEY ("id")
+);
