@@ -56,6 +56,7 @@ import site.addzero.lsi.jimmer.dto.baseProp
 import site.addzero.lsi.jimmer.dto.basePropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
+import site.addzero.lsi.jimmer.dto.foldPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.generatedBaseContractKind
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicBranch
@@ -550,10 +551,10 @@ internal class DtoGenerator private constructor(
                         if (!polymorphicBranch) {
                             addMetadata()
                         }
-                        for (prop in dtoType.dtoProps) {
+                        for (prop in lsiDtoType.basePropsInDeclarationOrder(lsiGraph)) {
                             addAccessorField(prop)
                         }
-                        for (prop in dtoType.foldProps) {
+                        for (prop in lsiDtoType.foldPropsInDeclarationOrder(lsiGraph)) {
                             addFoldNullGuardAccessorField(prop)
                         }
                     }
@@ -1379,10 +1380,9 @@ internal class DtoGenerator private constructor(
         )
     }
 
-    private fun TypeSpec.Builder.addAccessorField(prop: DtoProp<ImmutableType, ImmutableProp>) {
-        val lsiProp = lsiDtoType.baseProp(lsiGraph, prop.name)
+    private fun TypeSpec.Builder.addAccessorField(prop: DtoBaseProp) {
         if (
-            !lsiProp.requiresDtoPropAccessor(
+            !prop.requiresDtoPropAccessor(
                 graph = lsiGraph,
                 immutableSchema = immutableSchema,
                 targetLanguage = LsiLanguage.KOTLIN,
@@ -1392,15 +1392,15 @@ internal class DtoGenerator private constructor(
             return
         }
         addAccessorField(
-            lsiProp,
+            prop,
             accessorFieldName(prop.name),
-            lsiProp.acceptsNullInAccessor(lsiGraph),
+            prop.acceptsNullInAccessor(lsiGraph),
             true,
         )
     }
 
-    private fun TypeSpec.Builder.addFoldNullGuardAccessorField(prop: FoldProp<ImmutableType, ImmutableProp>) {
-        val nullGuardProp = lsiDtoType.foldProp(lsiGraph, prop.name).nullGuardProp(lsiGraph) ?: return
+    private fun TypeSpec.Builder.addFoldNullGuardAccessorField(prop: DtoFoldProp) {
+        val nullGuardProp = prop.nullGuardProp(lsiGraph) ?: return
         addAccessorField(
             nullGuardProp,
             foldNullGuardAccessorFieldName(prop.name),

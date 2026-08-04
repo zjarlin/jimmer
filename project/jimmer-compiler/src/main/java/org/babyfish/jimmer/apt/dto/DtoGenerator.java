@@ -664,10 +664,11 @@ public class DtoGenerator {
         }
 
         if (!isSpecification) {
-            for (DtoProp<ImmutableType, ImmutableProp> prop : dtoType.getDtoProps()) {
+            for (DtoBaseProp prop : DtoAccessorExtensionsKt.basePropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
                 addAccessorField(prop);
             }
-            for (FoldProp<ImmutableType, ImmutableProp> prop : dtoType.getFoldProps()) {
+            for (site.addzero.lsi.jimmer.dto.DtoFoldProp prop :
+                    DtoGenerationExtensionsKt.foldPropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
                 addFoldNullGuardAccessorField(prop);
             }
         }
@@ -926,14 +927,9 @@ public class DtoGenerator {
         typeBuilder.addField(builder.build());
     }
 
-    private void addAccessorField(DtoProp<ImmutableType, ImmutableProp> prop) {
-        DtoBaseProp lsiProp = DtoGenerationExtensionsKt.baseProp(
-                lsiDtoType,
-                lsiGraph,
-                prop.getName()
-        );
+    private void addAccessorField(DtoBaseProp prop) {
         if (!DtoAccessorExtensionsKt.requiresDtoPropAccessor(
-                lsiProp,
+                prop,
                 lsiGraph,
                 immutableSchema,
                 LsiLanguage.JAVA,
@@ -942,22 +938,19 @@ public class DtoGenerator {
             return;
         }
         addAccessorField(
-                lsiProp,
+                prop,
                 accessorFieldName(prop.getName()),
-                DtoAccessorExtensionsKt.acceptsNullInAccessor(lsiProp, lsiGraph),
+                DtoAccessorExtensionsKt.acceptsNullInAccessor(prop, lsiGraph),
                 true
         );
     }
 
-    private void addFoldNullGuardAccessorField(FoldProp<ImmutableType, ImmutableProp> prop) {
-        DtoBaseProp nullGuardProp = DtoGenerationExtensionsKt.nullGuardProp(
-                DtoGenerationExtensionsKt.foldProp(lsiDtoType, lsiGraph, prop.getName()),
-                lsiGraph
-        );
+    private void addFoldNullGuardAccessorField(site.addzero.lsi.jimmer.dto.DtoFoldProp prop) {
+        DtoBaseProp nullGuardProp = DtoGenerationExtensionsKt.nullGuardProp(prop, lsiGraph);
         if (nullGuardProp != null) {
             addAccessorField(
                     nullGuardProp,
-                    foldNullGuardAccessorFieldName(prop),
+                    foldNullGuardAccessorFieldName(prop.getName()),
                     true,
                     false
             );
@@ -1285,7 +1278,7 @@ public class DtoGenerator {
                                 lsiGraph,
                                 lsiWorkspace,
                                 "base",
-                                foldNullGuardAccessorFieldName(foldProp),
+                                foldNullGuardAccessorFieldName(foldProp.getName()),
                                 this::generatedTargetType,
                                 generatedDtoTypeIdsByTypeName.keySet()
                         )
@@ -1645,8 +1638,8 @@ public class DtoGenerator {
         return StringUtil.snake(propName + "Accessor", StringUtil.SnakeCase.UPPER);
     }
 
-    private String foldNullGuardAccessorFieldName(FoldProp<ImmutableType, ImmutableProp> prop) {
-        return StringUtil.snake(prop.getName() + "NullGuardAccessor", StringUtil.SnakeCase.UPPER);
+    private String foldNullGuardAccessorFieldName(String propName) {
+        return StringUtil.snake(propName + "NullGuardAccessor", StringUtil.SnakeCase.UPPER);
     }
 
     private static int docKeyIndex(int originalIndex, String doc, String key) {
