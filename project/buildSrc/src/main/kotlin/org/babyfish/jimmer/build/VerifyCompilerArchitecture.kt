@@ -34,6 +34,9 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
     abstract val allowedPoetPathSegments: SetProperty<String>
 
     @get:Input
+    abstract val allowedPoetRelativePathPrefixes: SetProperty<String>
+
+    @get:Input
     abstract val allowedPoetFileSuffixes: SetProperty<String>
 
     @get:Input
@@ -69,6 +72,7 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
     init {
         allowedPlatformPathSegments.convention(emptySet())
         allowedPoetPathSegments.convention(emptySet())
+        allowedPoetRelativePathPrefixes.convention(emptySet())
         allowedPoetFileSuffixes.convention(emptySet())
         forbiddenRelativePaths.convention(emptySet())
         allowedImportPrefixes.convention(emptySet())
@@ -144,6 +148,7 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
         val rules = CompilerArchitectureRules(
             allowedPlatformPathSegments = allowedPlatformPathSegments.get(),
             allowedPoetPathSegments = allowedPoetPathSegments.get(),
+            allowedPoetRelativePathPrefixes = allowedPoetRelativePathPrefixes.get(),
             allowedPoetFileSuffixes = allowedPoetFileSuffixes.get(),
             forbiddenRelativePaths = forbiddenRelativePaths.get(),
             allowedImportPrefixes = allowedImportPrefixes.get(),

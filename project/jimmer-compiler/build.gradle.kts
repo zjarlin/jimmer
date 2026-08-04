@@ -48,11 +48,22 @@ val verifySharedCompilerArchitecture by tasks.registering(VerifyCompilerArchitec
     description = "Verifies that shared compiler code stays outside platform and Poet boundaries"
 
     baseDirectory.set(layout.projectDirectory)
-    sourceFiles.from(fileTree("src/main/kotlin/org/babyfish/jimmer/compiler") {
-        include("**/*.kt")
+    sourceFiles.from(fileTree("src/main") {
+        include("**/*.kt", "**/*.java")
     })
     allowedPlatformPathSegments.set(setOf("apt", "ksp"))
-    allowedPoetPathSegments.set(setOf("render"))
+    allowedPoetRelativePathPrefixes.set(
+        setOf(
+            "src/main/kotlin/org/babyfish/jimmer/compiler/render/apt",
+            "src/main/kotlin/org/babyfish/jimmer/compiler/render/ksp",
+        )
+    )
+    additionalForbiddenNamespaces.set(
+        setOf(
+            "org.babyfish.jimmer.apt",
+            "org.babyfish.jimmer.ksp",
+        )
+    )
 }
 
 tasks.named("check") {

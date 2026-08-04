@@ -8,6 +8,7 @@ internal data class CompilerArchitectureSource(
 internal data class CompilerArchitectureRules(
     val allowedPlatformPathSegments: Set<String> = emptySet(),
     val allowedPoetPathSegments: Set<String> = emptySet(),
+    val allowedPoetRelativePathPrefixes: Set<String> = emptySet(),
     val allowedPoetFileSuffixes: Set<String> = emptySet(),
     val forbiddenRelativePaths: Set<String> = emptySet(),
     val allowedImportPrefixes: Set<String> = emptySet(),
@@ -33,7 +34,9 @@ internal fun findCompilerArchitectureViolations(
         }
         val pathSegments = source.relativePath.split('/')
         val platformBoundary = pathSegments.any(rules.allowedPlatformPathSegments::contains)
-        val rendererBoundary = pathSegments.any(rules.allowedPoetPathSegments::contains) ||
+        val rendererBoundary = rules.allowedPoetRelativePathPrefixes.any(
+            source.relativePath::matchesRelativePathPrefix,
+        ) || pathSegments.any(rules.allowedPoetPathSegments::contains) ||
             rules.allowedPoetFileSuffixes.any(source.relativePath::endsWith)
         val forbiddenNamespaces = buildList {
             if (!platformBoundary) {
@@ -119,6 +122,12 @@ private fun MatchResult.normalizedImportTarget(): String? {
 
 private fun String.matchesPrefix(prefix: String): Boolean {
     return this == prefix.removeSuffix(".") || startsWith(prefix)
+}
+
+private fun String.matchesRelativePathPrefix(prefix: String): Boolean {
+    val normalizedPrefix = prefix.trim('/')
+    return normalizedPrefix.isNotEmpty() &&
+        (this == normalizedPrefix || startsWith("$normalizedPrefix/"))
 }
 
 private fun String.toCodePattern(): Regex {

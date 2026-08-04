@@ -1,6 +1,5 @@
 package org.babyfish.jimmer.compiler.render.apt
 
-import org.babyfish.jimmer.apt.dto.DtoGenerator
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
 import site.addzero.lsi.codegen.ArtifactAggregationMode
@@ -60,7 +59,7 @@ internal class AptDtoProcessor(
                     rootType,
                     rootDtoTypeNamesByTypeId,
                 )
-                val content = DtoGenerator(
+                val content = AptDtoGenerator(
                     graph,
                     rootType,
                     annotationContract,

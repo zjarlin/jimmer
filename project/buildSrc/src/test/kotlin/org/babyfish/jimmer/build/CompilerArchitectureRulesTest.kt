@@ -21,6 +21,114 @@ class CompilerArchitectureRulesTest {
     }
 
     @Test
+    fun `仅精确 APT 与 KSP 渲染器目录允许 Poet`() {
+        val violations = findCompilerArchitectureViolations(
+            sources = listOf(
+                sourceAt(
+                    "src/main/java/org/babyfish/jimmer/compiler/render/apt/AptRenderer.java",
+                    "import com.squareup.javapoet.TypeSpec;",
+                ),
+                sourceAt(
+                    "src/main/kotlin/org/babyfish/jimmer/compiler/render/ksp/KspRenderer.kt",
+                    "import com.squareup.kotlinpoet.TypeSpec",
+                ),
+                sourceAt(
+                    "src/main/kotlin/org/babyfish/jimmer/compiler/render/common/CommonRenderer.kt",
+                    "import com.squareup.kotlinpoet.TypeSpec",
+                ),
+                sourceAt(
+                    "src/main/java/org/babyfish/jimmer/apt/dto/LegacyRenderer.java",
+                    "import com.squareup.javapoet.TypeSpec;",
+                ),
+            ),
+            rules = CompilerArchitectureRules(
+                allowedPlatformPathSegments = setOf("apt", "ksp"),
+                allowedPoetRelativePathPrefixes = POET_RENDERER_PREFIXES,
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "src/main/java/org/babyfish/jimmer/apt/dto/LegacyRenderer.java:1: com.squareup.javapoet",
+                "src/main/kotlin/org/babyfish/jimmer/compiler/render/common/CommonRenderer.kt:1: com.squareup.kotlinpoet",
+            ),
+            violations,
+        )
+    }
+
+    @Test
+    fun `平台 writer 允许平台 API 但禁止 Poet`() {
+        val violations = findCompilerArchitectureViolations(
+            sources = listOf(
+                sourceAt(
+                    "src/main/kotlin/org/babyfish/jimmer/compiler/lsi/apt/AptGeneratedArtifactWriter.kt",
+                    "import javax.annotation.processing.Filer",
+                ),
+                sourceAt(
+                    "src/main/kotlin/org/babyfish/jimmer/compiler/lsi/ksp/KspGeneratedArtifactWriter.kt",
+                    "import com.google.devtools.ksp.processing.CodeGenerator",
+                ),
+                sourceAt(
+                    "src/main/kotlin/org/babyfish/jimmer/compiler/lsi/apt/InvalidAptWriter.kt",
+                    listOf(
+                        "import javax.annotation.processing.Filer",
+                        "import com.squareup.javapoet.JavaFile",
+                    ).joinToString("\n"),
+                ),
+                sourceAt(
+                    "src/main/kotlin/org/babyfish/jimmer/compiler/lsi/ksp/InvalidKspWriter.kt",
+                    listOf(
+                        "import com.google.devtools.ksp.processing.CodeGenerator",
+                        "import com.squareup.kotlinpoet.FileSpec",
+                    ).joinToString("\n"),
+                ),
+            ),
+            rules = CompilerArchitectureRules(
+                allowedPlatformPathSegments = setOf("apt", "ksp"),
+                allowedPoetRelativePathPrefixes = POET_RENDERER_PREFIXES,
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "src/main/kotlin/org/babyfish/jimmer/compiler/lsi/apt/InvalidAptWriter.kt:2: com.squareup.javapoet",
+                "src/main/kotlin/org/babyfish/jimmer/compiler/lsi/ksp/InvalidKspWriter.kt:2: com.squareup.kotlinpoet",
+            ),
+            violations,
+        )
+    }
+
+    @Test
+    fun `拒绝旧 APT 与 KSP 处理器包声明`() {
+        val violations = findCompilerArchitectureViolations(
+            sources = listOf(
+                sourceAt(
+                    "src/main/java/org/babyfish/jimmer/apt/Legacy.java",
+                    "package org.babyfish.jimmer.apt;",
+                ),
+                sourceAt(
+                    "src/main/kotlin/org/babyfish/jimmer/ksp/Legacy.kt",
+                    "package org.babyfish.jimmer.ksp",
+                ),
+            ),
+            rules = CompilerArchitectureRules(
+                additionalForbiddenNamespaces = setOf(
+                    "org.babyfish.jimmer.apt",
+                    "org.babyfish.jimmer.ksp",
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "src/main/java/org/babyfish/jimmer/apt/Legacy.java:1: org.babyfish.jimmer.apt",
+                "src/main/kotlin/org/babyfish/jimmer/ksp/Legacy.kt:1: org.babyfish.jimmer.ksp",
+            ),
+            violations,
+        )
+    }
+
+    @Test
     fun `拒绝平台 javac Poet 与白名单外导入`() {
         val violations = findCompilerArchitectureViolations(
             sources = listOf(
@@ -284,6 +392,10 @@ class CompilerArchitectureRulesTest {
         return CompilerArchitectureSource("src/main/$language/$fileName", content)
     }
 
+    private fun sourceAt(relativePath: String, content: String): CompilerArchitectureSource {
+        return CompilerArchitectureSource(relativePath, content)
+    }
+
     private fun rules(
         allowedImports: Set<String> = ALLOWED_IMPORTS,
     ): CompilerArchitectureRules {
@@ -301,6 +413,13 @@ class CompilerArchitectureRulesTest {
             "java.",
             "kotlin.",
             "site.addzero.lsi.",
+        )
+
+        val POET_RENDERER_PREFIXES = setOf(
+            "src/main/java/org/babyfish/jimmer/compiler/render/apt/",
+            "src/main/java/org/babyfish/jimmer/compiler/render/ksp/",
+            "src/main/kotlin/org/babyfish/jimmer/compiler/render/apt/",
+            "src/main/kotlin/org/babyfish/jimmer/compiler/render/ksp/",
         )
     }
 }
