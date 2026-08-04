@@ -68,9 +68,14 @@ class ImmutableSchemaExtensionsTest {
             LsiDeclaredType(LsiSymbolId.type("demo.BaseProps")),
             baseType.generatedPropsType(),
         )
+        assertEquals(LsiDeclaredType(bookTypeId), bookType.sourceTypeRef())
         assertEquals(
             LsiDeclaredType(LsiSymbolId.type("demo.BookTable")),
             bookType.generatedTableType(),
+        )
+        assertEquals(
+            LsiDeclaredType(LsiSymbolId.type("demo.BookDraft")),
+            bookType.generatedDraftType(),
         )
         assertEquals(
             LsiDeclaredType(LsiSymbolId.type("demo.BookDraft.Producer")),

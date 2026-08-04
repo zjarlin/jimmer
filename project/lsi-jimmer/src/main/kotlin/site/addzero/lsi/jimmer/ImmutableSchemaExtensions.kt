@@ -13,6 +13,11 @@ val ImmutableType.packageName: String
 val ImmutableType.simpleName: String
     get() = qualifiedName.substringAfterLast('.')
 
+/** 返回不可变源码声明自身的冻结类型引用。 */
+fun ImmutableType.sourceTypeRef(): LsiDeclaredType {
+    return LsiDeclaredType(id)
+}
+
 /** 返回不可变类型对应的生成 Props 类型。 */
 fun ImmutableType.generatedPropsType(): LsiDeclaredType {
     return generatedQueryType("${simpleName}Props")
@@ -26,9 +31,16 @@ fun ImmutableType.generatedTableType(): LsiDeclaredType {
     return generatedQueryType("${simpleName}Table")
 }
 
+/** 返回不可变类型对应的生成 Draft 类型。 */
+fun ImmutableType.generatedDraftType(): LsiDeclaredType {
+    return LsiDeclaredType(LsiSymbolId.type("${qualifiedName}Draft"))
+}
+
 /** 返回不可变类型对应的 Draft Producer 类型。 */
 fun ImmutableType.generatedDraftProducerType(): LsiDeclaredType {
-    return LsiDeclaredType(LsiSymbolId.type("${qualifiedName}Draft.Producer"))
+    return LsiDeclaredType(
+        LsiSymbolId.type("${generatedDraftType().declarationId.requireTypeQualifiedName()}.Producer"),
+    )
 }
 
 /** 返回属性声明类型对应的生成 Props 类型。 */

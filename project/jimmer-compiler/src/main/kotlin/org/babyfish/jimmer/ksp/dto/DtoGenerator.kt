@@ -18,6 +18,7 @@ import org.babyfish.jimmer.compiler.render.ksp.KspDtoFoldDraftApplyRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoFoldValueRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoHibernateValidatorRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoInputBuilderRenderer
+import org.babyfish.jimmer.compiler.render.ksp.KspImmutableTypeNameRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoJacksonPolymorphismRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoLoadedStateRenderer
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoPolymorphicBranchRenderer
@@ -64,6 +65,7 @@ import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.generatedPolymorphicDtoBranchOrder
 import site.addzero.lsi.jimmer.dto.hasDtoPropAccessorFields
 import site.addzero.lsi.jimmer.dto.hasEntityBase
+import site.addzero.lsi.jimmer.dto.immutableBaseType
 import site.addzero.lsi.jimmer.dto.isDraftWriteSkipped
 import site.addzero.lsi.jimmer.dto.isPolymorphicRoot
 import site.addzero.lsi.jimmer.dto.isSealed
@@ -72,7 +74,6 @@ import site.addzero.lsi.jimmer.dto.kotlinDefaultValueTextOrNull
 import site.addzero.lsi.jimmer.dto.kotlinByImportPackages
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.nullGuardProp
-import site.addzero.lsi.jimmer.dto.prop
 import site.addzero.lsi.jimmer.dto.promotedPolymorphicRootPropOrNull
 import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
@@ -117,9 +118,11 @@ internal class DtoGenerator private constructor(
 ) {
     private val root: DtoGenerator = parent?.root ?: this
 
-    private val baseType: ImmutableType = requireNotNull(dtoType.baseType) {
-        "Generated DTO '${dtoType.qualifiedName ?: dtoType.name ?: "<anonymous>"}' has no immutable base type"
-    }
+    private val lsiBaseType = lsiDtoType.immutableBaseType(immutableSchema)
+
+    private val baseTypeName = KspImmutableTypeNameRenderer.renderSource(lsiBaseType, workspace)
+
+    private val baseDraftTypeName = KspImmutableTypeNameRenderer.renderDraft(lsiBaseType, workspace)
 
     private val entityBase: Boolean = lsiDtoType.hasEntityBase(immutableSchema)
 
@@ -777,7 +780,7 @@ internal class DtoGenerator private constructor(
                 .builder(
                     "METADATA",
                     DTO_METADATA_CLASS_NAME.parameterizedBy(
-                        baseType.className,
+                        baseTypeName,
                         getDtoClassName()
                     )
                 )
@@ -791,7 +794,7 @@ internal class DtoGenerator private constructor(
                             add(
                                 "%T<%T, %T>(\n",
                                 DTO_METADATA_CLASS_NAME,
-                                baseType.className, getDtoClassName()
+                                baseTypeName, getDtoClassName()
                             )
                             indent()
                             add("%T::class.java,\n", getDtoClassName())
@@ -829,7 +832,7 @@ internal class DtoGenerator private constructor(
                 .builder(
                     "METADATA",
                     DTO_METADATA_CLASS_NAME.parameterizedBy(
-                        baseType.className,
+                        baseTypeName,
                         getDtoClassName()
                     )
                 )
@@ -843,7 +846,7 @@ internal class DtoGenerator private constructor(
                             add(
                                 "%T<%T, %T>(\n",
                                 DTO_METADATA_CLASS_NAME,
-                                baseType.className,
+                                baseTypeName,
                                 getDtoClassName()
                             )
                             indent()
@@ -1035,7 +1038,7 @@ internal class DtoGenerator private constructor(
         typeBuilder.addFunction(
             FunSpec
                 .constructorBuilder()
-                .addParameter("base", baseType.className)
+                .addParameter("base", baseTypeName)
                 .apply {
                     for (userProp in lsiDtoType.userPropsInDeclarationOrder(lsiGraph)) {
                         addParameter(
@@ -1097,7 +1100,7 @@ internal class DtoGenerator private constructor(
                                             accessorName = accessorFieldName(prop.name),
                                             baseParameterName = "base",
                                             conversionErrorMessage =
-                                                "Cannot convert \"${baseType.className}\" to " +
+                                                "Cannot convert \"$baseTypeName\" to " +
                                                     "\"${getDtoClassName()}\" because the cannot get non-null " +
                                                     "value for \"${prop.name}\"",
                                             generatedTargetType = ::generatedTargetType,
@@ -1125,7 +1128,7 @@ internal class DtoGenerator private constructor(
             FunSpec
                 .builder(if (entityBase) "toEntity" else "toImmutable")
                 .addModifiers(KModifier.OVERRIDE)
-                .returns(baseType.className)
+                .returns(baseTypeName)
                 .apply {
                     if (discriminatorProp !== null && isDefaultPolymorphicInputBranch) {
                         addDefaultPolymorphicInputToEntityBody(discriminatorProp, null)
@@ -1133,7 +1136,7 @@ internal class DtoGenerator private constructor(
                         addStatement(
                             "return %M(%T::class).by(null, false, this@%L::%L)",
                             NEW,
-                            baseType.className,
+                            baseTypeName,
                             innerClassName ?: dtoType.name!!,
                             if (entityBase) "toEntityImpl" else "toImmutableImpl"
                         )
@@ -1148,9 +1151,9 @@ internal class DtoGenerator private constructor(
         addFunction(
             FunSpec
                 .builder(if (entityBase) "toEntities" else "toImmutables")
-                .addAnnotation(generatedAnnotation(baseType.className))
+                .addAnnotation(generatedAnnotation(baseTypeName))
                 .receiver(ITERABLE.parameterizedBy(dtoClassName))
-                .returns(LIST.parameterizedBy(baseType.className))
+                .returns(LIST.parameterizedBy(baseTypeName))
                 .addStatement(
                     "return map(%T::%L)",
                     dtoClassName,
@@ -1164,13 +1167,13 @@ internal class DtoGenerator private constructor(
         addFunction(
             FunSpec
                 .builder(if (entityBase) "toEntities" else "toImmutables")
-                .addAnnotation(generatedAnnotation(baseType.className))
+                .addAnnotation(generatedAnnotation(baseTypeName))
                 .receiver(ITERABLE.parameterizedBy(getDtoClassName()))
-                .returns(LIST.parameterizedBy(baseType.className))
+                .returns(LIST.parameterizedBy(baseTypeName))
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
-                        baseType.draftClassName,
+                        baseDraftTypeName,
                         emptyList(),
                         UNIT
                     ),
@@ -1195,12 +1198,12 @@ internal class DtoGenerator private constructor(
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
-                        baseType.draftClassName,
+                        baseDraftTypeName,
                         emptyList(),
                         UNIT
                     ),
                 )
-                .returns(baseType.className)
+                .returns(baseTypeName)
                 .apply {
                     if (discriminatorProp !== null && isDefaultPolymorphicInputBranch) {
                         addDefaultPolymorphicInputToEntityBody(discriminatorProp, "block")
@@ -1208,7 +1211,7 @@ internal class DtoGenerator private constructor(
                         beginControlFlow(
                             "return %M(%T::class).by",
                             NEW,
-                            baseType.className
+                            baseTypeName
                         )
                         addStatement(
                             "%L(this)",
@@ -1250,7 +1253,7 @@ internal class DtoGenerator private constructor(
                 .builder(if (entityBase) "toEntityImpl" else "toImmutableImpl")
                 .addKdoc(DOC_EXPLICIT_FUN)
                 .addModifiers(KModifier.PRIVATE)
-                .addParameter("_draft", baseType.draftClassName)
+                .addParameter("_draft", baseDraftTypeName)
                 .addStatement("this.__applyTo(_draft)")
                 .build()
         )
@@ -1261,7 +1264,7 @@ internal class DtoGenerator private constructor(
             FunSpec
                 .builder("__applyTo")
                 .addModifiers(KModifier.INTERNAL)
-                .addParameter("_draft", baseType.draftClassName)
+                .addParameter("_draft", baseDraftTypeName)
                 .apply {
                     polymorphicInputDiscriminatorProp()
                         ?.takeIf { isTypedPolymorphicInputBranch }
@@ -1442,9 +1445,6 @@ internal class DtoGenerator private constructor(
         )
         addProperty(builder.build())
     }
-
-    private fun propTypeName(prop: AbstractProp): TypeName =
-        propTypeName(lsiDtoType.prop(lsiGraph, prop.name))
 
     private fun propTypeName(prop: LsiDtoProp): TypeName =
         KspDtoTypeRefRenderer.render(

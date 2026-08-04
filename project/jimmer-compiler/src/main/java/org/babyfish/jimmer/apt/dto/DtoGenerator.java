@@ -20,6 +20,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoFoldDraftApplyRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoFoldValueRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoHibernateValidatorRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoInputBuilderRenderer;
+import org.babyfish.jimmer.compiler.render.apt.AptImmutableTypeNameRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoJacksonPolymorphismRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoLoadedStateRenderer;
 import org.babyfish.jimmer.compiler.render.apt.AptDtoMetadataFetcherRenderer;
@@ -374,7 +375,7 @@ public class DtoGenerator {
                         String.format(
                                 "Cannot generate dto type '%s' for '%s'",
                                 dtoType.getName(),
-                                dtoType.getBaseType().getQualifiedName()
+                                immutableBaseType().getQualifiedName()
                         ),
                         ex
                 );
@@ -468,7 +469,7 @@ public class DtoGenerator {
                         String.format(
                                 "Cannot generate dto type '%s' for '%s'",
                                 dtoType.getName(),
-                                dtoType.getBaseType().getQualifiedName()
+                                immutableBaseType().getQualifiedName()
                         ),
                         ex
                 );
@@ -846,7 +847,7 @@ public class DtoGenerator {
                 .builder(
                         ParameterizedTypeName.get(
                                 org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
-                                dtoType.getBaseType().getClassName(),
+                                immutableBaseTypeName(),
                                 getDtoClassName()
                         ),
                         "METADATA"
@@ -859,7 +860,7 @@ public class DtoGenerator {
                 .add(
                         "new $T<$T, $T>(\n",
                         org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
-                        dtoType.getBaseType().getClassName(),
+                        immutableBaseTypeName(),
                         getDtoClassName()
                 )
                 .indent()
@@ -893,7 +894,7 @@ public class DtoGenerator {
                 .builder(
                         ParameterizedTypeName.get(
                                 org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
-                                dtoType.getBaseType().getClassName(),
+                                immutableBaseTypeName(),
                                 getDtoClassName()
                         ),
                         "METADATA"
@@ -906,7 +907,7 @@ public class DtoGenerator {
                 .add(
                         "new $T<$T, $T>(\n",
                         org.babyfish.jimmer.apt.immutable.generator.Constants.DTO_METADATA_CLASS_NAME,
-                        dtoType.getBaseType().getClassName(),
+                        immutableBaseTypeName(),
                         getDtoClassName()
                 )
                 .indent()
@@ -1239,11 +1240,10 @@ public class DtoGenerator {
     }
 
     private void addConverterConstructor() {
-        site.addzero.lsi.jimmer.ImmutableType immutableBaseType =
-                DtoAccessorExtensionsKt.immutableBaseType(lsiDtoType, immutableSchema);
+        site.addzero.lsi.jimmer.ImmutableType immutableBaseType = immutableBaseType();
         ParameterSpec.Builder parameterBuilder =
                 ParameterSpec.builder(
-                        dtoType.getBaseType().getClassName().annotated(
+                        immutableBaseTypeName().annotated(
                                 AnnotationSpec.builder(NonNull.class).build()
                         ),
                         "base"
@@ -1305,7 +1305,7 @@ public class DtoGenerator {
                                     lsiWorkspace
                             ),
                             "Cannot convert \"" +
-                                    dtoType.getBaseType().getClassName() +
+                                    immutableBaseTypeName() +
                                     "\" to \"" +
                                     getDtoClassName() +
                                     "\" because the cannot get non-null value for \"" +
@@ -1335,7 +1335,7 @@ public class DtoGenerator {
         MethodSpec.Builder builder = MethodSpec
                 .methodBuilder("__applyTo")
                 .addModifiers(Modifier.PRIVATE)
-                .addParameter(dtoType.getBaseType().getDraftClassName(), "__draft");
+                .addParameter(immutableBaseDraftTypeName(), "__draft");
         for (site.addzero.lsi.jimmer.dto.DtoProp prop :
                 DtoAccessorExtensionsKt.propsInDeclarationOrder(lsiDtoType, lsiGraph)) {
             if (prop instanceof site.addzero.lsi.jimmer.dto.DtoFoldProp) {
@@ -1427,7 +1427,7 @@ public class DtoGenerator {
             builder.addAnnotation(Override.class);
         }
         builder.addModifiers(Modifier.PUBLIC)
-                .returns(dtoType.getBaseType().getClassName());
+                .returns(immutableBaseTypeName());
         if (!withId && idOverridable) {
             builder.addStatement("return toEntityById(null)");
         } else if (discriminatorProp != null && isDefaultPolymorphicInputBranch()) {
@@ -1467,7 +1467,7 @@ public class DtoGenerator {
             }
             builder.addCode(
                     "return $T.$L.produce(__draft -> {$>\n",
-                    dtoType.getBaseType().getDraftClassName(),
+                    immutableBaseDraftTypeName(),
                     "$"
             );
             builder.addStatement("this.__applyTo(__draft)");
@@ -1532,12 +1532,6 @@ public class DtoGenerator {
         );
     }
 
-    private TypeName renderGeneratedValueType(AbstractProp prop) {
-        return renderGeneratedValueType(
-                DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName())
-        );
-    }
-
     private TypeName renderGeneratedValueType(site.addzero.lsi.jimmer.dto.DtoProp prop) {
         LsiTypeRef type = DtoGeneratedValueTypeExtensionsKt.generatedValueType(
                 prop,
@@ -1551,6 +1545,18 @@ public class DtoGenerator {
                 lsiWorkspace,
                 generatedDtoTypeIdsByTypeName.keySet()
         );
+    }
+
+    private site.addzero.lsi.jimmer.ImmutableType immutableBaseType() {
+        return DtoAccessorExtensionsKt.immutableBaseType(lsiDtoType, immutableSchema);
+    }
+
+    private ClassName immutableBaseTypeName() {
+        return AptImmutableTypeNameRenderer.renderSource(immutableBaseType(), lsiWorkspace);
+    }
+
+    private ClassName immutableBaseDraftTypeName() {
+        return AptImmutableTypeNameRenderer.renderDraft(immutableBaseType(), lsiWorkspace);
     }
 
     private void addHashCode() {
