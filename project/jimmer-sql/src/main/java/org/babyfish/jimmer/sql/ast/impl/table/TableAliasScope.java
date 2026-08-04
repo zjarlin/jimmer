@@ -4,39 +4,32 @@ import org.babyfish.jimmer.meta.ImmutableProp;
 import org.babyfish.jimmer.sql.ast.impl.base.BaseTableImplementor;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 public final class TableAliasScope implements TableAliasAllocator {
 
     private int sequence;
 
-    private final Set<String> aliases = new HashSet<>();
+    private final Map<RealTable, AliasBinding> aliasBindings;
 
-    private final Map<RealTable, AliasBinding> aliasBindings = new IdentityHashMap<>();
+    @Nullable
+    private Map<TableAliasKey, AliasBinding> aliasBindingsByKey;
 
-    private final Map<TableAliasKey, AliasBinding> aliasBindingsByKey = new HashMap<>();
+    @Nullable
+    private Set<TableAliasKey> ambiguousAliasKeys;
 
-    private final Set<TableAliasKey> ambiguousAliasKeys = new HashSet<>();
+    public TableAliasScope(int expectedTableCount) {
+        this(expectedTableCount, 0);
+    }
 
-    @Override
-    public String allocateTableAlias(TableLikeImplementor<?> owner) {
-        String alias;
-        do {
-            alias = "tb_" + ++sequence + '_';
-        } while (!aliases.add(alias));
-        return alias;
+    public TableAliasScope(int expectedTableCount, int sequence) {
+        this.sequence = sequence;
+        aliasBindings = new IdentityHashMap<>(expectedTableCount);
     }
 
     @Override
-    public void reserveTableAlias(String alias) {
-        if (alias != null) {
-            aliases.add(alias);
-        }
+    public String allocateTableAlias(TableLikeImplementor<?> owner) {
+        return "tb_" + ++sequence + '_';
     }
 
     public void ensureAlias(RealTable table) {
@@ -53,9 +46,11 @@ public final class TableAliasScope implements TableAliasAllocator {
     }
 
     public void applyAliases(RealTable table, TableAliases aliases) {
-        TableAliases.Alias alias = aliases.get(table);
-        if (alias != null) {
-            bind(table, alias.value, alias.middleValue);
+        if (!isIdentityBound(table)) {
+            TableAliases.Alias alias = aliases.get(table);
+            if (alias != null) {
+                bind(table, alias.value, alias.middleValue);
+            }
         }
         for (RealTable childTable : table) {
             applyAliases(childTable, aliases);
@@ -63,8 +58,6 @@ public final class TableAliasScope implements TableAliasAllocator {
     }
 
     private void bind(RealTable table, String value, String middleValue) {
-        reserveTableAlias(value);
-        reserveTableAlias(middleValue);
         AliasBinding binding = new AliasBinding(value, middleValue, null, middleValue != null);
         bind(table, binding);
     }
@@ -142,15 +135,39 @@ public final class TableAliasScope implements TableAliasAllocator {
     }
 
     private void bind(RealTable table, AliasBinding binding) {
-        aliasBindings.put(table, binding);
+        AliasBinding oldBinding = aliasBindings.put(table, binding);
+        Map<TableAliasKey, AliasBinding> aliasBindingsByKey = this.aliasBindingsByKey;
+        if (aliasBindingsByKey != null || (oldBinding != null && oldBinding != binding)) {
+            updateStructuralBindings(table, binding, aliasBindingsByKey);
+        }
+    }
+
+    private void updateStructuralBindings(
+            RealTable table,
+            AliasBinding binding,
+            @Nullable Map<TableAliasKey, AliasBinding> aliasBindingsByKey
+    ) {
+        if (aliasBindingsByKey != null) {
+            bindByKey(aliasBindingsByKey, table, binding);
+        } else {
+            ambiguousAliasKeys().add(table.getAliasKey());
+        }
+    }
+
+    private void bindByKey(
+            Map<TableAliasKey, AliasBinding> aliasBindingsByKey,
+            RealTable table,
+            AliasBinding binding
+    ) {
         TableAliasKey key = table.getAliasKey();
-        if (ambiguousAliasKeys.contains(key)) {
+        Set<TableAliasKey> ambiguousAliasKeys = this.ambiguousAliasKeys;
+        if (ambiguousAliasKeys != null && ambiguousAliasKeys.contains(key)) {
             return;
         }
         AliasBinding existing = aliasBindingsByKey.putIfAbsent(key, binding);
         if (existing != null && existing != binding) {
             aliasBindingsByKey.remove(key);
-            ambiguousAliasKeys.add(key);
+            ambiguousAliasKeys().add(key);
         }
     }
 
@@ -166,8 +183,17 @@ public final class TableAliasScope implements TableAliasAllocator {
         if (binding != null) {
             return binding;
         }
+        Map<TableAliasKey, AliasBinding> aliasBindingsByKey = this.aliasBindingsByKey;
+        if (aliasBindingsByKey == null) {
+            aliasBindingsByKey = new HashMap<>(aliasBindings.size());
+            for (Map.Entry<RealTable, AliasBinding> e : aliasBindings.entrySet()) {
+                bindByKey(aliasBindingsByKey, e.getKey(), e.getValue());
+            }
+            this.aliasBindingsByKey = aliasBindingsByKey;
+        }
         TableAliasKey key = table.getAliasKey();
-        if (ambiguousAliasKeys.contains(key)) {
+        Set<TableAliasKey> ambiguousAliasKeys = this.ambiguousAliasKeys;
+        if (ambiguousAliasKeys != null && ambiguousAliasKeys.contains(key)) {
             return null;
         }
         binding = aliasBindingsByKey.get(key);
@@ -175,6 +201,14 @@ public final class TableAliasScope implements TableAliasAllocator {
             aliasBindings.put(table, binding);
         }
         return binding;
+    }
+
+    private Set<TableAliasKey> ambiguousAliasKeys() {
+        Set<TableAliasKey> ambiguousAliasKeys = this.ambiguousAliasKeys;
+        if (ambiguousAliasKeys == null) {
+            ambiguousAliasKeys = this.ambiguousAliasKeys = new HashSet<>();
+        }
+        return ambiguousAliasKeys;
     }
 
     final class AliasBinding {

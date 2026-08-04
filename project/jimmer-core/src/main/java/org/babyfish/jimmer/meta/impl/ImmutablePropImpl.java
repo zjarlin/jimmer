@@ -15,17 +15,14 @@ import org.babyfish.jimmer.meta.*;
 import org.babyfish.jimmer.meta.spi.ImmutablePropImplementor;
 import org.babyfish.jimmer.sql.*;
 import org.babyfish.jimmer.sql.meta.*;
-import org.babyfish.jimmer.sql.meta.impl.*;
+import org.babyfish.jimmer.sql.meta.impl.MetaCache;
+import org.babyfish.jimmer.sql.meta.impl.MetadataLiterals;
+import org.babyfish.jimmer.sql.meta.impl.Storages;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
-import java.lang.reflect.WildcardType;
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -37,14 +34,6 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
     private static final Pattern DOT_PATTERN = Pattern.compile("\\.");
 
     private static final Annotation[] EMPTY_ANNOTATIONS = new Annotation[0];
-
-    private static final LogicalDeletedValueGenerator<?> NIL_LOGICAL_DELETED_VALUE_GENERATOR =
-            new LogicalDeletedValueGenerator<Object>() {
-                @Override
-                public Object generate() {
-                    throw new UnsupportedOperationException();
-                }
-            };
 
     private static final Lock META_LOCK = new ReentrantLock();
 
@@ -91,6 +80,10 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
     private final ImmutablePropImpl original;
 
     private final ImmutablePropImpl annotationBase;
+
+    private int propCacheSlot = -1;
+
+    private int associationOrdinal = -1;
 
     private ConverterMetadata converterMetadata;
 
@@ -143,19 +136,6 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
 
     private final MetaCache<Boolean> isTargetForeignKeyRealCache =
             new MetaCache<>(this::isTargetForeignKeyReal0);
-
-    private final SqlContextCache<LogicalDeletedValueGenerator<?>> logicalDeletedValueGeneratorCache = new SqlContextCache<>(it -> {
-        ImmutableProp prop = getMappedBy() != null ? getMappedBy() : this;
-        Storage storage = prop.getStorage(it.getMetadataStrategy());
-        if (storage instanceof MiddleTable) {
-            LogicalDeletedValueGenerator<?> g = LogicalDeletedValueGenerators.of(
-                    ((MiddleTable) storage).getLogicalDeletedInfo(),
-                    it
-            );
-            return g != null ? g : NIL_LOGICAL_DELETED_VALUE_GENERATOR;
-        }
-        return NIL_LOGICAL_DELETED_VALUE_GENERATOR;
-    });
 
     ImmutablePropImpl(
             ImmutableTypeImpl declaringType,
@@ -435,6 +415,30 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
     @Override
     public ImmutableType getDeclaringType() {
         return declaringType;
+    }
+
+    @NotNull
+    @Override
+    public ImmutableType getCacheOwnerType() {
+        return declaringType;
+    }
+
+    @Override
+    public int getPropCacheSlot() {
+        return propCacheSlot;
+    }
+
+    @Override
+    public int getAssociationOrdinal() {
+        return associationOrdinal;
+    }
+
+    void setPropCacheSlot(int propCacheSlot) {
+        this.propCacheSlot = propCacheSlot;
+    }
+
+    void setAssociationOrdinal(int associationOrdinal) {
+        this.associationOrdinal = associationOrdinal;
     }
 
     @Override
@@ -1060,7 +1064,7 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
         if (metadata == null) {
             return null;
         }
-        metadata = forList && isReferenceList(TargetLevel.ENTITY) ? metadata.toListMetadata() : metadata;
+        metadata = forList ? metadata.toListMetadata() : metadata;
         return metadata.getConverter();
     }
 
@@ -1127,12 +1131,6 @@ class ImmutablePropImpl implements ImmutableProp, ImmutablePropImplementor {
             }
         }
         return type;
-    }
-
-    @Override
-    public LogicalDeletedValueGenerator<?> getLogicalDeletedValueGenerator(SqlContext sqlContext) {
-        LogicalDeletedValueGenerator<?> generator = logicalDeletedValueGeneratorCache.get(sqlContext);
-        return generator == NIL_LOGICAL_DELETED_VALUE_GENERATOR ? null : generator;
     }
 
     @Override

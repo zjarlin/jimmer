@@ -55,7 +55,7 @@ public interface OverrideBookDraft extends OverrideBook, BaseOnlyOneSwitchDraft 
 
         public static final ImmutableType TYPE = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 OverrideBook.class,
                 Collections.singleton(BaseOnlyOneSwitchDraft.Producer.TYPE),
                 (ctx, base) -> new DraftImpl(ctx, (OverrideBook)base)

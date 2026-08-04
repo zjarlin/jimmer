@@ -51,7 +51,7 @@ public interface AddressDraft extends Address, Draft {
 
         public static final ImmutableType TYPE = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 Address.class,
                 Collections.emptyList(),
                 (ctx, base) -> new DraftImpl(ctx, (Address)base)

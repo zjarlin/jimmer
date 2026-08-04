@@ -129,7 +129,7 @@ class JimmerDdlCompilerFrontendParityTest {
 
     private data class DdlOutput(
         val sql: String,
-        val snapshot: String,
+        val snapshot: Map<String, String>,
     )
 
     private companion object {
@@ -215,12 +215,16 @@ class JimmerDdlCompilerFrontendParityTest {
 
         fun File.readDdlOutput(projectDir: File): DdlOutput {
             val sqlFile = resolve("generated.sql")
-            val snapshotFile = projectDir.resolve(
-                "build/generated/jimmer-ddl/main/resources/.jimmer-ddl/entity-table-snapshot.properties",
+            val snapshotDirectory = projectDir.resolve(
+                "build/generated/jimmer-ddl/main/resources/.jimmer-ddl/entity-table-snapshot",
             )
             assertTrue(sqlFile.isFile, "DDL output is missing: ${sqlFile.absolutePath}")
-            assertTrue(snapshotFile.isFile, "DDL snapshot is missing: ${snapshotFile.absolutePath}")
-            return DdlOutput(sqlFile.readText(), snapshotFile.readText())
+            assertTrue(snapshotDirectory.isDirectory, "DDL snapshot is missing: ${snapshotDirectory.absolutePath}")
+            val snapshot = snapshotDirectory.listFiles { file -> file.isFile && file.extension == "properties" }
+                .orEmpty()
+                .sortedBy(File::getName)
+                .associate { file -> file.name to file.readText() }
+            return DdlOutput(sqlFile.readText(), snapshot)
         }
 
         fun DiagnosticCollector<JavaFileObject>.toErrorMessage(): String {

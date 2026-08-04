@@ -9,6 +9,7 @@ dependencies {
     api(projects.lsiCore)
 
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.h2)
 }
 
 tasks.test {

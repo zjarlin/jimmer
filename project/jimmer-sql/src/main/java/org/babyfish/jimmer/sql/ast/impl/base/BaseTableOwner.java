@@ -1,7 +1,6 @@
 package org.babyfish.jimmer.sql.ast.impl.base;
 
 import org.babyfish.jimmer.sql.ast.Expression;
-import org.babyfish.jimmer.sql.ast.Selection;
 import org.babyfish.jimmer.sql.ast.embedded.AbstractTypedEmbeddedPropExpression;
 import org.babyfish.jimmer.sql.ast.impl.AbstractMutableStatementImpl;
 import org.babyfish.jimmer.sql.ast.impl.AstContext;
@@ -10,7 +9,6 @@ import org.babyfish.jimmer.sql.ast.impl.table.TableLikeImplementor;
 import org.babyfish.jimmer.sql.ast.table.BaseTable;
 import org.babyfish.jimmer.sql.ast.table.spi.TableLike;
 import org.babyfish.jimmer.sql.ast.table.spi.TableProxy;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -25,6 +23,7 @@ public final class BaseTableOwner {
 
     public BaseTableOwner(BaseTable baseTable, int index) {
         Objects.requireNonNull(baseTable, "baseTable cannot be null");
+        baseTable = BaseTableProxies.unwrap(baseTable);
         if (baseTable instanceof BaseTableSymbol) {
             this.baseTable = (BaseTableSymbol) baseTable;
         } else {
@@ -41,7 +40,7 @@ public final class BaseTableOwner {
         return index;
     }
 
-    void visitOwnerStatementChain(AstContext ctx, Runnable block) {
+    public void visitOwnerStatementChain(AstContext ctx, Runnable block) {
         visitStatementChain(
                 ctx,
                 baseTable.getQuery().getMutableQuery(),

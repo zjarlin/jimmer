@@ -6,7 +6,12 @@ import org.babyfish.jimmer.sql.ast.impl.base.BaseTableImplementor;
 import org.babyfish.jimmer.sql.ast.impl.table.RealTable;
 import org.babyfish.jimmer.sql.ast.impl.table.TableLikeImplementor;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 final class CteTableDependencyAnalyzer {
 
@@ -21,7 +26,7 @@ final class CteTableDependencyAnalyzer {
         if (statements.isEmpty()) {
             return CteTableDependencies.EMPTY;
         }
-        Map<AbstractMutableStatementImpl, List<CteTableDeclaration>> declarationMap = new IdentityHashMap<>();
+        Map<AbstractMutableStatementImpl, List<CteTableDeclaration>> declarationMap = null;
         for (AbstractMutableStatementImpl statement : statements) {
             TableLikeImplementor<?> tableLikeImplementor = statement.getTableLikeImplementor();
             if (!tableLikeImplementor.hasBaseTable()) {
@@ -29,13 +34,19 @@ final class CteTableDependencyAnalyzer {
             }
             List<RealTable> tables = collectRenderTables(tableLikeImplementor.realTable(astContext));
             if (!tables.isEmpty()) {
+                if (declarationMap == null) {
+                    declarationMap = new IdentityHashMap<>();
+                }
                 declarationMap.put(statement, toDeclarations(tables));
             }
         }
+        if (declarationMap == null) {
+            return CteTableDependencies.EMPTY;
+        }
         List<RealTable> aliasRootTables = collectAliasRootTables(tableUsages.getRootTables(), astContext);
         return new CteTableDependencies(
-                Collections.unmodifiableMap(declarationMap),
-                Collections.unmodifiableList(aliasRootTables)
+                declarationMap,
+                aliasRootTables
         );
     }
 
@@ -65,7 +76,7 @@ final class CteTableDependencyAnalyzer {
             BaseTableImplementor baseTable = (BaseTableImplementor) table.getTableLikeImplementor();
             declarations.add(new CteTableDeclaration(table, baseTable.toSymbol(), baseTable.isRecursiveCte()));
         }
-        return Collections.unmodifiableList(declarations);
+        return declarations;
     }
 
     private static class State {
@@ -77,7 +88,7 @@ final class CteTableDependencyAnalyzer {
         private final Set<RealTable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
 
         List<RealTable> result() {
-            return Collections.unmodifiableList(new ArrayList<>(cteTables));
+            return cteTables;
         }
 
         List<RealTable> drain() {

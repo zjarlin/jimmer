@@ -77,8 +77,12 @@ public class AstContext extends AbstractIdentityDataManager<RealTable, TableUsed
         return state != null ? state : TableUsedState.NONE;
     }
 
-    public TableAliasScope beginTableAliasScope() {
-        return tableAliasScope = new TableAliasScope();
+    public TableAliasScope beginTableAliasScope(int expectedTableCount) {
+        return tableAliasScope = new TableAliasScope(expectedTableCount);
+    }
+
+    public TableAliasScope beginTableAliasScope(int expectedTableCount, int sequence) {
+        return tableAliasScope = new TableAliasScope(expectedTableCount, sequence);
     }
 
     public TableAliasScope getTableAliasScope() {
@@ -219,9 +223,14 @@ public class AstContext extends AbstractIdentityDataManager<RealTable, TableUsed
         for (StatementFrame frame = this.statementFrame; frame != null; frame = frame.parent) {
             AbstractMutableStatementImpl statement = frame.statement;
             TableLike<?> stmtTable = statement.getTable();
+            TableLikeImplementor<?> stmtTableImplementor = statement.getTableLikeImplementor();
             BaseTableOwner baseTableOwner = BaseTableOwner.of(table);
-            if (stmtTable instanceof BaseTableSymbol) {
-                TableImplementor<?> resolved = resolve(statement, (BaseTableSymbol) stmtTable, table);
+            if (stmtTableImplementor instanceof BaseTableImplementor) {
+                TableImplementor<?> resolved = resolve(
+                        statement,
+                        ((BaseTableImplementor) stmtTableImplementor).toSymbol(),
+                        table
+                );
                 if (resolved != null) {
                     return (TableImplementor<E>) resolved.baseTableOwner(baseTableOwner);
                 }
@@ -313,8 +322,13 @@ public class AstContext extends AbstractIdentityDataManager<RealTable, TableUsed
 
     private TableImplementor<?> resolveTable(AbstractMutableStatementImpl statement, Table<?> table) {
         TableLike<?> stmtTable = statement.getTable();
-        if (stmtTable instanceof BaseTableSymbol) {
-            TableImplementor<?> resolved = resolve(statement, (BaseTableSymbol) stmtTable, table);
+        TableLikeImplementor<?> stmtTableImplementor = statement.getTableLikeImplementor();
+        if (stmtTableImplementor instanceof BaseTableImplementor) {
+            TableImplementor<?> resolved = resolve(
+                    statement,
+                    ((BaseTableImplementor) stmtTableImplementor).toSymbol(),
+                    table
+            );
             if (resolved != null) {
                 return resolved;
             }
@@ -327,7 +341,7 @@ public class AstContext extends AbstractIdentityDataManager<RealTable, TableUsed
             }
         }
         return AbstractTypedTable.__refEquals(stmtTable, table) ?
-                (TableImplementor<?>) statement.getTableLikeImplementor() :
+                (TableImplementor<?>) stmtTableImplementor :
                 null;
     }
 

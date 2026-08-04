@@ -24,7 +24,7 @@ public interface BaseOnlyOneSwitchDraft extends BaseOnlyOneSwitch, Draft {
 
         public static final ImmutableType TYPE = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 BaseOnlyOneSwitch.class,
                 Collections.emptyList(),
                 null

@@ -19,7 +19,7 @@ public interface BaseOnlyOneSwitchDraft : BaseOnlyOneSwitch, Draft {
     public object `$` {
         public val type: ImmutableType = ImmutableType
                     .newBuilder(
-                        "0.11.2",
+                        "0.11.6",
                         BaseOnlyOneSwitch::class,
                         listOf(
 

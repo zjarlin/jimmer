@@ -4,11 +4,15 @@ import org.babyfish.jimmer.jackson.Converter;
 import org.babyfish.jimmer.jackson.ConverterMetadata;
 import org.babyfish.jimmer.lang.Ref;
 import org.babyfish.jimmer.meta.*;
+import org.babyfish.jimmer.meta.spi.ImmutablePropImplementor;
 import org.babyfish.jimmer.sql.DissociateAction;
 import org.babyfish.jimmer.sql.ManyToOne;
 import org.babyfish.jimmer.sql.TargetTransferMode;
 import org.babyfish.jimmer.sql.association.Association;
-import org.babyfish.jimmer.sql.meta.*;
+import org.babyfish.jimmer.sql.meta.ColumnDefinition;
+import org.babyfish.jimmer.sql.meta.MetadataStrategy;
+import org.babyfish.jimmer.sql.meta.SqlTemplate;
+import org.babyfish.jimmer.sql.meta.Storage;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.annotation.Annotation;
@@ -17,7 +21,7 @@ import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
 
-public abstract class AssociationProp implements ImmutableProp {
+public abstract class AssociationProp implements ImmutableProp, ImmutablePropImplementor {
 
     final AssociationType declaringType;
 
@@ -28,6 +32,22 @@ public abstract class AssociationProp implements ImmutableProp {
     @Override
     public @NotNull AssociationType getDeclaringType() {
         return declaringType;
+    }
+
+    @NotNull
+    @Override
+    public ImmutableType getCacheOwnerType() {
+        return declaringType.getCacheOwnerType();
+    }
+
+    @Override
+    public int getPropCacheSlot() {
+        return declaringType.getPropCacheSlot() + getId().asIndex();
+    }
+
+    @Override
+    public int getAssociationOrdinal() {
+        return ((ImmutablePropImplementor) declaringType.getBaseProp()).getAssociationOrdinal();
     }
 
     @Override
@@ -193,11 +213,6 @@ public abstract class AssociationProp implements ImmutableProp {
     }
 
     @Override
-    public LogicalDeletedValueGenerator<?> getLogicalDeletedValueGenerator(SqlContext sqlContext) {
-        return null;
-    }
-
-    @Override
     public boolean isId() {
         return false;
     }
@@ -335,6 +350,11 @@ public abstract class AssociationProp implements ImmutableProp {
             return GETTER.getAnnotations();
         }
 
+        @Override
+        public Method getJavaGetter() {
+            return GETTER;
+        }
+
         @SuppressWarnings("unchecked")
         @Override
         public ColumnDefinition getStorage(MetadataStrategy strategy) {
@@ -391,6 +411,11 @@ public abstract class AssociationProp implements ImmutableProp {
         @Override
         public Annotation[] getAnnotations() {
             return GETTER.getAnnotations();
+        }
+
+        @Override
+        public Method getJavaGetter() {
+            return GETTER;
         }
 
         @SuppressWarnings("unchecked")

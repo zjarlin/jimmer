@@ -70,7 +70,7 @@ public interface ReferenceModelDraft : ReferenceModel, Draft {
 
         public val type: ImmutableType = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 ReferenceModel::class,
                 listOf(
 

@@ -44,7 +44,7 @@ public interface OverrideBookDraft : OverrideBook, BaseOnlyOneSwitchDraft {
 
         public val type: ImmutableType = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 OverrideBook::class,
                 listOf(
                     BaseOnlyOneSwitchDraft.`$`.type

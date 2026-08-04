@@ -34,6 +34,12 @@ class JimmerDdlCompilerTest {
     @Test
     fun `ddl processor is disabled without explicit option`() {
         assertFalse(JimmerDdlCompilerSettings.fromOptions(emptyMap()).enabled)
+        assertFalse(JimmerDdlCompilerSettings.fromOptions(emptyMap()).allowDestructiveChanges)
+        assertTrue(
+            JimmerDdlCompilerSettings.fromOptions(
+                mapOf("jimmerDdl.allowDestructiveChanges" to "true"),
+            ).allowDestructiveChanges,
+        )
     }
 
     @Test
@@ -175,6 +181,22 @@ class JimmerDdlCompilerTest {
     }
 
     @Test
+    fun `removed property is preserved when destructive changes are disabled`() {
+        val outputDir = tempOutputDir()
+        val settings = settings(outputDir).copy(allowDestructiveChanges = false)
+        val first = compile(bookWorkspace(extraField = true), settings)
+        JimmerDdlEntityTableSnapshot.writeSnapshot(
+            entities = first.entities,
+            schema = first.schema,
+            settings = settings,
+        )
+
+        val changed = compile(bookWorkspace(extraField = false), settings)
+
+        assertFalse("DROP COLUMN" in changed.sql)
+    }
+
+    @Test
     fun `offline incremental ddl emits structural column changes`() {
         val outputDir = tempOutputDir()
         val settings = settings(outputDir).copy(nullabilityRepairOnly = true)
@@ -207,8 +229,8 @@ class JimmerDdlCompilerTest {
             schema = first.schema,
             settings = settings,
         )
-        val sourceSnapshot = requireNotNull(JimmerDdlCompilerFiles.resolveSnapshotFile(settings))
-        val sourceContent = sourceSnapshot.readText()
+        val sourceSnapshot = requireNotNull(JimmerDdlCompilerFiles.resolveSnapshotDirectory(settings))
+        val sourceContent = sourceSnapshot.readSnapshotContents()
         val changed = compile(bookWorkspace(extraField = true), settings)
 
         JimmerDdlEntityTableSnapshot.writeGeneratedSnapshot(
@@ -217,10 +239,10 @@ class JimmerDdlCompilerTest {
             settings = settings,
         )
 
-        val generatedSnapshot = JimmerDdlCompilerFiles.resolveGeneratedSnapshotFile(settings)
-        assertTrue(generatedSnapshot.isFile)
-        assertEquals(sourceContent, sourceSnapshot.readText())
-        assertFalse(sourceContent == generatedSnapshot.readText())
+        val generatedSnapshot = JimmerDdlCompilerFiles.resolveGeneratedSnapshotDirectory(settings)
+        assertTrue(generatedSnapshot.isDirectory)
+        assertEquals(sourceContent, sourceSnapshot.readSnapshotContents())
+        assertFalse(sourceContent == generatedSnapshot.readSnapshotContents())
     }
 
     @Test
@@ -492,7 +514,14 @@ class JimmerDdlCompilerTest {
             outputFormat = JimmerDdlOutputFormat.PLAIN,
             outputDir = outputDir.absolutePath,
             compareDatabase = false,
+            allowDestructiveChanges = true,
         )
+    }
+
+    private fun File.readSnapshotContents(): Map<String, String> {
+        return listFiles { file -> file.isFile && file.extension == "properties" }
+            .orEmpty()
+            .associate { file -> file.name to file.readText() }
     }
 
     private fun tempOutputDir(): File {

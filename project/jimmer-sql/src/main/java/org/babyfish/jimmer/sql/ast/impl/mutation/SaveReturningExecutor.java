@@ -17,7 +17,8 @@ import java.util.*;
 
 class SaveReturningExecutor {
 
-    private SaveReturningExecutor() {}
+    private SaveReturningExecutor() {
+    }
 
     static int[] executeInsert(SaveReturning returning, EntityCollection<DraftSpi> entities) {
         if (entities.isEmpty()) {
@@ -83,14 +84,13 @@ class SaveReturningExecutor {
     ) throws SQLException {
         int[] rowCounts = new int[entities.size()];
         Reader.Context readerContext = new Reader.Context(null, returning.ctx.options.getSqlClient());
-        SaveShapeMatcher shapeMatcher = new SaveShapeMatcher(returning.ctx.options::getUpsertMask);
         switch (returning.matchMode) {
             case ORDER:
-                readByOrder(returning, rs, entities, rowCounts, readerContext, shapeMatcher);
+                readByOrder(returning, rs, entities, rowCounts, readerContext);
                 break;
             case ID:
             case KEY:
-                readByKey(returning, rs, entities, rowCounts, readerContext, shapeMatcher);
+                readByKey(returning, rs, entities, rowCounts, readerContext);
                 break;
             default:
                 throw new AssertionError("Internal bug: Unexpected match mode: " + returning.matchMode);
@@ -109,8 +109,7 @@ class SaveReturningExecutor {
             ResultSet rs,
             EntityCollection<DraftSpi> entities,
             int[] rowCounts,
-            Reader.Context readerContext,
-            SaveShapeMatcher shapeMatcher
+            Reader.Context readerContext
     ) throws SQLException {
         Iterator<EntityCollection.Item<DraftSpi>> itr = entities.items().iterator();
         int index = 0;
@@ -122,7 +121,7 @@ class SaveReturningExecutor {
             rowCounts[index++] = 1;
             EntityCollection.Item<DraftSpi> item = itr.next();
             if (!isRejectedByLogicalDeleted(returning, values)) {
-                apply(returning, item, values, shapeMatcher);
+                apply(returning, item, values);
             }
         }
         if (itr.hasNext() && returning.kind == SaveReturningKind.INSERT) {
@@ -139,8 +138,7 @@ class SaveReturningExecutor {
             ResultSet rs,
             EntityCollection<DraftSpi> entities,
             int[] rowCounts,
-            Reader.Context readerContext,
-            SaveShapeMatcher shapeMatcher
+            Reader.Context readerContext
     ) throws SQLException {
         Map<List<Object>, EntityCollection.Item<DraftSpi>> itemMap = new LinkedHashMap<>();
         Map<List<Object>, Integer> indexMap = new LinkedHashMap<>();
@@ -159,7 +157,7 @@ class SaveReturningExecutor {
             }
             rowCounts[indexMap.get(key)] = 1;
             if (!isRejectedByLogicalDeleted(returning, values)) {
-                apply(returning, item, values, shapeMatcher);
+                apply(returning, item, values);
             }
         }
     }
@@ -224,13 +222,12 @@ class SaveReturningExecutor {
     private static void apply(
             SaveReturning returning,
             EntityCollection.Item<DraftSpi> item,
-            Object[] values,
-            SaveShapeMatcher shapeMatcher
+            Object[] values
     ) {
-        apply(returning, item.getEntity(), values, shapeMatcher);
+        apply(returning, item.getEntity(), values);
         for (DraftSpi draft : item.getOriginalEntities()) {
             if (draft != item.getEntity()) {
-                apply(returning, draft, values, shapeMatcher);
+                apply(returning, draft, values);
             }
         }
     }
@@ -238,8 +235,7 @@ class SaveReturningExecutor {
     private static void apply(
             SaveReturning returning,
             DraftSpi draft,
-            Object[] values,
-            SaveShapeMatcher shapeMatcher
+            Object[] values
     ) {
         for (int i = 0; i < returning.returningProps.size(); i++) {
             ImmutableProp prop = returning.returningProps.get(i);
@@ -247,8 +243,7 @@ class SaveReturningExecutor {
             draft.__set(propId, values[i]);
             draft.__show(propId, true);
         }
-        returning.ctx.markSaveReturningApplied(draft);
-        shapeMatcher.isMatched(draft, returning.ctx.fetcher, true);
+        returning.ctx.addSaveResultCoverage(draft, returning.returningProps);
     }
 
     private static void unloadAssociationsOfNotAcceptedRows(

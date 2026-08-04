@@ -55,7 +55,7 @@ class EntityInvestigator {
         this.keyMatcher = ctx.options.getKeyMatcher(ctx.path.getType());
         this.missedProps = keyMatcher.missedProps(shape.getGetterMap().keySet());
         this.isIdMissed = shape.getIdGetters().isEmpty() &&
-                shape.getType().getIdGenerator(ctx.options.getSqlClient()) instanceof IdentityIdGenerator;
+                ctx.options.getSqlClient().getGeneratorContext().getIdGenerator(shape.getType()) instanceof IdentityIdGenerator;
         this.primaryGroup = isIdMissed ?
                 keyMatcher.match(shape.getGetterMap().keySet()) :
                 null;
@@ -106,7 +106,7 @@ class EntityInvestigator {
             Map<Object, ImmutableSpi> rowMap = Rows.findMapByIds(
                     ctx,
                     QueryReason.INVESTIGATE_CONSTRAINT_VIOLATION_ERROR,
-                    idFetcher(null, missedProps),
+                    idFetcherWithMissedProps(missedProps),
                     drafts
             );
             for (DraftSpi draft : drafts) {
@@ -155,7 +155,7 @@ class EntityInvestigator {
             List<ImmutableSpi> rows = Rows.findByIds(
                     ctx,
                     QueryReason.INVESTIGATE_CONSTRAINT_VIOLATION_ERROR,
-                    idFetcher(null),
+                    idFetcher(),
                     Collections.singletonList(entity)
             );
             if (!rows.isEmpty()) {
@@ -174,7 +174,7 @@ class EntityInvestigator {
                 Map<KeyMatcher.Group, List<ImmutableSpi>> rowsMap = Rows.findByKeys(
                         ctx,
                         QueryReason.INVESTIGATE_CONSTRAINT_VIOLATION_ERROR,
-                        idFetcher(null, primaryGroup != null ? primaryGroup.getProps() : null),
+                        idFetcherWithMissedProps(primaryGroup != null ? primaryGroup.getProps() : null),
                         Collections.singletonList(entity),
                         keyMatcher.getGroup(groupName)
                 );
@@ -229,7 +229,7 @@ class EntityInvestigator {
             Map<Object, ImmutableSpi> rowMap = Rows.findMapByIds(
                     ctx,
                     QueryReason.INVESTIGATE_CONSTRAINT_VIOLATION_ERROR,
-                    idFetcher(null),
+                    idFetcher(),
                     entities
             );
             for (ImmutableSpi entity : entities) {
@@ -341,21 +341,20 @@ class EntityInvestigator {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Fetcher<ImmutableSpi> idFetcher(ImmutableType type) {
-        return idFetcherMap.computeIfAbsent(type, t -> {
-            if (t == null) {
-                t = ctx.path.getType();
-            }
-            return new FetcherImpl<>((Class<ImmutableSpi>) t.getJavaClass());
-        });
+    private Fetcher<ImmutableSpi> idFetcher() {
+        return idFetcher(ctx.path.getType());
     }
 
-    private Fetcher<ImmutableSpi> idFetcher(
-            ImmutableType type,
-            Iterable<ImmutableProp> missedProps
-    ) {
-        Fetcher<ImmutableSpi> fetcher = idFetcher(type);
+    @SuppressWarnings("unchecked")
+    private Fetcher<ImmutableSpi> idFetcher(ImmutableType type) {
+        return idFetcherMap.computeIfAbsent(
+                type,
+                t -> new FetcherImpl<>((Class<ImmutableSpi>) t.getJavaClass())
+        );
+    }
+
+    private Fetcher<ImmutableSpi> idFetcherWithMissedProps(Iterable<ImmutableProp> missedProps) {
+        Fetcher<ImmutableSpi> fetcher = idFetcher();
         if (missedProps != null) {
             for (ImmutableProp missedProp : missedProps) {
                 if (missedProp.isReference(TargetLevel.ENTITY)) {

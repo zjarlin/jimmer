@@ -141,6 +141,7 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             "jimmerDdl.includeSequences",
             "jimmerDdl.includeManyToManyTables",
             "jimmerDdl.compareDatabase",
+            "jimmerDdl.allowDestructiveChanges",
             "jimmerDdl.nullabilityRepairOnly",
             "jimmerDdl.sourceFingerprint",
         )

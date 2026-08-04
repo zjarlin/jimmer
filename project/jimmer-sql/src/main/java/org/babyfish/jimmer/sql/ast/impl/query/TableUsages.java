@@ -6,7 +6,9 @@ import org.babyfish.jimmer.sql.ast.impl.table.TableAliasScope;
 import org.babyfish.jimmer.sql.ast.impl.table.TableAliases;
 import org.babyfish.jimmer.sql.runtime.TableUsedState;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 public final class TableUsages {
 
@@ -17,8 +19,8 @@ public final class TableUsages {
     private final Map<RealTable, TableUsedState> tableStateMap;
 
     TableUsages(List<RealTable> rootTables, Map<RealTable, TableUsedState> tableStateMap) {
-        this.rootTables = Collections.unmodifiableList(new ArrayList<>(rootTables));
-        this.tableStateMap = new IdentityHashMap<>(tableStateMap);
+        this.rootTables = rootTables;
+        this.tableStateMap = tableStateMap;
     }
 
     public void applyUsedStatesTo(AstContext astContext) {
@@ -36,16 +38,29 @@ public final class TableUsages {
     }
 
     TableAliases allocateAndBindAliases(AstContext astContext, CteTableDependencies cteTableDependencies) {
-        TableAliasScope aliasScope = astContext.beginTableAliasScope();
-        TableAliases aliases = TableAliases.allocate(
-                cteTableDependencies != null ? cteTableDependencies.aliasRootTables() : rootTables,
-                tableStateMap,
-                aliasScope
+        TableAliases aliases = allocateAliases(cteTableDependencies);
+        bindAliases(astContext, aliases);
+        return aliases;
+    }
+
+    TableAliases allocateAliases(CteTableDependencies cteTableDependencies) {
+        List<RealTable> aliasRootTables = cteTableDependencies != null ?
+                cteTableDependencies.aliasRootTables() :
+                Collections.emptyList();
+        return TableAliases.allocate(
+                !aliasRootTables.isEmpty() ? aliasRootTables : rootTables,
+                tableStateMap
+        );
+    }
+
+    void bindAliases(AstContext astContext, TableAliases aliases) {
+        TableAliasScope aliasScope = astContext.beginTableAliasScope(
+                Math.max(rootTables.size(), tableStateMap.size()),
+                aliases.getAliasCount()
         );
         for (RealTable rootTable : rootTables) {
             aliasScope.applyAliases(rootTable, aliases);
         }
-        return aliases;
     }
 
     List<RealTable> getRootTables() {

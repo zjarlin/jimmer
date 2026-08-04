@@ -45,7 +45,8 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
 
     private JoinType joinType;
 
-    private final TableAliasKey aliasKey;
+    @Nullable
+    private volatile TableAliasKey aliasKey;
 
     RealTableImpl(TableLikeImplementor<?> owner) {
         this(
@@ -63,7 +64,6 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
         this.key = key;
         this.owner = owner;
         this.parent = parent;
-        this.aliasKey = TableAliasKey.create(this);
         if (owner instanceof BaseTableImplementor) {
             BaseTableImplementor baseTableImpl = (BaseTableImplementor) owner;
             this.joinType = baseTableImpl.getJoinType();
@@ -193,7 +193,7 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
                 bridgeProp != null &&
                 bridgeProp.isMappedId() &&
                 childProp == bridgeProp &&
-                bridgeImplementor.getStatement().getFilterPredicate(bridgeImplementor, ctx) == null;
+                ctx.getStatement().getFilterPredicate(bridgeImplementor, ctx) == null;
     }
 
     @Override
@@ -209,11 +209,16 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
                 tableOwner.weakJoinHandle == null &&
                 !joinProp.isMiddleTableDefinition() &&
                 !(joinProp.getSqlTemplate() instanceof JoinTemplate) &&
-                tableOwner.getStatement().getFilterPredicate(tableOwner, ctx) == null;
+                ctx.getStatement().getFilterPredicate(tableOwner, ctx) == null;
     }
 
     @Override
     public TableAliasKey getAliasKey() {
+        TableAliasKey aliasKey = this.aliasKey;
+        if (aliasKey == null) {
+            aliasKey = TableAliasKey.create(this);
+            this.aliasKey = aliasKey;
+        }
         return aliasKey;
     }
 
@@ -298,7 +303,7 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
             renderBaseTableCore(builder, cte);
         } else if (owner instanceof TableImplementor<?>) {
             TableImplementor<?> tableImplementor = (TableImplementor<?>) owner;
-            AbstractMutableStatementImpl statement = tableImplementor.getStatement();
+            AbstractMutableStatementImpl statement = builder.getAstContext().getStatement();
             Predicate filterPredicate;
             if (tableImplementor.isTreated()) {
                 renderTreatedJoin(builder, tableImplementor, mode);
@@ -556,9 +561,11 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
         AstContext ctx = builder.getAstContext();
         BaseTableImpl baseTableImpl = (BaseTableImpl) owner;
         boolean aliasOnly = !cte && ((BaseTableImplementor) owner).isCte();
+        List<RealTable> childTables = baseTableChildTablesToRender(ctx, baseTableImpl, cte);
         boolean withScope = !cte && parent != null &&
                 parent.owner instanceof TableImplementor<?> &&
-                ((BaseTableImplementor) owner).getRecursive() == null;
+                ((BaseTableImplementor) owner).getRecursive() == null &&
+                !childTables.isEmpty();
         if (withScope) {
             builder.enter(AbstractSqlBuilder.ScopeType.SUB_QUERY);
         }
@@ -572,23 +579,12 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
                 builder.sql(" ").sqlAlias(this);
             }
         }
-        for (Selection<?> selection : baseTableImpl.getSelections()) {
-            if (!(selection instanceof Table<?>)) {
-                continue;
+        if (!childTables.isEmpty()) {
+            ctx.pushRenderedBaseTable(null);
+            for (RealTable childTable : childTables) {
+                childTable.renderTo(builder, false);
             }
-            TableImplementor<?> tableImplementor = TableProxies.resolve((Table<?>) selection, ctx);
-            BaseTableOwner baseTableOwner = tableImplementor.getBaseTableOwner();
-            if (baseTableOwner == null || baseTableOwner.getBaseTable() != baseTableImpl.toSymbol()) {
-                continue;
-            }
-            RealTable realTable = tableImplementor.realTable(ctx);
-            if (!cte) {
-                ctx.pushRenderedBaseTable(null);
-                for (RealTable childTable : realTable) {
-                    childTable.renderTo(builder, false);
-                }
-                ctx.popRenderedBaseTable();
-            }
+            ctx.popRenderedBaseTable();
         }
         if (withScope) {
             builder.leave();
@@ -604,6 +600,36 @@ class RealTableImpl extends AbstractDataManager<RealTable.Key, RealTable> implem
             ((Ast) joinPredicate).renderTo(builder);
         }
         ctx.popRenderedBaseTable();
+    }
+
+    private static List<RealTable> baseTableChildTablesToRender(
+            AstContext ctx,
+            BaseTableImpl baseTable,
+            boolean cte
+    ) {
+        if (cte) {
+            return Collections.emptyList();
+        }
+        List<RealTable> childTables = null;
+        for (Selection<?> selection : baseTable.getSelections()) {
+            if (!(selection instanceof Table<?>)) {
+                continue;
+            }
+            TableImplementor<?> table = TableProxies.resolve((Table<?>) selection, ctx);
+            BaseTableOwner baseTableOwner = table.getBaseTableOwner();
+            if (baseTableOwner == null || baseTableOwner.getBaseTable() != baseTable.toSymbol()) {
+                continue;
+            }
+            for (RealTable childTable : table.realTable(ctx)) {
+                if (ctx.getTableUsedState(childTable) != TableUsedState.NONE) {
+                    if (childTables == null) {
+                        childTables = new ArrayList<>();
+                    }
+                    childTables.add(childTable);
+                }
+            }
+        }
+        return childTables != null ? childTables : Collections.emptyList();
     }
 
     private void renderJoin(SqlBuilder builder, TableImplementor.RenderMode mode) {

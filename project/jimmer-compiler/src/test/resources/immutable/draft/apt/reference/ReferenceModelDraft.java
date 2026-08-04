@@ -99,7 +99,7 @@ public interface ReferenceModelDraft extends ReferenceModel, Draft {
 
         public static final ImmutableType TYPE = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 ReferenceModel.class,
                 Collections.emptyList(),
                 (ctx, base) -> new DraftImpl(ctx, (ReferenceModel)base)

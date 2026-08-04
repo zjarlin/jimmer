@@ -65,10 +65,10 @@ class JimmerDdlCompilerKspFeatureTest {
         assertContains(sql, """"subtitle" VARCHAR(255) NOT NULL""")
 
         val snapshotFile = projectDir.resolve(
-            "build/generated/jimmer-ddl/main/resources/.jimmer-ddl/entity-table-snapshot.properties",
+            "build/generated/jimmer-ddl/main/resources/.jimmer-ddl/entity-table-snapshot/ksp_book.properties",
         )
         assertTrue(snapshotFile.isFile, "KSP should generate snapshot file: ${snapshotFile.absolutePath}")
-        assertContains(snapshotFile.readText(), "demo.KspBook=ksp_book")
+        assertContains(snapshotFile.readText(), "entity.demo.KspBook=ksp_book")
     }
 
     private class CapturingKspLogger : KSPLogger {

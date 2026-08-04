@@ -86,10 +86,10 @@ class JimmerDdlCompilerAptFeatureTest {
         assertContains(sql, """"subtitle" VARCHAR(255) NOT NULL""")
 
         val snapshotFile = projectDir.resolve(
-            "build/generated/jimmer-ddl/main/resources/.jimmer-ddl/entity-table-snapshot.properties",
+            "build/generated/jimmer-ddl/main/resources/.jimmer-ddl/entity-table-snapshot/apt_book.properties",
         )
         assertTrue(snapshotFile.isFile, "APT should generate snapshot file: ${snapshotFile.absolutePath}")
-        assertContains(snapshotFile.readText(), "demo.AptBook=apt_book")
+        assertContains(snapshotFile.readText(), "entity.demo.AptBook=apt_book")
     }
 
     private fun writeJavaSource(

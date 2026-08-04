@@ -51,7 +51,7 @@ public interface ContactDraft extends Contact, Draft {
 
         public static final ImmutableType TYPE = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 Contact.class,
                 Collections.emptyList(),
                 (ctx, base) -> new DraftImpl(ctx, (Contact)base)

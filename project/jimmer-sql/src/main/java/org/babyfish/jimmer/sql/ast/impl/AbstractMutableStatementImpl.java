@@ -8,9 +8,24 @@ import org.babyfish.jimmer.sql.ast.Predicate;
 import org.babyfish.jimmer.sql.ast.Selection;
 import org.babyfish.jimmer.sql.ast.impl.associated.VirtualPredicateMergedResult;
 import org.babyfish.jimmer.sql.ast.impl.base.BaseTableImplementor;
+import org.babyfish.jimmer.sql.ast.impl.base.BaseTableOwner;
+import org.babyfish.jimmer.sql.ast.impl.base.BaseTableProxies;
 import org.babyfish.jimmer.sql.ast.impl.base.BaseTableSymbol;
-import org.babyfish.jimmer.sql.ast.impl.query.*;
-import org.babyfish.jimmer.sql.ast.impl.table.*;
+import org.babyfish.jimmer.sql.ast.impl.query.ConfigurableSubQueryImpl;
+import org.babyfish.jimmer.sql.ast.impl.query.FilterableImplementor;
+import org.babyfish.jimmer.sql.ast.impl.query.FilterLevel;
+import org.babyfish.jimmer.sql.ast.impl.query.MutableStatementImplementor;
+import org.babyfish.jimmer.sql.ast.impl.query.MutableSubQueryImpl;
+import org.babyfish.jimmer.sql.ast.impl.query.QueryAnalysis;
+import org.babyfish.jimmer.sql.ast.impl.query.QueryRenderContext;
+import org.babyfish.jimmer.sql.ast.impl.query.TypedBaseQueryImplementor;
+import org.babyfish.jimmer.sql.ast.impl.table.BaseTableImpl;
+import org.babyfish.jimmer.sql.ast.impl.table.RealTable;
+import org.babyfish.jimmer.sql.ast.impl.table.StatementContext;
+import org.babyfish.jimmer.sql.ast.impl.table.TableImplementor;
+import org.babyfish.jimmer.sql.ast.impl.table.TableLikeImplementor;
+import org.babyfish.jimmer.sql.ast.impl.table.TableProxies;
+import org.babyfish.jimmer.sql.ast.impl.table.TableUtils;
 import org.babyfish.jimmer.sql.ast.impl.util.ConcattedIterator;
 import org.babyfish.jimmer.sql.ast.impl.util.FlaternIterator;
 import org.babyfish.jimmer.sql.ast.impl.util.IdentityMap;
@@ -22,6 +37,7 @@ import org.babyfish.jimmer.sql.ast.query.TypedSubQuery;
 import org.babyfish.jimmer.sql.ast.table.AssociationTable;
 import org.babyfish.jimmer.sql.ast.table.BaseTable;
 import org.babyfish.jimmer.sql.ast.table.Props;
+import org.babyfish.jimmer.sql.ast.table.Table;
 import org.babyfish.jimmer.sql.ast.table.TableEx;
 import org.babyfish.jimmer.sql.ast.table.spi.TableLike;
 import org.babyfish.jimmer.sql.ast.table.spi.TableProxy;
@@ -36,7 +52,11 @@ import org.babyfish.jimmer.sql.runtime.JSqlClientImplementor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
 
 public abstract class AbstractMutableStatementImpl implements FilterableImplementor, MutableStatementImplementor {
 
@@ -113,7 +133,9 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
             this.type = tableProxy.getImmutableType();
         } else if (table instanceof BaseTable) {
             this.table = table;
-            this.tableLikeImplementor = BaseTableImpl.of((BaseTableSymbol) table, null, null);
+            BaseTable rawBaseTable = BaseTableProxies.unwrap((BaseTable) table);
+            this.tableLikeImplementor =
+                    BaseTableImpl.of((BaseTableSymbol) rawBaseTable, null, null);
             this.type = null;
         } else {
             throw new IllegalArgumentException(
@@ -126,9 +148,9 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
     public <T extends TableLike<?>> T getTable() {
         TableLike<?> table = this.table;
         if (table == null) {
-            this.table = table = TableProxies.wrap((TableImplementor<?>)getTableLikeImplementor());
+            this.table = table = TableProxies.wrap((TableImplementor<?>) getTableLikeImplementor());
         }
-        return (T)table;
+        return (T) table;
     }
 
     public ImmutableType getType() {
@@ -139,7 +161,9 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
         TableLikeImplementor<?> tableLikeImplementor = this.tableLikeImplementor;
         if (tableLikeImplementor == null) {
             if (table instanceof BaseTable) {
-                this.tableLikeImplementor = BaseTableImpl.of((BaseTableSymbol) table, null, null);
+                BaseTable rawBaseTable = BaseTableProxies.unwrap((BaseTable) table);
+                this.tableLikeImplementor =
+                        BaseTableImpl.of((BaseTableSymbol) rawBaseTable, null, null);
             } else {
                 this.tableLikeImplementor = tableLikeImplementor =
                         TableImplementor.create(this, type);
@@ -160,7 +184,8 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
         return Collections.emptyList();
     }
 
-    protected void setHavingPredicates(List<Predicate> havingPredicates) {}
+    protected void setHavingPredicates(List<Predicate> havingPredicates) {
+    }
 
     protected List<Order> getOrders() {
         return Collections.emptyList();
@@ -214,7 +239,7 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
     @Override
     public boolean hasVirtualPredicate() {
         for (Predicate predicate : unfrozenPredicates()) {
-            if (((Ast)predicate).hasVirtualPredicate()) {
+            if (((Ast) predicate).hasVirtualPredicate()) {
                 return true;
             }
         }
@@ -231,7 +256,7 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
 
         if (tableLikeImplementor instanceof BaseTableImplementor) {
             TypedBaseQueryImplementor<?> typedBaseQueryImplementor =
-                    ((BaseTableImplementor)tableLikeImplementor).getQuery();
+                    ((BaseTableImplementor) tableLikeImplementor).getQuery();
             typedBaseQueryImplementor.resolveVirtualPredicate(ctx);
         }
 
@@ -308,12 +333,15 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
             @Nullable List<Selection<?>> selections,
             @Nullable QueryAnalysis queryAnalysis
     ) {
-        if (level != FilterLevel.IGNORE_ALL) {
+        if (hasGlobalFilters(level)) {
             applyGlobalFiltersImpl(new ApplyFilterVisitor(astContext, level, queryAnalysis), selections, null);
         }
     }
 
     public final void applyDataLoaderGlobalFilters(TableImplementor<?> table) {
+        if (!hasGlobalFilters(FilterLevel.DEFAULT)) {
+            return;
+        }
         AstContext astContext = new AstContext(sqlClient);
         ApplyFilterVisitor visitor = new ApplyFilterVisitor(astContext, FilterLevel.DEFAULT);
         for (Predicate predicate : unfrozenPredicates()) {
@@ -324,6 +352,19 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
         }
         getTableLikeImplementor();
         applyGlobalFiltersImpl(visitor, null, table);
+    }
+
+    private boolean hasGlobalFilters(FilterLevel level) {
+        if (level == FilterLevel.IGNORE_ALL) {
+            return false;
+        }
+        if (level != FilterLevel.IGNORE_USER_FILTERS &&
+                ((FilterManager) sqlClient.getFilters()).hasUserFilters()) {
+            return true;
+        }
+        return sqlClient
+                .getEntityManager()
+                .hasLogicalDeletedTypes(sqlClient.getMicroServiceName());
     }
 
     private void applyGlobalFiltersImpl(
@@ -340,18 +381,17 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
         astContext.pushStatement(this);
         try {
             if (start != null) {
-                applyGlobalFilerImpl(visitor, start);
+                applyGlobalFilterImpl(visitor, start);
             } else if (tableLikeImplementor instanceof TableImplementor<?>) {
-                applyGlobalFilerImpl(visitor, (TableImplementor<?>) tableLikeImplementor);
+                applyGlobalFilterImpl(visitor, (TableImplementor<?>) tableLikeImplementor);
             } else {
                 ((BaseTableImplementor) tableLikeImplementor)
                         .getQuery()
                         .applyGlobalFilters(astContext, visitor.level, visitor.getQueryAnalysis());
             }
-            int modCount = -1;
             __APPLY_STEP__:
-            while (modCount != modCount()) {
-                modCount = modCount();
+            while (true) {
+                int modCount = modCount();
                 if (selections != null) {
                     for (Selection<?> selection : selections) {
                         if (!visitor.isApplied(this, selection)) {
@@ -399,13 +439,14 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
                         visitor.apply(this, order);
                     }
                 }
+                break;
             }
         } finally {
             astContext.popStatement();
         }
     }
 
-    private void applyGlobalFilerImpl(ApplyFilterVisitor visitor, TableImplementor<?> table) {
+    private void applyGlobalFilterImpl(ApplyFilterVisitor visitor, TableImplementor<?> table) {
         FilterLevel level = visitor.level;
         if (level == FilterLevel.IGNORE_ALL || filterPredicates.get(table) != null) {
             return;
@@ -446,7 +487,7 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
     }
 
     @Override
-    public Filterable where(Predicate ... predicates) {
+    public Filterable where(Predicate... predicates) {
         validateMutable();
         for (Predicate predicate : predicates) {
             if (predicate != null) {
@@ -503,7 +544,7 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
         @Override
         public boolean visitSubQuery(TypedSubQuery<?> subQuery) {
             if (subQuery instanceof ConfigurableSubQueryImpl<?>) {
-                AbstractMutableStatementImpl statement = ((ConfigurableSubQueryImpl<?>)subQuery).getMutableQuery();
+                AbstractMutableStatementImpl statement = ((ConfigurableSubQueryImpl<?>) subQuery).getMutableQuery();
                 FilterManager.executing(((MutableSubQueryImpl) statement).filterOwner(), () -> {
                     statement.applyGlobalFiltersImpl(this, null, null);
                 });
@@ -528,9 +569,12 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
                 implementor = table.getTableLikeImplementor();
                 if (implementor instanceof TableImplementor<?>) {
                     TableImplementor<?> tableImplementor = (TableImplementor<?>) implementor;
-                    tableImplementor
-                            .getStatement()
-                            .applyGlobalFilerImpl(this, tableImplementor);
+                    // The base query already filters its selected entity. Descendant
+                    // joins belong to the outer query, but traversal must stop here.
+                    if (isBaseTableSelectionRoot(tableImplementor)) {
+                        break;
+                    }
+                    filterOwner(tableImplementor).applyGlobalFilterImpl(this, tableImplementor);
                 } else if (implementor instanceof BaseTableImplementor) {
                     ((BaseTableImplementor) implementor)
                             .getQuery()
@@ -538,6 +582,22 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
                 }
                 table = table.getParent();
             }
+        }
+
+        private boolean isBaseTableSelectionRoot(TableImplementor<?> table) {
+            BaseTableOwner owner = table.getBaseTableOwner();
+            if (owner == null) {
+                return false;
+            }
+            Selection<?> selection = owner.getBaseTable().getSelections().get(owner.getIndex());
+            return selection instanceof Table<?> &&
+                    TableProxies.resolve((Table<?>) selection, getAstContext()) == table;
+        }
+
+        private AbstractMutableStatementImpl filterOwner(TableImplementor<?> table) {
+            return table.getBaseTableOwner() != null ?
+                    getAstContext().getStatement() :
+                    table.getStatement();
         }
 
         @Nullable
@@ -598,9 +658,8 @@ public abstract class AbstractMutableStatementImpl implements FilterableImplemen
                                 field.getProp(),
                                 oldTableImplementor.getBaseTableOwner()
                         );
-                newTableImplementor
-                        .getStatement()
-                        .applyGlobalFilerImpl(ApplyFilterVisitor.this, newTableImplementor);
+                filterOwner(newTableImplementor)
+                        .applyGlobalFilterImpl(ApplyFilterVisitor.this, newTableImplementor);
                 tableImplementor = newTableImplementor;
                 return oldTableImplementor;
             }

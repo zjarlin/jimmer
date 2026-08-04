@@ -20,17 +20,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.*;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class EntityManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EntityManager.class);
-
-    private final ReadWriteLock reloadingLock = new ReentrantReadWriteLock();
 
     private volatile Data data;
 
@@ -162,11 +157,11 @@ public class EntityManager {
             );
         }
         map = Collections.unmodifiableMap(map);
-        Map<String, ImmutableType> springDevToolMap = new HashMap<>((map.size() * 4 + 2) / 3);
+        Map<String, ImmutableType> typeMapByClassName = new HashMap<>((map.size() * 4 + 2) / 3);
         for (ImmutableType type : map.keySet()) {
-            springDevToolMap.put(type.getJavaClass().getName(), type);
+            typeMapByClassName.put(type.getJavaClass().getName(), type);
         }
-        this.data = new Data(map, springDevToolMap);
+        this.data = new Data(map, typeMapByClassName);
     }
 
     public static EntityManager combine(EntityManager... entityManagers) {
@@ -252,6 +247,10 @@ public class EntityManager {
         return set;
     }
 
+    public boolean hasLogicalDeletedTypes(String microServiceName) {
+        return data.microServiceNamesWithLogicalDeletedTypes.contains(microServiceName);
+    }
+
     public List<ImmutableType> getImplementationTypes(ImmutableType type) {
         return info(type).implementationTypes;
     }
@@ -274,9 +273,10 @@ public class EntityManager {
     }
 
     private ImmutableTypeInfo info(ImmutableType type) {
+        Data data = this.data;
         ImmutableTypeInfo info = data.map.get(type);
         if (info == null) {
-            ImmutableType oldType = data.typeMapForSpringDevTools.get(type.getJavaClass().getName());
+            ImmutableType oldType = data.typeMapByClassName.get(type.getJavaClass().getName());
             if (oldType != null) {
                 LOGGER.info(
                         "You seem to be using spring-dev-tools (or other multi-ClassLoader technology), " +
@@ -293,7 +293,7 @@ public class EntityManager {
                             ex
                     );
                 }
-                info = data.map.get(type);
+                info = this.data.map.get(type);
             }
             if (info == null) {
                 throw new IllegalArgumentException(
@@ -304,32 +304,15 @@ public class EntityManager {
         return info;
     }
 
-    private void reload(ImmutableType immutableType) {
-
-        Lock lock;
-
-        (lock = reloadingLock.readLock()).lock();
-        try {
-            if (data.map.containsKey(immutableType)) {
-                return;
-            }
-        } finally {
-            lock.unlock();
+    private synchronized void reload(ImmutableType immutableType) {
+        if (data.map.containsKey(immutableType)) {
+            return;
         }
-
-        (lock = reloadingLock.writeLock()).lock();
-        try {
-            if (data.map.containsKey(immutableType)) {
-                return;
-            }
-            EntityManager newEntityManager = EntityManager.fromResources(
-                    immutableType.getJavaClass().getClassLoader(),
-                    null
-            );
-            data = newEntityManager.data;
-        } finally {
-            lock.unlock();
-        }
+        EntityManager newEntityManager = EntityManager.fromResources(
+                immutableType.getJavaClass().getClassLoader(),
+                null
+        );
+        data = newEntityManager.data;
     }
 
     private boolean isImplementationType(ImmutableType mappedSuperClass, ImmutableType type) {
@@ -639,16 +622,30 @@ public class EntityManager {
 
         final Map<ImmutableType, ImmutableTypeInfo> map;
 
-        final Map<String, ImmutableType> typeMapForSpringDevTools;
+        final Map<String, ImmutableType> typeMapByClassName;
+
+        final Set<String> microServiceNamesWithLogicalDeletedTypes;
 
         final MetaCache<Map<Key, Map<List<Object>, ImmutableType>>> typeMapCache =
                 new MetaCache<>(this::createTypeMap, 128);
 
         final Set<ImmutableProp> activeMiddleTableProps = new HashSet<>();
 
-        Data(Map<ImmutableType, ImmutableTypeInfo> map, Map<String, ImmutableType> typeMapForSpringDevTools) {
+        Data(Map<ImmutableType, ImmutableTypeInfo> map, Map<String, ImmutableType> typeMapByClassName) {
             this.map = map;
-            this.typeMapForSpringDevTools = typeMapForSpringDevTools;
+            this.typeMapByClassName = typeMapByClassName;
+            Set<String> microServiceNamesWithLogicalDeletedTypes = null;
+            for (ImmutableType type : map.keySet()) {
+                if (type.getLogicalDeletedInfo() != null) {
+                    if (microServiceNamesWithLogicalDeletedTypes == null) {
+                        microServiceNamesWithLogicalDeletedTypes = new HashSet<>();
+                    }
+                    microServiceNamesWithLogicalDeletedTypes.add(type.getMicroServiceName());
+                }
+            }
+            this.microServiceNamesWithLogicalDeletedTypes = microServiceNamesWithLogicalDeletedTypes != null ?
+                    microServiceNamesWithLogicalDeletedTypes :
+                    Collections.emptySet();
         }
 
         public Map<Key, Map<List<Object>, ImmutableType>> getTypeMap(MetadataStrategy strategy) {

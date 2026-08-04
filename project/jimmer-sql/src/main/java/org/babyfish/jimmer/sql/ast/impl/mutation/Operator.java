@@ -271,7 +271,7 @@ class Operator {
         SequenceIdGenerator sequenceIdGenerator = null;
         UserIdGenerator<?> userIdGenerator = null;
         if (batch.shape().getIdGetters().isEmpty()) {
-            IdGenerator idGenerator = sqlClient.getIdGenerator(tableType.getJavaClass());
+            IdGenerator idGenerator = sqlClient.getGeneratorContext().getIdGenerator(tableType);
             if (idGenerator instanceof SequenceIdGenerator) {
                 sequenceIdGenerator = (SequenceIdGenerator) idGenerator;
             } else if (idGenerator instanceof UserIdGenerator<?>) {
@@ -844,7 +844,7 @@ class Operator {
                     rootType,
                     oldType != targetType ? discriminatorProp : null,
                     discriminatorProp,
-                    DiscriminatorValues.of(oldType),
+                    inheritanceInfo.getDiscriminatorValue(oldType),
                     Collections.emptyList(),
                     true,
                     forceOneByOne,
@@ -1805,7 +1805,7 @@ class Operator {
         }
         SequenceIdGenerator sequenceIdGenerator = null;
         if (batch.shape().getIdGetters().isEmpty()) {
-            IdGenerator idGenerator = sqlClient.getIdGenerator(tableType.getJavaClass());
+            IdGenerator idGenerator = sqlClient.getGeneratorContext().getIdGenerator(tableType);
             if (idGenerator instanceof SequenceIdGenerator) {
                 sequenceIdGenerator = (SequenceIdGenerator) idGenerator;
             } else if (!(idGenerator instanceof IdentityIdGenerator)) {
@@ -1856,7 +1856,7 @@ class Operator {
 
         List<PropertyGetter> updatedGetters = new ArrayList<>();
         if (!ignoreUpdate) {
-            for (PropertyGetter getter : batch.shape().getGetters()) {
+            for (PropertyGetter getter : batch.shape().getColumnDefinitionGetters()) {
                 if (getter.isUpdatable(conflictProps, upsertMask)) {
                     updatedGetters.add(getter);
                 }
@@ -2818,11 +2818,6 @@ class Operator {
                 Map<ImmutableProp, List<PropertyGetter>> getterMap = shape.getGetterMap();
                 for (ImmutableProp keyProp : keyProps) {
                     List<PropertyGetter> getters = getterMap.get(keyProp);
-                    if (getters == null) {
-                        if (keyProp.isDiscriminator()) {
-                            getters = PropertyGetter.propertyGetters(ctx.options.getSqlClient(), keyProp);
-                        }
-                    }
                     if (getters == null) {
                         getters = PropertyGetter.propertyGetters(ctx.options.getSqlClient(), keyProp);
                     }

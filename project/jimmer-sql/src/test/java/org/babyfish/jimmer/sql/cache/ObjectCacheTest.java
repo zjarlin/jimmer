@@ -365,13 +365,13 @@ public class ObjectCacheTest extends AbstractQueryTest {
                     .findByIds(Client.class, Arrays.asList(200L, 201L));
             Assertions.assertEquals(Organization.class, ((ImmutableSpi) clients.get(0)).__type().getJavaClass());
             Assertions.assertEquals(Person.class, ((ImmutableSpi) clients.get(1)).__type().getJavaClass());
-            assertLoadState(clients.get(0), "id", "name", "description");
-            assertLoadState(clients.get(1), "id", "name", "description");
+            assertLoadState(clients.get(0), "type", "id", "name", "description");
+            assertLoadState(clients.get(1), "type", "id", "name", "description");
             return clients;
         }, ctx -> ctx.rows(
                 "[" +
-                        "--->{\"id\":200,\"name\":\"Globex\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}," +
-                        "--->{\"id\":201,\"name\":\"Alice\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}" +
+                        "--->{\"type\":\"ORG\",\"id\":200,\"name\":\"Globex\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}," +
+                        "--->{\"type\":\"Person\",\"id\":201,\"name\":\"Alice\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}" +
                         "]"
         ));
     }
@@ -384,7 +384,7 @@ public class ObjectCacheTest extends AbstractQueryTest {
                     .forConnection(con)
                     .findById(Client.class, 200L);
             Assertions.assertInstanceOf(Organization.class, cachedClient);
-            assertLoadState(cachedClient, "id", "name", "description");
+            assertLoadState(cachedClient, "type", "id", "name", "description");
             List<Client> clients = sqlClient
                     .getEntities()
                     .forConnection(con)
@@ -393,7 +393,7 @@ public class ObjectCacheTest extends AbstractQueryTest {
             for (Client client : clients) {
                 Assertions.assertInstanceOf(Organization.class, client);
             }
-            assertLoadState(clients, "id", "name", "description");
+            assertLoadState(clients, "type", "id", "name", "description");
             return clients;
         }, ctx -> {
             ctx.sql(
@@ -420,8 +420,8 @@ public class ObjectCacheTest extends AbstractQueryTest {
             ctx.statement(1).variables("ORG", "Person", 202L);
             ctx.rows(
                     "[" +
-                            "--->{\"id\":200,\"name\":\"Globex\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}," +
-                            "--->{\"id\":202,\"name\":\"Initech\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}" +
+                            "--->{\"type\":\"ORG\",\"id\":200,\"name\":\"Globex\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}," +
+                            "--->{\"type\":\"ORG\",\"id\":202,\"name\":\"Initech\",\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"}" +
                             "]"
             );
         });
@@ -448,28 +448,16 @@ public class ObjectCacheTest extends AbstractQueryTest {
                             "where tb_1_.ID = ? and tb_1_.CLIENT_TYPE = ?"
                     );
                 }
-                if (useSql) { // BUG！discriminator is loaded first time, but is not loaded at second time.
-                    ctx.rows(
-                            "[{" +
-                            "--->\"type\":\"ORG\"," +
-                            "--->\"id\":200," +
-                            "--->\"name\":\"Globex\"," +
-                            "--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
-                            "--->\"taxCode\":\"GLOBEX-001\"," +
-                            "--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
-                            "}]"
-                    );
-                } else {
-                    ctx.rows(
-                            "[{" +
-                                    "--->\"id\":200," +
-                                    "--->\"name\":\"Globex\"," +
-                                    "--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
-                                    "--->\"taxCode\":\"GLOBEX-001\"," +
-                                    "--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
-                                    "}]"
-                    );
-                }
+                ctx.rows(
+                        "[{" +
+                        "--->\"type\":\"ORG\"," +
+                        "--->\"id\":200," +
+                        "--->\"name\":\"Globex\"," +
+                        "--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
+                        "--->\"taxCode\":\"GLOBEX-001\"," +
+                        "--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
+                        "}]"
+                );
             });
         }
     }
@@ -497,45 +485,25 @@ public class ObjectCacheTest extends AbstractQueryTest {
                                     "where tb_1_.ID in (?, ?) and tb_1_.CLIENT_TYPE = ?"
                     );
                 }
-                if (useSql) { // BUG！discriminator is loaded first time, but is not loaded at second time.
-                    ctx.rows(
-                            "[" +
-                                    "--->{" +
-                                    "--->--->\"type\":\"ORG\"," +
-                                    "--->--->\"id\":200," +
-                                    "--->--->\"name\":\"Globex\"," +
-                                    "--->--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
-                                    "--->--->\"taxCode\":\"GLOBEX-001\"," +
-                                    "--->--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
-                                    "--->},{" +
-                                    "--->--->\"type\":\"ORG\"," +
-                                    "--->--->\"id\":202," +
-                                    "--->--->\"name\":\"Initech\"," +
-                                    "--->--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
-                                    "--->--->\"taxCode\":\"INI-001\"," +
-                                    "--->--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
-                                    "--->}" +
-                                    "]"
-                    );
-                } else {
-                    ctx.rows(
-                            "[" +
-                                    "--->{" +
-                                    "--->--->\"id\":200," +
-                                    "--->--->\"name\":\"Globex\"," +
-                                    "--->--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
-                                    "--->--->\"taxCode\":\"GLOBEX-001\"," +
-                                    "--->--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
-                                    "--->},{" +
-                                    "--->--->\"id\":202," +
-                                    "--->--->\"name\":\"Initech\"," +
-                                    "--->--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
-                                    "--->--->\"taxCode\":\"INI-001\"," +
-                                    "--->--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
-                                    "--->}" +
-                                    "]"
-                    );
-                }
+                ctx.rows(
+                        "[" +
+                                "--->{" +
+                                "--->--->\"type\":\"ORG\"," +
+                                "--->--->\"id\":200," +
+                                "--->--->\"name\":\"Globex\"," +
+                                "--->--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
+                                "--->--->\"taxCode\":\"GLOBEX-001\"," +
+                                "--->--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
+                                "--->},{" +
+                                "--->--->\"type\":\"ORG\"," +
+                                "--->--->\"id\":202," +
+                                "--->--->\"name\":\"Initech\"," +
+                                "--->--->\"description\":\"DEFAULT_CLIENT_DESCRIPTION\"," +
+                                "--->--->\"taxCode\":\"INI-001\"," +
+                                "--->--->\"status\":\"DEFAULT_ORGANIZATION_STATUS\"" +
+                                "--->}" +
+                                "]"
+                );
             });
         }
     }

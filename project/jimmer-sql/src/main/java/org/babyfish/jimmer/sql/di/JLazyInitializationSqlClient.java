@@ -1,45 +1,28 @@
 package org.babyfish.jimmer.sql.di;
 
-import org.babyfish.jimmer.sql.*;
-import org.babyfish.jimmer.sql.meta.*;
-import org.babyfish.jimmer.sql.runtime.*;
-
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.babyfish.jimmer.sql.JSqlClient;
+import org.babyfish.jimmer.sql.runtime.JSqlClientImplementor;
 
 public abstract class JLazyInitializationSqlClient extends AbstractJSqlClientDelegate {
 
-    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
-
-    private JSqlClientImplementor sqlClient;
+    private volatile JSqlClientImplementor sqlClient;
 
     protected final JSqlClientImplementor sqlClient() {
-        Lock lock;
-        JSqlClientImplementor sqlClient;
-
-        (lock = readWriteLock.readLock()).lock();
-        try {
-            sqlClient = this.sqlClient;
-        } finally {
-            lock.unlock();
-        }
-
+        JSqlClientImplementor sqlClient = this.sqlClient;
         if (sqlClient == null) {
-            (lock = readWriteLock.writeLock()).lock();
-            try {
-                sqlClient = this.sqlClient;
-                if (sqlClient == null) {
-                    JSqlClient.Builder builder = createBuilder();
-                    sqlClient = (JSqlClientImplementor) builder.build();
-                    afterCreate(sqlClient);
-                    this.sqlClient = sqlClient;
-                }
-            } finally {
-                lock.unlock();
-            }
+            sqlClient = initialize();
         }
+        return sqlClient;
+    }
 
+    private synchronized JSqlClientImplementor initialize() {
+        JSqlClientImplementor sqlClient = this.sqlClient;
+        if (sqlClient == null) {
+            JSqlClient.Builder builder = createBuilder();
+            sqlClient = (JSqlClientImplementor) builder.build();
+            afterCreate(sqlClient);
+            this.sqlClient = sqlClient;
+        }
         return sqlClient;
     }
 
@@ -47,10 +30,8 @@ public abstract class JLazyInitializationSqlClient extends AbstractJSqlClientDel
 
     protected void afterCreate(JSqlClientImplementor sqlClient) {}
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T extends SqlContext> T unwrap() {
-        return (T) sqlClient();
+    public JSqlClientImplementor unwrap() {
+        return sqlClient();
     }
 
     public static JSqlClient.Builder newBuilder() {

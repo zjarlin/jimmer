@@ -58,7 +58,7 @@ public interface BasicBookDraft extends BasicBook, Draft {
 
         public static final ImmutableType TYPE = ImmutableType
             .newBuilder(
-                "0.11.2",
+                "0.11.6",
                 BasicBook.class,
                 Collections.emptyList(),
                 (ctx, base) -> new DraftImpl(ctx, (BasicBook)base)
