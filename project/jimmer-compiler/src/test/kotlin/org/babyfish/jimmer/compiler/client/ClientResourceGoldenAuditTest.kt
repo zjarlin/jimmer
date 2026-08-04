@@ -23,6 +23,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
@@ -75,7 +76,7 @@ class ClientResourceGoldenAuditTest {
     private fun compileJava(
         sources: Map<String, String>,
         additionalProcessors: List<javax.annotation.processing.Processor> = emptyList(),
-    ): String {
+    ): ByteArray {
         val projectDir = createTempDirectory(prefix = "client-golden-apt").toFile()
         val sourceDir = projectDir.resolve("src/main/java")
         val classesDir = projectDir.resolve("build/classes").apply(File::mkdirs)
@@ -115,13 +116,13 @@ class ClientResourceGoldenAuditTest {
         )
         val resource = classesDir.resolve("META-INF/jimmer/client")
         assertTrue(resource.isFile, "Missing APT client resource: ${resource.absolutePath}")
-        return resource.readText()
+        return resource.readBytes()
     }
 
     private fun compileKotlin(
         source: String,
         additionalProviders: List<SymbolProcessorProvider> = emptyList(),
-    ): String {
+    ): ByteArray {
         val projectDir = createTempDirectory(prefix = "client-golden-ksp").toFile()
         val sourceFile = projectDir.resolve("src/main/kotlin/audit/Source.kt").also { file ->
             file.parentFile.mkdirs()
@@ -154,14 +155,14 @@ class ClientResourceGoldenAuditTest {
         assertEquals(KotlinSymbolProcessing.ExitCode.OK, exitCode, logger.text())
         val resource = resourceOutputDir.resolve("META-INF/jimmer/client")
         assertTrue(resource.isFile, "Missing KSP client resource: ${resource.absolutePath}\n${logger.text()}")
-        return resource.readText()
+        return resource.readBytes()
     }
 
-    private fun assertGolden(name: String, actual: String) {
-        val expected = requireNotNull(javaClass.getResource("/client/golden/$name")) {
+    private fun assertGolden(name: String, actual: ByteArray) {
+        val expected = requireNotNull(javaClass.getResourceAsStream("/client/golden/$name")) {
             "Missing client golden resource: $name"
-        }.readText().removeSuffix("\n")
-        assertEquals(expected, actual)
+        }.use { stream -> stream.readBytes() }
+        assertContentEquals(expected, actual, name)
     }
 
     private fun testClasspath(): String = testClasspathFiles().joinToString(File.pathSeparator)
