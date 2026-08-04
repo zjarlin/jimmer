@@ -3,7 +3,6 @@ package org.babyfish.jimmer.ksp.util
 import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import org.babyfish.jimmer.ksp.immutable.generator.GENERATED_BY_CLASS_NAME
-import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 
 internal fun generatedAnnotation(): AnnotationSpec =
     AnnotationSpec.builder(GENERATED_BY_CLASS_NAME)
@@ -13,9 +12,6 @@ internal fun generatedAnnotation(className: ClassName): AnnotationSpec =
     AnnotationSpec.builder(GENERATED_BY_CLASS_NAME)
         .addMember("type = %T::class", className)
         .build()
-
-internal fun generatedAnnotation(type: ImmutableType): AnnotationSpec =
-    generatedAnnotation(type.className)
 
 fun generatedAnnotation(sourcePath: String, mutable: Boolean): AnnotationSpec =
     AnnotationSpec

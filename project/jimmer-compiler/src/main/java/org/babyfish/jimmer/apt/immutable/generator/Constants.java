@@ -2,7 +2,6 @@ package org.babyfish.jimmer.apt.immutable.generator;
 
 import com.squareup.javapoet.ClassName;
 import org.babyfish.jimmer.*;
-import org.babyfish.jimmer.apt.immutable.meta.ImmutableProp;
 import org.babyfish.jimmer.client.TNullable;
 import org.babyfish.jimmer.impl.util.DtoPropAccessor;
 import org.babyfish.jimmer.ClientException;
@@ -518,23 +517,4 @@ public class Constants {
     public static final String FROZEN_EXCEPTION_MESSAGE =
             "The current draft has been resolved so it cannot be modified";
 
-    public static String regexpPatternFieldName(ImmutableProp prop, int index) {
-        return "__" + Strings.upper(prop.getName()) + "_PATTER" + (index == 0 ? "" : "_" + index);
-    }
-
-    public static String validatorFieldName(ClassName annotationClassName) {
-        return "__" +
-                Strings.upper(annotationClassName.simpleName()) +
-                "_VALIDATOR_" +
-                Math.abs(annotationClassName.hashCode());
-    }
-
-    public static String validatorFieldName(ImmutableProp prop, ClassName annotationClassName) {
-        return "__" +
-                Strings.upper(prop.getName()) +
-                "_" +
-                Strings.upper(annotationClassName.simpleName()) +
-                "_VALIDATOR_" +
-                Math.abs(annotationClassName.hashCode());
-    }
 }

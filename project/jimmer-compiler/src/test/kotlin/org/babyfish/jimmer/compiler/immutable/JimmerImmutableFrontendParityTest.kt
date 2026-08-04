@@ -515,8 +515,20 @@ class JimmerImmutableFrontendParityTest {
             aptStatus.defaultContract,
         )
         assertEquals("BASE_STATUS", aptStatus.annotationString(COLUMN, "name"))
+        assertEquals("child", aptStatus.annotationString(LsiSymbolId.type("demo.Marker"), "value"))
+        assertTrue(
+            aptStatus.annotations.any { annotation ->
+                annotation.type == LsiSymbolId.type("demo.ParentMarker")
+            }
+        )
         assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == DEFAULT })
         assertEquals(1, aptStatus.annotations.count { annotation -> annotation.type == COLUMN })
+        assertEquals(
+            1,
+            aptStatus.annotations.count { annotation ->
+                annotation.type == LsiSymbolId.type("demo.Marker")
+            },
+        )
         assertFalse(aptStatus.annotations.any { annotation -> annotation.type == JAVA_OVERRIDE })
 
         val draftType = aptDraftSchema.typesById.getValue(LsiSymbolId.type("demo.OverrideEntity"))
@@ -668,6 +680,304 @@ class JimmerImmutableFrontendParityTest {
         assertNull(ksp.schema)
         assertEquals(apt.diagnostic, ksp.diagnostic)
         assertTrue(apt.diagnostic.orEmpty().contains("mapped superclass of an entity"))
+    }
+
+    @Test
+    fun `real apt and ksp frontends reject invalid property overrides identically`() {
+        assertOverrideRejectionParity(
+            label = "mapped superclass override",
+            javaSource = """
+                package demo;
+
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface RootBase {
+                    String name();
+                }
+
+                @MappedSuperclass
+                interface InvalidBase extends RootBase {
+                    @Override
+                    String name();
+                }
+            """.trimIndent(),
+            kotlinSource = """
+                package demo
+
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface RootBase {
+                    val name: String
+                }
+
+                @MappedSuperclass
+                interface InvalidBase : RootBase {
+                    override val name: String
+                }
+            """.trimIndent(),
+            expected = "mapped superclass of an entity",
+        )
+        assertOverrideRejectionParity(
+            label = "entity override",
+            javaSource = """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Discriminator;
+                import org.babyfish.jimmer.sql.DiscriminatorValue;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.Inheritance;
+                import org.babyfish.jimmer.sql.InheritanceType;
+
+                @Entity
+                @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+                interface RootEntity {
+                    @Id
+                    long id();
+
+                    @Discriminator
+                    String type();
+
+                    String name();
+                }
+
+                @Entity
+                @DiscriminatorValue("DERIVED")
+                interface DerivedEntity extends RootEntity {
+                    @Override
+                    String name();
+                }
+            """.trimIndent(),
+            kotlinSource = """
+                package demo
+
+                import org.babyfish.jimmer.sql.Discriminator
+                import org.babyfish.jimmer.sql.DiscriminatorValue
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.Inheritance
+                import org.babyfish.jimmer.sql.InheritanceType
+
+                @Entity
+                @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+                interface RootEntity {
+                    @Id
+                    val id: Long
+
+                    @Discriminator
+                    val type: String
+
+                    val name: String
+                }
+
+                @Entity
+                @DiscriminatorValue("DERIVED")
+                interface DerivedEntity : RootEntity {
+                    override val name: String
+                }
+            """.trimIndent(),
+            expected = "mapped superclass of an entity",
+        )
+        assertOverrideRejectionParity(
+            label = "generic resolved type change",
+            javaSource = """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface GenericBase<T extends CharSequence> {
+                    T value();
+                }
+
+                @Entity
+                interface GenericMismatchEntity extends GenericBase<CharSequence> {
+                    @Id
+                    long id();
+
+                    @Override
+                    String value();
+                }
+            """.trimIndent(),
+            kotlinSource = """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface GenericBase<T : CharSequence> {
+                    val value: T
+                }
+
+                @Entity
+                interface GenericMismatchEntity : GenericBase<CharSequence> {
+                    @Id
+                    val id: Long
+
+                    override val value: String
+                }
+            """.trimIndent(),
+            expected = "resolved type",
+        )
+        assertOverrideRejectionParity(
+            label = "list scalar category change",
+            javaSource = """
+                package demo;
+
+                import java.util.List;
+                import org.babyfish.jimmer.Scalar;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface ListBase {
+                    List<String> tags();
+                }
+
+                @Entity
+                interface ListMismatchEntity extends ListBase {
+                    @Id
+                    long id();
+
+                    @Override
+                    @Scalar
+                    List<String> tags();
+                }
+            """.trimIndent(),
+            kotlinSource = """
+                package demo
+
+                import org.babyfish.jimmer.Scalar
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface ListBase {
+                    val tags: List<String>
+                }
+
+                @Entity
+                interface ListMismatchEntity : ListBase {
+                    @Id
+                    val id: Long
+
+                    @Scalar
+                    override val tags: List<String>
+                }
+            """.trimIndent(),
+            expected = "list category",
+        )
+        assertOverrideRejectionParity(
+            label = "primary mapping category change",
+            javaSource = """
+                package demo;
+
+                import org.babyfish.jimmer.Formula;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface ScalarBase {
+                    String name();
+                }
+
+                @Entity
+                interface FormulaMismatchEntity extends ScalarBase {
+                    @Id
+                    long id();
+
+                    @Override
+                    @Formula(sql = "NAME")
+                    String name();
+                }
+            """.trimIndent(),
+            kotlinSource = """
+                package demo
+
+                import org.babyfish.jimmer.Formula
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface ScalarBase {
+                    val name: String
+                }
+
+                @Entity
+                interface FormulaMismatchEntity : ScalarBase {
+                    @Id
+                    val id: Long
+
+                    @Formula(sql = "NAME")
+                    override val name: String
+                }
+            """.trimIndent(),
+            expected = "primary mapping annotation",
+        )
+        assertOverrideRejectionParity(
+            label = "formula kind change",
+            javaSource = """
+                package demo;
+
+                import org.babyfish.jimmer.Formula;
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+                import org.babyfish.jimmer.sql.MappedSuperclass;
+
+                @MappedSuperclass
+                interface SqlFormulaBase {
+                    @Formula(sql = "NAME")
+                    String name();
+                }
+
+                @Entity
+                interface LanguageFormulaEntity extends SqlFormulaBase {
+                    @Id
+                    long id();
+
+                    @Override
+                    @Formula(dependencies = "id")
+                    default String name() {
+                        return "";
+                    }
+                }
+            """.trimIndent(),
+            kotlinSource = """
+                package demo
+
+                import org.babyfish.jimmer.Formula
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+                import org.babyfish.jimmer.sql.MappedSuperclass
+
+                @MappedSuperclass
+                interface SqlFormulaBase {
+                    @Formula(sql = "NAME")
+                    val name: String
+                }
+
+                @Entity
+                interface LanguageFormulaEntity : SqlFormulaBase {
+                    @Id
+                    val id: Long
+
+                    @Formula(dependencies = ["id"])
+                    override val name: String
+                        get() = ""
+                }
+            """.trimIndent(),
+            expected = "formula kind",
+        )
     }
 
     @Test
@@ -2137,6 +2447,24 @@ class JimmerImmutableFrontendParityTest {
         return frontendResult
     }
 
+    private fun assertOverrideRejectionParity(
+        label: String,
+        javaSource: String,
+        kotlinSource: String,
+        expected: String,
+    ) {
+        val apt = compileApt(javaSource)
+        val ksp = compileKsp(kotlinSource)
+
+        assertNull(apt.schema, "$label produced an APT schema")
+        assertNull(ksp.schema, "$label produced a KSP schema")
+        assertEquals(apt.diagnostic, ksp.diagnostic, label)
+        assertTrue(
+            apt.diagnostic.orEmpty().contains(expected),
+            "$label: ${apt.diagnostic}",
+        )
+    }
+
     private fun compileKsp(
         source: String,
         libraries: List<File> = emptyList(),
@@ -2719,14 +3047,30 @@ class JimmerImmutableFrontendParityTest {
         val OVERRIDDEN_PROPERTY_JAVA_SOURCE = """
             package demo;
 
+            import java.lang.annotation.ElementType;
+            import java.lang.annotation.Retention;
+            import java.lang.annotation.RetentionPolicy;
+            import java.lang.annotation.Target;
             import org.babyfish.jimmer.sql.Column;
             import org.babyfish.jimmer.sql.Default;
             import org.babyfish.jimmer.sql.Entity;
             import org.babyfish.jimmer.sql.Id;
             import org.babyfish.jimmer.sql.MappedSuperclass;
 
+            @Retention(RetentionPolicy.RUNTIME)
+            @Target(ElementType.METHOD)
+            @interface Marker {
+                String value();
+            }
+
+            @Retention(RetentionPolicy.RUNTIME)
+            @Target(ElementType.METHOD)
+            @interface ParentMarker {}
+
             @MappedSuperclass
             interface GenericStatusBase<T extends CharSequence> {
+                @Marker("parent")
+                @ParentMarker
                 @Default("0")
                 @Column(name = "BASE_STATUS")
                 T getStatus();
@@ -2738,6 +3082,7 @@ class JimmerImmutableFrontendParityTest {
                 long getId();
 
                 @Override
+                @Marker("child")
                 @Default("1")
                 String getStatus();
             }
@@ -2752,8 +3097,18 @@ class JimmerImmutableFrontendParityTest {
             import org.babyfish.jimmer.sql.Id
             import org.babyfish.jimmer.sql.MappedSuperclass
 
+            @Retention(AnnotationRetention.RUNTIME)
+            @Target(AnnotationTarget.PROPERTY_GETTER)
+            annotation class Marker(val value: String)
+
+            @Retention(AnnotationRetention.RUNTIME)
+            @Target(AnnotationTarget.PROPERTY_GETTER)
+            annotation class ParentMarker
+
             @MappedSuperclass
             interface GenericStatusBase<T : CharSequence> {
+                @get:Marker("parent")
+                @get:ParentMarker
                 @Default("0")
                 @Column(name = "BASE_STATUS")
                 val status: T
@@ -2764,6 +3119,7 @@ class JimmerImmutableFrontendParityTest {
                 @Id
                 val id: Long
 
+                @get:Marker("child")
                 @Default("1")
                 override val status: String
             }
