@@ -8,6 +8,8 @@ plugins {
 
 dependencies {
     implementation(projects.jimmerCompilerCore)
+    implementation(projects.lsiApt)
+    implementation(projects.lsiKsp)
     implementation(projects.lsiPoet)
     implementation(projects.lsiPoetJavapoet)
     implementation(projects.lsiPoetKotlinpoet)
@@ -18,7 +20,6 @@ dependencies {
     implementation(projects.jimmerDtoCompiler)
 
     implementation(libs.kotlin.stdlib)
-    implementation(libs.kotlin.metadata.jvm)
     implementation(libs.ksp.symbolProcessing.api)
     implementation(libs.spring.core)
     implementation(libs.intellij.annotations)

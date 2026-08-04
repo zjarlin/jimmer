@@ -23,7 +23,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
+import org.babyfish.jimmer.compiler.ksp.KspLsiCompilerDriver
 import site.addzero.lsi.core.LsiSymbolId
 
 class JimmerDtoKspLifecycleTest {

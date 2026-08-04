@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.tuple
 
+import site.addzero.lsi.jimmer.toJimmerLsiFrontendOptions
+
 import com.google.devtools.ksp.impl.KotlinSymbolProcessing
 import com.google.devtools.ksp.processing.KSPJvmConfig
 import com.google.devtools.ksp.processing.KSPLogger
@@ -26,9 +28,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
 import org.babyfish.jimmer.compiler.ksp.JimmerProcessorProvider
-import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
-import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
-import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
+import site.addzero.lsi.apt.toLsiWorkspace
+import site.addzero.lsi.ksp.toLsiWorkspace
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.tuple.normalizedSnapshot
 import site.addzero.lsi.jimmer.tuple.toTypedTupleSchema
@@ -144,7 +145,7 @@ class TypedTupleCompilerParityTest {
             if (!roundEnvironment.processingOver()) {
                 workspaces += roundEnvironment.toLsiWorkspace(
                     processingEnv,
-                    LsiFrontendOptions.from(processingEnv.options),
+                    processingEnv.options.toJimmerLsiFrontendOptions(),
                 )
             }
             return false
@@ -157,7 +158,7 @@ class TypedTupleCompilerParityTest {
         override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
             return object : SymbolProcessor {
                 override fun process(resolver: Resolver): List<KSAnnotated> {
-                    workspaces += resolver.toLsiWorkspace(LsiFrontendOptions.from(environment.options))
+                    workspaces += resolver.toLsiWorkspace(environment.options.toJimmerLsiFrontendOptions())
                     return emptyList()
                 }
             }

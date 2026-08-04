@@ -4,6 +4,8 @@ include(
     "jimmer-core",
     "jimmer-mapstruct-apt",
     "lsi-core",
+    "lsi-apt",
+    "lsi-ksp",
     "lsi-poet",
     "lsi-poet-javapoet",
     "lsi-poet-kotlinpoet",

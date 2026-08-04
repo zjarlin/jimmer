@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.jimmer.toJimmerLsiFrontendOptions
+
 import com.google.devtools.ksp.impl.KotlinSymbolProcessing
 import com.google.devtools.ksp.processing.KSPJvmConfig
 import com.google.devtools.ksp.processing.KSPLogger
@@ -37,9 +39,8 @@ import site.addzero.lsi.jimmer.fingerprint
 import site.addzero.lsi.jimmer.normalizedSnapshot
 import site.addzero.lsi.jimmer.jimmerTypeSignature
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
-import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
-import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
-import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
+import site.addzero.lsi.apt.toLsiWorkspace
+import site.addzero.lsi.ksp.toLsiWorkspace
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -340,7 +341,7 @@ class JimmerDtoFrontendParityTest {
             if (!roundEnvironment.processingOver()) {
                 workspaces += roundEnvironment.toLsiWorkspace(
                     processingEnv,
-                    LsiFrontendOptions.from(processingEnv.options),
+                    processingEnv.options.toJimmerLsiFrontendOptions(),
                 )
             }
             return false
@@ -353,7 +354,7 @@ class JimmerDtoFrontendParityTest {
         override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
             return object : SymbolProcessor {
                 override fun process(resolver: Resolver): List<KSAnnotated> {
-                    workspaces += resolver.toLsiWorkspace(LsiFrontendOptions.from(environment.options))
+                    workspaces += resolver.toLsiWorkspace(environment.options.toJimmerLsiFrontendOptions())
                     return emptyList()
                 }
             }

@@ -22,7 +22,7 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
+import org.babyfish.jimmer.compiler.apt.AptLsiCompilerDriver
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.dto.DtoConfigContract
 

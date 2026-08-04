@@ -5,7 +5,6 @@ import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
-import org.babyfish.jimmer.compiler.lsi.ksp.KspLsiCompilerDriver
 
 class JimmerProcessorProvider : SymbolProcessorProvider {
 

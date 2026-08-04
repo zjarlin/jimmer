@@ -3,9 +3,9 @@ package org.babyfish.jimmer.compiler.apt
 import org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
-import org.babyfish.jimmer.compiler.lsi.apt.AptLsiCompilerDriver
 import org.babyfish.jimmer.dto.compiler.DtoAstException
 import org.babyfish.jimmer.sql.EnableDtoGeneration
+import site.addzero.lsi.jimmer.JIMMER_KEEP_IS_PREFIX_OPTION
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
@@ -91,7 +91,7 @@ class JimmerProcessor : AbstractProcessor() {
             "jimmer.excludedUserAnnotationPrefixes",
             "jimmer.immutable.isModuleRequired",
             "jimmer.jackson3",
-            "jimmer.keepIsPrefix",
+            JIMMER_KEEP_IS_PREFIX_OPTION,
             "jimmer.source.excludes",
             "jimmer.source.includes",
         )

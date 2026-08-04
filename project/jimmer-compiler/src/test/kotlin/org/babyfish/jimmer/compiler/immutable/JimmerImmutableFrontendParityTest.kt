@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.toJimmerLsiFrontendOptions
+
 import site.addzero.lsi.jimmer.ApplicationDefaultStrategy
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
@@ -47,9 +49,8 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.lsi.LsiFrontendOptions
-import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
-import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
+import site.addzero.lsi.apt.toLsiWorkspace
+import site.addzero.lsi.ksp.toLsiWorkspace
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.core.LsiSymbolId
@@ -2638,7 +2639,7 @@ class JimmerImmutableFrontendParityTest {
             }
             val workspace = roundEnvironment.toLsiWorkspace(
                 processingEnv,
-                LsiFrontendOptions.from(emptyMap()),
+                emptyMap<String, String>().toJimmerLsiFrontendOptions(),
             )
             capture.freeze(workspace)
             capture.diagnostic?.let { diagnostic ->
@@ -2658,7 +2659,7 @@ class JimmerImmutableFrontendParityTest {
                     if (capture.completed) {
                         return emptyList()
                     }
-                    val workspace = resolver.toLsiWorkspace(LsiFrontendOptions.from(emptyMap()))
+                    val workspace = resolver.toLsiWorkspace(emptyMap<String, String>().toJimmerLsiFrontendOptions())
                     capture.freeze(workspace)
                     capture.diagnostic?.let { diagnostic ->
                         environment.logger.error(diagnostic)
