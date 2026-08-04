@@ -21,6 +21,7 @@ import javax.tools.StandardLocation
 import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.apt.JimmerProcessor
@@ -47,8 +48,8 @@ class TransactionalCompilerParityTest {
         val kspSchema = ksp.sourceWorkspace().toTransactionalSchema()
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
 
-        assertEquals(golden("parity/ServiceATx.java"), apt.generatedSource())
-        assertEquals(golden("parity/ServiceATx.kt"), ksp.generatedSource())
+        assertContentEquals(golden("parity/ServiceATx.java"), apt.generatedSource())
+        assertContentEquals(golden("parity/ServiceATx.kt"), ksp.generatedSource())
     }
 
     private fun compileApt(source: String): AptCompilationResult {
@@ -198,10 +199,10 @@ class TransactionalCompilerParityTest {
             return workspaces.first { workspace -> workspace[SERVICE_ID] != null }
         }
 
-        fun generatedSource(): String {
+        fun generatedSource(): ByteArray {
             val file = generatedDir.resolve(JAVA_GENERATED_PATH)
             assertTrue(file.isFile, "Missing generated Transactional source: ${file.absolutePath}")
-            return file.readText()
+            return file.readBytes()
         }
     }
 
@@ -215,15 +216,15 @@ class TransactionalCompilerParityTest {
             return workspaces.first { workspace -> workspace[SERVICE_ID] != null }
         }
 
-        fun generatedSource(): String {
+        fun generatedSource(): ByteArray {
             val file = kotlinOutputDir.resolve(KOTLIN_GENERATED_PATH)
             assertTrue(file.isFile, "Missing generated Transactional source: ${file.absolutePath}\n${logger.text()}")
-            return file.readText()
+            return file.readBytes()
         }
     }
 
-    private fun golden(path: String): String {
-        return requireNotNull(javaClass.getResource("/transactional/$path")).readText()
+    private fun golden(path: String): ByteArray {
+        return requireNotNull(javaClass.getResource("/transactional/$path")).readBytes()
     }
 
     private fun DiagnosticCollector<JavaFileObject>.errorMessage(): String {

@@ -10,6 +10,7 @@ import javax.tools.ToolProvider
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -58,7 +59,7 @@ class TransactionalRendererTest {
             schema.toLsiPoetArtifacts(workspace).single()
         )
 
-        assertEquals(golden("ServiceATx.java"), artifact.content)
+        assertContentEquals(golden("ServiceATx.java"), artifact.content.encodeToByteArray())
         assertEquals(setOf(JAVA_SERVICE_ID), artifact.originatingSymbols)
         assertEquals(workspace.sources.toSet(), artifact.originatingSources)
         assertTransactionalDependencies(schema.types.single(), artifact.dependencySymbols)
@@ -73,7 +74,7 @@ class TransactionalRendererTest {
             schema.toLsiPoetArtifacts(workspace).single()
         )
 
-        assertEquals(golden("ServiceATx.kt"), artifact.content)
+        assertContentEquals(golden("ServiceATx.kt"), artifact.content.encodeToByteArray())
         assertEquals(setOf(KOTLIN_SERVICE_ID), artifact.originatingSymbols)
         assertEquals(workspace.sources.toSet(), artifact.originatingSources)
         assertTransactionalDependencies(schema.types.single(), artifact.dependencySymbols)
@@ -555,8 +556,8 @@ class TransactionalRendererTest {
         )
     }
 
-    private fun golden(name: String): String {
-        return requireNotNull(javaClass.getResource("/transactional/$name")).readText()
+    private fun golden(name: String): ByteArray {
+        return requireNotNull(javaClass.getResource("/transactional/$name")).readBytes()
     }
 
     private fun compileJava(content: String) {
