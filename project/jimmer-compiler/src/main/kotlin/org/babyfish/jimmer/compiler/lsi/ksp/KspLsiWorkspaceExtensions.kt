@@ -31,6 +31,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDeclaration
+import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiEnumEntry
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFileAnnotationScope
@@ -250,6 +251,9 @@ internal class KspLsiWorkspaceBuilder(
                     }
                 }
                 .filterNot { superType -> superType.declarationId == typeId }
+                .filterNot { superType ->
+                    declaration.classKind.isImplicitObjectSuperType(superType)
+                }
                 .distinct()
                 .toList()
             entries[typeId] = LsiTypeHierarchyEntry(
@@ -394,7 +398,10 @@ internal class KspLsiWorkspaceBuilder(
             superTypes = typeDeclaration.superTypes
                 .map { type -> typeContext.toLsiType(type, typeParameterIds) }
                 .filterNot { superType ->
-                    superType is site.addzero.lsi.model.LsiDeclaredType && superType.declarationId == typeId
+                    superType is LsiDeclaredType && superType.declarationId == typeId
+                }
+                .filterNot { superType ->
+                    typeDeclaration.classKind.isImplicitObjectSuperType(superType)
                 }
                 .distinct()
                 .toList(),
@@ -410,6 +417,12 @@ internal class KspLsiWorkspaceBuilder(
             location = context.location(typeDeclaration),
             origin = context.origin(typeDeclaration),
         )
+    }
+
+    private fun ClassKind.isImplicitObjectSuperType(type: LsiTypeRef): Boolean {
+        return this in setOf(ClassKind.INTERFACE, ClassKind.ANNOTATION_CLASS) &&
+            type is LsiDeclaredType &&
+            type.declarationId == JAVA_LANG_OBJECT_ID
     }
 
     private fun KSClassDeclaration.isJavaRecord(): Boolean {
@@ -837,6 +850,8 @@ private val JIMMER_MANAGED_TYPE_ANNOTATIONS = setOf(
 )
 
 private const val JAVA_LANG_RECORD = "java.lang.Record"
+
+private val JAVA_LANG_OBJECT_ID = LsiSymbolId.type("java.lang.Object")
 
 private fun KSClassDeclaration.toLsiTypeId(): LsiSymbolId {
     val qualifiedName = requireNotNull(qualifiedName?.asString()) {

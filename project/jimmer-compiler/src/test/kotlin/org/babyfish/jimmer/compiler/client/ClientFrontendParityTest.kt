@@ -29,6 +29,8 @@ import org.babyfish.jimmer.compiler.lsi.apt.toLsiWorkspace
 import org.babyfish.jimmer.compiler.lsi.ksp.toLsiWorkspace
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
+import site.addzero.lsi.jimmer.normalizedSnapshot as normalizedImmutableSnapshot
+import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.jimmer.client.ClientOperation
 import site.addzero.lsi.jimmer.client.ClientSchemaDependencies
 import site.addzero.lsi.jimmer.client.normalizedSnapshot
@@ -48,6 +50,33 @@ private fun emptyClientDependencies(): ClientSchemaDependencies {
 }
 
 class ClientFrontendParityTest {
+
+    @Test
+    fun `same entity service fixture has identical lsi client and immutable snapshots`() {
+        val aptWorkspace = compileJava(ENTITY_SERVICE_JAVA_SOURCES)
+        val kspWorkspace = compileKotlin(ENTITY_SERVICE_KOTLIN_SOURCES)
+
+        val fixtureTypeIds = setOf(BOOK_ID, BOOK_SERVICE_ID)
+        assertEquals(
+            aptWorkspace.semanticSnapshotOf(fixtureTypeIds),
+            kspWorkspace.semanticSnapshotOf(fixtureTypeIds),
+        )
+
+        val aptImmutable = aptWorkspace.toImmutableSchema(setOf(BOOK_ID))
+        val kspImmutable = kspWorkspace.toImmutableSchema(setOf(BOOK_ID))
+        assertEquals(
+            aptImmutable.normalizedImmutableSnapshot(),
+            kspImmutable.normalizedImmutableSnapshot(),
+        )
+
+        val aptClient = aptWorkspace.toClientSchema(aptImmutable.clientDependencies())
+        val kspClient = kspWorkspace.toClientSchema(kspImmutable.clientDependencies())
+        assertEquals(aptClient.normalizedSnapshot(), kspClient.normalizedSnapshot())
+
+        assertEquals(listOf(BOOK_ID), aptImmutable.types.map { type -> type.id })
+        val service = aptClient.services.single { candidate -> candidate.id == BOOK_SERVICE_ID }
+        assertEquals(listOf("find"), service.operations.map(ClientOperation::name))
+    }
 
     @Test
     fun `java throws and kotlin Throws produce identical client exception schema`() {
@@ -197,6 +226,19 @@ class ClientFrontendParityTest {
             .toList()
     }
 
+    private fun LsiWorkspace.semanticSnapshotOf(typeIds: Set<LsiSymbolId>): String {
+        return LsiWorkspace(
+            sources = sources,
+            declarations = declarations.filter { declaration ->
+                typeIds.any { typeId ->
+                    declaration.id == typeId || declaration.id.value.startsWith("${typeId.value}/")
+                }
+            },
+            typeHierarchy = typeHierarchy.filter { entry -> entry.id in typeIds },
+            annotationScopes = annotationScopes,
+        ).toSemanticSnapshot()
+    }
+
     private fun compileKotlin(sources: Map<String, String>): LsiWorkspace {
         val projectDir = createTempDirectory(prefix = "jimmer-client-ksp-parity").toFile()
         val sourceDir = projectDir.resolve("src/main/kotlin")
@@ -232,6 +274,14 @@ class ClientFrontendParityTest {
     }
 
     private fun testClasspath(): String = testClasspathFiles().joinToString(File.pathSeparator)
+
+    private fun ImmutableSchema.clientDependencies(): ClientSchemaDependencies {
+        return ClientSchemaDependencies(
+            immutableSchema = this,
+            errorSchema = ErrorSchema(emptyList()),
+            definitionDocumentationByTypeId = emptyMap(),
+        )
+    }
 
     private fun testClasspathFiles(): List<File> {
         return System.getProperty("java.class.path")
@@ -311,11 +361,68 @@ class ClientFrontendParityTest {
     }
 
     private companion object {
+        val BOOK_ID = LsiSymbolId.type("demo.Book")
+        val BOOK_SERVICE_ID = LsiSymbolId.type("demo.BookService")
         val ROOT_EXCEPTION_ID = LsiSymbolId.type("demo.RootException")
         val BRANCH_EXCEPTION_ID = LsiSymbolId.type("demo.BranchException")
         val ALPHA_EXCEPTION_ID = LsiSymbolId.type("demo.AlphaException")
         val BETA_EXCEPTION_ID = LsiSymbolId.type("demo.BetaException")
         val GAMMA_EXCEPTION_ID = LsiSymbolId.type("demo.GammaException")
+
+        val ENTITY_SERVICE_JAVA_SOURCES = mapOf(
+            "demo/Book.java" to """
+                package demo;
+
+                import org.babyfish.jimmer.sql.Entity;
+                import org.babyfish.jimmer.sql.Id;
+
+                @Entity
+                public interface Book {
+                    @Id
+                    long id();
+
+                    String name();
+                }
+            """.trimIndent(),
+            "demo/BookService.java" to """
+                package demo;
+
+                import org.babyfish.jimmer.client.meta.Api;
+
+                @Api
+                public interface BookService {
+                    @Api
+                    Book find(long id);
+                }
+            """.trimIndent(),
+        )
+
+        val ENTITY_SERVICE_KOTLIN_SOURCES = mapOf(
+            "demo/Book.kt" to """
+                package demo
+
+                import org.babyfish.jimmer.sql.Entity
+                import org.babyfish.jimmer.sql.Id
+
+                @Entity
+                interface Book {
+                    @Id
+                    val id: Long
+                    val name: String
+                }
+            """.trimIndent(),
+            "demo/BookService.kt" to """
+                package demo
+
+                import org.babyfish.jimmer.client.meta.Api
+
+                @Api
+                interface BookService {
+                    @Api
+                    fun find(id: Long): Book
+                }
+            """.trimIndent(),
+        )
 
         val JAVA_SOURCES = mapOf(
             "demo/RootException.java" to """
