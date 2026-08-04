@@ -701,9 +701,9 @@ public class DtoGenerator {
         addToString();
 
         if (isSpecification) {
-            for (DtoProp<ImmutableType, ImmutableProp> prop : dtoType.getDtoProps()) {
+            for (DtoBaseProp prop : DtoAccessorExtensionsKt.basePropsInDeclarationOrder(lsiDtoType, lsiGraph)) {
                 MethodSpec converter = AptDtoSpecificationRenderer.renderConverterOrNull(
-                        lsiProp(prop),
+                        prop,
                         lsiGraph,
                         immutableSchema,
                         lsiWorkspace
@@ -1594,10 +1594,6 @@ public class DtoGenerator {
             return parent.simpleNamePath() + '.' + name;
         }
         return name;
-    }
-
-    private DtoBaseProp lsiProp(DtoProp<ImmutableType, ImmutableProp> prop) {
-        return (DtoBaseProp) DtoGenerationExtensionsKt.prop(lsiDtoType, lsiGraph, prop.getName());
     }
 
     private site.addzero.lsi.jimmer.dto.DtoProp polymorphicRootPropOrNull(AbstractProp prop) {

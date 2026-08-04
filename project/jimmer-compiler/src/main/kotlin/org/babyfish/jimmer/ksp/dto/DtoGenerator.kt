@@ -53,6 +53,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoUserProp
 import site.addzero.lsi.jimmer.dto.acceptsNullInAccessor
 import site.addzero.lsi.jimmer.dto.baseProp
+import site.addzero.lsi.jimmer.dto.basePropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.contractFor
 import site.addzero.lsi.jimmer.dto.foldProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
@@ -512,9 +513,9 @@ internal class DtoGenerator private constructor(
         }
 
         if (isSpecification) {
-            for (prop in dtoType.dtoProps) {
+            for (prop in lsiDtoType.basePropsInDeclarationOrder(lsiGraph)) {
                 val converter = KspDtoSpecificationRenderer.renderConverterOrNull(
-                    prop = lsiProp(prop),
+                    prop = prop,
                     graph = lsiGraph,
                     immutableSchema = immutableSchema,
                     workspace = workspace,
@@ -1458,9 +1459,6 @@ internal class DtoGenerator private constructor(
     @Suppress("UNCHECKED_CAST")
     private fun AbstractProp.asFoldProp(): FoldProp<ImmutableType, ImmutableProp> =
         this as FoldProp<ImmutableType, ImmutableProp>
-
-    private fun lsiProp(prop: DtoProp<ImmutableType, ImmutableProp>) =
-        lsiDtoType.prop(lsiGraph, prop.name) as site.addzero.lsi.jimmer.dto.DtoBaseProp
 
     private fun collectNames(list: MutableList<String>) {
         if (parent == null) {
