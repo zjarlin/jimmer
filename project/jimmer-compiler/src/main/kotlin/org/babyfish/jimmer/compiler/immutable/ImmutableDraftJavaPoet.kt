@@ -98,7 +98,12 @@ private class JavaDraftPoetContext(
         return LsiPoetType(
             name = "${type.simpleName}Draft",
             kind = LsiPoetTypeKind.INTERFACE,
-            annotations = listOf(generatedByAnnotation()),
+            annotations = buildList {
+                add(generatedByAnnotation())
+                type.documentation?.takeIf(String::isNotEmpty)?.let { documentation ->
+                    add(descriptionAnnotation(documentation))
+                }
+            },
             modifiers = if (type.visibility == site.addzero.lsi.model.LsiVisibility.PUBLIC) {
                 setOf(LsiPoetModifier.PUBLIC)
             } else {
@@ -174,7 +179,12 @@ private class JavaDraftPoetContext(
     private fun draftSetter(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction {
         return LsiPoetFunction(
             name = prop.javaSetterName,
-            annotations = listOf(OLD_CHAIN_ANNOTATION),
+            annotations = buildList {
+                add(OLD_CHAIN_ANNOTATION)
+                prop.documentation?.takeIf(String::isNotEmpty)?.let { documentation ->
+                    add(descriptionAnnotation(documentation))
+                }
+            },
             modifiers = PUBLIC_ABSTRACT,
             documentation = prop.documentation?.takeIf(String::isNotEmpty),
             parameters = listOf(
@@ -764,18 +774,6 @@ private class JavaDraftPoetContext(
                 if (prop.nullable) {
                     add(NULLABLE_ANNOTATION)
                 }
-                prop.sourceDocumentation?.takeIf(String::isNotEmpty)?.let { documentation ->
-                    add(
-                        LsiPoetAnnotation(
-                            type = DESCRIPTION_TYPE_ID,
-                            arguments = listOf(
-                                LsiPoetAnnotationArgument.Positional(
-                                    LsiPoetAnnotationValue.StringValue(documentation)
-                                )
-                            ),
-                        )
-                    )
-                }
             },
             modifiers = PUBLIC_OVERRIDE,
             returnType = prop.type.withoutJavaDraftTypeAnnotations(),
@@ -834,6 +832,17 @@ private class JavaDraftPoetContext(
             endControlFlow()
             returnValue { name(requireNotNull(prop.valueFieldName)) }
         }
+    }
+
+    private fun descriptionAnnotation(documentation: String): LsiPoetAnnotation {
+        return LsiPoetAnnotation(
+            type = DESCRIPTION_TYPE_ID,
+            arguments = listOf(
+                LsiPoetAnnotationArgument.Positional(
+                    LsiPoetAnnotationValue.StringValue(documentation)
+                )
+            ),
+        )
     }
 
     private fun implCloneFunction(): LsiPoetFunction {

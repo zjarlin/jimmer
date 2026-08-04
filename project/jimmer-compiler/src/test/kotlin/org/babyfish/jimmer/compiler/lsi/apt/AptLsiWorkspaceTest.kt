@@ -186,7 +186,7 @@ class AptLsiWorkspaceTest {
     }
 
     @Test
-    fun `freezes binary immutable documentation from generated draft impl`() {
+    fun `freezes binary immutable documentation from generated draft contract`() {
         val dependency = compileDependency(
             "demo/BinaryBook.java" to """
                 package demo;
@@ -207,16 +207,10 @@ class AptLsiWorkspaceTest {
 
                 import org.babyfish.jimmer.client.Description;
 
+                @Description("binary type")
                 public interface BinaryBookDraft {
-                    class Producer {
-                        @Description("binary type")
-                        public static class Impl {
-                            @Description("binary property")
-                            public String name() {
-                                return "";
-                            }
-                        }
-                    }
+                    @Description("binary property")
+                    BinaryBookDraft setName(String name);
                 }
             """.trimIndent(),
         )

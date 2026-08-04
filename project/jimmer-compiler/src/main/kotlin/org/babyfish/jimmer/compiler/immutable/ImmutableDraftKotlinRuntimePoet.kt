@@ -318,15 +318,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
         if (prop.languageFormula) {
             return null
         }
-        val documentation = prop.sourceDocumentation ?: prop.documentation
         return LsiPoetProperty(
             name = prop.name,
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
             type = context.propType(prop),
             mutable = false,
-            annotations = buildList {
-                documentation?.let { value -> add(context.descriptionAnnotation(value)) }
-            },
             modifiers = setOf(LsiPoetModifier.OVERRIDE),
             getter = LsiPoetAccessor(body = implGetter(prop)),
         )

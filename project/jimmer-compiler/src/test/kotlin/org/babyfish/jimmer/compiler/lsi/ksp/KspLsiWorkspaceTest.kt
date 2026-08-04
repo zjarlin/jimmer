@@ -234,7 +234,7 @@ class KspLsiWorkspaceTest {
     }
 
     @Test
-    fun `freezes binary immutable documentation from generated draft impl`() {
+    fun `freezes binary immutable documentation from generated draft contract`() {
         val descriptionType = classDeclaration(
             qualifiedName = DESCRIPTION_ANNOTATION,
             classKind = ClassKind.ANNOTATION_CLASS,
@@ -274,38 +274,23 @@ class KspLsiWorkspaceTest {
             declarations = { listOf(binaryName) },
             annotations = sequenceOf(annotation(entityType, emptyList())),
         )
-        lateinit var impl: KSClassDeclaration
-        val implName = property(
+        lateinit var draft: KSClassDeclaration
+        val draftName = property(
             name = "name",
-            parent = { impl },
+            parent = { draft },
             type = typeReference(type(stringType)),
             annotations = sequenceOf(description("binary property")),
             origin = Origin.KOTLIN_LIB,
             file = null,
             line = 1,
         )
-        impl = classDeclaration(
-            qualifiedName = "demo.BinaryBookDraft.\$.Impl",
-            classKind = ClassKind.CLASS,
-            origin = Origin.KOTLIN_LIB,
-            file = null,
-            declarations = { listOf(implName) },
-            annotations = sequenceOf(description("binary type")),
-        )
-        lateinit var producer: KSClassDeclaration
-        producer = classDeclaration(
-            qualifiedName = "demo.BinaryBookDraft.\$",
-            classKind = ClassKind.CLASS,
-            origin = Origin.KOTLIN_LIB,
-            file = null,
-            declarations = { listOf(impl) },
-        )
-        val draft = classDeclaration(
+        draft = classDeclaration(
             qualifiedName = "demo.BinaryBookDraft",
             classKind = ClassKind.INTERFACE,
             origin = Origin.KOTLIN_LIB,
             file = null,
-            declarations = { listOf(producer) },
+            declarations = { listOf(draftName) },
+            annotations = sequenceOf(description("binary type")),
         )
         val workspace = listOf(binaryBook).toLsiWorkspace(
             resolver(

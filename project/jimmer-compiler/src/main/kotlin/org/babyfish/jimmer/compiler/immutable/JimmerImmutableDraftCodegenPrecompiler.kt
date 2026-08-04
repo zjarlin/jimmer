@@ -172,6 +172,7 @@ internal class JimmerImmutableDraftCodegenPrecompiler {
                 sourceLanguage = declaration.origin.language,
                 sourcePath = declaration.origin.source?.path,
                 sourceBaseName = declaration.origin.source?.baseName(),
+                documentation = declaration.documentation,
                 visibility = declaration.visibility,
                 typeParameters = declaration.typeParameters,
                 selfType = LsiDeclaredType(

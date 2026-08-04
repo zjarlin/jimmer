@@ -114,16 +114,8 @@ internal class KspLsiContext(
         }
         val qualifiedName = owner.qualifiedName?.asString()?.takeIf(String::isNotBlank) ?: return null
         val draft = resolver.getClassDeclarationByName("${qualifiedName}Draft") ?: return null
-        val producer = draft.declarations
-            .filterIsInstance<KSClassDeclaration>()
-            .firstOrNull { type -> type.simpleName.asString() == "$" }
-            ?: return null
-        val impl = producer.declarations
-            .filterIsInstance<KSClassDeclaration>()
-            .firstOrNull { type -> type.simpleName.asString() == "Impl" }
-            ?: return null
         if (this is KSClassDeclaration) {
-            return impl.description()
+            return draft.description()
         }
         val propertyName = when (this) {
             is KSPropertyDeclaration -> simpleName.asString()
@@ -135,32 +127,24 @@ internal class KspLsiContext(
             }
             else -> return null
         }
-        return impl.declarations
+        return draft.declarations
             .firstNotNullOfOrNull { member ->
-                val memberName = when (member) {
-                    is KSPropertyDeclaration -> member.simpleName.asString()
-                    is KSFunctionDeclaration -> {
-                        member.generatedImmutableDocumentationPropertyName()
-                            ?: return@firstNotNullOfOrNull null
-                    }
-                    else -> return@firstNotNullOfOrNull null
+                val matches = when (member) {
+                    is KSPropertyDeclaration -> member.simpleName.asString() == propertyName
+                    is KSFunctionDeclaration -> member.isGeneratedImmutableDraftSetter(propertyName)
+                    else -> false
                 }
-                member.description().takeIf { memberName == propertyName }
+                if (matches) member.description() else null
             }
     }
 
-    private fun KSFunctionDeclaration.generatedImmutableDocumentationPropertyName(): String? {
-        val resolvedReturnType = returnType?.resolve() ?: return null
-        if (
-            parameters.isNotEmpty() ||
-            typeParameters.isNotEmpty() ||
-            Modifier.JAVA_STATIC in modifiers ||
-            Modifier.PRIVATE in modifiers ||
-            resolvedReturnType.declaration.qualifiedName?.asString() == "kotlin.Unit"
-        ) {
-            return null
+    private fun KSFunctionDeclaration.isGeneratedImmutableDraftSetter(propertyName: String): Boolean {
+        val methodName = simpleName.asString()
+        if (!methodName.startsWith("set") || methodName.length == 3 || parameters.size != 1) {
+            return false
         }
-        return toLsiJavaPropertyName(frontendOptions)
+        val suffix = methodName.substring(3)
+        return suffix == propertyName || suffix.decapitalizeFirst() == propertyName
     }
 
     private fun KSAnnotation.isDescription(): Boolean {
@@ -255,6 +239,10 @@ private fun String.toLsiSourceKind(): LsiSourceKind {
     } else {
         LsiSourceKind.SOURCE
     }
+}
+
+private fun String.decapitalizeFirst(): String {
+    return first().lowercaseChar() + substring(1)
 }
 
 private const val DESCRIPTION_ANNOTATION = "org.babyfish.jimmer.client.Description"

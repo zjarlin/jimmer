@@ -26,6 +26,7 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class ImmutableDraftPoetTest {
@@ -334,6 +335,56 @@ class ImmutableDraftPoetTest {
         assertFalse("scores, LangLong::class.java, false" in content)
     }
 
+    @Test
+    fun `draft contracts preserve type and property documentation`() {
+        val source = source("src/main/java/demo/Book.java")
+        val bookId = typeId("demo.Book")
+        val idPropId = LsiSymbolId.property(bookId, "id")
+        val titlePropId = LsiSymbolId.property(bookId, "title")
+        val origin = origin(source)
+        val workspace = LsiWorkspace(
+            sources = listOf(source),
+            declarations = listOf(
+                immutableType(
+                    id = bookId,
+                    memberIds = listOf(idPropId, titlePropId),
+                    origin = origin,
+                    documentation = "Book documentation",
+                ),
+                property(
+                    id = idPropId,
+                    ownerId = bookId,
+                    type = LONG_TYPE,
+                    annotations = listOf(LsiAnnotation(ID)),
+                    origin = origin,
+                ),
+                property(
+                    id = titlePropId,
+                    ownerId = bookId,
+                    type = LsiDeclaredType(STRING),
+                    origin = origin,
+                    documentation = "Title documentation",
+                ),
+            ),
+        )
+        val artifacts = workspace.draftArtifacts(bookId)
+        val javaContent = LsiJavaPoetRenderer().render(
+            artifacts.single { artifact -> artifact.file.language == LsiLanguage.JAVA }
+        ).content
+        val kotlinContent = LsiKotlinPoetRenderer().render(
+            artifacts.single { artifact -> artifact.file.language == LsiLanguage.KOTLIN }
+        ).content
+
+        assertContains(javaContent, "@Description(\"Book documentation\")")
+        assertContains(javaContent, "@Description(\"Title documentation\")")
+        assertContains(javaContent, "BookDraft setTitle(String title)")
+        assertEquals(2, "@Description".toRegex().findAll(javaContent).count())
+        assertContains(kotlinContent, "@Description(`value` = \"Book documentation\")")
+        assertContains(kotlinContent, "@Description(`value` = \"Title documentation\")")
+        assertContains(kotlinContent, "override var title: String")
+        assertEquals(2, "@Description".toRegex().findAll(kotlinContent).count())
+    }
+
     private fun LsiWorkspace.draftArtifacts(typeId: LsiSymbolId): List<LsiPoetArtifact> {
         val schema = toImmutableSchema()
         val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
@@ -373,6 +424,7 @@ class ImmutableDraftPoetTest {
         marker: LsiSymbolId = ENTITY,
         superTypeIds: List<LsiSymbolId> = emptyList(),
         origin: LsiOrigin,
+        documentation: String? = null,
     ): LsiTypeDeclaration {
         val qualifiedName = id.requireTypeQualifiedName()
         return LsiTypeDeclaration(
@@ -384,6 +436,7 @@ class ImmutableDraftPoetTest {
             memberIds = memberIds,
             annotations = listOf(LsiAnnotation(marker)),
             origin = origin,
+            documentation = documentation,
         )
     }
 
@@ -407,6 +460,7 @@ class ImmutableDraftPoetTest {
         type: LsiTypeRef,
         annotations: List<LsiAnnotation> = emptyList(),
         origin: LsiOrigin,
+        documentation: String? = null,
     ): LsiProperty {
         return LsiProperty(
             id = id,
@@ -415,6 +469,7 @@ class ImmutableDraftPoetTest {
             type = type,
             annotations = annotations,
             origin = origin,
+            documentation = documentation,
         )
     }
 
@@ -451,5 +506,6 @@ class ImmutableDraftPoetTest {
         val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")
         val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
         val LIST = LsiSymbolId.type("java.util.List")
+        val STRING = LsiSymbolId.type("java.lang.String")
     }
 }

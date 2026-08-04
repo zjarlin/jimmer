@@ -35,6 +35,7 @@ internal data class JimmerImmutableDraftTypePlan(
     val sourceLanguage: LsiLanguage,
     val sourcePath: String?,
     val sourceBaseName: String?,
+    val documentation: String?,
     val visibility: LsiVisibility,
     val typeParameters: List<LsiTypeParameter>,
     val selfType: LsiDeclaredType,

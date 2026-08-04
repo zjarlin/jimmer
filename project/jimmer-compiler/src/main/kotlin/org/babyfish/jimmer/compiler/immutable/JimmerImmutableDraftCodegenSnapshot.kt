@@ -49,6 +49,7 @@ private fun JimmerImmutableDraftCodegenSchema.snapshot(includePlatformSurface: B
                 if (includePlatformSurface) type.sourceLanguage.name else "",
                 if (includePlatformSurface) type.sourcePath.orEmpty() else "",
                 if (includePlatformSurface) type.sourceBaseName.orEmpty() else "",
+                if (includePlatformSurface) type.documentation.orEmpty() else "",
             )
             type.propsBySlot.forEach { prop ->
                 appendDraftRecord(

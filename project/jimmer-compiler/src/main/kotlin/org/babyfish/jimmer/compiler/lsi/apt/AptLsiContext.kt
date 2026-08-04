@@ -18,7 +18,6 @@ import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
 import javax.lang.model.element.PackageElement
 import javax.lang.model.element.TypeElement
-import javax.lang.model.type.TypeKind
 import javax.lang.model.util.Elements
 import javax.tools.FileObject
 import javax.tools.JavaFileObject
@@ -194,43 +193,31 @@ internal class AptLsiContext(
             return null
         }
         val draft = elements.getTypeElement("${owner.qualifiedName}Draft") ?: return null
-        val producer = draft.enclosedElements
-            .filterIsInstance<TypeElement>()
-            .firstOrNull { type -> type.simpleName.contentEquals("Producer") }
-            ?: return null
-        val impl = producer.enclosedElements
-            .filterIsInstance<TypeElement>()
-            .firstOrNull { type -> type.simpleName.contentEquals("Impl") }
-            ?: return null
         if (this is TypeElement) {
-            return impl.description()
+            return draft.description()
         }
         val property = this as ExecutableElement
         if (!property.isLsiPropertyGetter()) {
             return null
         }
         val propertyName = property.toLsiPropertyName(frontendOptions)
-        return impl.enclosedElements
+        return draft.enclosedElements
             .filterIsInstance<ExecutableElement>()
             .firstOrNull { candidate ->
-                candidate.isGeneratedImmutableDocumentationAccessor(propertyName)
+                candidate.isGeneratedImmutableDraftSetter(propertyName)
             }
             ?.description()
     }
 
-    private fun ExecutableElement.isGeneratedImmutableDocumentationAccessor(
+    private fun ExecutableElement.isGeneratedImmutableDraftSetter(
         propertyName: String,
     ): Boolean {
-        if (
-            returnType.kind == TypeKind.VOID ||
-            parameters.isNotEmpty() ||
-            typeParameters.isNotEmpty() ||
-            Modifier.STATIC in modifiers ||
-            Modifier.PRIVATE in modifiers
-        ) {
+        val methodName = simpleName.toString()
+        if (!methodName.startsWith("set") || methodName.length == 3 || parameters.size != 1) {
             return false
         }
-        return toLsiPropertyName(frontendOptions) == propertyName
+        val suffix = methodName.substring(3)
+        return suffix == propertyName || suffix.decapitalizeFirst() == propertyName
     }
 
     private fun TypeElement.isImmutableType(): Boolean {
@@ -251,6 +238,10 @@ private fun String.toLsiSourceKind(): LsiSourceKind {
     } else {
         LsiSourceKind.SOURCE
     }
+}
+
+private fun String.decapitalizeFirst(): String {
+    return first().lowercaseChar() + substring(1)
 }
 
 private const val DESCRIPTION_ANNOTATION = "org.babyfish.jimmer.client.Description"

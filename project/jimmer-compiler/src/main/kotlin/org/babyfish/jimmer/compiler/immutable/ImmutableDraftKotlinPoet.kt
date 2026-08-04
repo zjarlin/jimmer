@@ -332,7 +332,13 @@ internal class ImmutableDraftKotlinPoetContext(
             name = "$simpleName$KOTLIN_DRAFT_SUFFIX",
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
             kind = LsiPoetTypeKind.INTERFACE,
-            annotations = listOf(KOTLIN_DRAFT_DSL_SCOPE_ANNOTATION, generatedByAnnotation()),
+            annotations = buildList {
+                add(KOTLIN_DRAFT_DSL_SCOPE_ANNOTATION)
+                add(generatedByAnnotation())
+                type.documentation?.takeIf(String::isNotEmpty)?.let { documentation ->
+                    add(descriptionAnnotation(documentation))
+                }
+            },
             typeParameters = type.typeParameters,
             superInterfaces = buildList {
                 add(modelType)
@@ -372,6 +378,11 @@ internal class ImmutableDraftKotlinPoetContext(
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
             type = propType(prop),
             mutable = prop.writable,
+            annotations = buildList {
+                prop.documentation?.takeIf(String::isNotEmpty)?.let { documentation ->
+                    add(descriptionAnnotation(documentation))
+                }
+            },
             modifiers = setOf(LsiPoetModifier.OVERRIDE),
         )
     }
