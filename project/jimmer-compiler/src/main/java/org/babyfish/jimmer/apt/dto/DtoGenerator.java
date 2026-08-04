@@ -89,13 +89,15 @@ public class DtoGenerator {
 
     private final Map<DtoTypeId, LsiPoetTypeName> batchRootDtoTypeNames;
 
+    private final String generatedDtoPackageName;
+
+    private final List<String> generatedDtoSimpleNames;
+
     private final JimmerDtoJacksonVersion jacksonVersion;
 
     private final boolean hibernateValidatorEnhancement;
 
     private final DtoGenerator parent;
-
-    private final DtoGenerator root;
 
     private final String innerClassName;
 
@@ -205,7 +207,6 @@ public class DtoGenerator {
         this.lsiGraph = lsiGraph;
         this.lsiDtoType = lsiDtoType;
         this.parent = parent;
-        this.root = parent != null ? parent.root : this;
         this.innerClassName = innerClassName;
         this.annotationContract = parent != null ? parent.annotationContract : annotationContract;
         this.interfaceContractResolution = parent != null ?
@@ -219,6 +220,21 @@ public class DtoGenerator {
         this.batchRootDtoTypeNames = parent != null ?
                 parent.batchRootDtoTypeNames :
                 Collections.unmodifiableMap(new LinkedHashMap<>(batchRootDtoTypeNames));
+        if (parent != null) {
+            this.generatedDtoPackageName = parent.generatedDtoPackageName;
+            List<String> simpleNames = new ArrayList<>(parent.generatedDtoSimpleNames);
+            simpleNames.add(innerClassName);
+            this.generatedDtoSimpleNames = Collections.unmodifiableList(simpleNames);
+        } else {
+            LsiPoetTypeName generatedDtoTypeName = JimmerDtoPoetTypeNames.rootTypeName(
+                    lsiDtoType,
+                    this.batchRootDtoTypeNames
+            );
+            this.generatedDtoPackageName = generatedDtoTypeName.getPackageName();
+            this.generatedDtoSimpleNames = Collections.unmodifiableList(
+                    new ArrayList<>(generatedDtoTypeName.getSimpleNames())
+            );
+        }
         this.generatedDtoTypeIdsByTypeName = parent != null ?
                 parent.generatedDtoTypeIdsByTypeName :
                 Collections.unmodifiableMap(
@@ -364,7 +380,7 @@ public class DtoGenerator {
             try {
                 JavaFile
                         .builder(
-                                root.dtoType.getPackageName(),
+                                generatedDtoPackageName,
                                 typeBuilder.build()
                         )
                         .indent("    ")
@@ -374,7 +390,7 @@ public class DtoGenerator {
                 throw new GeneratorException(
                         String.format(
                                 "Cannot generate dto type '%s' for '%s'",
-                                dtoType.getName(),
+                                getSimpleName(),
                                 immutableBaseType().getQualifiedName()
                         ),
                         ex
@@ -458,7 +474,7 @@ public class DtoGenerator {
             try {
                 JavaFile
                         .builder(
-                                root.dtoType.getPackageName(),
+                                generatedDtoPackageName,
                                 typeBuilder.build()
                         )
                         .indent("    ")
@@ -468,7 +484,7 @@ public class DtoGenerator {
                 throw new GeneratorException(
                         String.format(
                                 "Cannot generate dto type '%s' for '%s'",
-                                dtoType.getName(),
+                                getSimpleName(),
                                 immutableBaseType().getQualifiedName()
                         ),
                         ex
@@ -554,7 +570,7 @@ public class DtoGenerator {
     }
 
     public String getSimpleName() {
-        return innerClassName != null ? innerClassName : dtoType.getName();
+        return generatedDtoSimpleNames.get(generatedDtoSimpleNames.size() - 1);
     }
 
     private Modifier sealedModifier() {
@@ -573,41 +589,24 @@ public class DtoGenerator {
     }
 
     ClassName getDtoClassName(String nestedClassName) {
-        if (innerClassName != null) {
-            List<String> list = new ArrayList<>();
-            collectNames(list);
-            List<String> simpleNames = list.subList(1, list.size());
-            if (nestedClassName != null) {
-                simpleNames = new ArrayList<>(simpleNames);
-                simpleNames.add(nestedClassName);
-            }
-            return ClassName.get(
-                    root.dtoType.getPackageName(),
-                    list.get(0),
-                    simpleNames.toArray(EMPTY_STR_ARR)
-            );
-        }
-        if (nestedClassName == null) {
-            return ClassName.get(
-                    root.dtoType.getPackageName(),
-                    dtoType.getName()
-            );
+        List<String> simpleNames = generatedDtoSimpleNames;
+        if (nestedClassName != null) {
+            simpleNames = new ArrayList<>(simpleNames);
+            simpleNames.add(nestedClassName);
         }
         return ClassName.get(
-                root.dtoType.getPackageName(),
-                dtoType.getName(),
-                nestedClassName
+                generatedDtoPackageName,
+                simpleNames.get(0),
+                simpleNames.subList(1, simpleNames.size()).toArray(EMPTY_STR_ARR)
         );
     }
 
     private String getGeneratedDtoPackageName() {
-        return root.dtoType.getPackageName();
+        return generatedDtoPackageName;
     }
 
     private List<String> getGeneratedDtoSimpleNames() {
-        List<String> simpleNames = new ArrayList<>();
-        collectNames(simpleNames);
-        return Collections.unmodifiableList(simpleNames);
+        return generatedDtoSimpleNames;
     }
 
     private Map<DtoTypeId, LsiPoetTypeName> getGeneratedDtoTypeNames() {
@@ -1622,15 +1621,6 @@ public class DtoGenerator {
                 generatedDtoTypeIdsByTypeName,
                 batchRootDtoTypeNames
         );
-    }
-
-    private void collectNames(List<String> list) {
-        if (parent == null) {
-            list.add(dtoType.getName());
-        } else {
-            parent.collectNames(list);
-            list.add(innerClassName);
-        }
     }
 
     private String accessorFieldName(String propName) {

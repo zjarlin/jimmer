@@ -242,32 +242,19 @@ internal class DtoGenerator private constructor(
     val typeBuilder: TypeSpec.Builder
         get() = _typeBuilder ?: error("Type builder is not ready")
 
+    private val generatedDtoSimpleName: String
+        get() = generatedDtoSimpleNames.last()
+
     fun getDtoClassName(nestedSimpleName: String? = null): ClassName {
-        if (innerClassName !== null) {
-            val list: MutableList<String> = ArrayList()
-            collectNames(list)
-            return ClassName(
-                root.dtoType.packageName,
-                list[0],
-                *list.subList(1, list.size).let {
-                    if (nestedSimpleName == null) {
-                        it
-                    } else {
-                        it.toMutableList() + nestedSimpleName
-                    }
-                }.toTypedArray()
-            )
-        }
-        if (nestedSimpleName == null) {
-            return ClassName(
-                root.dtoType.packageName,
-                dtoType.name!!
-            )
+        val simpleNames = if (nestedSimpleName == null) {
+            generatedDtoSimpleNames
+        } else {
+            generatedDtoSimpleNames + nestedSimpleName
         }
         return ClassName(
-            root.dtoType.packageName,
-            dtoType.name!!,
-            nestedSimpleName
+            generatedDtoPackageName,
+            simpleNames.first(),
+            *simpleNames.drop(1).toTypedArray(),
         )
     }
 
@@ -279,17 +266,17 @@ internal class DtoGenerator private constructor(
         if (codeGenerator != null) {
             codeGenerator.createNewFile(
                 Dependencies(true, *allFiles.toTypedArray()),
-                root.dtoType.packageName,
-                dtoType.name!!
+                generatedDtoPackageName,
+                generatedDtoSimpleName,
             ).use {
                 val fileSpec = FileSpec
                     .builder(
-                        root.dtoType.packageName,
-                        dtoType.name!!
+                        generatedDtoPackageName,
+                        generatedDtoSimpleName,
                     ).apply {
                         indent("    ")
                         val builder = TypeSpec
-                            .classBuilder(dtoType.name!!)
+                            .classBuilder(generatedDtoSimpleName)
                             .apply {
                                 if (!polymorphicBranch) {
                                     addModifiers(KModifier.OPEN)
@@ -317,7 +304,7 @@ internal class DtoGenerator private constructor(
             }
         } else if (innerClassName !== null && parent !== null) {
             val builder = TypeSpec
-                .classBuilder(innerClassName)
+                .classBuilder(generatedDtoSimpleName)
                 .apply {
                     if (!polymorphicBranch) {
                         addModifiers(KModifier.OPEN)
@@ -359,13 +346,13 @@ internal class DtoGenerator private constructor(
         if (codeGenerator != null) {
             codeGenerator.createNewFile(
                 Dependencies(true, *allFiles.toTypedArray()),
-                root.dtoType.packageName,
-                dtoType.name!!
+                generatedDtoPackageName,
+                generatedDtoSimpleName,
             ).use {
                 val fileSpec = FileSpec
                     .builder(
-                        root.dtoType.packageName,
-                        dtoType.name!!
+                        generatedDtoPackageName,
+                        generatedDtoSimpleName,
                     ).apply {
                         indent("    ")
                         addType(buildPolymorphicType(baseContractKind))
@@ -385,7 +372,7 @@ internal class DtoGenerator private constructor(
         baseContractKind: DtoGeneratedBaseContractKind,
     ): TypeSpec {
         val builder = TypeSpec
-            .interfaceBuilder(innerClassName ?: dtoType.name!!)
+            .interfaceBuilder(generatedDtoSimpleName)
             .apply {
                 if (lsiDtoType.isSealed()) {
                     addModifiers(KModifier.SEALED)
@@ -1137,7 +1124,7 @@ internal class DtoGenerator private constructor(
                             "return %M(%T::class).by(null, false, this@%L::%L)",
                             NEW,
                             baseTypeName,
-                            innerClassName ?: dtoType.name!!,
+                            generatedDtoSimpleName,
                             if (entityBase) "toEntityImpl" else "toImmutableImpl"
                         )
                     }
@@ -1458,15 +1445,6 @@ internal class DtoGenerator private constructor(
             generatedTypeNames = generatedDtoTypeIdsByTypeName.keys,
         )
 
-    private fun collectNames(list: MutableList<String>) {
-        if (parent == null) {
-            list.add(dtoType.name!!)
-        } else if (innerClassName !== null) {
-            parent.collectNames(list)
-            list.add(innerClassName)
-        }
-    }
-
     private fun polymorphicRootPropOrNull(prop: LsiDtoProp): LsiDtoProp? {
         val polymorphicOwner = parent
         if (!polymorphicBranch || polymorphicOwner == null) {
@@ -1568,12 +1546,7 @@ internal class DtoGenerator private constructor(
         addFunction(KspDtoToStringRenderer.render(lsiDtoType, lsiGraph, simpleNamePart()))
     }
 
-    private fun simpleNamePart(): String =
-        (innerClassName ?: dtoType.name!!).let { name ->
-            parent
-                ?.let { "${it.simpleNamePart()}.$name" }
-                ?: name
-        }
+    private fun simpleNamePart(): String = generatedDtoSimpleNames.joinToString(".")
 
     private val isSerializerRequired: Boolean by lazy {
         lsiDtoType.requiresDynamicInputSerialization(lsiGraph)

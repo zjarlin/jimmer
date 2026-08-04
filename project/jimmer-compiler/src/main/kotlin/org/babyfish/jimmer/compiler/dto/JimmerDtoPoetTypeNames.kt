@@ -47,6 +47,15 @@ internal object JimmerDtoPoetTypeNames {
         return result
     }
 
+    /** 返回冻结根 DTO 在当前处理批次中已经规划的精确源码名称。 */
+    @JvmStatic
+    fun rootTypeName(
+        rootType: DtoType,
+        batchRootTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
+    ): LsiPoetTypeName = requireNotNull(batchRootTypeNames[rootType.id]) {
+        "Frozen root DTO type has no batch generated name: ${rootType.id.value}"
+    }
+
     /** 为单个根 DTO 预计算本轮将生成的全部声明名称。 */
     @JvmStatic
     fun forRoot(
@@ -63,9 +72,7 @@ internal object JimmerDtoPoetTypeNames {
         val rootName = requireNotNull(rootType.name) {
             "Frozen root DTO type must have a generated name: ${rootType.id.value}"
         }
-        val rootTypeName = requireNotNull(batchRootTypeNames[rootType.id]) {
-            "Frozen root DTO type has no batch generated name: ${rootType.id.value}"
-        }
+        val rootTypeName = rootTypeName(rootType, batchRootTypeNames)
         require(rootTypeName == create(rootType.packageName, listOf(rootName))) {
             "Frozen root DTO type has an unexpected batch generated name: ${rootTypeName.canonicalName}"
         }
