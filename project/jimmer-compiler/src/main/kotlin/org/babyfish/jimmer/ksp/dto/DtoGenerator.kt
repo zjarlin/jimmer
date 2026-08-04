@@ -142,7 +142,9 @@ internal class DtoGenerator private constructor(
         .requiredPropNames()
         .let {
             if (polymorphicBranch) {
-                it + root.dtoType.props.map { prop -> prop.name }
+                it + root.lsiDtoType
+                    .propsInDeclarationOrder(root.lsiGraph)
+                    .map { prop -> prop.name }
             } else {
                 it
             }
@@ -1513,16 +1515,14 @@ internal class DtoGenerator private constructor(
                 .returns(getDtoClassName())
                 .apply {
                     val args = mutableListOf<String>()
-                    for (prop in dtoType.props) {
+                    for (prop in lsiDtoType.propsInDeclarationOrder(lsiGraph)) {
                         addParameter(
                             ParameterSpec.builder(prop.name, propTypeName(prop))
                                 .defaultValue("this.%N", prop.name)
                                 .build()
                         )
                         args += prop.name
-                        lsiDtoType
-                            .prop(lsiGraph, prop.name)
-                            .dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
+                        prop.dtoLoadedStateStorageNameOrNull(lsiGraph, LsiLanguage.KOTLIN)
                             ?.let {
                             addParameter(
                                 ParameterSpec.builder(it, BOOLEAN)
