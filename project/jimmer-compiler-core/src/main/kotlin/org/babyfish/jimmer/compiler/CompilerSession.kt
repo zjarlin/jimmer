@@ -126,9 +126,6 @@ data class CompilerRoundResult(
     val newArtifacts: List<GeneratedArtifact>,
     val diagnostics: List<LsiDiagnostic>,
 ) {
-    val generatedSources: Boolean
-        get() = newArtifacts.any { artifact -> artifact.kind.isSource }
-
     val unresolvedSymbols: Set<LsiSymbolId>
         get() = featureResults.values.flatMapTo(sortedSetOf()) { result -> result.unresolvedSymbols }
 }
@@ -167,8 +164,8 @@ data class JimmerCompilerRenderContext(
 class CompilerSessionStateException(message: String) : IllegalStateException(message)
 
 class CompilerFixedPointException(
-    val sessionId: String,
-    val roundNumber: Int,
+    sessionId: String,
+    roundNumber: Int,
     val maximumIterations: Int,
 ) : IllegalStateException(
     "Compiler session '$sessionId' round $roundNumber did not reach a fixed point after $maximumIterations iterations",

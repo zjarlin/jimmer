@@ -5,7 +5,6 @@ import org.babyfish.jimmer.client.meta.Doc
 import org.babyfish.jimmer.client.meta.TypeDefinition
 import org.babyfish.jimmer.client.meta.TypeName
 import org.babyfish.jimmer.client.meta.impl.ApiOperationImpl
-import org.babyfish.jimmer.client.meta.impl.ApiServiceImpl
 import org.babyfish.jimmer.client.meta.impl.SchemaBuilder
 import org.babyfish.jimmer.client.meta.impl.SchemaImpl
 import org.babyfish.jimmer.client.meta.impl.Schemas
