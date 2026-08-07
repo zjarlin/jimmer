@@ -53,7 +53,6 @@ import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
-import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoConfigContractKind
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
@@ -116,10 +115,10 @@ class JimmerDtoFrontendParityTest {
         assertEquals(listOf(AUTHOR_ID, FILTER_ID), aptConfigContract.dependencyTypeIds)
         val aptMarkerDeclaration = aptAnnotationContract.declarationsByTypeId.getValue(MARKER_ID)
         val kspMarkerDeclaration = kspAnnotationContract.declarationsByTypeId.getValue(MARKER_ID)
-        assertEquals(DtoAnnotationDeclarationKind.JAVA, aptMarkerDeclaration.kind)
-        assertEquals(DtoAnnotationDeclarationKind.KOTLIN, kspMarkerDeclaration.kind)
+        assertEquals(LsiLanguage.JAVA, aptMarkerDeclaration.language)
+        assertEquals(LsiLanguage.KOTLIN, kspMarkerDeclaration.language)
         assertEquals(
-            aptMarkerDeclaration.copy(kind = DtoAnnotationDeclarationKind.KOTLIN),
+            aptMarkerDeclaration.copy(language = LsiLanguage.KOTLIN),
             kspMarkerDeclaration,
         )
         val canonicalAptResolution = apt.dtoResolution.copy(
@@ -127,7 +126,7 @@ class JimmerDtoFrontendParityTest {
                 aptGraph.source to aptAnnotationContract.copy(
                     declarations = aptAnnotationContract.declarations.map { declaration ->
                         if (declaration.typeId == MARKER_ID) {
-                            declaration.copy(kind = DtoAnnotationDeclarationKind.KOTLIN)
+                            declaration.copy(language = LsiLanguage.KOTLIN)
                         } else {
                             declaration
                         }

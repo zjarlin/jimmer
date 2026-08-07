@@ -7,6 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.babyfish.jimmer.compiler.CompilerPlatform
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -19,7 +20,7 @@ class JimmerModulePrecompilerTest {
     @Test
     fun `apt plans four summaries and two aggregating indexes`() {
         val schema = precompiler(
-            platform = JimmerModulePlatform.APT,
+            platform = CompilerPlatform.APT,
             moduleRequired = true,
         ).compile(
             immutableSchema(
@@ -31,7 +32,7 @@ class JimmerModulePrecompilerTest {
             )
         )
 
-        assertEquals(JimmerModulePlatform.APT, schema.platform)
+        assertEquals(CompilerPlatform.APT, schema.platform)
         assertEquals("demo", schema.packageName)
         assertNull(schema.module)
         assertEquals(
@@ -74,7 +75,7 @@ class JimmerModulePrecompilerTest {
     fun `apt freezes custom names and summary member collision suffixes`() {
         val schema = JimmerModulePrecompiler(
             JimmerModulePrecompileOptions(
-                platform = JimmerModulePlatform.APT,
+                platform = CompilerPlatform.APT,
                 immutablesName = "DomainObjects",
                 tablesName = "DomainTables",
                 tableExesName = "DomainTableExes",
@@ -113,7 +114,7 @@ class JimmerModulePrecompilerTest {
             entityQualifiedTypeNames = listOf("legacy.Book", "legacy.Changed"),
             immutableQualifiedTypeNames = listOf("legacy.Address"),
         )
-        val schema = precompiler(JimmerModulePlatform.APT).compile(
+        val schema = precompiler(CompilerPlatform.APT).compile(
             immutableSchema(
                 "demo.Store" to ImmutableTypeKind.ENTITY,
                 "legacy.Changed" to ImmutableTypeKind.EMBEDDABLE,
@@ -151,7 +152,7 @@ class JimmerModulePrecompilerTest {
 
     @Test
     fun `apt emits empty index plans without immutable models`() {
-        val schema = precompiler(JimmerModulePlatform.APT).compile(ImmutableSchema(emptyList()))
+        val schema = precompiler(CompilerPlatform.APT).compile(ImmutableSchema(emptyList()))
 
         assertTrue(schema.summaries.isEmpty())
         assertEquals(2, schema.resources.size)
@@ -168,7 +169,7 @@ class JimmerModulePrecompilerTest {
         )
         val bookId = LsiSymbolId.type("demo.Book")
         val storeId = LsiSymbolId.type("demo.Store")
-        val schema = precompiler(JimmerModulePlatform.APT).compile(
+        val schema = precompiler(CompilerPlatform.APT).compile(
             immutableSchema = immutableSchema,
             compilationScope = JimmerModuleCompilationScope(
                 currentImmutableTypeIds = listOf(bookId),
@@ -204,7 +205,7 @@ class JimmerModulePrecompilerTest {
         val currentTypeIds = immutableSchema.types.map(ImmutableType::id).sorted()
         val compilationSourceTypeIds = (currentTypeIds + LsiSymbolId.type("demo.api.BookApi")).sorted()
         val schema = precompiler(
-            platform = JimmerModulePlatform.KSP,
+            platform = CompilerPlatform.KSP,
             moduleRequired = true,
         ).compile(
             immutableSchema,
@@ -215,7 +216,7 @@ class JimmerModulePrecompilerTest {
             ),
         )
 
-        assertEquals(JimmerModulePlatform.KSP, schema.platform)
+        assertEquals(CompilerPlatform.KSP, schema.platform)
         assertEquals("demo", schema.packageName)
         assertTrue(schema.summaries.isEmpty())
         val module = requireNotNull(schema.module)
@@ -242,7 +243,7 @@ class JimmerModulePrecompilerTest {
     fun `ksp resource switch suppresses module and module switch preserves resource`() {
         val entities = immutableSchema("demo.Book" to ImmutableTypeKind.ENTITY)
         val disabledResources = precompiler(
-            platform = JimmerModulePlatform.KSP,
+            platform = CompilerPlatform.KSP,
             moduleRequired = true,
             resourceGeneration = false,
         ).compile(entities)
@@ -250,14 +251,14 @@ class JimmerModulePrecompilerTest {
         assertTrue(disabledResources.resources.isEmpty())
 
         val disabledModule = precompiler(
-            platform = JimmerModulePlatform.KSP,
+            platform = CompilerPlatform.KSP,
             moduleRequired = false,
         ).compile(entities)
         assertNull(disabledModule.module)
         assertEquals(1, disabledModule.resources.size)
 
         val empty = precompiler(
-            platform = JimmerModulePlatform.KSP,
+            platform = CompilerPlatform.KSP,
             moduleRequired = true,
         ).compile(ImmutableSchema(emptyList()))
         assertNull(empty.module)
@@ -267,11 +268,11 @@ class JimmerModulePrecompilerTest {
     @Test
     fun `platform and options participate in snapshots and fingerprints`() {
         val immutableSchema = immutableSchema("demo.Book" to ImmutableTypeKind.ENTITY)
-        val apt = precompiler(JimmerModulePlatform.APT).compile(immutableSchema)
-        val ksp = precompiler(JimmerModulePlatform.KSP).compile(immutableSchema)
+        val apt = precompiler(CompilerPlatform.APT).compile(immutableSchema)
+        val ksp = precompiler(CompilerPlatform.KSP).compile(immutableSchema)
         val renamed = JimmerModulePrecompiler(
             JimmerModulePrecompileOptions(
-                platform = JimmerModulePlatform.APT,
+                platform = CompilerPlatform.APT,
                 tablesName = "DomainTables",
             )
         ).compile(immutableSchema)
@@ -285,13 +286,13 @@ class JimmerModulePrecompilerTest {
     fun `rejects invalid names and unstable retained resource state`() {
         assertFailsWith<IllegalArgumentException> {
             JimmerModulePrecompileOptions(
-                platform = JimmerModulePlatform.APT,
+                platform = CompilerPlatform.APT,
                 immutablesName = "demo.Immutables",
             )
         }
         assertFailsWith<IllegalArgumentException> {
             JimmerModulePrecompileOptions(
-                platform = JimmerModulePlatform.APT,
+                platform = CompilerPlatform.APT,
                 fetchersName = "",
             )
         }
@@ -301,10 +302,23 @@ class JimmerModulePrecompilerTest {
         assertFailsWith<IllegalArgumentException> {
             JimmerModuleResourceState(immutableQualifiedTypeNames = listOf("demo.Bad Type"))
         }
+        assertFailsWith<IllegalArgumentException> {
+            JimmerModulePrecompileOptions(platform = CompilerPlatform.UNKNOWN)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            JimmerModuleSchema(
+                platform = CompilerPlatform.UNKNOWN,
+                options = JimmerModulePrecompileOptions(platform = CompilerPlatform.APT),
+                packageName = "",
+                summaries = emptyList(),
+                module = null,
+                resources = emptyList(),
+            )
+        }
     }
 
     private fun precompiler(
-        platform: JimmerModulePlatform,
+        platform: CompilerPlatform,
         moduleRequired: Boolean = false,
         resourceGeneration: Boolean = true,
     ): JimmerModulePrecompiler {

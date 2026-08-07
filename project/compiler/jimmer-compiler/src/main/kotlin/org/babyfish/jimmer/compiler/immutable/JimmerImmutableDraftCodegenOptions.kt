@@ -1,10 +1,11 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiWorkspace
 
 internal data class JimmerImmutableDraftCodegenOptions(
-    val jacksonFamily: JimmerImmutableJacksonFamily,
+    val jacksonFamily: JacksonFamily,
     val excludedUserAnnotationPrefixes: List<String>,
 ) {
 
@@ -20,7 +21,7 @@ internal data class JimmerImmutableDraftCodegenOptions(
     companion object {
 
         val DEFAULT = JimmerImmutableDraftCodegenOptions(
-            jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
+            jacksonFamily = JacksonFamily.JACKSON_2,
             excludedUserAnnotationPrefixes = emptyList(),
         )
 
@@ -30,13 +31,13 @@ internal data class JimmerImmutableDraftCodegenOptions(
         ): JimmerImmutableDraftCodegenOptions {
             val jackson3 = compilerOptions["jimmer.jackson3"]?.trim()?.takeIf(String::isNotEmpty)
             val jacksonFamily = when (jackson3) {
-                "true" -> JimmerImmutableJacksonFamily.JACKSON_3
+                "true" -> JacksonFamily.JACKSON_3
                 null -> if (workspace[TOOLS_JACKSON_OBJECT_MAPPER] != null) {
-                    JimmerImmutableJacksonFamily.JACKSON_3
+                    JacksonFamily.JACKSON_3
                 } else {
-                    JimmerImmutableJacksonFamily.JACKSON_2
+                    JacksonFamily.JACKSON_2
                 }
-                else -> JimmerImmutableJacksonFamily.JACKSON_2
+                else -> JacksonFamily.JACKSON_2
             }
             val excludedPrefixes = compilerOptions["jimmer.excludedUserAnnotationPrefixes"]
                 ?.trim()
@@ -51,11 +52,6 @@ internal data class JimmerImmutableDraftCodegenOptions(
             )
         }
     }
-}
-
-internal enum class JimmerImmutableJacksonFamily {
-    JACKSON_2,
-    JACKSON_3,
 }
 
 private val TOOLS_JACKSON_OBJECT_MAPPER =

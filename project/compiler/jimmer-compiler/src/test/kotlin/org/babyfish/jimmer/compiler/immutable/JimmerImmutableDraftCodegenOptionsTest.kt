@@ -2,6 +2,7 @@ package org.babyfish.jimmer.compiler.immutable
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
@@ -27,7 +28,7 @@ class JimmerImmutableDraftCodegenOptionsTest {
 
         assertEquals(
             JimmerImmutableDraftCodegenOptions(
-                jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_3,
+                jacksonFamily = JacksonFamily.JACKSON_3,
                 excludedUserAnnotationPrefixes = listOf("demo.internal", "demo.generated"),
             ),
             JimmerImmutableDraftCodegenOptions.from(
@@ -39,7 +40,7 @@ class JimmerImmutableDraftCodegenOptionsTest {
             ),
         )
         assertEquals(
-            JimmerImmutableJacksonFamily.JACKSON_2,
+            JacksonFamily.JACKSON_2,
             JimmerImmutableDraftCodegenOptions.from(
                 compilerOptions = mapOf("jimmer.jackson3" to "false"),
                 workspace = workspace,

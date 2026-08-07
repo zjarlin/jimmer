@@ -7,6 +7,7 @@ import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.FormulaKind
 import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutablePropValueCategory
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -159,13 +160,13 @@ internal fun ImmutableSchema.associatedIdPropName(
     return associatedIdPropNames(type)[prop.id]
 }
 
-internal fun ImmutableSchema.typedPropKind(prop: ImmutableProp): JimmerImmutableTypedPropKind {
+internal fun ImmutableSchema.typedPropValueCategory(prop: ImmutableProp): ImmutablePropValueCategory {
     val reference = isImmutableReference(prop)
     return when {
-        reference && prop.list -> JimmerImmutableTypedPropKind.REFERENCE_LIST
-        reference -> JimmerImmutableTypedPropKind.REFERENCE
-        prop.list -> JimmerImmutableTypedPropKind.SCALAR_LIST
-        else -> JimmerImmutableTypedPropKind.SCALAR
+        reference && prop.list -> ImmutablePropValueCategory.REFERENCE_LIST
+        reference -> ImmutablePropValueCategory.REFERENCE
+        prop.list -> ImmutablePropValueCategory.SCALAR_LIST
+        else -> ImmutablePropValueCategory.SCALAR
     }
 }
 
@@ -189,12 +190,6 @@ internal fun ImmutableProp.fieldName(): String {
     return StringUtil.snake(name, StringUtil.SnakeCase.UPPER)
 }
 
-internal enum class JimmerImmutableTypedPropKind {
-    SCALAR,
-    SCALAR_LIST,
-    REFERENCE,
-    REFERENCE_LIST,
-}
 
 internal enum class JimmerImmutablePropExpressionKind {
     GENERIC,

@@ -48,8 +48,8 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
-import site.addzero.lsi.jimmer.dto.DtoModifier
-import site.addzero.lsi.jimmer.dto.DtoReusableTypeKind
+import org.babyfish.jimmer.dto.compiler.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 
 class JimmerDtoReusableIntegrationTest {
 
@@ -100,7 +100,7 @@ class JimmerDtoReusableIntegrationTest {
         assertEquals(storeDocument.source, storeView.location.source)
         assertEquals("demo.dto.StoreView", storeProp.targetTypeReference?.qualifiedName)
         assertEquals(STORE_TYPE_ID, storeProp.targetTypeReference?.targetBaseTypeId)
-        assertEquals(DtoReusableTypeKind.VIEW, storeProp.targetTypeReference?.kind)
+        assertEquals(DtoTypeKind.VIEW, storeProp.targetTypeReference?.kind)
         assertEquals(bookDocument.source, storeProp.targetTypeReference?.location?.source)
     }
 
@@ -198,7 +198,7 @@ class JimmerDtoReusableIntegrationTest {
         assertNull(storeProp.targetTypeId)
         assertEquals("contract.StoreView", storeProp.targetTypeReference?.qualifiedName)
         assertEquals(STORE_TYPE_ID, storeProp.targetTypeReference?.targetBaseTypeId)
-        assertEquals(DtoReusableTypeKind.VIEW, storeProp.targetTypeReference?.kind)
+        assertEquals(DtoTypeKind.VIEW, storeProp.targetTypeReference?.kind)
     }
 
     @Test
@@ -240,7 +240,7 @@ class JimmerDtoReusableIntegrationTest {
             assertNull(storeProp.targetTypeId)
             assertEquals("contract.StoreSpecification", storeProp.targetTypeReference?.qualifiedName)
             assertEquals(STORE_TYPE_ID, storeProp.targetTypeReference?.targetBaseTypeId)
-            assertEquals(DtoReusableTypeKind.SPECIFICATION, storeProp.targetTypeReference?.kind)
+            assertEquals(DtoTypeKind.SPECIFICATION, storeProp.targetTypeReference?.kind)
         }
     }
 

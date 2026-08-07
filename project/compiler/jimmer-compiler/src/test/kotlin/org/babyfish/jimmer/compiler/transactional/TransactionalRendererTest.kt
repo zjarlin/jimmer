@@ -26,7 +26,6 @@ import site.addzero.lsi.jimmer.transactional.TransactionalConstructor
 import site.addzero.lsi.jimmer.transactional.TransactionalMethod
 import site.addzero.lsi.jimmer.transactional.TransactionalMethodSourceKind
 import site.addzero.lsi.jimmer.transactional.TransactionalParameter
-import site.addzero.lsi.jimmer.transactional.TransactionalPlatform
 import site.addzero.lsi.jimmer.transactional.TransactionalSchema
 import site.addzero.lsi.jimmer.transactional.TransactionalSqlClient
 import site.addzero.lsi.jimmer.transactional.TransactionalType
@@ -302,7 +301,7 @@ class TransactionalRendererTest {
             serviceId = JAVA_SERVICE_ID,
             packageName = "org.babyfish.jimmer.sql.transaction",
             sqlClientType = LsiDeclaredType(J_SQL_CLIENT),
-            platform = TransactionalPlatform.JAVA,
+            language = LsiLanguage.JAVA,
             constructor = TransactionalConstructor(
                 id = constructorId,
                 primary = false,
@@ -351,7 +350,7 @@ class TransactionalRendererTest {
             serviceId = KOTLIN_SERVICE_ID,
             packageName = "org.babyfish.jimmer.sql.kt.transaction",
             sqlClientType = LsiDeclaredType(K_SQL_CLIENT),
-            platform = TransactionalPlatform.KOTLIN,
+            language = LsiLanguage.KOTLIN,
             constructor = TransactionalConstructor(
                 id = constructorId,
                 primary = true,
@@ -388,7 +387,7 @@ class TransactionalRendererTest {
         serviceId: LsiSymbolId,
         packageName: String,
         sqlClientType: LsiDeclaredType,
-        platform: TransactionalPlatform,
+        language: LsiLanguage,
         constructor: TransactionalConstructor,
         methods: List<TransactionalMethod>,
     ): TransactionalType {
@@ -404,14 +403,14 @@ class TransactionalRendererTest {
             targetAnnotationTypeId = LsiSymbolId.type("$packageName.Component"),
             sqlClient = TransactionalSqlClient(
                 logicalId = LsiSymbolId.property(serviceId, "sqlClient"),
-                declarationId = if (platform == TransactionalPlatform.JAVA) {
+                declarationId = if (language == LsiLanguage.JAVA) {
                     LsiSymbolId.field(serviceId, "sqlClient")
                 } else {
                     LsiSymbolId.property(serviceId, "sqlClient")
                 },
                 name = "sqlClient",
                 type = sqlClientType,
-                platform = platform,
+                language = language,
             ),
             constructors = listOf(constructor),
             methods = methods,
@@ -658,7 +657,7 @@ class TransactionalRendererTest {
             add((type.sqlClient.type as LsiDeclaredType).declarationId)
             add(PROPAGATION)
             add(
-                if (type.sqlClient.platform == TransactionalPlatform.JAVA) {
+                if (type.sqlClient.language == LsiLanguage.JAVA) {
                     JAVA_OVERRIDE
                 } else {
                     KOTLIN_SUPPRESS

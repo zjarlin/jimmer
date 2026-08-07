@@ -1,7 +1,7 @@
 package org.babyfish.jimmer.compiler.render.ksp
 
 import com.squareup.kotlinpoet.TypeSpec
-import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.dto.serializerPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.toSerializerPoetType
 import site.addzero.lsi.core.LsiLanguage
@@ -20,7 +20,7 @@ internal object KspDtoSerializerRenderer {
         dtoType: DtoType,
         graph: DtoGraph,
         immutableSchema: ImmutableSchema,
-        jacksonVersion: JimmerDtoJacksonVersion,
+        jacksonVersion: JacksonFamily,
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
     ): TypeSpec {

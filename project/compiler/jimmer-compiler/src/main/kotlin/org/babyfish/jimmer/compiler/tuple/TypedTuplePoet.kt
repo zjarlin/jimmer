@@ -39,7 +39,7 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -163,7 +163,7 @@ private fun TypedTupleType.javaMapperType(): LsiPoetType {
     val mapperType = declaredType(mapperQualifiedName)
     return LsiPoetType(
         name = mapperSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         modifiers = setOf(LsiPoetModifier.PUBLIC),
         superInterfaces = buildList {
             add(tupleMapperType(tupleType))
@@ -192,7 +192,7 @@ private fun TypedTupleType.kotlinMapperType(): LsiPoetType {
     val mapperType = declaredType(mapperQualifiedName)
     return LsiPoetType(
         name = mapperSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         primaryConstructor = LsiPoetConstructor(
             modifiers = setOf(LsiPoetModifier.PRIVATE),
             parameters = listOf(LsiPoetParameter("selections", KOTLIN_SELECTION_ARRAY_TYPE)),
@@ -231,7 +231,7 @@ private fun TypedTupleType.javaBaseTableType(): LsiPoetType {
     val projection = requireNotNull(baseTableProjection)
     return LsiPoetType(
         name = tableSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.FINAL),
         superClass = declaredType(ABSTRACT_TYPED_BASE_TABLE_ID, tableType),
         primaryConstructor = LsiPoetConstructor(
@@ -279,7 +279,7 @@ private fun TypedTupleType.kotlinBaseTableType(): LsiPoetType {
     val projection = requireNotNull(baseTableProjection)
     return LsiPoetType(
         name = tableSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         superClass = ABSTRACT_K_BASE_TABLE_TYPE,
         superClassConstructorArguments = listOf(code { name("baseTable") }),
         superInterfaces = listOf(declaredType(K_NON_NULL_BASE_TABLE_ID, nullableTableType)),
@@ -303,7 +303,7 @@ private fun TypedTupleType.kotlinNullableBaseTableType(
 ): LsiPoetType {
     return LsiPoetType(
         name = "Nullable",
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         superClass = ABSTRACT_K_BASE_TABLE_TYPE,
         superClassConstructorArguments = listOf(code { name("baseTable") }),
         superInterfaces = listOf(K_NULLABLE_BASE_TABLE_TYPE),
@@ -348,7 +348,7 @@ private fun TypedTupleType.kotlinBaseTableCompanionType(
 ): LsiPoetType {
     return LsiPoetType(
         name = "Companion",
-        kind = LsiPoetTypeKind.OBJECT,
+        kind = LsiTypeDeclarationKind.OBJECT,
         modifiers = setOf(LsiPoetModifier.COMPANION),
         members = listOf(
             LsiPoetProperty(
@@ -722,7 +722,7 @@ private fun TypedTupleType.javaBuilderType(
     val returnType = stepType(property, mapperType)
     return LsiPoetType(
         name = builderSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         modifiers = setOf(
             LsiPoetModifier.PUBLIC,
             LsiPoetModifier.STATIC,
@@ -817,7 +817,7 @@ private fun TypedTupleType.kotlinBuilderType(
     val returnType = stepType(property, mapperType)
     return LsiPoetType(
         name = builderSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         primaryConstructor = LsiPoetConstructor(
             modifiers = setOf(LsiPoetModifier.INTERNAL),
             parameters = listOf(LsiPoetParameter("selections", KOTLIN_SELECTION_ARRAY_TYPE)),
@@ -853,7 +853,7 @@ private fun TypedTupleType.kotlinCompanionType(mapperType: LsiTypeRef): LsiPoetT
     val returnType = stepType(property, mapperType)
     return LsiPoetType(
         name = "Companion",
-        kind = LsiPoetTypeKind.OBJECT,
+        kind = LsiTypeDeclarationKind.OBJECT,
         modifiers = setOf(LsiPoetModifier.COMPANION),
         members = listOf(
             LsiPoetFunction(

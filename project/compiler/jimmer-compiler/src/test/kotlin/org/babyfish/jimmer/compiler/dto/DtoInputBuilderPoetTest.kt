@@ -21,7 +21,6 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
 import site.addzero.lsi.jimmer.dto.DtoAnnotationApplication
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclaration
-import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoAnnotationOrigin
 import site.addzero.lsi.jimmer.dto.DtoAnnotationPlacement
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
@@ -29,7 +28,7 @@ import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoBuilderSetterAnnotationApplication
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoPropId
@@ -153,7 +152,7 @@ class DtoInputBuilderPoetTest {
                 ),
                 annotationDeclaration(
                     typeId = TAGS_ANNOTATION_TYPE_ID,
-                    kind = DtoAnnotationDeclarationKind.KOTLIN,
+                    language = LsiLanguage.KOTLIN,
                     argumentTypes = mapOf(
                         "value" to LsiArrayType(LsiDeclaredType(JAVA_STRING_TYPE_ID)),
                     ),
@@ -251,7 +250,7 @@ class DtoInputBuilderPoetTest {
             declarations = listOf(
                 annotationDeclaration(
                     typeId = TAGS_ANNOTATION_TYPE_ID,
-                    kind = DtoAnnotationDeclarationKind.KOTLIN,
+                    language = LsiLanguage.KOTLIN,
                     argumentTypes = mapOf(
                         "value" to LsiArrayType(LsiDeclaredType(JAVA_STRING_TYPE_ID)),
                     ),
@@ -507,14 +506,14 @@ class DtoInputBuilderPoetTest {
 
     private fun annotationDeclaration(
         typeId: LsiSymbolId,
-        kind: DtoAnnotationDeclarationKind = DtoAnnotationDeclarationKind.JAVA,
+        language: LsiLanguage = LsiLanguage.JAVA,
         argumentTypes: Map<String, LsiTypeRef>,
         kotlinValueVararg: Boolean = false,
         argumentNamesInDeclarationOrder: List<String> = argumentTypes.keys.toList(),
     ): DtoAnnotationDeclaration {
         return DtoAnnotationDeclaration(
             typeId = typeId,
-            kind = kind,
+            language = language,
             targetDeclared = true,
             allowedPlacements = listOf(DtoAnnotationPlacement.TYPE),
             argumentTypes = argumentTypes.toSortedMap(),

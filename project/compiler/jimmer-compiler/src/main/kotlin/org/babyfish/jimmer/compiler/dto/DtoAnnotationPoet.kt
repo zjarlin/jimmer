@@ -7,7 +7,6 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationApplication
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclaration
-import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoAnnotationOrigin
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoBuilderSetterAnnotationApplication
@@ -347,7 +346,7 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
             val element = soleValueArray.elements.single()
             if (
                 targetLanguage == LsiLanguage.KOTLIN &&
-                (!includeDefaultArguments || declaration.kind == DtoAnnotationDeclarationKind.KOTLIN)
+                (!includeDefaultArguments || declaration.language == LsiLanguage.KOTLIN)
             ) {
                 listOf(LsiPoetAnnotationArgument.Positional(element))
             } else {
@@ -357,7 +356,7 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
                         nameStyle = if (
                             includeDefaultArguments &&
                             targetLanguage == LsiLanguage.KOTLIN &&
-                            declaration.kind == DtoAnnotationDeclarationKind.JAVA
+                            declaration.language == LsiLanguage.JAVA
                         ) {
                             LsiPoetAnnotationArgumentNameStyle.VERBATIM
                         } else {

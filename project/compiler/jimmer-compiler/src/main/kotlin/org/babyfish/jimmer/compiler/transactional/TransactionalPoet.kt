@@ -6,7 +6,6 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.transactional.TransactionalConstructor
 import site.addzero.lsi.jimmer.transactional.TransactionalMethod
 import site.addzero.lsi.jimmer.transactional.TransactionalParameter
-import site.addzero.lsi.jimmer.transactional.TransactionalPlatform
 import site.addzero.lsi.jimmer.transactional.TransactionalSchema
 import site.addzero.lsi.jimmer.transactional.TransactionalType
 import site.addzero.lsi.model.LsiAnnotation
@@ -18,6 +17,7 @@ import site.addzero.lsi.model.LsiFunctionType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
@@ -38,7 +38,6 @@ import site.addzero.lsi.poet.LsiPoetFunction
 import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -56,10 +55,10 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
     val dependencySymbols = dependencySymbols()
     val dependencySources = workspace.originatingSources(dependencySymbols)
     val file = LsiPoetFile(
-        language = platformLanguage,
+        language = sqlClient.language,
         packageName = packageName,
         fileName = generatedSimpleName,
-        annotations = if (sqlClient.platform == TransactionalPlatform.KOTLIN) {
+        annotations = if (sqlClient.language == LsiLanguage.KOTLIN) {
             listOf(FILE_WARNING_SUPPRESSION)
         } else {
             emptyList()
@@ -82,16 +81,17 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
 }
 
 private fun TransactionalType.toLsiPoetType(): LsiPoetType {
-    return when (sqlClient.platform) {
-        TransactionalPlatform.JAVA -> toJavaPoetType()
-        TransactionalPlatform.KOTLIN -> toKotlinPoetType()
+    return when (sqlClient.language) {
+        LsiLanguage.JAVA -> toJavaPoetType()
+        LsiLanguage.KOTLIN -> toKotlinPoetType()
+        LsiLanguage.UNKNOWN -> error("Transactional SQL client language must be Java or Kotlin")
     }
 }
 
 private fun TransactionalType.toJavaPoetType(): LsiPoetType {
     return LsiPoetType(
         name = generatedSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = typeAnnotations(),
         modifiers = buildSet {
             if (visibility == LsiVisibility.PUBLIC) {
@@ -113,7 +113,7 @@ private fun TransactionalType.toKotlinPoetType(): LsiPoetType {
     val primaryConstructor = constructors.singleOrNull(TransactionalConstructor::primary)
     return LsiPoetType(
         name = generatedSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = typeAnnotations(),
         modifiers = buildSet {
             when (visibility) {
@@ -394,11 +394,12 @@ private fun TransactionalType.dependencySymbols(): Set<LsiSymbolId> {
         add(sqlClient.logicalId)
         add(sqlClient.declarationId)
         add(PROPAGATION_TYPE.declarationId)
-        when (sqlClient.platform) {
-            TransactionalPlatform.JAVA -> if (methods.isNotEmpty()) {
+        when (sqlClient.language) {
+            LsiLanguage.JAVA -> if (methods.isNotEmpty()) {
                 add(JAVA_OVERRIDE_ID)
             }
-            TransactionalPlatform.KOTLIN -> add(KOTLIN_SUPPRESS_ID)
+            LsiLanguage.KOTLIN -> add(KOTLIN_SUPPRESS_ID)
+            LsiLanguage.UNKNOWN -> error("Transactional SQL client language must be Java or Kotlin")
         }
         addType(sqlClient.type)
         copiedAnnotations.forEach(::addAnnotation)
@@ -466,12 +467,6 @@ private fun MutableSet<LsiSymbolId>.addAnnotationValue(value: LsiAnnotationValue
         else -> Unit
     }
 }
-
-private val TransactionalType.platformLanguage: LsiLanguage
-    get() = when (sqlClient.platform) {
-        TransactionalPlatform.JAVA -> LsiLanguage.JAVA
-        TransactionalPlatform.KOTLIN -> LsiLanguage.KOTLIN
-    }
 
 private fun String?.withTrailingLineBreak(): String? {
     return this?.let { documentation -> "$documentation\n" }

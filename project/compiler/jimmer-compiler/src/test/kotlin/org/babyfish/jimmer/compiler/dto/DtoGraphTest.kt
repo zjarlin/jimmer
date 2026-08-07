@@ -19,7 +19,9 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerSourceSet
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.jimmer.client.toClientDefinitionDocumentation
 import site.addzero.lsi.jimmer.AssociationKind
@@ -34,7 +36,6 @@ import site.addzero.lsi.jimmer.InheritanceStrategy
 import site.addzero.lsi.jimmer.JoinedTableDissociateAction
 import org.babyfish.jimmer.compiler.immutable.completeEntityProps
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
-import org.babyfish.jimmer.dto.compiler.DtoModifier as AstDtoModifier
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiOrigin
@@ -50,6 +51,7 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
@@ -71,12 +73,12 @@ import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContract
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
-import site.addzero.lsi.jimmer.dto.DtoLikeOption
+import org.babyfish.jimmer.dto.compiler.LikeOption
 import site.addzero.lsi.jimmer.dto.DtoLimit
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoOrderItem
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoPredicate
 import site.addzero.lsi.jimmer.dto.DtoProp
@@ -90,7 +92,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeArgument
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoUserProp
-import site.addzero.lsi.jimmer.dto.DtoVariance
+import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.jimmer.dto.fingerprint
 import site.addzero.lsi.jimmer.dto.normalizedSnapshot
 
@@ -133,7 +135,7 @@ class DtoGraphTest {
         val resolution = resolution(complexGraph())
         val state = JimmerDtoCompilerFeatureState(
             status = JimmerDtoCompilerFeatureStatus.RESOLVED,
-            dependencyStatus = JimmerDtoCompilerDependencyStatus.RESOLVED,
+            dependencyStatus = CompilerResolutionStatus.RESOLVED,
             graphs = resolution.graphs,
             annotationContractsBySource = resolution.annotationContractsBySource,
             interfaceContractsBySource = resolution.interfaceContractsBySource,
@@ -141,11 +143,11 @@ class DtoGraphTest {
             resolvedInputFingerprint = resolution.resolvedInputs.resolvedInputFingerprint(),
             unresolvedDocuments = emptyList(),
             failures = emptyList(),
-            defaultNullableInputModifier = AstDtoModifier.STATIC,
+            defaultNullableInputModifier = DtoModifier.STATIC,
             rendererOptions = JimmerDtoRendererOptions(
-                jacksonVersion = JimmerDtoJacksonVersion.JACKSON_2,
+                jacksonVersion = JacksonFamily.JACKSON_2,
                 hibernateValidatorEnhancement = false,
-                aptFieldVisibility = JimmerDtoFieldVisibility.PRIVATE,
+                aptFieldVisibility = LsiVisibility.PRIVATE,
                 kspMutable = false,
             ),
             effectiveKspMutableByRootTypeId = resolution.graphs
@@ -269,7 +271,7 @@ class DtoGraphTest {
             immutableSemanticRootTypeIds = fixture.schema.types.mapTo(sortedSetOf(), ImmutableType::id),
             workspace = fixture.workspace,
             sourceFilter = JimmerCompilerSourceFilter(),
-            defaultNullableInputModifier = AstDtoModifier.STATIC,
+            defaultNullableInputModifier = DtoModifier.STATIC,
             platform = CompilerPlatform.APT,
         )
 
@@ -343,7 +345,7 @@ class DtoGraphTest {
                     typeName = "demo.View",
                     arguments = listOf(
                         DtoTypeArgument(
-                            variance = DtoVariance.OUT,
+                            variance = LsiVariance.OUT,
                             type = DtoTypeRef(
                                 typeName = "java.lang.String",
                                 arguments = emptyList(),
@@ -520,8 +522,8 @@ class DtoGraphTest {
                 ),
                 recursive = false,
                 likeOptions = linkedSetOf(
-                    DtoLikeOption.INSENSITIVE,
-                    DtoLikeOption.MATCH_START,
+                    LikeOption.INSENSITIVE,
+                    LikeOption.MATCH_START,
                 ),
             ),
             DtoBaseProp(
@@ -866,8 +868,8 @@ class DtoGraphTest {
             if (prop.id == STORE_PROP_ID) {
                 (prop as DtoBaseProp).copy(
                     likeOptions = linkedSetOf(
-                        DtoLikeOption.MATCH_START,
-                        DtoLikeOption.INSENSITIVE,
+                        LikeOption.MATCH_START,
+                        LikeOption.INSENSITIVE,
                     ),
                 )
             } else {
@@ -1056,7 +1058,7 @@ class DtoGraphTest {
                     value = DtoAnnotationValue.TypeValue(
                         DtoTypeRef(
                             typeName = "demo.Payload",
-                            arguments = listOf(DtoTypeArgument(DtoVariance.STAR, null)),
+                            arguments = listOf(DtoTypeArgument(LsiVariance.STAR, null)),
                             nullable = false,
                             location = location(source, 1, 20),
                         )

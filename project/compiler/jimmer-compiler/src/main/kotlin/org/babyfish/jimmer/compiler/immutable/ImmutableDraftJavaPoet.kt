@@ -29,7 +29,7 @@ import site.addzero.lsi.poet.LsiPoetMember
 import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 
 /**
@@ -97,7 +97,7 @@ private class JavaDraftPoetContext(
     private fun draftType(): LsiPoetType {
         return LsiPoetType(
             name = "${type.simpleName}Draft",
-            kind = LsiPoetTypeKind.INTERFACE,
+            kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = buildList {
                 add(generatedByAnnotation())
                 type.documentation?.takeIf(String::isNotEmpty)?.let { documentation ->
@@ -261,7 +261,7 @@ private class JavaDraftPoetContext(
     private fun producer(): LsiPoetType {
         return LsiPoetType(
             name = PRODUCER,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
             modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC),
             members = buildList {
@@ -489,7 +489,7 @@ private class JavaDraftPoetContext(
     private fun implementor(): LsiPoetType {
         return LsiPoetType(
             name = IMPLEMENTOR,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(), jsonPropertyOrderAnnotation()),
             modifiers = setOf(
                 LsiPoetModifier.PUBLIC,
@@ -647,7 +647,7 @@ private class JavaDraftPoetContext(
     private fun impl(): LsiPoetType {
         return LsiPoetType(
             name = IMPL,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
             modifiers = setOf(LsiPoetModifier.PRIVATE, LsiPoetModifier.STATIC),
             superClass = implementorType,
@@ -1195,7 +1195,7 @@ private class JavaDraftPoetContext(
     private fun draftImpl(): LsiPoetType {
         return LsiPoetType(
             name = DRAFT_IMPL,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
             modifiers = setOf(LsiPoetModifier.PRIVATE, LsiPoetModifier.STATIC),
             superClass = implementorType,
@@ -1954,7 +1954,7 @@ private class JavaDraftPoetContext(
     private fun builder(): LsiPoetType {
         return LsiPoetType(
             name = BUILDER,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
             modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC),
             members = buildList {

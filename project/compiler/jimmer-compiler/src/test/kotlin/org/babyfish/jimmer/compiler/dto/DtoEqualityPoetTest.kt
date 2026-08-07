@@ -9,7 +9,7 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
@@ -17,7 +17,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeArgument
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoUserProp
-import site.addzero.lsi.jimmer.dto.DtoVariance
+import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -156,7 +156,7 @@ class DtoEqualityPoetTest {
             typeName = "Array",
             arguments = listOf(
                 DtoTypeArgument(
-                    variance = DtoVariance.INVARIANT,
+                    variance = LsiVariance.INVARIANT,
                     type = scalarType(elementName),
                 ),
             ),
@@ -168,7 +168,7 @@ class DtoEqualityPoetTest {
     private fun starArrayType(): DtoTypeRef {
         return DtoTypeRef(
             typeName = "Array",
-            arguments = listOf(DtoTypeArgument(DtoVariance.STAR, type = null)),
+            arguments = listOf(DtoTypeArgument(LsiVariance.STAR, type = null)),
             nullable = false,
             location = LOCATION,
         )

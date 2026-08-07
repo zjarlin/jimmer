@@ -2,7 +2,9 @@ package org.babyfish.jimmer.compiler.immutable
 
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerRound
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
@@ -13,17 +15,17 @@ import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
+import site.addzero.lsi.core.LsiLanguage
+import site.addzero.lsi.core.LsiOriginKind
+import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.diagnostic.LsiDiagnostic
+import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.fingerprint
 import site.addzero.lsi.jimmer.isJimmerImmutableType
 import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
-import site.addzero.lsi.core.LsiLanguage
-import site.addzero.lsi.core.LsiOriginKind
-import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.diagnostic.LsiDiagnostic
-import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetRenderer
@@ -105,7 +107,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             return JimmerCompilerFeatureRenderResult()
         }
         val state = context.state as JimmerImmutableCompilerFeatureState
-        if (state.status != JimmerImmutableCompilerFeatureStatus.RESOLVED) {
+        if (state.status != CompilerResolutionStatus.RESOLVED) {
             return JimmerCompilerFeatureRenderResult()
         }
         val fetcherTypes = state.schema.generatedFetcherTypes(state.targetTypeIds)
@@ -224,9 +226,9 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 currentTypeIds = currentTypeIds,
                 unresolvedRootTypeIds = unresolvedTypeIds,
                 status = if (deferred) {
-                    JimmerImmutableCompilerFeatureStatus.DEFERRED
+                    CompilerResolutionStatus.DEFERRED
                 } else {
-                    JimmerImmutableCompilerFeatureStatus.INVALID
+                    CompilerResolutionStatus.INVALID
                 },
             ),
             diagnostics = if (deferred) {
@@ -285,14 +287,14 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             state = JimmerImmutableCompilerFeatureState(
                 schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
-                    jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
+                    jacksonFamily = JacksonFamily.JACKSON_2,
                     types = emptyList(),
                 ),
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
                 unresolvedRootTypeIds = if (exception.recoverable) setOf(affectedTypeId) else emptySet(),
-                status = JimmerImmutableCompilerFeatureStatus.INVALID,
+                status = CompilerResolutionStatus.INVALID,
                 failure = exception.message.orEmpty(),
             ),
             diagnostics = listOf(
@@ -320,26 +322,20 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             state = JimmerImmutableCompilerFeatureState(
                 schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
-                    jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
+                    jacksonFamily = JacksonFamily.JACKSON_2,
                     types = emptyList(),
                 ),
                 targetTypeIds = targetTypeIds,
                 semanticRootTypeIds = semanticRootTypeIds,
                 currentTypeIds = currentTypeIds,
                 unresolvedRootTypeIds = unresolvedTypeIds,
-                status = JimmerImmutableCompilerFeatureStatus.DEFERRED,
+                status = CompilerResolutionStatus.DEFERRED,
             ),
             processedSymbols = currentTypeIds - unresolvedTypeIds,
             unresolvedSymbols = unresolvedTypeIds,
         )
     }
 
-}
-
-internal enum class JimmerImmutableCompilerFeatureStatus {
-    RESOLVED,
-    DEFERRED,
-    INVALID,
 }
 
 internal data class JimmerImmutableCompilerFeatureState(
@@ -349,7 +345,7 @@ internal data class JimmerImmutableCompilerFeatureState(
     val semanticRootTypeIds: Set<LsiSymbolId>,
     val currentTypeIds: Set<LsiSymbolId>,
     val unresolvedRootTypeIds: Set<LsiSymbolId> = emptySet(),
-    val status: JimmerImmutableCompilerFeatureStatus = JimmerImmutableCompilerFeatureStatus.RESOLVED,
+    val status: CompilerResolutionStatus = CompilerResolutionStatus.RESOLVED,
     val failure: String = "",
     override val fingerprint: String = buildString {
         append(status.name)
@@ -382,7 +378,7 @@ internal data class JimmerImmutableCompilerFeatureState(
         require(unresolvedRootTypeIds.all(semanticRootTypeIds::contains)) {
             "Unresolved immutable root ids must be part of semantic root ids"
         }
-        require(status != JimmerImmutableCompilerFeatureStatus.RESOLVED || unresolvedRootTypeIds.isEmpty()) {
+        require(status != CompilerResolutionStatus.RESOLVED || unresolvedRootTypeIds.isEmpty()) {
             "Resolved immutable state cannot contain unresolved roots"
         }
     }

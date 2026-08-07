@@ -24,14 +24,14 @@ import site.addzero.lsi.jimmer.dto.DtoConfigContractResolution
 import site.addzero.lsi.jimmer.dto.DtoFetchType
 import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropConfig
 import site.addzero.lsi.jimmer.dto.DtoPropId
-import site.addzero.lsi.jimmer.dto.DtoReusableTypeKind
+import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
@@ -584,7 +584,7 @@ class DtoMetadataFetcherPoetTest {
         return DtoReusableTypeReference(
             qualifiedName = qualifiedName,
             targetBaseTypeId = targetBaseTypeId,
-            kind = DtoReusableTypeKind.VIEW,
+            kind = DtoTypeKind.VIEW,
             location = LOCATION,
         )
     }

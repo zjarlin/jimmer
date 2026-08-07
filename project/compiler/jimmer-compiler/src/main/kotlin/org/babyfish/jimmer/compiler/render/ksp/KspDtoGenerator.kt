@@ -2,7 +2,7 @@ package org.babyfish.jimmer.compiler.render.ksp
 
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
 import org.babyfish.jimmer.impl.util.StringUtil
@@ -17,7 +17,7 @@ import site.addzero.lsi.jimmer.dto.DtoGeneratedBaseContractKind
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch as LsiDtoPolymorphicBranch
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp as LsiDtoProp
 import site.addzero.lsi.jimmer.dto.DtoType as LsiDtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
@@ -1515,14 +1515,14 @@ internal class KspDtoGenerator private constructor(
     }
 }
 
-private fun JimmerDtoJacksonVersion.className(
+private fun JacksonFamily.className(
     jackson2PackageName: String,
     jackson3PackageName: String,
     simpleName: String,
 ): ClassName = ClassName(
     when (this) {
-        JimmerDtoJacksonVersion.JACKSON_2 -> jackson2PackageName
-        JimmerDtoJacksonVersion.JACKSON_3 -> jackson3PackageName
+        JacksonFamily.JACKSON_2 -> jackson2PackageName
+        JacksonFamily.JACKSON_3 -> jackson3PackageName
     },
     simpleName,
 )

@@ -18,7 +18,6 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationApplication
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclaration
-import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoAnnotationOrigin
 import site.addzero.lsi.jimmer.dto.DtoAnnotationPlacement
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
@@ -119,7 +118,7 @@ class DtoPropAnnotationRendererTest {
             declarations = listOf(
                 DtoAnnotationDeclaration(
                     typeId = ANNOTATION_ID,
-                    kind = DtoAnnotationDeclarationKind.JAVA,
+                    language = LsiLanguage.JAVA,
                     targetDeclared = true,
                     allowedPlacements = PLACEMENTS,
                     argumentTypes = sortedMapOf(

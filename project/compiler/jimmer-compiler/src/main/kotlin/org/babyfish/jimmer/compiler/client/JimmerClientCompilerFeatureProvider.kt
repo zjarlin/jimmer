@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.client
 
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
@@ -16,7 +17,6 @@ import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -190,12 +190,6 @@ internal enum class JimmerClientCompilerFeatureStatus {
     DISABLED,
 }
 
-internal enum class JimmerClientCompilerDependencyStatus {
-    RESOLVED,
-    DEFERRED,
-    INVALID,
-}
-
 internal data class ClientCompilerFailure(
     val rootTypeId: LsiSymbolId,
     val declarationId: LsiSymbolId,
@@ -209,7 +203,7 @@ internal data class ClientCompilerFailure(
 
 internal data class JimmerClientCompilerFeatureState(
     val status: JimmerClientCompilerFeatureStatus,
-    val dependencyStatus: JimmerClientCompilerDependencyStatus,
+    val dependencyStatus: CompilerResolutionStatus,
     val schema: ClientSchema,
     val explicitApi: Boolean,
     val targetServiceTypeIds: Set<LsiSymbolId>,
@@ -272,7 +266,7 @@ internal data class JimmerClientCompilerFeatureState(
         require(failures.mapTo(sortedSetOf(), ClientCompilerFailure::rootTypeId) == invalidRootTypeIds) {
             "Client failures must describe all invalid roots"
         }
-        require(status != JimmerClientCompilerFeatureStatus.RESOLVED || dependencyStatus == JimmerClientCompilerDependencyStatus.RESOLVED) {
+        require(status != JimmerClientCompilerFeatureStatus.RESOLVED || dependencyStatus == CompilerResolutionStatus.RESOLVED) {
             "Resolved client state requires resolved dependencies"
         }
         require(status != JimmerClientCompilerFeatureStatus.RESOLVED || unresolvedRootTypeIds.isEmpty()) {
@@ -285,7 +279,7 @@ internal data class JimmerClientCompilerFeatureState(
 }
 
 private data class ClientDependencies(
-    val status: JimmerClientCompilerDependencyStatus,
+    val status: CompilerResolutionStatus,
     val immutableFingerprint: String,
     val errorFingerprint: String,
     val immutableSchema: ImmutableSchema,
@@ -336,16 +330,16 @@ private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependen
         "Client feature requires DTO compiler state"
     }
     val status = when {
-        immutableState.status == JimmerImmutableCompilerFeatureStatus.INVALID ||
+        immutableState.status == CompilerResolutionStatus.INVALID ||
             errorState.status == ErrorCompilerFeatureStatus.INVALID ||
             dtoState.status in DTO_INVALID_STATUSES -> {
-            JimmerClientCompilerDependencyStatus.INVALID
+            CompilerResolutionStatus.INVALID
         }
-        immutableState.status == JimmerImmutableCompilerFeatureStatus.DEFERRED ||
+        immutableState.status == CompilerResolutionStatus.DEFERRED ||
             dtoState.status in DTO_DEFERRED_STATUSES -> {
-            JimmerClientCompilerDependencyStatus.DEFERRED
+            CompilerResolutionStatus.DEFERRED
         }
-        else -> JimmerClientCompilerDependencyStatus.RESOLVED
+        else -> CompilerResolutionStatus.RESOLVED
     }
     return ClientDependencies(
         status = status,
@@ -395,12 +389,12 @@ private fun clientStatus(
 ): JimmerClientCompilerFeatureStatus {
     return when {
         invalid -> JimmerClientCompilerFeatureStatus.INVALID
-        dependencies.status == JimmerClientCompilerDependencyStatus.INVALID -> {
+        dependencies.status == CompilerResolutionStatus.INVALID -> {
             JimmerClientCompilerFeatureStatus.DEPENDENCY_INVALID
         }
         unresolved && !deferred -> JimmerClientCompilerFeatureStatus.INVALID
         deferred -> JimmerClientCompilerFeatureStatus.DEFERRED
-        dependencies.status == JimmerClientCompilerDependencyStatus.DEFERRED -> {
+        dependencies.status == CompilerResolutionStatus.DEFERRED -> {
             JimmerClientCompilerFeatureStatus.DEPENDENCY_DEFERRED
         }
         else -> JimmerClientCompilerFeatureStatus.RESOLVED

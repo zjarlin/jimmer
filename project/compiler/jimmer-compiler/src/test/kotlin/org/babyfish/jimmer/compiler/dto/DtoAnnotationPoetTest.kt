@@ -15,7 +15,6 @@ import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
 import site.addzero.lsi.jimmer.dto.DtoAnnotationApplication
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
 import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclaration
-import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoAnnotationOrigin
 import site.addzero.lsi.jimmer.dto.DtoAnnotationPlacement
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
@@ -63,7 +62,7 @@ class DtoAnnotationPoetTest {
             declarations = listOf(
                 DtoAnnotationDeclaration(
                     typeId = REPEATED_ANNOTATION_TYPE_ID,
-                    kind = DtoAnnotationDeclarationKind.JAVA,
+                    language = LsiLanguage.JAVA,
                     targetDeclared = true,
                     allowedPlacements = listOf(DtoAnnotationPlacement.TYPE),
                     argumentTypes = sortedMapOf(
@@ -201,7 +200,7 @@ class DtoAnnotationPoetTest {
             declarations = listOf(
                 DtoAnnotationDeclaration(
                     typeId = annotationTypeId,
-                    kind = DtoAnnotationDeclarationKind.JAVA,
+                    language = LsiLanguage.JAVA,
                     targetDeclared = true,
                     allowedPlacements = listOf(DtoAnnotationPlacement.FIELD),
                     argumentTypes = sortedMapOf(
@@ -251,7 +250,7 @@ class DtoAnnotationPoetTest {
             declarations = listOf(
                 DtoAnnotationDeclaration(
                     typeId = annotationTypeId,
-                    kind = DtoAnnotationDeclarationKind.JAVA,
+                    language = LsiLanguage.JAVA,
                     targetDeclared = true,
                     allowedPlacements = listOf(DtoAnnotationPlacement.FIELD),
                     argumentTypes = sortedMapOf("when" to LsiDeclaredType(STRING_TYPE_ID)),
@@ -314,7 +313,7 @@ class DtoAnnotationPoetTest {
     ): DtoAnnotationDeclaration {
         return DtoAnnotationDeclaration(
             typeId = REPEATED_ANNOTATION_TYPE_ID,
-            kind = DtoAnnotationDeclarationKind.JAVA,
+            language = LsiLanguage.JAVA,
             targetDeclared = true,
             allowedPlacements = listOf(placement),
             argumentTypes = sortedMapOf(

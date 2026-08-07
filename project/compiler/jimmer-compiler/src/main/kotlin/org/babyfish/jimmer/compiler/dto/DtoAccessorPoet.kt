@@ -11,7 +11,7 @@ import site.addzero.lsi.jimmer.generatedDraftSlotName
 import site.addzero.lsi.jimmer.dto.DtoAccessorConversionKind
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.accessorConversionKind
 import site.addzero.lsi.jimmer.dto.accessorPath

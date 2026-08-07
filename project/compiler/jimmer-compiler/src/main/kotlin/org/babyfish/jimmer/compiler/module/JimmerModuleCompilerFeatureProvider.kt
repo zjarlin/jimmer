@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.module
 
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
 import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
@@ -10,7 +11,6 @@ import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
 import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
@@ -35,7 +35,7 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             "Jimmer module feature requires immutable compiler state"
         }
         when (immutableState.status) {
-            JimmerImmutableCompilerFeatureStatus.DEFERRED -> {
+            CompilerResolutionStatus.DEFERRED -> {
                 return JimmerCompilerFeaturePrecompileResult(
                     state = JimmerModuleCompilerFeatureState.blocked(
                         status = JimmerModuleCompilerFeatureStatus.DEPENDENCY_DEFERRED,
@@ -43,7 +43,7 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     )
                 )
             }
-            JimmerImmutableCompilerFeatureStatus.INVALID -> {
+            CompilerResolutionStatus.INVALID -> {
                 return JimmerCompilerFeaturePrecompileResult(
                     state = JimmerModuleCompilerFeatureState.blocked(
                         status = JimmerModuleCompilerFeatureStatus.DEPENDENCY_INVALID,
@@ -51,16 +51,18 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     )
                 )
             }
-            JimmerImmutableCompilerFeatureStatus.RESOLVED -> Unit
+            CompilerResolutionStatus.RESOLVED -> Unit
         }
 
-        val platform = context.round.platform.toModulePlatform()
-            ?: return JimmerCompilerFeaturePrecompileResult(
+        val platform = context.round.platform
+        if (platform == CompilerPlatform.UNKNOWN) {
+            return JimmerCompilerFeaturePrecompileResult(
                 state = JimmerModuleCompilerFeatureState.blocked(
                     status = JimmerModuleCompilerFeatureStatus.UNSUPPORTED_PLATFORM,
                     dependencyFingerprint = immutableState.fingerprint,
                 )
             )
+        }
         val scope = JimmerModuleCompilationScope(
             cumulativeImmutableTypeIds = immutableState.targetTypeIds.sorted(),
             currentImmutableTypeIds = immutableState.currentTypeIds.sorted(),
@@ -237,16 +239,8 @@ private fun JimmerModuleCompilerFeatureState?.nextStability(
     return JimmerModuleStability(count, roundNumber)
 }
 
-private fun CompilerPlatform.toModulePlatform(): JimmerModulePlatform? {
-    return when (this) {
-        CompilerPlatform.APT -> JimmerModulePlatform.APT
-        CompilerPlatform.KSP -> JimmerModulePlatform.KSP
-        CompilerPlatform.UNKNOWN -> null
-    }
-}
-
 private fun Map<String, String>.toModuleOptions(
-    platform: JimmerModulePlatform,
+    platform: CompilerPlatform,
 ): JimmerModulePrecompileOptions {
     return JimmerModulePrecompileOptions(
         platform = platform,

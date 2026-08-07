@@ -50,7 +50,6 @@ import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
 import site.addzero.lsi.jimmer.dto.DtoAnnotationContract
-import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoAnnotationValue
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
@@ -105,7 +104,7 @@ class DtoAnnotationBinaryFrontendParityTest {
             ),
             aptTag.arguments.getValue("value").value,
         )
-        assertEquals(DtoAnnotationDeclarationKind.KOTLIN, aptTagDeclaration.kind)
+        assertEquals(LsiLanguage.KOTLIN, aptTagDeclaration.language)
         assertEquals(listOf("alpha", "value", "zebra"), aptTagDeclaration.argumentNames)
         assertEquals(
             listOf("zebra", "alpha", "value"),

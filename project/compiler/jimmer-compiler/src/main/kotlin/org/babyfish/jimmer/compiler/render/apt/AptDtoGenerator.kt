@@ -2,8 +2,7 @@ package org.babyfish.jimmer.compiler.render.apt
 
 import com.squareup.javapoet.*
 import org.babyfish.jimmer.client.ApiIgnore
-import org.babyfish.jimmer.compiler.dto.JimmerDtoFieldVisibility
-import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames.create
 import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
@@ -35,6 +34,7 @@ import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeAnnotationRenderer.rend
 import org.babyfish.jimmer.compiler.render.apt.AptDtoTypeRefRenderer.render
 import org.babyfish.jimmer.compiler.render.apt.AptImmutableTypeNameRenderer.renderDraft
 import org.babyfish.jimmer.compiler.render.apt.AptImmutableTypeNameRenderer.renderSource
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import org.babyfish.jimmer.impl.util.StringUtil
 import org.jspecify.annotations.NonNull
 import org.jspecify.annotations.Nullable
@@ -42,6 +42,7 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.*
 import site.addzero.lsi.jimmer.dto.*
 import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetTypeName
 import java.util.*
@@ -82,7 +83,7 @@ internal class AptDtoGenerator private constructor(
 
     private val generatedDtoSimpleNames: List<String>
 
-    private val jacksonVersion: JimmerDtoJacksonVersion
+    private val jacksonVersion: JacksonFamily
 
     private val hibernateValidatorEnhancement: Boolean
 
@@ -1488,8 +1489,8 @@ internal class AptDtoGenerator private constructor(
             )
 
     companion object {
-        private fun jacksonTypes(jacksonVersion: JimmerDtoJacksonVersion): AptJacksonTypes {
-            if (jacksonVersion == JimmerDtoJacksonVersion.JACKSON_3) {
+        private fun jacksonTypes(jacksonVersion: JacksonFamily): AptJacksonTypes {
+            if (jacksonVersion == JacksonFamily.JACKSON_3) {
                 return AptJacksonTypes(
                     ClassName.get("com.fasterxml.jackson.annotation", "JsonIgnore"),
                     ClassName.get("tools.jackson.databind.annotation", "JsonSerialize"),
@@ -1503,11 +1504,16 @@ internal class AptDtoGenerator private constructor(
             )
         }
 
-        private fun dtoFieldModifier(visibility: JimmerDtoFieldVisibility): Modifier {
+        private fun dtoFieldModifier(visibility: LsiVisibility): Modifier {
             when (visibility) {
-                JimmerDtoFieldVisibility.PRIVATE -> return Modifier.PRIVATE
-                JimmerDtoFieldVisibility.PROTECTED -> return Modifier.PROTECTED
-                JimmerDtoFieldVisibility.PUBLIC -> return Modifier.PUBLIC
+                LsiVisibility.PRIVATE -> return Modifier.PRIVATE
+                LsiVisibility.PROTECTED -> return Modifier.PROTECTED
+                LsiVisibility.PUBLIC -> return Modifier.PUBLIC
+                LsiVisibility.INTERNAL,
+                LsiVisibility.PACKAGE_PRIVATE,
+                LsiVisibility.LOCAL,
+                LsiVisibility.UNKNOWN,
+                -> error("Unsupported APT DTO field visibility: $visibility")
             }
         }
 

@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.module
 
+import org.babyfish.jimmer.compiler.CompilerPlatform
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
@@ -16,7 +17,7 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -25,8 +26,11 @@ internal fun JimmerModuleSchema.toLsiPoetArtifacts(
     workspace: LsiWorkspace,
 ): List<LsiPoetArtifact> {
     return when (platform) {
-        JimmerModulePlatform.APT -> summaries.map { summary -> summary.toLsiPoet(workspace) }
-        JimmerModulePlatform.KSP -> module?.let { source -> listOf(source.toLsiPoet(workspace)) }.orEmpty()
+        CompilerPlatform.APT -> summaries.map { summary -> summary.toLsiPoet(workspace) }
+        CompilerPlatform.KSP -> module?.let { source -> listOf(source.toLsiPoet(workspace)) }.orEmpty()
+        CompilerPlatform.UNKNOWN -> error(
+            "Jimmer module schema requires an APT or KSP platform"
+        )
     }
 }
 
@@ -50,7 +54,7 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtif
         members = listOf(
             LsiPoetType(
                 name = simpleName,
-                kind = LsiPoetTypeKind.INTERFACE,
+                kind = LsiTypeDeclarationKind.INTERFACE,
                 annotations = listOf(LsiPoetAnnotation(GENERATED_BY_ID)),
                 modifiers = setOf(LsiPoetModifier.PUBLIC),
                 members = typeMembers,
@@ -162,7 +166,7 @@ private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifa
         members = listOf(
             LsiPoetType(
                 name = simpleName,
-                kind = LsiPoetTypeKind.CLASS,
+                kind = LsiTypeDeclarationKind.CLASS,
                 modifiers = setOf(LsiPoetModifier.PRIVATE),
             ),
             LsiPoetProperty(

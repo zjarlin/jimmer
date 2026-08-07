@@ -1,7 +1,7 @@
 package org.babyfish.jimmer.compiler.render.ksp
 
 import com.squareup.kotlinpoet.TypeSpec
-import org.babyfish.jimmer.compiler.dto.JimmerDtoJacksonVersion
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.dto.JimmerDtoPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.inputBuilderJsonNamingAnnotationTypeId
 import org.babyfish.jimmer.compiler.dto.inputBuilderJsonPojoBuilderAnnotationTypeId
@@ -27,7 +27,7 @@ internal object KspDtoInputBuilderRenderer {
         immutableSchema: ImmutableSchema,
         annotationContract: DtoAnnotationContract,
         workspace: LsiWorkspace,
-        jacksonVersion: JimmerDtoJacksonVersion,
+        jacksonVersion: JacksonFamily,
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
         generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,

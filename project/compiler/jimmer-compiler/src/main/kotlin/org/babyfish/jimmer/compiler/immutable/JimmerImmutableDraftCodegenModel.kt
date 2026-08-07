@@ -1,20 +1,21 @@
 package org.babyfish.jimmer.compiler.immutable
 
-import site.addzero.lsi.jimmer.ImmutableDraftAnnotationProjection
-import site.addzero.lsi.jimmer.ImmutableDraftRuntimeProp
-import site.addzero.lsi.jimmer.ImmutableDraftRuntimeValueCategory
-import site.addzero.lsi.jimmer.ImmutableDraftValidationPlan
-import site.addzero.lsi.jimmer.ImmutableTypeKind
-import site.addzero.lsi.jimmer.ImmutableValidation
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.jimmer.ImmutableDraftAnnotationProjection
+import site.addzero.lsi.jimmer.ImmutableDraftRuntimeProp
+import site.addzero.lsi.jimmer.ImmutableDraftValidationPlan
+import site.addzero.lsi.jimmer.ImmutablePropValueCategory
+import site.addzero.lsi.jimmer.ImmutableTypeKind
+import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiVisibility
 
 internal data class JimmerImmutableDraftCodegenSchema(
-    val jacksonFamily: JimmerImmutableJacksonFamily,
+    val jacksonFamily: JacksonFamily,
     val types: List<JimmerImmutableDraftTypePlan>,
 ) {
 
@@ -165,10 +166,10 @@ internal data class JimmerImmutableDraftPropPlan(
             "Immutable draft primitive flag must match its LSI type: ${propId.value}"
         }
         require(runtimeProp.valueCategory == when {
-            list && immutableReference -> ImmutableDraftRuntimeValueCategory.REFERENCE_LIST
-            list -> ImmutableDraftRuntimeValueCategory.SCALAR_LIST
-            immutableReference -> ImmutableDraftRuntimeValueCategory.REFERENCE
-            else -> ImmutableDraftRuntimeValueCategory.SCALAR
+            list && immutableReference -> ImmutablePropValueCategory.REFERENCE_LIST
+            list -> ImmutablePropValueCategory.SCALAR_LIST
+            immutableReference -> ImmutablePropValueCategory.REFERENCE
+            else -> ImmutablePropValueCategory.SCALAR
         }) {
             "Immutable draft runtime value category must match property shape: ${propId.value}"
         }

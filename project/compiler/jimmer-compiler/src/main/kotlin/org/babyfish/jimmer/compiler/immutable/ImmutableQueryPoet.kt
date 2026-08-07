@@ -9,6 +9,7 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutablePropValueCategory
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -30,6 +31,7 @@ import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
@@ -56,7 +58,6 @@ import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -549,7 +550,7 @@ private class KotlinQueryPoetContext(
     private fun propsObject(): LsiPoetType {
         return LsiPoetType(
             name = "${type.simpleName}$PROPS_SUFFIX",
-            kind = LsiPoetTypeKind.OBJECT,
+            kind = LsiTypeDeclarationKind.OBJECT,
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
             annotations = listOf(generatedByAnnotation(modelType)),
             members = schema.orderedProps(type).map(::typedProp),
@@ -557,7 +558,7 @@ private class KotlinQueryPoetContext(
     }
 
     private fun typedProp(prop: ImmutableProp): LsiPoetProperty {
-        val kind = schema.typedPropKind(prop)
+        val kind = schema.typedPropValueCategory(prop)
         return LsiPoetProperty(
             name = prop.fieldName(),
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
@@ -652,7 +653,7 @@ private class JavaQueryPoetContext(
         }
         return LsiPoetType(
             name = "${type.simpleName}Props",
-            kind = LsiPoetTypeKind.INTERFACE,
+            kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = buildList {
                 add(generatedByAnnotation(modelType))
                 if (type.kind in SQL_QUERY_TYPE_KINDS) {
@@ -701,7 +702,7 @@ private class JavaQueryPoetContext(
     }
 
     private fun javaTypedPropField(prop: ImmutableProp): LsiPoetField {
-        val kind = schema.typedPropKind(prop)
+        val kind = schema.typedPropValueCategory(prop)
         return LsiPoetField(
             name = prop.fieldName(),
             type = declaredType(
@@ -736,7 +737,7 @@ private class JavaQueryPoetContext(
         val selfType = if (tableEx) tableExType else tableType
         return LsiPoetType(
             name = selfType.declarationId.value.substringAfterLast('.'),
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(modelType)),
             modifiers = setOf(LsiPoetModifier.PUBLIC),
             superClass = if (tableEx) tableType else declaredType(ABSTRACT_TYPED_TABLE_ID, modelType),
@@ -1371,7 +1372,7 @@ private class JavaQueryPoetContext(
             ?: error("Entity immutable type '${type.id.value}' must declare an id property")
         return LsiPoetType(
             name = "Remote",
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(modelType)),
             modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC),
             superClass = declaredType(ABSTRACT_TYPED_TABLE_ID, modelType),
@@ -1657,20 +1658,20 @@ private fun ImmutableType.generatedQueryTypeId(simpleName: String): LsiSymbolId 
     return LsiSymbolId.type(qualifiedName)
 }
 
-private val JimmerImmutableTypedPropKind.typedPropTypeId: LsiSymbolId
+private val ImmutablePropValueCategory.typedPropTypeId: LsiSymbolId
     get() = when (this) {
-        JimmerImmutableTypedPropKind.SCALAR -> TYPED_PROP_SCALAR_ID
-        JimmerImmutableTypedPropKind.SCALAR_LIST -> TYPED_PROP_SCALAR_LIST_ID
-        JimmerImmutableTypedPropKind.REFERENCE -> TYPED_PROP_REFERENCE_ID
-        JimmerImmutableTypedPropKind.REFERENCE_LIST -> TYPED_PROP_REFERENCE_LIST_ID
+        ImmutablePropValueCategory.SCALAR -> TYPED_PROP_SCALAR_ID
+        ImmutablePropValueCategory.SCALAR_LIST -> TYPED_PROP_SCALAR_LIST_ID
+        ImmutablePropValueCategory.REFERENCE -> TYPED_PROP_REFERENCE_ID
+        ImmutablePropValueCategory.REFERENCE_LIST -> TYPED_PROP_REFERENCE_LIST_ID
     }
 
-private val JimmerImmutableTypedPropKind.factoryName: String
+private val ImmutablePropValueCategory.factoryName: String
     get() = when (this) {
-        JimmerImmutableTypedPropKind.SCALAR -> "scalar"
-        JimmerImmutableTypedPropKind.SCALAR_LIST -> "scalarList"
-        JimmerImmutableTypedPropKind.REFERENCE -> "reference"
-        JimmerImmutableTypedPropKind.REFERENCE_LIST -> "referenceList"
+        ImmutablePropValueCategory.SCALAR -> "scalar"
+        ImmutablePropValueCategory.SCALAR_LIST -> "scalarList"
+        ImmutablePropValueCategory.REFERENCE -> "reference"
+        ImmutablePropValueCategory.REFERENCE_LIST -> "referenceList"
     }
 
 private const val PROPS_SUFFIX = "Props"

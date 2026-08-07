@@ -3,6 +3,7 @@ package org.babyfish.jimmer.compiler.dto
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
@@ -19,7 +20,7 @@ import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
@@ -51,40 +52,40 @@ class DtoSerializerPoetTest {
                 graph,
                 schema,
                 LsiLanguage.JAVA,
-                JimmerDtoJacksonVersion.JACKSON_2,
+                JacksonFamily.JACKSON_2,
                 dtoType,
             ),
-            JimmerDtoJacksonVersion.JACKSON_2.serializerPoetTypeNames(dtoTypeName),
+            JacksonFamily.JACKSON_2.serializerPoetTypeNames(dtoTypeName),
         ).toString()
         val java3 = LsiJavaPoetRenderer().renderType(
             type.toSerializerPoetType(
                 graph,
                 schema,
                 LsiLanguage.JAVA,
-                JimmerDtoJacksonVersion.JACKSON_3,
+                JacksonFamily.JACKSON_3,
                 dtoType,
             ),
-            JimmerDtoJacksonVersion.JACKSON_3.serializerPoetTypeNames(dtoTypeName),
+            JacksonFamily.JACKSON_3.serializerPoetTypeNames(dtoTypeName),
         ).toString()
         val kotlin2 = LsiKotlinPoetRenderer().renderType(
             type.toSerializerPoetType(
                 graph,
                 schema,
                 LsiLanguage.KOTLIN,
-                JimmerDtoJacksonVersion.JACKSON_2,
+                JacksonFamily.JACKSON_2,
                 dtoType,
             ),
-            JimmerDtoJacksonVersion.JACKSON_2.serializerPoetTypeNames(dtoTypeName),
+            JacksonFamily.JACKSON_2.serializerPoetTypeNames(dtoTypeName),
         ).toString()
         val kotlin3 = LsiKotlinPoetRenderer().renderType(
             type.toSerializerPoetType(
                 graph,
                 schema,
                 LsiLanguage.KOTLIN,
-                JimmerDtoJacksonVersion.JACKSON_3,
+                JacksonFamily.JACKSON_3,
                 dtoType,
             ),
-            JimmerDtoJacksonVersion.JACKSON_3.serializerPoetTypeNames(dtoTypeName),
+            JacksonFamily.JACKSON_3.serializerPoetTypeNames(dtoTypeName),
         ).toString()
 
         assertEquals(
@@ -181,7 +182,7 @@ class DtoSerializerPoetTest {
                 graph,
                 schema,
                 LsiLanguage.UNKNOWN,
-                JimmerDtoJacksonVersion.JACKSON_2,
+                JacksonFamily.JACKSON_2,
                 dtoType,
             )
         }
@@ -200,7 +201,7 @@ class DtoSerializerPoetTest {
                 fixedGraph,
                 schema,
                 LsiLanguage.JAVA,
-                JimmerDtoJacksonVersion.JACKSON_2,
+                JacksonFamily.JACKSON_2,
                 dtoType,
             )
         }

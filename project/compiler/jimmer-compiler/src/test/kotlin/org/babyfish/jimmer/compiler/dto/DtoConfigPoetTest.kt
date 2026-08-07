@@ -23,7 +23,7 @@ import site.addzero.lsi.jimmer.dto.DtoConfigTypeRef
 import site.addzero.lsi.jimmer.dto.DtoFetchType
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoLimit
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPropConfig
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType

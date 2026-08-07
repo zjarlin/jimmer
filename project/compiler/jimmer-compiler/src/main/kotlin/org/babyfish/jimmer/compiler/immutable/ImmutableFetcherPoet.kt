@@ -58,7 +58,7 @@ import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -163,7 +163,7 @@ private class FetcherPoetContext(
     private fun javaFetcherType(): LsiPoetType {
         return LsiPoetType(
             name = "${type.simpleName}$FETCHER_SUFFIX",
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(modelType)),
             modifiers = setOf(LsiPoetModifier.PUBLIC),
             superClass = declaredType(ABSTRACT_TYPED_FETCHER_ID, modelType, fetcherClassType),
@@ -649,7 +649,7 @@ private class FetcherPoetContext(
     private fun kotlinFetcherDslType(): LsiPoetType {
         return LsiPoetType(
             name = "${type.simpleName}$FETCHER_DSL_SUFFIX",
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
             annotations = listOf(DSL_SCOPE_ANNOTATION, generatedByAnnotation(modelType)),
             primaryConstructor = LsiPoetConstructor(

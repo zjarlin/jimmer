@@ -2,14 +2,26 @@ package org.babyfish.jimmer.compiler.dto
 
 import org.babyfish.jimmer.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.CompilerRound
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiSymbolId
+import site.addzero.lsi.model.LsiVisibility
 
 internal data class JimmerDtoRendererOptions(
-    val jacksonVersion: JimmerDtoJacksonVersion,
+    val jacksonVersion: JacksonFamily,
     val hibernateValidatorEnhancement: Boolean,
-    val aptFieldVisibility: JimmerDtoFieldVisibility,
+    val aptFieldVisibility: LsiVisibility,
     val kspMutable: Boolean,
 ) {
+    init {
+        require(
+            aptFieldVisibility == LsiVisibility.PRIVATE ||
+                aptFieldVisibility == LsiVisibility.PROTECTED ||
+                aptFieldVisibility == LsiVisibility.PUBLIC
+        ) {
+            "APT DTO field visibility must be private, protected or public: $aptFieldVisibility"
+        }
+    }
+
     val fingerprint: String = buildString {
         append(jacksonVersion.name)
         append(':')
@@ -19,17 +31,6 @@ internal data class JimmerDtoRendererOptions(
         append(':')
         append(kspMutable)
     }
-}
-
-internal enum class JimmerDtoJacksonVersion {
-    JACKSON_2,
-    JACKSON_3,
-}
-
-internal enum class JimmerDtoFieldVisibility {
-    PRIVATE,
-    PROTECTED,
-    PUBLIC,
 }
 
 internal fun CompilerRound.toJimmerDtoRendererOptions(): JimmerDtoRendererOptions {
@@ -42,15 +43,15 @@ internal fun CompilerRound.toJimmerDtoRendererOptions(): JimmerDtoRendererOption
     val fieldVisibility = if (platform == CompilerPlatform.APT) {
         options.aptDtoFieldVisibility()
     } else {
-        JimmerDtoFieldVisibility.PRIVATE
+        LsiVisibility.PRIVATE
     }
     val mutable = platform == CompilerPlatform.KSP &&
         options[KSP_DTO_MUTABLE_OPTION]?.trim() == "true"
     return JimmerDtoRendererOptions(
         jacksonVersion = if (jackson3) {
-            JimmerDtoJacksonVersion.JACKSON_3
+            JacksonFamily.JACKSON_3
         } else {
-            JimmerDtoJacksonVersion.JACKSON_2
+            JacksonFamily.JACKSON_2
         },
         hibernateValidatorEnhancement = options[HIBERNATE_VALIDATOR_ENHANCEMENT_OPTION] == "true",
         aptFieldVisibility = fieldVisibility,
@@ -58,11 +59,11 @@ internal fun CompilerRound.toJimmerDtoRendererOptions(): JimmerDtoRendererOption
     )
 }
 
-private fun Map<String, String>.aptDtoFieldVisibility(): JimmerDtoFieldVisibility {
+private fun Map<String, String>.aptDtoFieldVisibility(): LsiVisibility {
     return when (val visibility = this[APT_DTO_FIELD_VISIBILITY_OPTION]) {
-        null, "private" -> JimmerDtoFieldVisibility.PRIVATE
-        "protected" -> JimmerDtoFieldVisibility.PROTECTED
-        "public" -> JimmerDtoFieldVisibility.PUBLIC
+        null, "private" -> LsiVisibility.PRIVATE
+        "protected" -> LsiVisibility.PROTECTED
+        "public" -> LsiVisibility.PUBLIC
         else -> throw IllegalArgumentException(
             "The apt options `$APT_DTO_FIELD_VISIBILITY_OPTION` can only be " +
                 "\"private\", \"protected\" or \"public\", but got \"$visibility\"",

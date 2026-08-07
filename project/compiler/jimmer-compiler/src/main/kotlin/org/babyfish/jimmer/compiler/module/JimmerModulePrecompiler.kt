@@ -1,12 +1,13 @@
 package org.babyfish.jimmer.compiler.module
 
+import org.babyfish.jimmer.compiler.CompilerPlatform
+import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
-import site.addzero.lsi.core.LsiSymbolId
 
 data class JimmerModulePrecompileOptions(
-    val platform: JimmerModulePlatform,
+    val platform: CompilerPlatform,
     val immutablesName: String = "Immutables",
     val tablesName: String = "Tables",
     val tableExesName: String = "TableExes",
@@ -15,6 +16,9 @@ data class JimmerModulePrecompileOptions(
     val resourceGeneration: Boolean = true,
 ) {
     init {
+        require(platform != CompilerPlatform.UNKNOWN) {
+            "Jimmer module precompile options require an APT or KSP platform"
+        }
         validateSimpleName(immutablesName, "immutables")
         validateSimpleName(tablesName, "tables")
         validateSimpleName(tableExesName, "table exes")
@@ -104,16 +108,19 @@ class JimmerModulePrecompiler(
         val aggregateEntities = (retainedEntities + cumulativeEntities).distinctTypes()
         val aggregateImmutableTypes = (retainedImmutableTypes + cumulativeImmutableIndexTypes).distinctTypes()
         return when (options.platform) {
-            JimmerModulePlatform.APT -> compileApt(
+            CompilerPlatform.APT -> compileApt(
                 currentEntities = currentEntities,
                 currentImmutableTypes = currentImmutableIndexTypes,
                 aggregateEntities = aggregateEntities,
                 aggregateImmutableTypes = aggregateImmutableTypes,
             )
-            JimmerModulePlatform.KSP -> compileKsp(
+            CompilerPlatform.KSP -> compileKsp(
                 cumulativeEntities = cumulativeEntities,
                 aggregateEntities = aggregateEntities,
                 compilationSourceTypeIds = compilationScope.compilationSourceTypeIds,
+            )
+            CompilerPlatform.UNKNOWN -> error(
+                "Jimmer module precompile options require an APT or KSP platform"
             )
         }
     }
@@ -192,7 +199,7 @@ class JimmerModulePrecompiler(
             emptyList()
         }
         return JimmerModuleSchema(
-            platform = JimmerModulePlatform.APT,
+            platform = CompilerPlatform.APT,
             options = options,
             packageName = packageName,
             summaries = summaries,
@@ -209,7 +216,7 @@ class JimmerModulePrecompiler(
         val packageName = cumulativeEntities.commonPackageName()
         if (!options.resourceGeneration || cumulativeEntities.isEmpty()) {
             return JimmerModuleSchema(
-                platform = JimmerModulePlatform.KSP,
+                platform = CompilerPlatform.KSP,
                 options = options,
                 packageName = packageName,
                 summaries = emptyList(),
@@ -232,7 +239,7 @@ class JimmerModulePrecompiler(
             null
         }
         return JimmerModuleSchema(
-            platform = JimmerModulePlatform.KSP,
+            platform = CompilerPlatform.KSP,
             options = options,
             packageName = packageName,
             summaries = emptyList(),

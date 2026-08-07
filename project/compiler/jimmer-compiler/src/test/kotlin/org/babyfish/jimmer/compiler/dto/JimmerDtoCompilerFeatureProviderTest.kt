@@ -12,10 +12,12 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.CompilerSession
 import org.babyfish.jimmer.compiler.CompilerSourceSet
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
@@ -56,15 +58,15 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
 import site.addzero.lsi.jimmer.dto.DtoAnnotationApplication
 import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclaration
-import site.addzero.lsi.jimmer.dto.DtoAnnotationDeclarationKind
 import site.addzero.lsi.jimmer.dto.DtoAnnotationOrigin
 import site.addzero.lsi.jimmer.dto.DtoAnnotationPlacement
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoInterfaceAccessorContract
@@ -113,12 +115,12 @@ class JimmerDtoCompilerFeatureProviderTest {
             options = mapOf("jimmer.jackson3" to "true"),
         )
 
-        assertEquals(JimmerDtoJacksonVersion.JACKSON_3, detected.jacksonVersion)
-        assertEquals(JimmerDtoJacksonVersion.JACKSON_2, explicitJackson2.jacksonVersion)
+        assertEquals(JacksonFamily.JACKSON_3, detected.jacksonVersion)
+        assertEquals(JacksonFamily.JACKSON_2, explicitJackson2.jacksonVersion)
         assertTrue(explicitJackson2.hibernateValidatorEnhancement)
         assertTrue(explicitJackson2.kspMutable)
-        assertEquals(JimmerDtoFieldVisibility.PRIVATE, explicitJackson2.aptFieldVisibility)
-        assertEquals(JimmerDtoJacksonVersion.JACKSON_3, explicitJackson3.jacksonVersion)
+        assertEquals(LsiVisibility.PRIVATE, explicitJackson2.aptFieldVisibility)
+        assertEquals(JacksonFamily.JACKSON_3, explicitJackson3.jacksonVersion)
     }
 
     @Test
@@ -136,14 +138,22 @@ class JimmerDtoCompilerFeatureProviderTest {
             options = mapOf("jimmer.dto.fieldVisibility" to "public"),
         )
 
-        assertEquals(JimmerDtoFieldVisibility.PRIVATE, defaults.aptFieldVisibility)
-        assertEquals(JimmerDtoFieldVisibility.PROTECTED, protectedOptions.aptFieldVisibility)
+        assertEquals(LsiVisibility.PRIVATE, defaults.aptFieldVisibility)
+        assertEquals(LsiVisibility.PROTECTED, protectedOptions.aptFieldVisibility)
         assertFalse(protectedOptions.kspMutable)
-        assertEquals(JimmerDtoFieldVisibility.PUBLIC, publicOptions.aptFieldVisibility)
+        assertEquals(LsiVisibility.PUBLIC, publicOptions.aptFieldVisibility)
         assertFailsWith<IllegalArgumentException> {
             rendererOptions(
                 platform = CompilerPlatform.APT,
                 options = mapOf("jimmer.dto.fieldVisibility" to "internal"),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            JimmerDtoRendererOptions(
+                jacksonVersion = JacksonFamily.JACKSON_2,
+                hibernateValidatorEnhancement = false,
+                aptFieldVisibility = LsiVisibility.INTERNAL,
+                kspMutable = false,
             )
         }
     }
@@ -173,8 +183,8 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         ).dtoState()
 
-        assertEquals(JimmerDtoJacksonVersion.JACKSON_2, jackson2.rendererOptions.jacksonVersion)
-        assertEquals(JimmerDtoJacksonVersion.JACKSON_3, jackson3.rendererOptions.jacksonVersion)
+        assertEquals(JacksonFamily.JACKSON_2, jackson2.rendererOptions.jacksonVersion)
+        assertEquals(JacksonFamily.JACKSON_3, jackson3.rendererOptions.jacksonVersion)
         assertNotEquals(jackson2.fingerprint, jackson3.fingerprint)
     }
 
@@ -676,7 +686,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             declarations = listOf(
                 DtoAnnotationDeclaration(
                     typeId = markerTypeId,
-                    kind = DtoAnnotationDeclarationKind.JAVA,
+                    language = LsiLanguage.JAVA,
                     targetDeclared = true,
                     allowedPlacements = listOf(DtoAnnotationPlacement.TYPE),
                     argumentTypes = emptyMap(),
@@ -1853,7 +1863,7 @@ class JimmerDtoCompilerFeatureProviderTest {
     private fun dtoState(resolution: JimmerDtoRoundResolution): JimmerDtoCompilerFeatureState {
         return JimmerDtoCompilerFeatureState(
             status = JimmerDtoCompilerFeatureStatus.RESOLVED,
-            dependencyStatus = JimmerDtoCompilerDependencyStatus.RESOLVED,
+            dependencyStatus = CompilerResolutionStatus.RESOLVED,
             graphs = resolution.graphs,
             annotationContractsBySource = resolution.annotationContractsBySource,
             interfaceContractsBySource = resolution.interfaceContractsBySource,

@@ -1,10 +1,11 @@
 package org.babyfish.jimmer.compiler.module
 
+import org.babyfish.jimmer.compiler.CompilerPlatform
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiSymbolId
 
 data class JimmerModuleSchema(
-    val platform: JimmerModulePlatform,
+    val platform: CompilerPlatform,
     val options: JimmerModulePrecompileOptions,
     val packageName: String,
     val summaries: List<JimmerModuleSummary>,
@@ -12,14 +13,17 @@ data class JimmerModuleSchema(
     val resources: List<JimmerModuleResource>,
 ) {
     init {
+        require(platform != CompilerPlatform.UNKNOWN) {
+            "Jimmer module schema requires an APT or KSP platform"
+        }
         require(options.platform == platform) {
             "Jimmer module options must match schema platform"
         }
         when (platform) {
-            JimmerModulePlatform.APT -> require(module == null) {
+            CompilerPlatform.APT -> require(module == null) {
                 "APT Jimmer module schema cannot contain a Kotlin module source"
             }
-            JimmerModulePlatform.KSP -> {
+            CompilerPlatform.KSP -> {
                 require(summaries.isEmpty()) {
                     "KSP Jimmer module schema cannot contain APT summaries"
                 }
@@ -27,6 +31,9 @@ data class JimmerModuleSchema(
                     "KSP Jimmer module schema cannot contain an immutable index"
                 }
             }
+            CompilerPlatform.UNKNOWN -> error(
+                "Jimmer module schema requires an APT or KSP platform"
+            )
         }
     }
 }
@@ -127,11 +134,6 @@ data class JimmerModuleArtifactDependencies(
             "Jimmer module artifacts must be aggregating"
         }
     }
-}
-
-enum class JimmerModulePlatform {
-    APT,
-    KSP,
 }
 
 enum class JimmerModuleSummaryKind {

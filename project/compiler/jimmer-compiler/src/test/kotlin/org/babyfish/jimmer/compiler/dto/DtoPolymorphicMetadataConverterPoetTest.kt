@@ -13,9 +13,9 @@ import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId

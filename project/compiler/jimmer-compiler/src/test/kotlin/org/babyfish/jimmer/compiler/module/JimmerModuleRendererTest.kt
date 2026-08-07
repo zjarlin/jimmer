@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.babyfish.jimmer.compiler.CompilerPlatform
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -36,7 +37,7 @@ class JimmerModuleRendererTest {
 
     @Test
     fun `apt summaries match collision goldens and compile`() {
-        val fixture = fixture(JimmerModulePlatform.APT)
+        val fixture = fixture(CompilerPlatform.APT)
         val renderer = LsiJavaPoetRenderer()
         val artifacts = fixture.schema.toLsiPoetArtifacts(fixture.workspace).map(renderer::render)
 
@@ -59,7 +60,7 @@ class JimmerModuleRendererTest {
 
     @Test
     fun `ksp module matches golden and compiles`() {
-        val fixture = fixture(JimmerModulePlatform.KSP)
+        val fixture = fixture(CompilerPlatform.KSP)
         val renderer = LsiKotlinPoetRenderer()
         val artifact = fixture.schema.toLsiPoetArtifacts(fixture.workspace).map(renderer::render).single()
 
@@ -74,9 +75,9 @@ class JimmerModuleRendererTest {
 
     @Test
     fun `shared resources match stable golden and schema origins`() {
-        val aptFixture = fixture(JimmerModulePlatform.APT)
+        val aptFixture = fixture(CompilerPlatform.APT)
         val aptArtifacts = JimmerModuleResourceRenderer().render(aptFixture.schema, aptFixture.workspace)
-        val kspFixture = fixture(JimmerModulePlatform.KSP)
+        val kspFixture = fixture(CompilerPlatform.KSP)
         val kspArtifact = JimmerModuleResourceRenderer().render(kspFixture.schema, kspFixture.workspace).single()
 
         assertEquals(
@@ -99,10 +100,11 @@ class JimmerModuleRendererTest {
         })
     }
 
-    private fun fixture(platform: JimmerModulePlatform): Fixture {
+    private fun fixture(platform: CompilerPlatform): Fixture {
         val language = when (platform) {
-            JimmerModulePlatform.APT -> LsiLanguage.JAVA
-            JimmerModulePlatform.KSP -> LsiLanguage.KOTLIN
+            CompilerPlatform.APT -> LsiLanguage.JAVA
+            CompilerPlatform.KSP -> LsiLanguage.KOTLIN
+            CompilerPlatform.UNKNOWN -> error("Unexpected module fixture platform: $platform")
         }
         val extension = when (language) {
             LsiLanguage.JAVA -> "java"

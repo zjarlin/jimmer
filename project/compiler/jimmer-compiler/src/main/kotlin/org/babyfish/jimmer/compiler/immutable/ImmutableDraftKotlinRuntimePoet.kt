@@ -21,7 +21,7 @@ import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 
 /**
  * 将 Kotlin Draft 的运行时实现降低为纯 LSI Poet 类型。
@@ -35,7 +35,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
     fun implementor(): LsiPoetType {
         return LsiPoetType(
             name = KOTLIN_DRAFT_IMPLEMENTOR,
-            kind = LsiPoetTypeKind.INTERFACE,
+            kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = listOf(context.generatedByAnnotation(), propertyOrderAnnotation()),
             modifiers = setOf(LsiPoetModifier.PRIVATE, LsiPoetModifier.ABSTRACT),
             superInterfaces = listOf(context.modelType, IMMUTABLE_SPI_TYPE),
@@ -64,7 +64,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
     fun impl(): LsiPoetType {
         return LsiPoetType(
             name = KOTLIN_DRAFT_IMPL,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(context.generatedByAnnotation()),
             modifiers = setOf(LsiPoetModifier.PRIVATE),
             superInterfaces = listOf(
@@ -123,7 +123,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
     fun draftImpl(): LsiPoetType {
         return LsiPoetType(
             name = KOTLIN_DRAFT_DRAFT_IMPL,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(context.generatedByAnnotation()),
             modifiers = setOf(LsiPoetModifier.INTERNAL),
             superInterfaces = listOf(context.implementorType, context.draftType, DRAFT_SPI_TYPE),
@@ -223,7 +223,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
         return LsiPoetType(
             name = "Companion",
-            kind = LsiPoetTypeKind.OBJECT,
+            kind = LsiTypeDeclarationKind.OBJECT,
             modifiers = setOf(LsiPoetModifier.COMPANION),
             members = deeperProps.map { prop ->
                 LsiPoetProperty(

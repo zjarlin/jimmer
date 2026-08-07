@@ -9,7 +9,9 @@ import org.babyfish.jimmer.compiler.CompilerInputDocument
 import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerSourceSet
+import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiPosition
@@ -25,6 +27,7 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeAnnotationPlan
 import site.addzero.lsi.jimmer.dto.DtoTypeId
+import site.addzero.lsi.model.LsiVisibility
 
 class JimmerDtoKspMutabilityPlanTest {
     @Test
@@ -127,9 +130,9 @@ class JimmerDtoKspMutabilityPlanTest {
 
     private fun rendererOptions(defaultMutable: Boolean): JimmerDtoRendererOptions {
         return JimmerDtoRendererOptions(
-            jacksonVersion = JimmerDtoJacksonVersion.JACKSON_2,
+            jacksonVersion = JacksonFamily.JACKSON_2,
             hibernateValidatorEnhancement = false,
-            aptFieldVisibility = JimmerDtoFieldVisibility.PRIVATE,
+            aptFieldVisibility = LsiVisibility.PRIVATE,
             kspMutable = defaultMutable,
         )
     }
@@ -141,7 +144,7 @@ class JimmerDtoKspMutabilityPlanTest {
         val graph = graphs.single()
         return JimmerDtoCompilerFeatureState(
             status = JimmerDtoCompilerFeatureStatus.RESOLVED,
-            dependencyStatus = JimmerDtoCompilerDependencyStatus.RESOLVED,
+            dependencyStatus = CompilerResolutionStatus.RESOLVED,
             graphs = graphs,
             annotationContractsBySource = sortedMapOf(
                 graph.source to DtoAnnotationContract(

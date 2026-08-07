@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerSession
 import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
@@ -268,7 +269,7 @@ class JimmerClientCompilerFeatureProviderTest {
         val deferredState = deferredResult.state as JimmerClientCompilerFeatureState
 
         assertEquals(JimmerClientCompilerFeatureStatus.DEPENDENCY_DEFERRED, deferredState.status)
-        assertEquals(JimmerClientCompilerDependencyStatus.DEFERRED, deferredState.dependencyStatus)
+        assertEquals(CompilerResolutionStatus.DEFERRED, deferredState.dependencyStatus)
         assertFalse(deferredState.renderable)
         assertTrue(deferredState.immutableDependencyFingerprint.isNotBlank())
         assertTrue(deferredState.fingerprint.contains(deferredState.immutableDependencyFingerprint))
@@ -292,7 +293,7 @@ class JimmerClientCompilerFeatureProviderTest {
         val invalidState = invalidResult.state as JimmerClientCompilerFeatureState
 
         assertEquals(JimmerClientCompilerFeatureStatus.DEPENDENCY_INVALID, invalidState.status)
-        assertEquals(JimmerClientCompilerDependencyStatus.INVALID, invalidState.dependencyStatus)
+        assertEquals(CompilerResolutionStatus.INVALID, invalidState.dependencyStatus)
         assertFalse(invalidState.renderable)
         assertTrue(invalidState.errorDependencyFingerprint.startsWith("INVALID:"))
         assertTrue(invalidState.fingerprint.contains(invalidState.immutableDependencyFingerprint))

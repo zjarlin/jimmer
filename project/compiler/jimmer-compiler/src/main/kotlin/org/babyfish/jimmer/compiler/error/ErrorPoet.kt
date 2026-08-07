@@ -41,7 +41,7 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -110,7 +110,7 @@ private fun ErrorFamily.toJavaPoetType(): LsiPoetType {
     val enumType = LsiDeclaredType(id)
     return LsiPoetType(
         name = exceptionSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(
             generatedByAnnotation(enumType),
             clientExceptionAnnotation(),
@@ -136,7 +136,7 @@ private fun ErrorFamily.toKotlinPoetType(): LsiPoetType {
     val enumType = LsiDeclaredType(id)
     return LsiPoetType(
         name = exceptionSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(
             generatedByAnnotation(enumType),
             clientExceptionAnnotation(),
@@ -296,7 +296,7 @@ private fun ErrorCode.toJavaPoetType(
     val allFields = family.declaredFields + declaredFields
     return LsiPoetType(
         name = exceptionSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(clientExceptionAnnotation(family.family)),
         modifiers = setOf(
             LsiPoetModifier.PUBLIC,
@@ -547,7 +547,7 @@ private fun ErrorFamily.kotlinFieldsProperty(fields: List<ErrorField>): LsiPoetP
 private fun ErrorFamily.kotlinCompanionType(): LsiPoetType {
     return LsiPoetType(
         name = "Companion",
-        kind = LsiPoetTypeKind.OBJECT,
+        kind = LsiTypeDeclarationKind.OBJECT,
         modifiers = setOf(LsiPoetModifier.COMPANION),
         members = codes.map { code ->
             code.kotlinFactoryFunction(declaredFields + code.declaredFields)
@@ -608,7 +608,7 @@ private fun ErrorCode.toKotlinPoetType(
     val allFields = family.declaredFields + declaredFields
     return LsiPoetType(
         name = exceptionSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(clientExceptionAnnotation(family.family)),
         modifiers = setOf(LsiPoetModifier.PUBLIC),
         documentation = documentation.withTrailingLineBreak(),

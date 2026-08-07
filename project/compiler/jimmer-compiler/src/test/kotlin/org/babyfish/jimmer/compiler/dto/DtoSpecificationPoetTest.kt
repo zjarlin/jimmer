@@ -28,8 +28,8 @@ import site.addzero.lsi.jimmer.dto.DtoEnumMapping
 import site.addzero.lsi.jimmer.dto.DtoEnumType
 import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoLikeOption
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.LikeOption
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
@@ -496,7 +496,7 @@ class DtoSpecificationPoetTest {
             pathProp: ImmutableProp,
             argumentProps: List<ImmutableProp>,
             functionName: String,
-            likeOptions: Set<DtoLikeOption> = emptySet(),
+            likeOptions: Set<LikeOption> = emptySet(),
         ) {
             val headId = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#prop:$name")
             val tailId = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#tail:$name")
@@ -526,14 +526,14 @@ class DtoSpecificationPoetTest {
             pathProp = bookStore,
             argumentProps = listOf(storeName),
             functionName = "like",
-            likeOptions = setOf(DtoLikeOption.INSENSITIVE, DtoLikeOption.MATCH_END),
+            likeOptions = setOf(LikeOption.INSENSITIVE, LikeOption.MATCH_END),
         )
         pathProp(
             name = "authorName",
             pathProp = bookAuthors,
             argumentProps = listOf(authorFirstName, authorLastName),
             functionName = "like",
-            likeOptions = setOf(DtoLikeOption.MATCH_START),
+            likeOptions = setOf(LikeOption.MATCH_START),
         )
         val storeFilter = specificationProp(
             id = DtoPropId("${ROOT_SPEC_TYPE_ID.value}#prop:storeFilter"),
@@ -677,7 +677,7 @@ class DtoSpecificationPoetTest {
         functionName: String? = null,
         targetTypeId: DtoTypeId? = null,
         enumType: DtoEnumType? = null,
-        likeOptions: Set<DtoLikeOption> = emptySet(),
+        likeOptions: Set<LikeOption> = emptySet(),
     ): DtoBaseProp {
         return DtoBaseProp(
             id = id,

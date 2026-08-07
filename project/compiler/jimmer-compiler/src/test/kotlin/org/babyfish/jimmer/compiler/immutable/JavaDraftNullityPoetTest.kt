@@ -13,7 +13,7 @@ import site.addzero.lsi.poet.LsiPoetFunction
 import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
@@ -27,7 +27,7 @@ class JavaDraftNullityPoetTest {
         val nonNullTypeId = LsiSymbolId.type("org.jspecify.annotations.NonNull")
         val type = LsiPoetType(
             name = "DraftBuilder",
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             modifiers = setOf(LsiPoetModifier.PUBLIC),
             members = listOf(
                 LsiPoetFunction(

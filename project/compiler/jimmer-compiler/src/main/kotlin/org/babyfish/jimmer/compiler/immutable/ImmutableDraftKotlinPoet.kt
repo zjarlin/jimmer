@@ -4,7 +4,7 @@ import org.babyfish.jimmer.currentVersion
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableDraftRuntimePropKind
-import site.addzero.lsi.jimmer.ImmutableDraftRuntimeValueCategory
+import site.addzero.lsi.jimmer.ImmutablePropValueCategory
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
@@ -36,7 +36,7 @@ import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 
 /**
  * 把一个不可变类型的 Draft 代码生成计划降低为 Kotlin LSI Poet 文件。
@@ -331,7 +331,7 @@ internal class ImmutableDraftKotlinPoetContext(
         return LsiPoetType(
             name = "$simpleName$KOTLIN_DRAFT_SUFFIX",
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
-            kind = LsiPoetTypeKind.INTERFACE,
+            kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = buildList {
                 add(KOTLIN_DRAFT_DSL_SCOPE_ANNOTATION)
                 add(generatedByAnnotation())
@@ -421,7 +421,7 @@ internal class ImmutableDraftKotlinPoetContext(
         return LsiPoetType(
             name = KOTLIN_DRAFT_PRODUCER,
             nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
-            kind = LsiPoetTypeKind.OBJECT,
+            kind = LsiTypeDeclarationKind.OBJECT,
             annotations = listOf(generatedByAnnotation()),
             members = buildList {
                 if (!mappedSuperclass) {
@@ -638,7 +638,7 @@ internal class ImmutableDraftKotlinPoetContext(
     private fun builderDeclaration(): LsiPoetType {
         return LsiPoetType(
             name = KOTLIN_DRAFT_BUILDER,
-            kind = LsiPoetTypeKind.CLASS,
+            kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
             members = buildList {
                 add(
@@ -999,12 +999,12 @@ internal fun draftReceiverFunctionType(receiverType: LsiTypeRef): LsiFunctionTyp
     )
 }
 
-internal val ImmutableDraftRuntimeValueCategory.draftRuntimeName: String
+internal val ImmutablePropValueCategory.draftRuntimeName: String
     get() = when (this) {
-        ImmutableDraftRuntimeValueCategory.SCALAR -> "SCALAR"
-        ImmutableDraftRuntimeValueCategory.SCALAR_LIST -> "SCALAR_LIST"
-        ImmutableDraftRuntimeValueCategory.REFERENCE -> "REFERENCE"
-        ImmutableDraftRuntimeValueCategory.REFERENCE_LIST -> "REFERENCE_LIST"
+        ImmutablePropValueCategory.SCALAR -> "SCALAR"
+        ImmutablePropValueCategory.SCALAR_LIST -> "SCALAR_LIST"
+        ImmutablePropValueCategory.REFERENCE -> "REFERENCE"
+        ImmutablePropValueCategory.REFERENCE_LIST -> "REFERENCE_LIST"
     }
 
 internal const val KOTLIN_DRAFT_SUFFIX = "Draft"

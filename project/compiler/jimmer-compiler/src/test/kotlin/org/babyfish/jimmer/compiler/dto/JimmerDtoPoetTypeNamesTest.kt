@@ -15,13 +15,13 @@ import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoFoldProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
-import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranchKind
+import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
-import site.addzero.lsi.jimmer.dto.DtoReusableTypeKind
+import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
@@ -340,7 +340,7 @@ class JimmerDtoPoetTypeNamesTest {
             targetTypeReference = DtoReusableTypeReference(
                 qualifiedName = "other.dto.ReusableView",
                 targetBaseTypeId = ENTITY_TYPE_ID,
-                kind = DtoReusableTypeKind.VIEW,
+                kind = DtoTypeKind.VIEW,
                 location = LOCATION,
             ),
         )
@@ -607,7 +607,7 @@ class JimmerDtoPoetTypeNamesTest {
             targetTypeReference = DtoReusableTypeReference(
                 qualifiedName = "other.dto.OtherView",
                 targetBaseTypeId = ENTITY_TYPE_ID,
-                kind = DtoReusableTypeKind.VIEW,
+                kind = DtoTypeKind.VIEW,
                 location = LOCATION,
             ),
         )
@@ -619,7 +619,7 @@ class JimmerDtoPoetTypeNamesTest {
             targetTypeReference = DtoReusableTypeReference(
                 qualifiedName = "contract.ExternalView",
                 targetBaseTypeId = ENTITY_TYPE_ID,
-                kind = DtoReusableTypeKind.VIEW,
+                kind = DtoTypeKind.VIEW,
                 location = LOCATION,
             ),
         )

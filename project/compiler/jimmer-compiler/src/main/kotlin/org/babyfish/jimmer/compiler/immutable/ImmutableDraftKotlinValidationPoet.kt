@@ -22,7 +22,7 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetNameStyle
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 
 /**
  * 将 Kotlin Draft 校验计划降低为纯 LSI Poet 成员和代码块。
@@ -148,7 +148,7 @@ internal object ImmutableDraftKotlinValidationPoet {
         }
         return LsiPoetType(
             name = "Companion",
-            kind = LsiPoetTypeKind.OBJECT,
+            kind = LsiTypeDeclarationKind.OBJECT,
             modifiers = setOf(LsiPoetModifier.COMPANION),
             members = members,
         )

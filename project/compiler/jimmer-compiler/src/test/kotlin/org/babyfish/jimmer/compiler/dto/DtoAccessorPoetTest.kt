@@ -21,10 +21,10 @@ import site.addzero.lsi.jimmer.dto.DtoBasePropBinding
 import site.addzero.lsi.jimmer.dto.DtoEnumMapping
 import site.addzero.lsi.jimmer.dto.DtoEnumType
 import site.addzero.lsi.jimmer.dto.DtoGraph
-import site.addzero.lsi.jimmer.dto.DtoModifier
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
-import site.addzero.lsi.jimmer.dto.DtoReusableTypeKind
+import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
@@ -298,7 +298,7 @@ class DtoAccessorPoetTest {
             targetTypeReference = DtoReusableTypeReference(
                 qualifiedName = REUSABLE_DTO_TYPE_NAME.canonicalName,
                 targetBaseTypeId = STORE_TYPE_ID,
-                kind = DtoReusableTypeKind.INPUT,
+                kind = DtoTypeKind.INPUT,
                 location = LOCATION,
             ),
         )

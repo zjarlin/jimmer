@@ -2,7 +2,7 @@ package org.babyfish.jimmer.compiler.immutable
 
 import site.addzero.lsi.jimmer.ImmutableDraftPatternFlag
 import site.addzero.lsi.jimmer.ImmutableDraftRuntimePropKind
-import site.addzero.lsi.jimmer.ImmutableDraftRuntimeValueCategory
+import site.addzero.lsi.jimmer.ImmutablePropValueCategory
 import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutablePrecompileException
 import site.addzero.lsi.jimmer.toImmutableSchema
@@ -60,7 +60,7 @@ class JimmerImmutableDraftCodegenModelTest {
         assertEquals("__idLoaded", id.loadedStateFieldName)
         assertEquals(JimmerImmutableDraftValueState.VALUE_AND_LOADED, id.valueState)
         assertEquals(ImmutableDraftRuntimePropKind.ID, id.runtimeProp.kind)
-        assertEquals(ImmutableDraftRuntimeValueCategory.SCALAR, id.runtimeProp.valueCategory)
+        assertEquals(ImmutablePropValueCategory.SCALAR, id.runtimeProp.valueCategory)
         assertEquals(LsiPrimitiveType(LsiPrimitiveKind.LONG), id.runtimeProp.metadataElementType)
 
         val active = book.propsById.getValue(LsiSymbolId.property(BOOK, "active"))
@@ -145,7 +145,7 @@ class JimmerImmutableDraftCodegenModelTest {
         assertTrue(author.referenceMutationSupported)
         assertEquals(ImmutableDraftRuntimePropKind.KEY_REFERENCE, author.runtimeProp.kind)
         assertEquals(
-            ImmutableDraftRuntimeValueCategory.REFERENCE,
+            ImmutablePropValueCategory.REFERENCE,
             author.runtimeProp.valueCategory,
         )
         assertEquals(MANY_TO_ONE, author.runtimeProp.associationAnnotationTypeId)
@@ -283,12 +283,12 @@ class JimmerImmutableDraftCodegenModelTest {
         assertTrue(addressPlan.immutableReference)
         assertTrue(addressPlan.autoCreateSupported)
         assertTrue(addressPlan.referenceMutationSupported)
-        assertEquals(ImmutableDraftRuntimeValueCategory.REFERENCE, addressPlan.runtimeProp.valueCategory)
+        assertEquals(ImmutablePropValueCategory.REFERENCE, addressPlan.runtimeProp.valueCategory)
 
         val aliasesPlan = type.propsById.getValue(aliases)
         assertFalse(aliasesPlan.association)
         assertFalse(aliasesPlan.immutableReference)
-        assertEquals(ImmutableDraftRuntimeValueCategory.SCALAR_LIST, aliasesPlan.runtimeProp.valueCategory)
+        assertEquals(ImmutablePropValueCategory.SCALAR_LIST, aliasesPlan.runtimeProp.valueCategory)
         assertEquals(LsiNullability.NULLABLE, aliasesPlan.elementType.nullability)
     }
 
@@ -334,14 +334,14 @@ class JimmerImmutableDraftCodegenModelTest {
         assertFalse(scalarPlan.association)
         assertFalse(scalarPlan.immutableReference)
         assertFalse(scalarPlan.autoCreateSupported)
-        assertEquals(ImmutableDraftRuntimeValueCategory.SCALAR, scalarPlan.runtimeProp.valueCategory)
+        assertEquals(ImmutablePropValueCategory.SCALAR, scalarPlan.runtimeProp.valueCategory)
 
         val referencePlan = type.propsById.getValue(reference)
         assertTrue(referencePlan.genericTarget)
         assertTrue(referencePlan.association)
         assertTrue(referencePlan.immutableReference)
         assertFalse(referencePlan.autoCreateSupported)
-        assertEquals(ImmutableDraftRuntimeValueCategory.REFERENCE, referencePlan.runtimeProp.valueCategory)
+        assertEquals(ImmutablePropValueCategory.REFERENCE, referencePlan.runtimeProp.valueCategory)
     }
 
     @Test

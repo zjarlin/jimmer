@@ -5,12 +5,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class DtoPolymorphicBranch<T, P> {
 
-    public enum Kind {
-        DEFAULT,
-        TYPE
-    }
-
-    private final Kind kind;
+    private final DtoPolymorphicBranchKind kind;
 
     @Nullable
     private final T targetType;
@@ -27,7 +22,7 @@ public class DtoPolymorphicBranch<T, P> {
     private final int col;
 
     DtoPolymorphicBranch(
-            Kind kind,
+            DtoPolymorphicBranchKind kind,
             @Nullable T targetType,
             @Nullable String declaredClassName,
             DtoType<T, P> dtoType,
@@ -44,7 +39,7 @@ public class DtoPolymorphicBranch<T, P> {
         this.col = col;
     }
 
-    public Kind getKind() {
+    public DtoPolymorphicBranchKind getKind() {
         return kind;
     }
 
@@ -63,7 +58,7 @@ public class DtoPolymorphicBranch<T, P> {
         if (declaredClassName != null) {
             return declaredClassName;
         }
-        return kind == Kind.DEFAULT ? "Default" : dtoType.getBaseTypeName();
+        return kind == DtoPolymorphicBranchKind.DEFAULT ? "Default" : dtoType.getBaseTypeName();
     }
 
     public DtoType<T, P> getDtoType() {
@@ -88,7 +83,7 @@ public class DtoPolymorphicBranch<T, P> {
         if (implicit) {
             builder.append("@implicit ");
         }
-        if (kind == Kind.DEFAULT) {
+        if (kind == DtoPolymorphicBranchKind.DEFAULT) {
             builder.append("default");
         } else {
             builder.append(dtoType.getBaseTypeQualifiedName());

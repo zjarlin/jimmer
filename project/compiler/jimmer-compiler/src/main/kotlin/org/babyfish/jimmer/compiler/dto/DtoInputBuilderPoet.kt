@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -23,6 +24,7 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetAnnotation
@@ -39,7 +41,6 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.LsiPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetAnnotation
@@ -101,7 +102,7 @@ internal fun DtoType.toInputBuilderPoetType(
     }
     return LsiPoetType(
         name = "Builder",
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = inputBuilderTypeAnnotations(
             graph = graph,
             annotationContract = annotationContract,
@@ -511,7 +512,7 @@ internal fun LsiWorkspace.inputBuilderPoetTypeNames(
     inputBuilderType: LsiPoetType,
     currentDtoTypeName: LsiPoetTypeName,
     generatedDtoTypeNames: Collection<LsiPoetTypeName>,
-    jacksonVersion: JimmerDtoJacksonVersion,
+    jacksonVersion: JacksonFamily,
 ): List<LsiPoetTypeName> {
     val builderTypeName = JimmerDtoPoetTypeNames.create(
         currentDtoTypeName.packageName,
@@ -535,24 +536,24 @@ internal fun LsiWorkspace.inputBuilderPoetTypeNames(
     )
 }
 
-internal fun JimmerDtoJacksonVersion.inputBuilderJsonPojoBuilderAnnotationTypeId(): LsiSymbolId {
+internal fun JacksonFamily.inputBuilderJsonPojoBuilderAnnotationTypeId(): LsiSymbolId {
     return when (this) {
-        JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_JSON_POJO_BUILDER_TYPE_ID
-        JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_JSON_POJO_BUILDER_TYPE_ID
+        JacksonFamily.JACKSON_2 -> JACKSON_2_JSON_POJO_BUILDER_TYPE_ID
+        JacksonFamily.JACKSON_3 -> JACKSON_3_JSON_POJO_BUILDER_TYPE_ID
     }
 }
 
-internal fun JimmerDtoJacksonVersion.inputBuilderJsonNamingAnnotationTypeId(): LsiSymbolId {
+internal fun JacksonFamily.inputBuilderJsonNamingAnnotationTypeId(): LsiSymbolId {
     return when (this) {
-        JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_JSON_NAMING_TYPE_ID
-        JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_JSON_NAMING_TYPE_ID
+        JacksonFamily.JACKSON_2 -> JACKSON_2_JSON_NAMING_TYPE_ID
+        JacksonFamily.JACKSON_3 -> JACKSON_3_JSON_NAMING_TYPE_ID
     }
 }
 
-private fun JimmerDtoJacksonVersion.inputBuilderJacksonPoetTypeNames(): List<LsiPoetTypeName> {
+private fun JacksonFamily.inputBuilderJacksonPoetTypeNames(): List<LsiPoetTypeName> {
     return when (this) {
-        JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_INPUT_BUILDER_POET_TYPE_NAMES
-        JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_INPUT_BUILDER_POET_TYPE_NAMES
+        JacksonFamily.JACKSON_2 -> JACKSON_2_INPUT_BUILDER_POET_TYPE_NAMES
+        JacksonFamily.JACKSON_3 -> JACKSON_3_INPUT_BUILDER_POET_TYPE_NAMES
     }
 }
 

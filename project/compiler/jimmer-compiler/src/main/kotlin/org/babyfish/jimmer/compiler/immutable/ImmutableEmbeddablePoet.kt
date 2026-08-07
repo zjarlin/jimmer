@@ -7,6 +7,7 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSourceKind
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableProp
+import site.addzero.lsi.jimmer.ImmutablePropValueCategory
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -24,6 +25,7 @@ import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiTypeSystem
@@ -47,7 +49,6 @@ import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetProperty
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
 import site.addzero.lsi.poet.referencedTypeIds
 import site.addzero.lsi.poet.toLsiPoetTypeNames
@@ -265,7 +266,7 @@ private fun ImmutableType.toJavaPoetArtifacts(
 private fun ImmutableType.javaPropsType(schema: ImmutableSchema): LsiPoetType {
     return LsiPoetType(
         name = propsSimpleName,
-        kind = LsiPoetTypeKind.INTERFACE,
+        kind = LsiTypeDeclarationKind.INTERFACE,
         annotations = listOf(generatedByAnnotation(modelType)),
         modifiers = setOf(LsiPoetModifier.PUBLIC),
         members = props.map { prop -> javaTypedPropField(schema, prop) },
@@ -276,7 +277,7 @@ private fun ImmutableType.javaTypedPropField(
     schema: ImmutableSchema,
     prop: ImmutableProp,
 ): LsiPoetField {
-    val kind = schema.typedPropKind(prop)
+    val kind = schema.typedPropValueCategory(prop)
     return LsiPoetField(
         name = prop.fieldName(),
         type = declaredType(
@@ -313,7 +314,7 @@ private fun ImmutableType.javaPropExpressionType(
 ): LsiPoetType {
     return LsiPoetType(
         name = propExpressionSimpleName,
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(generatedByAnnotation(modelType)),
         modifiers = setOf(LsiPoetModifier.PUBLIC),
         superClass = declaredType(ABSTRACT_TYPED_EMBEDDED_PROP_EXPRESSION_ID, modelType),
@@ -549,7 +550,7 @@ private fun ImmutableType.kotlinFetchByFunction(nullable: Boolean): LsiPoetFunct
 private fun ImmutableType.kotlinPropsObject(schema: ImmutableSchema): LsiPoetType {
     return LsiPoetType(
         name = propsSimpleName,
-        kind = LsiPoetTypeKind.OBJECT,
+        kind = LsiTypeDeclarationKind.OBJECT,
         annotations = listOf(generatedByAnnotation(modelType)),
         members = props.map { prop -> kotlinTypedProp(schema, prop) },
     )
@@ -559,7 +560,7 @@ private fun ImmutableType.kotlinTypedProp(
     schema: ImmutableSchema,
     prop: ImmutableProp,
 ): LsiPoetProperty {
-    val kind = schema.typedPropKind(prop)
+    val kind = schema.typedPropValueCategory(prop)
     return LsiPoetProperty(
         name = prop.fieldName(),
         type = declaredType(
@@ -686,20 +687,20 @@ private fun ImmutableType.generatedTypeId(generatedSimpleName: String): LsiSymbo
     return LsiSymbolId.type(qualifiedName)
 }
 
-private val JimmerImmutableTypedPropKind.typedPropTypeId: LsiSymbolId
+private val ImmutablePropValueCategory.typedPropTypeId: LsiSymbolId
     get() = when (this) {
-        JimmerImmutableTypedPropKind.SCALAR -> TYPED_PROP_SCALAR_ID
-        JimmerImmutableTypedPropKind.SCALAR_LIST -> TYPED_PROP_SCALAR_LIST_ID
-        JimmerImmutableTypedPropKind.REFERENCE -> TYPED_PROP_REFERENCE_ID
-        JimmerImmutableTypedPropKind.REFERENCE_LIST -> TYPED_PROP_REFERENCE_LIST_ID
+        ImmutablePropValueCategory.SCALAR -> TYPED_PROP_SCALAR_ID
+        ImmutablePropValueCategory.SCALAR_LIST -> TYPED_PROP_SCALAR_LIST_ID
+        ImmutablePropValueCategory.REFERENCE -> TYPED_PROP_REFERENCE_ID
+        ImmutablePropValueCategory.REFERENCE_LIST -> TYPED_PROP_REFERENCE_LIST_ID
     }
 
-private val JimmerImmutableTypedPropKind.factoryName: String
+private val ImmutablePropValueCategory.factoryName: String
     get() = when (this) {
-        JimmerImmutableTypedPropKind.SCALAR -> "scalar"
-        JimmerImmutableTypedPropKind.SCALAR_LIST -> "scalarList"
-        JimmerImmutableTypedPropKind.REFERENCE -> "reference"
-        JimmerImmutableTypedPropKind.REFERENCE_LIST -> "referenceList"
+        ImmutablePropValueCategory.SCALAR -> "scalar"
+        ImmutablePropValueCategory.SCALAR_LIST -> "scalarList"
+        ImmutablePropValueCategory.REFERENCE -> "reference"
+        ImmutablePropValueCategory.REFERENCE_LIST -> "referenceList"
     }
 
 private fun EmbeddableArtifactDependencies.artifact(

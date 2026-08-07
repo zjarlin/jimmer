@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -11,19 +12,19 @@ import site.addzero.lsi.jimmer.dto.serializerPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.dtoValueAccessorName
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.LsiPoetCodeBlock
 import site.addzero.lsi.poet.LsiPoetFunction
 import site.addzero.lsi.poet.LsiPoetModifier
 import site.addzero.lsi.poet.LsiPoetParameter
 import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeKind
 import site.addzero.lsi.poet.LsiPoetTypeName
 
 internal fun DtoType.toSerializerPoetType(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-    jacksonVersion: JimmerDtoJacksonVersion,
+    jacksonVersion: JacksonFamily,
     dtoType: LsiDeclaredType,
 ): LsiPoetType {
     require(requiresDynamicInputSerialization(graph)) {
@@ -34,7 +35,7 @@ internal fun DtoType.toSerializerPoetType(
     }
     return LsiPoetType(
         name = "Serializer",
-        kind = LsiPoetTypeKind.CLASS,
+        kind = LsiTypeDeclarationKind.CLASS,
         modifiers = if (targetLanguage == LsiLanguage.JAVA) {
             setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC)
         } else {
@@ -59,7 +60,7 @@ internal fun DtoType.toSerializerPoetType(
                 ),
                 thrownTypes = if (
                     targetLanguage == LsiLanguage.JAVA &&
-                    jacksonVersion == JimmerDtoJacksonVersion.JACKSON_2
+                    jacksonVersion == JacksonFamily.JACKSON_2
                 ) {
                     listOf(LsiDeclaredType(JAVA_IO_EXCEPTION_TYPE_ID))
                 } else {
@@ -80,7 +81,7 @@ private fun DtoType.serializerBody(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-    jacksonVersion: JimmerDtoJacksonVersion,
+    jacksonVersion: JacksonFamily,
 ): LsiPoetCodeBlock = LsiPoetCodeBlock.build {
     statement {
         name("gen")
@@ -133,24 +134,24 @@ private fun DtoType.serializerBody(
     }
 }
 
-private fun JimmerDtoJacksonVersion.serializerTypeId(): LsiSymbolId = when (this) {
-    JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_SERIALIZER_TYPE_ID
-    JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_SERIALIZER_TYPE_ID
+private fun JacksonFamily.serializerTypeId(): LsiSymbolId = when (this) {
+    JacksonFamily.JACKSON_2 -> JACKSON_2_SERIALIZER_TYPE_ID
+    JacksonFamily.JACKSON_3 -> JACKSON_3_SERIALIZER_TYPE_ID
 }
 
-private fun JimmerDtoJacksonVersion.generatorTypeId(): LsiSymbolId = when (this) {
-    JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_GENERATOR_TYPE_ID
-    JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_GENERATOR_TYPE_ID
+private fun JacksonFamily.generatorTypeId(): LsiSymbolId = when (this) {
+    JacksonFamily.JACKSON_2 -> JACKSON_2_GENERATOR_TYPE_ID
+    JacksonFamily.JACKSON_3 -> JACKSON_3_GENERATOR_TYPE_ID
 }
 
-private fun JimmerDtoJacksonVersion.providerTypeId(): LsiSymbolId = when (this) {
-    JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_PROVIDER_TYPE_ID
-    JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_PROVIDER_TYPE_ID
+private fun JacksonFamily.providerTypeId(): LsiSymbolId = when (this) {
+    JacksonFamily.JACKSON_2 -> JACKSON_2_PROVIDER_TYPE_ID
+    JacksonFamily.JACKSON_3 -> JACKSON_3_PROVIDER_TYPE_ID
 }
 
-private fun JimmerDtoJacksonVersion.defaultSerializeMethodName(): String = when (this) {
-    JimmerDtoJacksonVersion.JACKSON_2 -> "defaultSerializeField"
-    JimmerDtoJacksonVersion.JACKSON_3 -> "defaultSerializeProperty"
+private fun JacksonFamily.defaultSerializeMethodName(): String = when (this) {
+    JacksonFamily.JACKSON_2 -> "defaultSerializeField"
+    JacksonFamily.JACKSON_3 -> "defaultSerializeProperty"
 }
 
 private val JACKSON_2_SERIALIZER_TYPE_ID =
@@ -167,12 +168,12 @@ private val JACKSON_3_PROVIDER_TYPE_ID =
     LsiSymbolId.type("tools.jackson.databind.SerializationContext")
 private val JAVA_IO_EXCEPTION_TYPE_ID = LsiSymbolId.type("java.io.IOException")
 
-internal fun JimmerDtoJacksonVersion.serializerPoetTypeNames(
+internal fun JacksonFamily.serializerPoetTypeNames(
     dtoTypeName: LsiPoetTypeName,
 ): List<LsiPoetTypeName> {
     val jacksonTypeNames = when (this) {
-        JimmerDtoJacksonVersion.JACKSON_2 -> JACKSON_2_POET_TYPE_NAMES
-        JimmerDtoJacksonVersion.JACKSON_3 -> JACKSON_3_POET_TYPE_NAMES
+        JacksonFamily.JACKSON_2 -> JACKSON_2_POET_TYPE_NAMES
+        JacksonFamily.JACKSON_3 -> JACKSON_3_POET_TYPE_NAMES
     }
     return listOf(dtoTypeName) + jacksonTypeNames + JAVA_IO_EXCEPTION_POET_TYPE_NAME
 }

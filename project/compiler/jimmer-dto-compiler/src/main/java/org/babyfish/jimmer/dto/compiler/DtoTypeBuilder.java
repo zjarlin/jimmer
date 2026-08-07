@@ -764,7 +764,7 @@ class DtoTypeBuilder<T, P> {
         ).build();
         validateNoNestedTypesBlock(branchType, branch.dtoBody());
         return new DtoPolymorphicBranch<>(
-                DtoPolymorphicBranch.Kind.DEFAULT,
+                DtoPolymorphicBranchKind.DEFAULT,
                 null,
                 branch.className != null ? branch.className.getText() : null,
                 branchType,
@@ -776,7 +776,7 @@ class DtoTypeBuilder<T, P> {
 
     private DtoPolymorphicBranch<T, P> implicitDefaultBranch(DtoParser.TypesBlockContext block) {
         return new DtoPolymorphicBranch<>(
-                DtoPolymorphicBranch.Kind.DEFAULT,
+                DtoPolymorphicBranchKind.DEFAULT,
                 null,
                 null,
                 emptyBranchType(baseType),
@@ -844,7 +844,7 @@ class DtoTypeBuilder<T, P> {
         ).build();
         validateNoNestedTypesBlock(branchType, branch.dtoBody());
         return new DtoPolymorphicBranch<>(
-                DtoPolymorphicBranch.Kind.TYPE,
+                DtoPolymorphicBranchKind.TYPE,
                 targetType,
                 branch.className != null ? branch.className.getText() : null,
                 branchType,
@@ -870,7 +870,7 @@ class DtoTypeBuilder<T, P> {
             T targetType
     ) {
         return new DtoPolymorphicBranch<>(
-                DtoPolymorphicBranch.Kind.TYPE,
+                DtoPolymorphicBranchKind.TYPE,
                 targetType,
                 null,
                 emptyBranchType(targetType),

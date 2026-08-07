@@ -8,6 +8,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerRoundResult
 import org.babyfish.jimmer.compiler.CompilerSession
@@ -18,11 +19,10 @@ import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
 import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableJacksonFamily
+import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -196,14 +196,14 @@ class JimmerModuleCompilerFeatureProviderTest {
         val deferredDependency = JimmerImmutableCompilerFeatureState(
             schema = ImmutableSchema(emptyList()),
             draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
-                jacksonFamily = JimmerImmutableJacksonFamily.JACKSON_2,
+                jacksonFamily = JacksonFamily.JACKSON_2,
                 types = emptyList(),
             ),
             targetTypeIds = setOf(brokenId),
             semanticRootTypeIds = setOf(brokenId),
             currentTypeIds = setOf(brokenId),
             unresolvedRootTypeIds = setOf(brokenId),
-            status = JimmerImmutableCompilerFeatureStatus.DEFERRED,
+            status = CompilerResolutionStatus.DEFERRED,
         )
         val deferred = PROVIDER.precompile(featureContext(deferredDependency))
         val deferredAgain = PROVIDER.precompile(
@@ -219,7 +219,7 @@ class JimmerModuleCompilerFeatureProviderTest {
         assertTrue(render(deferredState, deferredDependency).artifacts.isEmpty())
 
         val invalidDependency = deferredDependency.copy(
-            status = JimmerImmutableCompilerFeatureStatus.INVALID,
+            status = CompilerResolutionStatus.INVALID,
             failure = "invalid immutable",
         )
         val invalid = PROVIDER.precompile(featureContext(invalidDependency))
@@ -227,6 +227,21 @@ class JimmerModuleCompilerFeatureProviderTest {
         assertEquals(JimmerModuleCompilerFeatureStatus.DEPENDENCY_INVALID, invalidState.status)
         assertNull(invalidState.schema)
         assertTrue(render(invalidState, invalidDependency).artifacts.isEmpty())
+    }
+
+    @Test
+    fun `unknown compiler platform blocks module before precompilation`() {
+        val dependencyState = resolvedDependencyState("demo.Book")
+        val result = PROVIDER.precompile(
+            featureContext(
+                dependencyState = dependencyState,
+                platform = CompilerPlatform.UNKNOWN,
+            )
+        )
+
+        val state = assertIs<JimmerModuleCompilerFeatureState>(result.state)
+        assertEquals(JimmerModuleCompilerFeatureStatus.UNSUPPORTED_PLATFORM, state.status)
+        assertNull(state.schema)
     }
 
     @Test

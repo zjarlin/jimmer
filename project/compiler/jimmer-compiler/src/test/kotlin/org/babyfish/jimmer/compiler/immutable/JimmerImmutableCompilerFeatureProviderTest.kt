@@ -11,6 +11,7 @@ import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
 import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
 import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
 import org.babyfish.jimmer.compiler.CompilerPlatform
+import org.babyfish.jimmer.compiler.CompilerResolutionStatus
 import org.babyfish.jimmer.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
 import org.babyfish.jimmer.compiler.CompilerSourceSet
@@ -72,7 +73,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         )
         val state = assertIs<JimmerImmutableCompilerFeatureState>(result.state)
 
-        assertEquals(JimmerImmutableCompilerFeatureStatus.RESOLVED, state.status)
+        assertEquals(CompilerResolutionStatus.RESOLVED, state.status)
         assertEquals(setOf(childId), state.targetTypeIds)
         assertEquals(setOf(childId), result.processedSymbols)
         assertEquals(setOf(baseId, childId), state.schema.types.mapTo(sortedSetOf()) { type -> type.id })
@@ -88,7 +89,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
 
         val deferred = PROVIDER.precompile(context(workspace, platform = CompilerPlatform.APT))
         val deferredState = assertIs<JimmerImmutableCompilerFeatureState>(deferred.state)
-        assertEquals(JimmerImmutableCompilerFeatureStatus.DEFERRED, deferredState.status)
+        assertEquals(CompilerResolutionStatus.DEFERRED, deferredState.status)
         assertEquals(setOf(BROKEN_ID), deferred.unresolvedSymbols)
         assertTrue(deferred.diagnostics.isEmpty())
 
@@ -101,7 +102,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
             )
         )
         val finalState = assertIs<JimmerImmutableCompilerFeatureState>(final.state)
-        assertEquals(JimmerImmutableCompilerFeatureStatus.INVALID, finalState.status)
+        assertEquals(CompilerResolutionStatus.INVALID, finalState.status)
         assertTrue(final.unresolvedSymbols.isEmpty())
         assertEquals("jimmer.immutable.unresolved", final.diagnostics.single().code)
     }
@@ -115,7 +116,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         assertTrue(result.unresolvedSymbols.isEmpty())
         assertEquals("jimmer.immutable.unresolved", result.diagnostics.single().code)
         assertEquals(
-            JimmerImmutableCompilerFeatureStatus.INVALID,
+            CompilerResolutionStatus.INVALID,
             assertIs<JimmerImmutableCompilerFeatureState>(result.state).status,
         )
     }
@@ -197,7 +198,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         )
         val state = assertIs<JimmerImmutableCompilerFeatureState>(result.state)
 
-        assertEquals(JimmerImmutableCompilerFeatureStatus.RESOLVED, state.status)
+        assertEquals(CompilerResolutionStatus.RESOLVED, state.status)
         assertEquals(setOf(localId), state.targetTypeIds)
         assertEquals(setOf(localId), state.currentTypeIds)
         assertEquals(setOf(localId), result.processedSymbols)

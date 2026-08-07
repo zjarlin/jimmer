@@ -12,12 +12,12 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.jimmer.dto.DtoReusableTypeKind
+import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoTypeArgument
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
-import site.addzero.lsi.jimmer.dto.DtoVariance
+import site.addzero.lsi.model.LsiVariance
 import site.addzero.lsi.jimmer.dto.toLsiType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
@@ -34,7 +34,7 @@ class DtoTypeRefPoetTest {
             name = "List",
             arguments = listOf(
                 DtoTypeArgument(
-                    variance = DtoVariance.INVARIANT,
+                    variance = LsiVariance.INVARIANT,
                     type = type("String"),
                 ),
             ),
@@ -62,7 +62,7 @@ class DtoTypeRefPoetTest {
             name = "Array",
             arguments = listOf(
                 DtoTypeArgument(
-                    variance = DtoVariance.INVARIANT,
+                    variance = LsiVariance.INVARIANT,
                     type = type("Int"),
                 ),
             ),
@@ -115,7 +115,7 @@ class DtoTypeRefPoetTest {
         val reference = DtoReusableTypeReference(
             qualifiedName = generatedTypeName.canonicalName,
             targetBaseTypeId = LsiSymbolId.type("demo.Base"),
-            kind = DtoReusableTypeKind.VIEW,
+            kind = DtoTypeKind.VIEW,
             location = LOCATION,
         )
 
@@ -136,7 +136,7 @@ class DtoTypeRefPoetTest {
         val reference = DtoReusableTypeReference(
             qualifiedName = canonicalName,
             targetBaseTypeId = LsiSymbolId.type("demo.Base"),
-            kind = DtoReusableTypeKind.VIEW,
+            kind = DtoTypeKind.VIEW,
             location = LOCATION,
         )
 
