@@ -1,0 +1,3 @@
+[submodule "lib/lsi"]
+	path = lib/lsi
+	url = https://github.com/zjarlin/lsi.git
