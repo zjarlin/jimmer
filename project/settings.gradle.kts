@@ -1,37 +1,44 @@
 rootProject.name = "jimmer"
-include(
-    "jimmer-bom",
-    "jimmer-core",
-    "jimmer-mapstruct-apt",
-    "lsi-core",
-    "lsi-apt",
-    "lsi-ksp",
-    "lsi-poet",
-    "lsi-poet-javapoet",
-    "lsi-poet-kotlinpoet",
-    "lsi-jimmer",
-    "jimmer-compiler-core",
-    "jimmer-compiler",
-    "jimmer-sql",
-    "jimmer-core-kotlin",
-    "jimmer-sql-kotlin",
-    "jimmer-client",
-    "jimmer-spring-boot-starter",
-    "jimmer-dto-compiler",
-    "jimmer-client-swagger",
-    "jimmer-client-scalar",
-    "jimmer-ddl-compiler",
-    "jimmer-sql-test:jimmer-sql-test-model-base",
-    "jimmer-sql-test:jimmer-sql-test-model",
-    "jimmer-sql-test:jimmer-sql-test-model-kotlin",
-    "jimmer-sql-test:jimmer-sql-test-support",
+
+val moduleDirectories = linkedMapOf(
+    "jimmer-bom" to "bom/jimmer-bom",
+    "jimmer-client" to "client/jimmer-client",
+    "jimmer-client-scalar" to "client/jimmer-client-scalar",
+    "jimmer-client-swagger" to "client/jimmer-client-swagger",
+    "jimmer-compiler" to "compiler/jimmer-compiler",
+    "jimmer-compiler-core" to "compiler/jimmer-compiler-core",
+    "jimmer-ddl-compiler" to "compiler/jimmer-ddl-compiler",
+    "jimmer-dto-compiler" to "compiler/jimmer-dto-compiler",
+    "jimmer-mapstruct-apt" to "compiler/jimmer-mapstruct-apt",
+    "jimmer-core" to "core/jimmer-core",
+    "jimmer-core-kotlin" to "core/jimmer-core-kotlin",
+    "jimmer-spring-boot-starter" to "spring/jimmer-spring-boot-starter",
+    "jimmer-sql" to "sql/jimmer-sql",
+    "jimmer-sql-kotlin" to "sql/jimmer-sql-kotlin",
+    "jimmer-sql-test:jimmer-sql-test-model-base" to
+        "sql/jimmer-sql-test/jimmer-sql-test-model-base",
+    "jimmer-sql-test:jimmer-sql-test-model" to
+        "sql/jimmer-sql-test/jimmer-sql-test-model",
+    "jimmer-sql-test:jimmer-sql-test-model-kotlin" to
+        "sql/jimmer-sql-test/jimmer-sql-test-model-kotlin",
+    "jimmer-sql-test:jimmer-sql-test-support" to
+        "sql/jimmer-sql-test/jimmer-sql-test-support",
 )
+include(*moduleDirectories.keys.toTypedArray())
+moduleDirectories.forEach { (projectPath, directory) ->
+    val moduleDirectory = file(directory)
+    require(moduleDirectory.resolve("build.gradle.kts").isFile) {
+        "Jimmer module '$projectPath' is missing from '$directory'."
+    }
+    project(":$projectPath").projectDir = moduleDirectory
+}
+project(":jimmer-sql-test").projectDir = file("sql/jimmer-sql-test")
 
 val lsiRootDirectory = file("../lib/lsi")
 require(lsiRootDirectory.isDirectory) {
     "LSI submodule is missing. Run 'git submodule update --init --recursive'."
 }
-listOf(
+val lsiModules = listOf(
     "lsi-core",
     "lsi-apt",
     "lsi-ksp",
@@ -39,7 +46,9 @@ listOf(
     "lsi-poet-javapoet",
     "lsi-poet-kotlinpoet",
     "lsi-jimmer",
-).forEach { moduleName ->
+)
+include(*lsiModules.toTypedArray())
+lsiModules.forEach { moduleName ->
     val moduleDirectory = lsiRootDirectory.resolve(moduleName)
     require(moduleDirectory.resolve("build.gradle.kts").isFile) {
         "LSI submodule module '$moduleName' is missing. Run 'git submodule update --init --recursive'."
