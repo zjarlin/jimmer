@@ -7,6 +7,36 @@ import kotlin.test.assertFailsWith
 class JimmerCompilerFeatureGraphTest {
 
     @Test
+    fun `descriptor validates apt metadata names`() {
+        val descriptor = JimmerCompilerFeatureDescriptor(
+            id = "immutable",
+            aptAnnotationTypes = setOf("org.babyfish.jimmer.Immutable"),
+            supportedOptions = setOf("jimmer.source.includes"),
+        )
+
+        assertEquals(setOf("org.babyfish.jimmer.Immutable"), descriptor.aptAnnotationTypes)
+        assertEquals(setOf("jimmer.source.includes"), descriptor.supportedOptions)
+        listOf("", " Immutable", "Immutable", "org..Immutable", "org.example.Invalid-Name")
+            .forEach { annotationType ->
+                assertFailsWith<IllegalArgumentException> {
+                    JimmerCompilerFeatureDescriptor(
+                        id = "invalid",
+                        aptAnnotationTypes = setOf(annotationType),
+                    )
+                }
+            }
+        listOf("", " jimmer.option", "jimmer..option", "jimmer.option=value")
+            .forEach { optionName ->
+                assertFailsWith<IllegalArgumentException> {
+                    JimmerCompilerFeatureDescriptor(
+                        id = "invalid",
+                        supportedOptions = setOf(optionName),
+                    )
+                }
+            }
+    }
+
+    @Test
     fun `descriptor validates stable input resource paths`() {
         val descriptor = JimmerCompilerFeatureDescriptor(
             id = "module",

@@ -7,6 +7,8 @@ import site.addzero.lsi.model.LsiTypeSeed
 data class JimmerCompilerFeatureDescriptor(
     val id: String,
     val dependsOn: Set<String> = emptySet(),
+    val aptAnnotationTypes: Set<String> = emptySet(),
+    val supportedOptions: Set<String> = emptySet(),
     val classpathTypeIds: Set<LsiSymbolId> = emptySet(),
     val inputResourcePaths: Set<String> = emptySet(),
     val inputDocumentKinds: Set<CompilerInputDocumentKind> = emptySet(),
@@ -18,6 +20,8 @@ data class JimmerCompilerFeatureDescriptor(
         requireFeatureId(id)
         dependsOn.forEach(::requireFeatureId)
         require(id !in dependsOn) { "Compiler feature '$id' cannot depend on itself" }
+        aptAnnotationTypes.forEach(::requireAnnotationQualifiedName)
+        supportedOptions.forEach(::requireCompilerOptionName)
         classpathTypeIds.forEach(LsiSymbolId::requireTypeQualifiedName)
         inputResourcePaths.forEach(::requireCompilerResourcePath)
     }
@@ -188,6 +192,32 @@ private fun requireFeatureId(id: String) {
     require(id.isNotBlank()) { "Compiler feature id cannot be blank" }
     require(id == id.trim()) { "Compiler feature id cannot have surrounding whitespace: '$id'" }
     require(id.none(Char::isWhitespace)) { "Compiler feature id cannot contain whitespace: '$id'" }
+}
+
+private fun requireAnnotationQualifiedName(qualifiedName: String) {
+    requireCanonicalDottedName(qualifiedName, "APT annotation type")
+    require('.' in qualifiedName) {
+        "APT annotation type must be qualified: '$qualifiedName'"
+    }
+}
+
+private fun requireCompilerOptionName(optionName: String) {
+    requireCanonicalDottedName(optionName, "Compiler option")
+}
+
+private fun requireCanonicalDottedName(value: String, role: String) {
+    require(value.isNotBlank()) { "$role cannot be blank" }
+    require(value == value.trim()) { "$role cannot have surrounding whitespace: '$value'" }
+    require(value.split('.').all(String::isCanonicalIdentifier)) {
+        "$role must be a period-separated sequence of identifiers: '$value'"
+    }
+}
+
+private fun String.isCanonicalIdentifier(): Boolean {
+    if (isEmpty() || !Character.isJavaIdentifierStart(first())) {
+        return false
+    }
+    return drop(1).all(Character::isJavaIdentifierPart)
 }
 
 internal fun requireCompilerResourcePath(path: String) {

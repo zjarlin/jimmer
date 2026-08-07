@@ -1,9 +1,0 @@
-org.babyfish.jimmer.compiler.client.JimmerClientCompilerFeatureProvider
-org.babyfish.jimmer.compiler.ddl.JimmerDdlCompilerFeatureProvider
-org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureProvider
-org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureProvider
-org.babyfish.jimmer.compiler.exportdoc.JimmerExportDocCompilerFeatureProvider
-org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
-org.babyfish.jimmer.compiler.module.JimmerModuleCompilerFeatureProvider
-org.babyfish.jimmer.compiler.transactional.TransactionalCompilerFeatureProvider
-org.babyfish.jimmer.compiler.tuple.TypedTupleCompilerFeatureProvider
