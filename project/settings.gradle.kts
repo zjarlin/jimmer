@@ -45,7 +45,7 @@ moduleDirectories.forEach { (projectPath, directory) ->
 }
 project(":jimmer-sql-test").projectDir = file("sql/jimmer-sql-test")
 
-val lsiRootDirectory = file("../lib/lsi")
+val lsiRootDirectory = file("lib/lsi")
 require(lsiRootDirectory.isDirectory) {
     "LSI submodule is missing. Run 'git submodule update --init --recursive'."
 }
