@@ -3,7 +3,6 @@ package org.babyfish.jimmer.compiler.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -14,11 +13,13 @@ import site.addzero.lsi.compiler.CompilerRoundResult
 import site.addzero.lsi.compiler.CompilerSession
 import site.addzero.lsi.compiler.CompilerSessionSnapshot
 import site.addzero.lsi.compiler.CompilerFeatureCollection
-import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerFeatureLoader
+import site.addzero.lsi.compiler.CompilerFeatureStates
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
@@ -42,20 +43,20 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
-class JimmerModuleCompilerFeatureProviderTest {
+class ModuleFeatureTest {
 
     @Test
     fun `module feature is registered after immutable dependency`() {
-        val providers = CompilerFeatureProviders.load()
-        val featureIds = providers.map { provider -> provider.descriptor.id }
-        val module = providers.single { provider -> provider.descriptor.id == MODULE_FEATURE_ID }
+        val features = CompilerFeatureLoader.load()
+        val featureKeys = features.map { feature -> feature.key }
+        val module = features.single { feature -> feature.key == ModuleFeature.Key }
 
-        assertEquals(setOf(IMMUTABLE_FEATURE_ID), module.descriptor.dependsOn)
+        assertEquals(setOf(ImmutableFeature.Key), module.dependencies)
         assertEquals(
             setOf(ENTITIES_RESOURCE_PATH, IMMUTABLES_RESOURCE_PATH),
-            module.descriptor.inputResourcePaths,
+            module.metadata.inputResourcePaths,
         )
-        assertTrue(featureIds.indexOf(IMMUTABLE_FEATURE_ID) < featureIds.indexOf(MODULE_FEATURE_ID))
+        assertTrue(featureKeys.indexOf(ImmutableFeature.Key) < featureKeys.indexOf(ModuleFeature.Key))
     }
 
     @Test
@@ -193,7 +194,7 @@ class JimmerModuleCompilerFeatureProviderTest {
     @Test
     fun `deferred and invalid immutable states block module with stable empty output`() {
         val brokenId = LsiSymbolId.type("demo.Broken")
-        val deferredDependency = JimmerImmutableCompilerFeatureState(
+        val deferredDependency = ImmutableFeatureState(
             schema = ImmutableSchema(emptyList()),
             draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
                 jacksonFamily = JacksonFamily.JACKSON_2,
@@ -205,15 +206,15 @@ class JimmerModuleCompilerFeatureProviderTest {
             unresolvedRootTypeIds = setOf(brokenId),
             status = CompilerResolutionStatus.DEFERRED,
         )
-        val deferred = PROVIDER.precompile(featureContext(deferredDependency))
-        val deferredAgain = PROVIDER.precompile(
+        val deferred = FEATURE.precompile(featureContext(deferredDependency))
+        val deferredAgain = FEATURE.precompile(
             featureContext(
                 dependencyState = deferredDependency,
-                previousState = deferred.state as JimmerModuleCompilerFeatureState,
+                previousState = deferred.state,
             )
         )
-        val deferredState = assertIs<JimmerModuleCompilerFeatureState>(deferred.state)
-        assertEquals(JimmerModuleCompilerFeatureStatus.DEPENDENCY_DEFERRED, deferredState.status)
+        val deferredState = deferred.state
+        assertEquals(ModuleFeatureStatus.DEPENDENCY_DEFERRED, deferredState.status)
         assertNull(deferredState.schema)
         assertEquals(deferredState.fingerprint, deferredAgain.state.fingerprint)
         assertTrue(render(deferredState, deferredDependency).artifacts.isEmpty())
@@ -222,9 +223,9 @@ class JimmerModuleCompilerFeatureProviderTest {
             status = CompilerResolutionStatus.INVALID,
             failure = "invalid immutable",
         )
-        val invalid = PROVIDER.precompile(featureContext(invalidDependency))
-        val invalidState = assertIs<JimmerModuleCompilerFeatureState>(invalid.state)
-        assertEquals(JimmerModuleCompilerFeatureStatus.DEPENDENCY_INVALID, invalidState.status)
+        val invalid = FEATURE.precompile(featureContext(invalidDependency))
+        val invalidState = invalid.state
+        assertEquals(ModuleFeatureStatus.DEPENDENCY_INVALID, invalidState.status)
         assertNull(invalidState.schema)
         assertTrue(render(invalidState, invalidDependency).artifacts.isEmpty())
     }
@@ -232,23 +233,23 @@ class JimmerModuleCompilerFeatureProviderTest {
     @Test
     fun `unknown compiler platform blocks module before precompilation`() {
         val dependencyState = resolvedDependencyState("demo.Book")
-        val result = PROVIDER.precompile(
+        val result = FEATURE.precompile(
             featureContext(
                 dependencyState = dependencyState,
                 platform = CompilerPlatform.UNKNOWN,
             )
         )
 
-        val state = assertIs<JimmerModuleCompilerFeatureState>(result.state)
-        assertEquals(JimmerModuleCompilerFeatureStatus.UNSUPPORTED_PLATFORM, state.status)
+        val state = result.state
+        assertEquals(ModuleFeatureStatus.UNSUPPORTED_PLATFORM, state.status)
         assertNull(state.schema)
     }
 
     @Test
-    fun `provider respects entry resource and module switches`() {
+    fun `feature respects entry resource and module switches`() {
         val workspace = workspace(LsiLanguage.JAVA, "demo.Book")
         val dependencyState = resolvedDependencyState("demo.Book")
-        val apt = PROVIDER.precompile(
+        val apt = FEATURE.precompile(
             featureContext(
                 dependencyState = dependencyState,
                 workspace = workspace,
@@ -262,23 +263,23 @@ class JimmerModuleCompilerFeatureProviderTest {
                 ),
             )
         )
-        val aptSchema = assertIs<JimmerModuleCompilerFeatureState>(apt.state).requireSchema()
+        val aptSchema = apt.state.requireSchema()
         assertEquals(
             listOf("DomainObjects", "DomainTables", "DomainTableExes", "DomainFetchers"),
             aptSchema.summaries.map(JimmerModuleSummary::simpleName),
         )
         assertTrue(aptSchema.resources.isEmpty())
 
-        val kspWithoutModule = PROVIDER.precompile(
+        val kspWithoutModule = FEATURE.precompile(
             featureContext(
                 dependencyState = dependencyState,
                 workspace = workspace,
                 platform = CompilerPlatform.KSP,
             )
         )
-        assertNull(assertIs<JimmerModuleCompilerFeatureState>(kspWithoutModule.state).requireSchema().module)
+        assertNull(kspWithoutModule.state.requireSchema().module)
 
-        val kspWithModule = PROVIDER.precompile(
+        val kspWithModule = FEATURE.precompile(
             featureContext(
                 dependencyState = dependencyState,
                 workspace = workspace,
@@ -286,14 +287,14 @@ class JimmerModuleCompilerFeatureProviderTest {
                 options = mapOf(MODULE_REQUIRED_OPTION to "true"),
             )
         )
-        assertNotNull(assertIs<JimmerModuleCompilerFeatureState>(kspWithModule.state).requireSchema().module)
+        assertNotNull(kspWithModule.state.requireSchema().module)
     }
 
     @Test
-    fun `provider merges trimmed existing indexes without duplicate retained types`() {
+    fun `feature merges trimmed existing indexes without duplicate retained types`() {
         val workspace = workspace(LsiLanguage.JAVA, "demo.Book")
         val dependencyState = resolvedDependencyState("demo.Book")
-        val result = PROVIDER.precompile(
+        val result = FEATURE.precompile(
             featureContext(
                 dependencyState = dependencyState,
                 workspace = workspace,
@@ -304,7 +305,7 @@ class JimmerModuleCompilerFeatureProviderTest {
                 ),
             )
         )
-        val schema = assertIs<JimmerModuleCompilerFeatureState>(result.state).requireSchema()
+        val schema = result.state.requireSchema()
 
         assertEquals(
             listOf("demo.Book", "legacy.Store"),
@@ -326,7 +327,7 @@ class JimmerModuleCompilerFeatureProviderTest {
     private fun session(id: String): CompilerSession {
         return CompilerSession(
             id = id,
-            providers = listOf(JimmerImmutableCompilerFeatureProvider(), PROVIDER),
+            features = listOf(ImmutableFeature(), FEATURE),
         )
     }
 
@@ -355,25 +356,25 @@ class JimmerModuleCompilerFeatureProviderTest {
         )
     }
 
-    private fun CompilerRoundResult.moduleState(): JimmerModuleCompilerFeatureState {
-        return assertIs(featureResults.getValue(MODULE_FEATURE_ID).state)
+    private fun CompilerRoundResult.moduleState(): ModuleFeatureState {
+        return featureResults.getValue(ModuleFeature.Key).state
     }
 
     private fun CompilerRoundResult.moduleArtifacts() =
-        featureResults.getValue(MODULE_FEATURE_ID).artifacts
+        featureResults.getValue(ModuleFeature.Key).artifacts
 
-    private fun JimmerModuleCompilerFeatureState.requireSchema(): JimmerModuleSchema {
+    private fun ModuleFeatureState.requireSchema(): JimmerModuleSchema {
         return requireNotNull(schema)
     }
 
     private fun featureContext(
-        dependencyState: JimmerImmutableCompilerFeatureState,
-        previousState: JimmerModuleCompilerFeatureState? = null,
+        dependencyState: ImmutableFeatureState,
+        previousState: ModuleFeatureState? = null,
         workspace: LsiWorkspace = LsiWorkspace.EMPTY,
         platform: CompilerPlatform = CompilerPlatform.APT,
         options: Map<String, String> = emptyMap(),
         inputResources: Map<String, String> = emptyMap(),
-    ): CompilerPrecompileContext {
+    ): CompilerPrecompileContext<EmptyCompilerFeatureState, ModuleFeatureState> {
         return CompilerPrecompileContext(
             session = CompilerSessionSnapshot("module-feature-direct", emptyList()),
             round = round(
@@ -384,26 +385,30 @@ class JimmerModuleCompilerFeatureProviderTest {
                 options = options,
                 inputResources = inputResources,
             ),
-            collection = CompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(EmptyCompilerFeatureState),
             previousState = previousState,
-            dependencyStates = mapOf(IMMUTABLE_FEATURE_ID to dependencyState),
+            dependencyStates = CompilerFeatureStates(
+                mapOf(ImmutableFeature.Key to dependencyState)
+            ),
         )
     }
 
     private fun render(
-        state: JimmerModuleCompilerFeatureState,
-        dependencyState: JimmerImmutableCompilerFeatureState,
-    ) = PROVIDER.render(
+        state: ModuleFeatureState,
+        dependencyState: ImmutableFeatureState,
+    ) = FEATURE.render(
         CompilerRenderContext(
             session = CompilerSessionSnapshot("module-feature-render", emptyList()),
             round = round(0, LsiWorkspace.EMPTY, LsiWorkspace.EMPTY, CompilerPlatform.APT),
-            collection = CompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(EmptyCompilerFeatureState),
             state = state,
-            dependencyStates = mapOf(IMMUTABLE_FEATURE_ID to dependencyState),
+            dependencyStates = CompilerFeatureStates(
+                mapOf(ImmutableFeature.Key to dependencyState)
+            ),
         )
     )
 
-    private fun resolvedDependencyState(qualifiedName: String): JimmerImmutableCompilerFeatureState {
+    private fun resolvedDependencyState(qualifiedName: String): ImmutableFeatureState {
         val typeId = LsiSymbolId.type(qualifiedName)
         val props = completeEntityProps(typeId)
         val schema = ImmutableSchema(
@@ -433,7 +438,7 @@ class JimmerModuleCompilerFeatureProviderTest {
             )
         )
         val workspace = workspace(LsiLanguage.JAVA, qualifiedName)
-        return JimmerImmutableCompilerFeatureState(
+        return ImmutableFeatureState(
             schema = schema,
             draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema,
@@ -491,8 +496,6 @@ class JimmerModuleCompilerFeatureProviderTest {
     }
 
     private companion object {
-        const val MODULE_FEATURE_ID = "module"
-        const val IMMUTABLE_FEATURE_ID = "immutable"
         const val IMMUTABLES_OPTION = "jimmer.entry.immutables"
         const val TABLES_OPTION = "jimmer.entry.tables"
         const val TABLE_EXES_OPTION = "jimmer.entry.tableExes"
@@ -503,6 +506,6 @@ class JimmerModuleCompilerFeatureProviderTest {
         const val IMMUTABLES_RESOURCE_PATH = "META-INF/jimmer/immutables"
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
         val ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Id")
-        val PROVIDER = JimmerModuleCompilerFeatureProvider()
+        val FEATURE = ModuleFeature()
     }
 }

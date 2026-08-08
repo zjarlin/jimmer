@@ -3,20 +3,25 @@ package org.babyfish.jimmer.compiler.client
 import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerResolutionStatus
 import site.addzero.lsi.compiler.CompilerRound
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeature
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
+import site.addzero.lsi.compiler.compilerFeatureKey
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.compiler.CompilerTypeSeedContext
-import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
-import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
-import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
-import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureStatus
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import org.babyfish.jimmer.compiler.error.ErrorFeatureState
+import org.babyfish.jimmer.compiler.error.ErrorFeatureStatus
+import org.babyfish.jimmer.compiler.error.ErrorFeature
+import org.babyfish.jimmer.compiler.dto.DtoFeature
+import org.babyfish.jimmer.compiler.dto.DtoFeatureState
+import org.babyfish.jimmer.compiler.dto.DtoFeatureStatus
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeatureState
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -51,11 +56,13 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiWorkspace
 
-class JimmerClientCompilerFeatureProvider : CompilerFeatureProvider {
+class ClientFeature : CompilerFeature<EmptyCompilerFeatureState, ClientFeatureState> {
 
-    override val descriptor = CompilerFeatureDescriptor(
-        id = CLIENT_FEATURE_ID,
-        dependsOn = setOf(DTO_FEATURE_ID, ERROR_FEATURE_ID, IMMUTABLE_FEATURE_ID),
+    override val key = Key
+
+    override val dependencies = setOf(DtoFeature.Key, ErrorFeature.Key, ImmutableFeature.Key)
+
+    override val metadata = CompilerFeatureMetadata(
         aptAnnotationTypes = setOf(
             "org.babyfish.jimmer.client.EnableImplicitApi",
             "org.babyfish.jimmer.client.meta.Api",
@@ -95,8 +102,8 @@ class JimmerClientCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     override fun precompile(
-        context: CompilerPrecompileContext,
-    ): CompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, ClientFeatureState>,
+    ): CompilerFeaturePrecompileResult<ClientFeatureState> {
         val dependencies = context.clientDependencies()
         if (context.round.options[IGNORE_RESOURCE_GENERATION_OPTION] == "true") {
             return CompilerFeaturePrecompileResult(
@@ -140,7 +147,7 @@ class JimmerClientCompilerFeatureProvider : CompilerFeatureProvider {
             unresolved = outcome.unresolvedRootTypeIds.isNotEmpty(),
             invalid = outcome.failures.isNotEmpty(),
         )
-        val state = JimmerClientCompilerFeatureState(
+        val state = ClientFeatureState(
             status = status,
             dependencyStatus = dependencies.status,
             schema = outcome.schema,
@@ -164,9 +171,9 @@ class JimmerClientCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     override fun render(
-        context: CompilerRenderContext,
+        context: CompilerRenderContext<EmptyCompilerFeatureState, ClientFeatureState>,
     ): CompilerFeatureRenderResult {
-        val state = context.state as JimmerClientCompilerFeatureState
+        val state = context.state
         if (!context.round.isFinal || context.round.frontendDeferred || !state.renderable) {
             return CompilerFeatureRenderResult()
         }
@@ -190,9 +197,15 @@ class JimmerClientCompilerFeatureProvider : CompilerFeatureProvider {
             ),
         )
     }
+
+    companion object {
+        val Key = compilerFeatureKey<ClientFeature, EmptyCompilerFeatureState, ClientFeatureState>(
+            EmptyCompilerFeatureState,
+        )
+    }
 }
 
-internal enum class JimmerClientCompilerFeatureStatus {
+enum class ClientFeatureStatus {
     RESOLVED,
     DEFERRED,
     INVALID,
@@ -201,7 +214,7 @@ internal enum class JimmerClientCompilerFeatureStatus {
     DISABLED,
 }
 
-internal data class ClientCompilerFailure(
+data class ClientCompilerFailure(
     val rootTypeId: LsiSymbolId,
     val declarationId: LsiSymbolId,
     val message: String,
@@ -212,8 +225,8 @@ internal data class ClientCompilerFailure(
     }
 }
 
-internal data class JimmerClientCompilerFeatureState(
-    val status: JimmerClientCompilerFeatureStatus,
+data class ClientFeatureState(
+    val status: ClientFeatureStatus,
     val dependencyStatus: CompilerResolutionStatus,
     val schema: ClientSchema,
     val explicitApi: Boolean,
@@ -258,7 +271,7 @@ internal data class JimmerClientCompilerFeatureState(
 ) : CompilerFeatureState {
 
     val renderable: Boolean
-        get() = status == JimmerClientCompilerFeatureStatus.RESOLVED
+        get() = status == ClientFeatureStatus.RESOLVED
 
     init {
         require(currentServiceTypeIds.all(targetServiceTypeIds::contains)) {
@@ -277,13 +290,13 @@ internal data class JimmerClientCompilerFeatureState(
         require(failures.mapTo(sortedSetOf(), ClientCompilerFailure::rootTypeId) == invalidRootTypeIds) {
             "Client failures must describe all invalid roots"
         }
-        require(status != JimmerClientCompilerFeatureStatus.RESOLVED || dependencyStatus == CompilerResolutionStatus.RESOLVED) {
+        require(status != ClientFeatureStatus.RESOLVED || dependencyStatus == CompilerResolutionStatus.RESOLVED) {
             "Resolved client state requires resolved dependencies"
         }
-        require(status != JimmerClientCompilerFeatureStatus.RESOLVED || unresolvedRootTypeIds.isEmpty()) {
+        require(status != ClientFeatureStatus.RESOLVED || unresolvedRootTypeIds.isEmpty()) {
             "Resolved client state cannot contain unresolved roots"
         }
-        require(status != JimmerClientCompilerFeatureStatus.RESOLVED || invalidRootTypeIds.isEmpty()) {
+        require(status != ClientFeatureStatus.RESOLVED || invalidRootTypeIds.isEmpty()) {
             "Resolved client state cannot contain invalid roots"
         }
     }
@@ -307,9 +320,9 @@ private data class ClientSchemaOutcome(
 
 private fun disabledClientState(
     dependencies: ClientDependencies,
-): JimmerClientCompilerFeatureState {
-    return JimmerClientCompilerFeatureState(
-        status = JimmerClientCompilerFeatureStatus.DISABLED,
+): ClientFeatureState {
+    return ClientFeatureState(
+        status = ClientFeatureStatus.DISABLED,
         dependencyStatus = dependencies.status,
         schema = EMPTY_SCHEMA,
         explicitApi = false,
@@ -324,25 +337,13 @@ private fun disabledClientState(
     )
 }
 
-private fun CompilerPrecompileContext.clientDependencies(): ClientDependencies {
-    val immutableState = requireNotNull(
-        dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
-    ) {
-        "Client feature requires immutable compiler state"
-    }
-    val errorState = requireNotNull(
-        dependencyStates[ERROR_FEATURE_ID] as? ErrorCompilerFeatureState
-    ) {
-        "Client feature requires error compiler state"
-    }
-    val dtoState = requireNotNull(
-        dependencyStates[DTO_FEATURE_ID] as? JimmerDtoCompilerFeatureState
-    ) {
-        "Client feature requires DTO compiler state"
-    }
+private fun CompilerPrecompileContext<EmptyCompilerFeatureState, ClientFeatureState>.clientDependencies(): ClientDependencies {
+    val immutableState = dependencyStates.getValue(ImmutableFeature.Key)
+    val errorState = dependencyStates.getValue(ErrorFeature.Key)
+    val dtoState = dependencyStates.getValue(DtoFeature.Key)
     val status = when {
         immutableState.status == CompilerResolutionStatus.INVALID ||
-            errorState.status == ErrorCompilerFeatureStatus.INVALID ||
+            errorState.status == ErrorFeatureStatus.INVALID ||
             dtoState.status in DTO_INVALID_STATUSES -> {
             CompilerResolutionStatus.INVALID
         }
@@ -397,18 +398,18 @@ private fun clientStatus(
     deferred: Boolean,
     unresolved: Boolean,
     invalid: Boolean,
-): JimmerClientCompilerFeatureStatus {
+): ClientFeatureStatus {
     return when {
-        invalid -> JimmerClientCompilerFeatureStatus.INVALID
+        invalid -> ClientFeatureStatus.INVALID
         dependencies.status == CompilerResolutionStatus.INVALID -> {
-            JimmerClientCompilerFeatureStatus.DEPENDENCY_INVALID
+            ClientFeatureStatus.DEPENDENCY_INVALID
         }
-        unresolved && !deferred -> JimmerClientCompilerFeatureStatus.INVALID
-        deferred -> JimmerClientCompilerFeatureStatus.DEFERRED
+        unresolved && !deferred -> ClientFeatureStatus.INVALID
+        deferred -> ClientFeatureStatus.DEFERRED
         dependencies.status == CompilerResolutionStatus.DEFERRED -> {
-            JimmerClientCompilerFeatureStatus.DEPENDENCY_DEFERRED
+            ClientFeatureStatus.DEPENDENCY_DEFERRED
         }
-        else -> JimmerClientCompilerFeatureStatus.RESOLVED
+        else -> ClientFeatureStatus.RESOLVED
     }
 }
 
@@ -547,25 +548,21 @@ private fun StringBuilder.appendIds(ids: Set<LsiSymbolId>) {
     append(ids.sorted().joinToString(",") { id -> id.value })
 }
 
-private const val CLIENT_FEATURE_ID = "client"
-private const val DTO_FEATURE_ID = "dto"
-private const val ERROR_FEATURE_ID = "error"
-private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val IGNORE_RESOURCE_GENERATION_OPTION = "jimmer.buddy.ignoreResourceGeneration"
 private const val CLIENT_RESOURCE_PATH = "META-INF/jimmer/client"
 
 private val EMPTY_SCHEMA = ClientSchema(emptyList(), emptyList())
 
 private val DTO_DEFERRED_STATUSES = setOf(
-    JimmerDtoCompilerFeatureStatus.PENDING,
-    JimmerDtoCompilerFeatureStatus.INPUT_PENDING,
-    JimmerDtoCompilerFeatureStatus.DEFERRED,
-    JimmerDtoCompilerFeatureStatus.DEPENDENCY_DEFERRED,
+    DtoFeatureStatus.PENDING,
+    DtoFeatureStatus.INPUT_PENDING,
+    DtoFeatureStatus.DEFERRED,
+    DtoFeatureStatus.DEPENDENCY_DEFERRED,
 )
 
 private val DTO_INVALID_STATUSES = setOf(
-    JimmerDtoCompilerFeatureStatus.INVALID,
-    JimmerDtoCompilerFeatureStatus.DEPENDENCY_INVALID,
+    DtoFeatureStatus.INVALID,
+    DtoFeatureStatus.DEPENDENCY_INVALID,
 )
 private val ENABLE_IMPLICIT_API_ANNOTATION =
     LsiSymbolId.type("org.babyfish.jimmer.client.EnableImplicitApi")

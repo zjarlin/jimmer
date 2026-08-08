@@ -16,7 +16,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
-class JimmerDdlCompilerFeatureProviderTest {
+class DdlFeatureTest {
 
     @Test
     fun `collect ignores current workspace entities without a source`() {
@@ -34,7 +34,8 @@ class JimmerDdlCompilerFeatureProviderTest {
             declarations = listOf(localEntity, classpathEntity),
         )
 
-        val collection = JimmerDdlCompilerFeatureProvider().collect(
+        val feature = DdlFeature()
+        val collection = feature.collect(
             CompilerCollectContext(
                 session = CompilerSessionSnapshot("ddl-collect", emptyList()),
                 round = CompilerRound(
@@ -48,6 +49,7 @@ class JimmerDdlCompilerFeatureProviderTest {
             )
         )
 
+        assertEquals(DdlFeature.Key, feature.key)
         assertEquals(localEntity.id.value, collection.state.fingerprint)
     }
 

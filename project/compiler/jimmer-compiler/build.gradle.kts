@@ -1,5 +1,6 @@
 import org.babyfish.jimmer.build.VerifyCompilerArchitecture
 import org.babyfish.jimmer.build.VerifyCompilerEntrypoints
+import org.babyfish.jimmer.build.VerifyCompilerFeatureSpi
 
 plugins {
     `kotlin-publish-convention`
@@ -84,6 +85,21 @@ val verifyCompilerEntrypoints by tasks.registering(VerifyCompilerEntrypoints::cl
     maxNonBlankLineCount.set(3)
 }
 
+val verifyCompilerFeatureSpi by tasks.registering(VerifyCompilerFeatureSpi::class) {
+    group = "verification"
+    description = "验证 compiler feature 使用 typed SPI 与唯一 ServiceLoader 入口"
+
+    val compilerDirectory = layout.projectDirectory.dir("..")
+    baseDirectory.set(compilerDirectory)
+    sourceFiles.from(fileTree(compilerDirectory) {
+        include(
+            "jimmer-compiler*/src/main/**/*.kt",
+            "jimmer-compiler*/src/main/**/*.java",
+            "jimmer-compiler*/src/main/resources/META-INF/services/**",
+        )
+    })
+}
+
 tasks.named("check") {
     dependsOn(
         ":lsi-core:check",
@@ -102,4 +118,5 @@ tasks.named("check") {
     )
     dependsOn(verifySharedCompilerArchitecture)
     dependsOn(verifyCompilerEntrypoints)
+    dependsOn(verifyCompilerFeatureSpi)
 }

@@ -7,17 +7,19 @@ import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerResolutionStatus
 import site.addzero.lsi.compiler.CompilerFailureTranslation
 import site.addzero.lsi.compiler.CompilerFailureTranslator
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeature
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
 import org.babyfish.jimmer.compiler.render.apt.AptDtoProcessor
 import org.babyfish.jimmer.compiler.render.ksp.KspDtoProcessor
 import org.babyfish.jimmer.dto.compiler.DtoAstException
@@ -33,10 +35,13 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 
-class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailureTranslator {
-    override val descriptor = CompilerFeatureDescriptor(
-        id = DTO_FEATURE_ID,
-        dependsOn = setOf(IMMUTABLE_FEATURE_ID),
+class DtoFeature : CompilerFeature<EmptyCompilerFeatureState, DtoFeatureState>, CompilerFailureTranslator {
+
+    override val key = Key
+
+    override val dependencies = setOf(ImmutableFeature.Key)
+
+    override val metadata = CompilerFeatureMetadata(
         aptAnnotationTypes = setOf(ENABLE_DTO_GENERATION_ANNOTATION),
         supportedOptions = setOf(
             DEFAULT_NULLABLE_INPUT_MODIFIER_OPTION,
@@ -57,13 +62,9 @@ class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailur
     )
 
     override fun precompile(
-        context: CompilerPrecompileContext,
-    ): CompilerFeaturePrecompileResult {
-        val immutableState = requireNotNull(
-            context.dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
-        ) {
-            "DTO feature requires immutable compiler state"
-        }
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, DtoFeatureState>,
+    ): CompilerFeaturePrecompileResult<DtoFeatureState> {
+        val immutableState = context.dependencyStates.getValue(ImmutableFeature.Key)
         val dependencyStatus = immutableState.status
         val defaultNullableInputModifier = context.round.options.defaultNullableInputModifier()
         val rendererOptions = context.round.toJimmerDtoRendererOptions()
@@ -93,7 +94,7 @@ class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailur
             inputDocumentDiscoveryComplete = context.round.inputDocumentDiscoveryComplete,
             isFinal = context.round.isFinal,
         )
-        val state = JimmerDtoCompilerFeatureState(
+        val state = DtoFeatureState(
             status = status,
             dependencyStatus = dependencyStatus,
             graphs = resolution.graphs,
@@ -123,10 +124,10 @@ class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailur
         return CompilerFeaturePrecompileResult(
             state = state,
             diagnostics = resolution.diagnostics(
-                reportUnresolved = unresolvedStatus == JimmerDtoCompilerFeatureStatus.INVALID,
+                reportUnresolved = unresolvedStatus == DtoFeatureStatus.INVALID,
             ) + inputDiscoveryDiagnostics(context.round),
             processedSymbols = if (context.round.inputDocumentDiscoveryComplete) processedTypeIds else emptySet(),
-            unresolvedSymbols = if (unresolvedStatus == JimmerDtoCompilerFeatureStatus.DEFERRED) {
+            unresolvedSymbols = if (unresolvedStatus == DtoFeatureStatus.DEFERRED) {
                 resolution.unresolvedDocuments.flatMapTo(sortedSetOf()) { document ->
                     document.unresolvedTypeIds
                 }
@@ -136,21 +137,17 @@ class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailur
         )
     }
 
-    override fun render(context: CompilerRenderContext): CompilerFeatureRenderResult {
+    override fun render(
+        context: CompilerRenderContext<EmptyCompilerFeatureState, DtoFeatureState>,
+    ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
             return renderInputDocumentBundle(context)
         }
-        val state = requireNotNull(context.state as? JimmerDtoCompilerFeatureState) {
-            "DTO feature render requires the frozen DTO compiler state"
-        }
-        if (state.status != JimmerDtoCompilerFeatureStatus.RESOLVED) {
+        val state = context.state
+        if (state.status != DtoFeatureStatus.RESOLVED) {
             return CompilerFeatureRenderResult()
         }
-        val immutableState = requireNotNull(
-            context.dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
-        ) {
-            "DTO feature render requires immutable compiler state"
-        }
+        val immutableState = context.dependencyStates.getValue(ImmutableFeature.Key)
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> AptDtoProcessor(
                 state.graphs,
@@ -186,7 +183,7 @@ class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailur
     }
 
     private fun renderInputDocumentBundle(
-        context: CompilerRenderContext,
+        context: CompilerRenderContext<EmptyCompilerFeatureState, DtoFeatureState>,
     ): CompilerFeatureRenderResult {
         if (!context.round.inputDocumentDiscoveryComplete) {
             return CompilerFeatureRenderResult()
@@ -203,9 +200,15 @@ class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailur
             ),
         )
     }
+
+    companion object {
+        val Key = compilerFeatureKey<DtoFeature, EmptyCompilerFeatureState, DtoFeatureState>(
+            EmptyCompilerFeatureState
+        )
+    }
 }
 
-enum class JimmerDtoCompilerFeatureStatus {
+enum class DtoFeatureStatus {
     RESOLVED,
     PENDING,
     INPUT_PENDING,
@@ -215,8 +218,8 @@ enum class JimmerDtoCompilerFeatureStatus {
     DEPENDENCY_INVALID,
 }
 
-data class JimmerDtoCompilerFeatureState(
-    val status: JimmerDtoCompilerFeatureStatus,
+data class DtoFeatureState(
+    val status: DtoFeatureStatus,
     val dependencyStatus: CompilerResolutionStatus,
     val graphs: List<DtoGraph>,
     val annotationContractsBySource: Map<LsiSource, DtoAnnotationContract>,
@@ -325,22 +328,22 @@ data class JimmerDtoCompilerFeatureState(
         ) {
             "DTO documents cannot be both unresolved and invalid"
         }
-        require(status != JimmerDtoCompilerFeatureStatus.RESOLVED || dependencyStatus == CompilerResolutionStatus.RESOLVED) {
+        require(status != DtoFeatureStatus.RESOLVED || dependencyStatus == CompilerResolutionStatus.RESOLVED) {
             "Resolved DTO state requires resolved immutable dependency"
         }
-        require(status != JimmerDtoCompilerFeatureStatus.RESOLVED || unresolvedDocuments.isEmpty()) {
+        require(status != DtoFeatureStatus.RESOLVED || unresolvedDocuments.isEmpty()) {
             "Resolved DTO state cannot contain unresolved documents"
         }
-        require(status != JimmerDtoCompilerFeatureStatus.RESOLVED || failures.isEmpty()) {
+        require(status != DtoFeatureStatus.RESOLVED || failures.isEmpty()) {
             "Resolved DTO state cannot contain failures"
         }
-        require(status != JimmerDtoCompilerFeatureStatus.RESOLVED || inputDocumentDiscoveryComplete) {
+        require(status != DtoFeatureStatus.RESOLVED || inputDocumentDiscoveryComplete) {
             "Resolved DTO state requires complete input document discovery"
         }
-        require(status != JimmerDtoCompilerFeatureStatus.PENDING || unresolvedDocuments.isNotEmpty()) {
+        require(status != DtoFeatureStatus.PENDING || unresolvedDocuments.isNotEmpty()) {
             "Pending DTO state requires unresolved documents"
         }
-        require(status != JimmerDtoCompilerFeatureStatus.DEFERRED || unresolvedDocuments.isNotEmpty()) {
+        require(status != DtoFeatureStatus.DEFERRED || unresolvedDocuments.isNotEmpty()) {
             "Deferred DTO state requires unresolved documents"
         }
     }
@@ -348,26 +351,26 @@ data class JimmerDtoCompilerFeatureState(
 
 private fun dtoStatus(
     dependencyStatus: CompilerResolutionStatus,
-    unresolvedStatus: JimmerDtoCompilerFeatureStatus?,
+    unresolvedStatus: DtoFeatureStatus?,
     invalid: Boolean,
     inputDocumentDiscoveryComplete: Boolean,
     isFinal: Boolean,
-): JimmerDtoCompilerFeatureStatus {
+): DtoFeatureStatus {
     return when {
-        invalid -> JimmerDtoCompilerFeatureStatus.INVALID
+        invalid -> DtoFeatureStatus.INVALID
         dependencyStatus == CompilerResolutionStatus.INVALID -> {
-            JimmerDtoCompilerFeatureStatus.DEPENDENCY_INVALID
+            DtoFeatureStatus.DEPENDENCY_INVALID
         }
         !inputDocumentDiscoveryComplete -> if (isFinal) {
-            JimmerDtoCompilerFeatureStatus.INVALID
+            DtoFeatureStatus.INVALID
         } else {
-            JimmerDtoCompilerFeatureStatus.INPUT_PENDING
+            DtoFeatureStatus.INPUT_PENDING
         }
         unresolvedStatus != null -> unresolvedStatus
         dependencyStatus == CompilerResolutionStatus.DEFERRED -> {
-            JimmerDtoCompilerFeatureStatus.DEPENDENCY_DEFERRED
+            DtoFeatureStatus.DEPENDENCY_DEFERRED
         }
-        else -> JimmerDtoCompilerFeatureStatus.RESOLVED
+        else -> DtoFeatureStatus.RESOLVED
     }
 }
 
@@ -391,17 +394,17 @@ private fun dtoUnresolvedStatus(
     platform: CompilerPlatform,
     isFinal: Boolean,
     unresolved: Boolean,
-): JimmerDtoCompilerFeatureStatus? {
+): DtoFeatureStatus? {
     if (!unresolved) {
         return null
     }
     if (isFinal) {
-        return JimmerDtoCompilerFeatureStatus.INVALID
+        return DtoFeatureStatus.INVALID
     }
     return when (platform) {
-        CompilerPlatform.APT -> JimmerDtoCompilerFeatureStatus.DEFERRED
-        CompilerPlatform.KSP -> JimmerDtoCompilerFeatureStatus.PENDING
-        CompilerPlatform.UNKNOWN -> JimmerDtoCompilerFeatureStatus.INVALID
+        CompilerPlatform.APT -> DtoFeatureStatus.DEFERRED
+        CompilerPlatform.KSP -> DtoFeatureStatus.PENDING
+        CompilerPlatform.UNKNOWN -> DtoFeatureStatus.INVALID
     }
 }
 
@@ -550,8 +553,6 @@ private fun StringBuilder.appendEffectiveKspMutableByRootTypeId(
     }
 }
 
-internal const val DTO_FEATURE_ID = "dto"
-private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val ENABLE_DTO_GENERATION_ANNOTATION = "org.babyfish.jimmer.sql.EnableDtoGeneration"
 private const val DEFAULT_NULLABLE_INPUT_MODIFIER_OPTION = "jimmer.dto.defaultNullableInputModifier"
 internal val JACKSON_3_OBJECT_MAPPER_TYPE_ID = LsiSymbolId.type("tools.jackson.databind.ObjectMapper")

@@ -134,8 +134,8 @@ class DtoGraphTest {
     @Test
     fun `round resolution and state retain only frozen dto graph`() {
         val resolution = resolution(complexGraph())
-        val state = JimmerDtoCompilerFeatureState(
-            status = JimmerDtoCompilerFeatureStatus.RESOLVED,
+        val state = DtoFeatureState(
+            status = DtoFeatureStatus.RESOLVED,
             dependencyStatus = CompilerResolutionStatus.RESOLVED,
             graphs = resolution.graphs,
             annotationContractsBySource = resolution.annotationContractsBySource,
@@ -176,7 +176,7 @@ class DtoGraphTest {
         val fieldTypeSignatures = reachableFieldTypeSignatures(
             JimmerDtoResolvedInput::class.java,
             JimmerDtoRoundResolution::class.java,
-            JimmerDtoCompilerFeatureState::class.java,
+            DtoFeatureState::class.java,
         )
         val forbiddenSignatures = fieldTypeSignatures.filter { signature ->
             FORBIDDEN_RENDER_STATE_TYPE_NAMES.any(signature::contains)

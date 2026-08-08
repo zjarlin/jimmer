@@ -153,7 +153,7 @@ private fun String.lineNumberAt(offset: Int): Int {
     return line
 }
 
-private fun stripCommentsAndLiterals(
+internal fun stripCommentsAndLiterals(
     source: String,
     supportsTemplates: Boolean,
     supportsNestedBlockComments: Boolean,

@@ -3,23 +3,27 @@ package org.babyfish.jimmer.compiler.module
 import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerResolutionStatus
 import site.addzero.lsi.compiler.CompilerSessionSnapshot
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeature
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class JimmerModuleCompilerFeatureProvider : CompilerFeatureProvider {
+class ModuleFeature : CompilerFeature<EmptyCompilerFeatureState, ModuleFeatureState> {
 
-    override val descriptor = CompilerFeatureDescriptor(
-        id = MODULE_FEATURE_ID,
-        dependsOn = setOf(IMMUTABLE_FEATURE_ID),
+    override val key = Key
+
+    override val dependencies = setOf(ImmutableFeature.Key)
+
+    override val metadata = CompilerFeatureMetadata(
         supportedOptions = setOf(
             FETCHERS_OPTION,
             IMMUTABLES_OPTION,
@@ -37,26 +41,22 @@ class JimmerModuleCompilerFeatureProvider : CompilerFeatureProvider {
     )
 
     override fun precompile(
-        context: CompilerPrecompileContext,
-    ): CompilerFeaturePrecompileResult {
-        val immutableState = requireNotNull(
-            context.dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
-        ) {
-            "Jimmer module feature requires immutable compiler state"
-        }
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, ModuleFeatureState>,
+    ): CompilerFeaturePrecompileResult<ModuleFeatureState> {
+        val immutableState = context.dependencyStates.getValue(ImmutableFeature.Key)
         when (immutableState.status) {
             CompilerResolutionStatus.DEFERRED -> {
                 return CompilerFeaturePrecompileResult(
-                    state = JimmerModuleCompilerFeatureState.blocked(
-                        status = JimmerModuleCompilerFeatureStatus.DEPENDENCY_DEFERRED,
+                    state = ModuleFeatureState.blocked(
+                        status = ModuleFeatureStatus.DEPENDENCY_DEFERRED,
                         dependencyFingerprint = immutableState.fingerprint,
                     )
                 )
             }
             CompilerResolutionStatus.INVALID -> {
                 return CompilerFeaturePrecompileResult(
-                    state = JimmerModuleCompilerFeatureState.blocked(
-                        status = JimmerModuleCompilerFeatureStatus.DEPENDENCY_INVALID,
+                    state = ModuleFeatureState.blocked(
+                        status = ModuleFeatureStatus.DEPENDENCY_INVALID,
                         dependencyFingerprint = immutableState.fingerprint,
                     )
                 )
@@ -67,8 +67,8 @@ class JimmerModuleCompilerFeatureProvider : CompilerFeatureProvider {
         val platform = context.round.platform
         if (platform == CompilerPlatform.UNKNOWN) {
             return CompilerFeaturePrecompileResult(
-                state = JimmerModuleCompilerFeatureState.blocked(
-                    status = JimmerModuleCompilerFeatureStatus.UNSUPPORTED_PLATFORM,
+                state = ModuleFeatureState.blocked(
+                    status = ModuleFeatureStatus.UNSUPPORTED_PLATFORM,
                     dependencyFingerprint = immutableState.fingerprint,
                 )
             )
@@ -86,14 +86,14 @@ class JimmerModuleCompilerFeatureProvider : CompilerFeatureProvider {
             compilationScope = scope,
         )
         val sourcePlanFingerprint = schema.sourcePlanFingerprint()
-        val previousState = context.previousState as? JimmerModuleCompilerFeatureState
+        val previousState = context.previousState
         val stability = previousState.nextStability(
             roundNumber = context.round.number,
             isFinal = context.round.isFinal,
             sourcePlanFingerprint = sourcePlanFingerprint,
         )
         return CompilerFeaturePrecompileResult(
-            state = JimmerModuleCompilerFeatureState.ready(
+            state = ModuleFeatureState.ready(
                 schema = schema,
                 sourcePlanFingerprint = sourcePlanFingerprint,
                 stableNonFinalRoundCount = stability.count,
@@ -104,11 +104,11 @@ class JimmerModuleCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     override fun render(
-        context: CompilerRenderContext,
+        context: CompilerRenderContext<EmptyCompilerFeatureState, ModuleFeatureState>,
     ): CompilerFeatureRenderResult {
-        val state = context.state as JimmerModuleCompilerFeatureState
+        val state = context.state
         val schema = state.schema ?: return CompilerFeatureRenderResult()
-        if (state.status != JimmerModuleCompilerFeatureStatus.READY) {
+        if (state.status != ModuleFeatureStatus.READY) {
             return CompilerFeatureRenderResult()
         }
         if (context.round.isFinal) {
@@ -127,17 +127,23 @@ class JimmerModuleCompilerFeatureProvider : CompilerFeatureProvider {
         val artifacts = schema.toLsiPoetArtifacts(context.round.workspace).map(renderer::render)
         return CompilerFeatureRenderResult(artifacts = artifacts)
     }
+
+    companion object {
+        val Key = compilerFeatureKey<ModuleFeature, EmptyCompilerFeatureState, ModuleFeatureState>(
+            EmptyCompilerFeatureState
+        )
+    }
 }
 
-internal enum class JimmerModuleCompilerFeatureStatus {
+enum class ModuleFeatureStatus {
     READY,
     DEPENDENCY_DEFERRED,
     DEPENDENCY_INVALID,
     UNSUPPORTED_PLATFORM,
 }
 
-internal data class JimmerModuleCompilerFeatureState(
-    val status: JimmerModuleCompilerFeatureStatus,
+data class ModuleFeatureState(
+    val status: ModuleFeatureStatus,
     val schema: JimmerModuleSchema?,
     val sourcePlanFingerprint: String,
     val stableNonFinalRoundCount: Int,
@@ -157,19 +163,19 @@ internal data class JimmerModuleCompilerFeatureState(
 ) : CompilerFeatureState {
 
     val sourceReady: Boolean
-        get() = status == JimmerModuleCompilerFeatureStatus.READY && stableNonFinalRoundCount >= 2
+        get() = status == ModuleFeatureStatus.READY && stableNonFinalRoundCount >= 2
 
     init {
         require(stableNonFinalRoundCount in 0..2) {
             "Jimmer module stable non-final round count must be between zero and two"
         }
-        require(status == JimmerModuleCompilerFeatureStatus.READY || schema == null) {
+        require(status == ModuleFeatureStatus.READY || schema == null) {
             "Blocked Jimmer module state cannot contain a schema"
         }
-        require(status != JimmerModuleCompilerFeatureStatus.READY || schema != null) {
+        require(status != ModuleFeatureStatus.READY || schema != null) {
             "Ready Jimmer module state requires a schema"
         }
-        require(status != JimmerModuleCompilerFeatureStatus.READY || sourcePlanFingerprint.isNotBlank()) {
+        require(status != ModuleFeatureStatus.READY || sourcePlanFingerprint.isNotBlank()) {
             "Ready Jimmer module state requires a source plan fingerprint"
         }
         require(stableNonFinalRoundCount == 0 || observedNonFinalRoundNumber != null) {
@@ -184,9 +190,9 @@ internal data class JimmerModuleCompilerFeatureState(
             stableNonFinalRoundCount: Int,
             observedNonFinalRoundNumber: Int?,
             dependencyFingerprint: String,
-        ): JimmerModuleCompilerFeatureState {
-            return JimmerModuleCompilerFeatureState(
-                status = JimmerModuleCompilerFeatureStatus.READY,
+        ): ModuleFeatureState {
+            return ModuleFeatureState(
+                status = ModuleFeatureStatus.READY,
                 schema = schema,
                 sourcePlanFingerprint = sourcePlanFingerprint,
                 stableNonFinalRoundCount = stableNonFinalRoundCount,
@@ -196,13 +202,13 @@ internal data class JimmerModuleCompilerFeatureState(
         }
 
         fun blocked(
-            status: JimmerModuleCompilerFeatureStatus,
+            status: ModuleFeatureStatus,
             dependencyFingerprint: String,
-        ): JimmerModuleCompilerFeatureState {
-            require(status != JimmerModuleCompilerFeatureStatus.READY) {
+        ): ModuleFeatureState {
+            require(status != ModuleFeatureStatus.READY) {
                 "Ready Jimmer module state must be created with a schema"
             }
-            return JimmerModuleCompilerFeatureState(
+            return ModuleFeatureState(
                 status = status,
                 schema = null,
                 sourcePlanFingerprint = "blocked",
@@ -219,7 +225,7 @@ private data class JimmerModuleStability(
     val observedRoundNumber: Int?,
 )
 
-private fun JimmerModuleCompilerFeatureState?.nextStability(
+private fun ModuleFeatureState?.nextStability(
     roundNumber: Int,
     isFinal: Boolean,
     sourcePlanFingerprint: String,
@@ -232,14 +238,14 @@ private fun JimmerModuleCompilerFeatureState?.nextStability(
     }
     if (
         this != null &&
-        status == JimmerModuleCompilerFeatureStatus.READY &&
+        status == ModuleFeatureStatus.READY &&
         observedNonFinalRoundNumber == roundNumber
     ) {
         return JimmerModuleStability(stableNonFinalRoundCount, roundNumber)
     }
     val count = if (
         this != null &&
-        status == JimmerModuleCompilerFeatureStatus.READY &&
+        status == ModuleFeatureStatus.READY &&
         this.sourcePlanFingerprint == sourcePlanFingerprint
     ) {
         minOf(2, stableNonFinalRoundCount + 1)
@@ -318,15 +324,13 @@ private fun JimmerModuleArtifactDependencies.withoutCurrentOrigins(): JimmerModu
 
 private fun CompilerSessionSnapshot.hasRenderedModuleSources(): Boolean {
     return rounds.any { round ->
-        round.featureResults[MODULE_FEATURE_ID]
+        round.featureResults[ModuleFeature.Key]
             ?.artifacts
             ?.any { artifact -> artifact.kind.isSource }
             ?: false
     }
 }
 
-private const val MODULE_FEATURE_ID = "module"
-private const val IMMUTABLE_FEATURE_ID = "immutable"
 private const val IMMUTABLES_OPTION = "jimmer.entry.immutables"
 private const val TABLES_OPTION = "jimmer.entry.tables"
 private const val TABLE_EXES_OPTION = "jimmer.entry.tableExes"

@@ -141,10 +141,10 @@ class JimmerDtoKspMutabilityPlanTest {
     private fun state(
         graphs: List<DtoGraph>,
         effectiveKspMutableByRootTypeId: Map<DtoTypeId, Boolean>,
-    ): JimmerDtoCompilerFeatureState {
+    ): DtoFeatureState {
         val graph = graphs.single()
-        return JimmerDtoCompilerFeatureState(
-            status = JimmerDtoCompilerFeatureStatus.RESOLVED,
+        return DtoFeatureState(
+            status = DtoFeatureStatus.RESOLVED,
             dependencyStatus = CompilerResolutionStatus.RESOLVED,
             graphs = graphs,
             annotationContractsBySource = sortedMapOf(

@@ -7,13 +7,15 @@ import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerResolutionStatus
 import site.addzero.lsi.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.JacksonFamily
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeature
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
@@ -35,10 +37,11 @@ import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
+class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFeatureState> {
 
-    override val descriptor = CompilerFeatureDescriptor(
-        id = JIMMER_IMMUTABLE_FEATURE_ID,
+    override val key = Key
+
+    override val metadata = CompilerFeatureMetadata(
         aptAnnotationTypes = setOf(
             "org.babyfish.jimmer.Immutable",
             "org.babyfish.jimmer.sql.Entity",
@@ -56,8 +59,8 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
     )
 
     override fun precompile(
-        context: CompilerPrecompileContext,
-    ): CompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, ImmutableFeatureState>,
+    ): CompilerFeaturePrecompileResult<ImmutableFeatureState> {
         val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
         val targetTypeIds = context.round.workspace.immutableTargetTypeIds(
             platform = context.round.platform,
@@ -99,7 +102,7 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
             )
             schema.validateFetcherGenerationContracts(targetTypeIds)
             CompilerFeaturePrecompileResult(
-                state = JimmerImmutableCompilerFeatureState(
+                state = ImmutableFeatureState(
                     schema = schema,
                     draftCodegenSchema = draftCodegenSchema,
                     targetTypeIds = targetTypeIds,
@@ -120,12 +123,12 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     override fun render(
-        context: CompilerRenderContext,
+        context: CompilerRenderContext<EmptyCompilerFeatureState, ImmutableFeatureState>,
     ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
             return CompilerFeatureRenderResult()
         }
-        val state = context.state as JimmerImmutableCompilerFeatureState
+        val state = context.state
         if (state.status != CompilerResolutionStatus.RESOLVED) {
             return CompilerFeatureRenderResult()
         }
@@ -208,12 +211,12 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     private fun unresolvedResult(
-        context: CompilerPrecompileContext,
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, ImmutableFeatureState>,
         targetTypeIds: Set<LsiSymbolId>,
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
         unresolvedTypeIds: Set<LsiSymbolId>,
-    ): CompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult<ImmutableFeatureState> {
         val deferred = context.round.platform == CompilerPlatform.APT && !context.round.isFinal
         val resolvedTypeIds = semanticRootTypeIds - unresolvedTypeIds
         val (schema, draftCodegenSchema) = try {
@@ -237,7 +240,7 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
             )
         }
         return CompilerFeaturePrecompileResult(
-            state = JimmerImmutableCompilerFeatureState(
+            state = ImmutableFeatureState(
                 schema = schema,
                 draftCodegenSchema = draftCodegenSchema,
                 targetTypeIds = targetTypeIds,
@@ -269,13 +272,13 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     private fun failedResult(
-        context: CompilerPrecompileContext,
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, ImmutableFeatureState>,
         targetTypeIds: Set<LsiSymbolId>,
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
         exception: ImmutablePrecompileException,
         knownUnresolvedTypeIds: Set<LsiSymbolId> = emptySet(),
-    ): CompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult<ImmutableFeatureState> {
         val affectedTypeId = exception.declarationId.rootTypeId()
             .takeIf { typeId -> typeId in semanticRootTypeIds }
             ?: semanticRootTypeIds.firstOrNull()
@@ -303,7 +306,7 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
             )
         }
         return CompilerFeaturePrecompileResult(
-            state = JimmerImmutableCompilerFeatureState(
+            state = ImmutableFeatureState(
                 schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
                     jacksonFamily = JacksonFamily.JACKSON_2,
@@ -336,9 +339,9 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
         unresolvedTypeIds: Set<LsiSymbolId>,
-    ): CompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult<ImmutableFeatureState> {
         return CompilerFeaturePrecompileResult(
-            state = JimmerImmutableCompilerFeatureState(
+            state = ImmutableFeatureState(
                 schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
                     jacksonFamily = JacksonFamily.JACKSON_2,
@@ -355,9 +358,17 @@ class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
         )
     }
 
+    companion object {
+        val Key = compilerFeatureKey<
+            ImmutableFeature,
+            EmptyCompilerFeatureState,
+            ImmutableFeatureState,
+        >(EmptyCompilerFeatureState)
+    }
+
 }
 
-data class JimmerImmutableCompilerFeatureState(
+data class ImmutableFeatureState(
     val schema: ImmutableSchema,
     val draftCodegenSchema: JimmerImmutableDraftCodegenSchema,
     val targetTypeIds: Set<LsiSymbolId>,
@@ -491,5 +502,3 @@ private val COMPILATION_ORIGIN_KINDS = setOf(
 )
 
 private val KOTLIN_METADATA = LsiSymbolId.type("kotlin.Metadata")
-
-internal const val JIMMER_IMMUTABLE_FEATURE_ID = "immutable"

@@ -16,13 +16,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import site.addzero.lsi.compiler.CompilerCollectContext
+import site.addzero.lsi.compiler.CompilerFailureTranslation
+import site.addzero.lsi.compiler.CompilerFailureTranslator
+import site.addzero.lsi.compiler.CompilerFeature
 import site.addzero.lsi.compiler.CompilerFeatureCollection
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
 import org.babyfish.jimmer.compiler.input.JimmerCompilerWiring
 import site.addzero.lsi.ksp.KspLsiCompilerDriver
 import site.addzero.lsi.core.LsiSymbolId
@@ -35,13 +39,13 @@ class JimmerDtoKspLifecycleTest {
 
         assertEquals(KotlinSymbolProcessing.ExitCode.OK, result.exitCode, result.logger.messages.joinToString("\n"))
         assertTrue(result.logger.errors.isEmpty())
-        assertEquals(JimmerDtoCompilerFeatureStatus.PENDING, result.capture.round(0).status)
+        assertEquals(DtoFeatureStatus.PENDING, result.capture.round(0).status)
         assertTrue(result.capture.round(0).unresolvedSymbols.isEmpty())
         assertTrue(result.capture.round(0).diagnosticCodes.isEmpty())
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.capture.round(1).status)
+        assertEquals(DtoFeatureStatus.RESOLVED, result.capture.round(1).status)
         assertEquals(setOf(BOOK_ID), result.capture.round(1).processedSymbols)
         assertEquals(listOf("BookView"), result.capture.round(1).dtoTypeNames)
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.capture.finalRound().status)
+        assertEquals(DtoFeatureStatus.RESOLVED, result.capture.finalRound().status)
     }
 
     @Test
@@ -53,10 +57,10 @@ class JimmerDtoKspLifecycleTest {
             result.exitCode,
             result.logger.messages.joinToString("\n"),
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.PENDING, result.capture.round(0).status)
+        assertEquals(DtoFeatureStatus.PENDING, result.capture.round(0).status)
         assertTrue(result.capture.round(0).unresolvedSymbols.isEmpty())
         assertTrue(result.capture.round(0).diagnosticCodes.isEmpty())
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, result.capture.finalRound().status)
+        assertEquals(DtoFeatureStatus.INVALID, result.capture.finalRound().status)
         assertEquals(listOf("jimmer.dto.unresolved"), result.capture.finalRound().diagnosticCodes)
         assertTrue(result.logger.errors.single().contains("[jimmer.dto.unresolved]"))
     }
@@ -106,9 +110,9 @@ class JimmerDtoKspLifecycleTest {
         override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
             val driver = KspLsiCompilerDriver(
                 environment = environment,
-                providers = listOf(
-                    JimmerImmutableCompilerFeatureProvider(),
-                    CapturingDtoFeatureProvider(capture),
+                features = listOf(
+                    ImmutableFeature(),
+                    CapturingDtoFeature(capture),
                 ),
                 wiring = JimmerCompilerWiring,
                 sessionId = "dto-real-ksp-lifecycle",
@@ -125,27 +129,47 @@ class JimmerDtoKspLifecycleTest {
         }
     }
 
-    private class CapturingDtoFeatureProvider(
+    private class CapturingDtoFeature(
         private val capture: LifecycleCapture,
-    ) : CompilerFeatureProvider {
-        private val delegate = JimmerDtoCompilerFeatureProvider()
+    ) : CompilerFeature<EmptyCompilerFeatureState, DtoFeatureState>, CompilerFailureTranslator {
+        private val delegate = DtoFeature()
 
-        override val descriptor = delegate.descriptor
+        override val key = Key
 
-        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
+        override val dependencies = delegate.dependencies
+
+        override val metadata = delegate.metadata
+
+        override fun collect(
+            context: CompilerCollectContext,
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             return delegate.collect(context)
         }
 
         override fun precompile(
-            context: CompilerPrecompileContext,
-        ): CompilerFeaturePrecompileResult {
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, DtoFeatureState>,
+        ): CompilerFeaturePrecompileResult<DtoFeatureState> {
             val result = delegate.precompile(context)
             capture.record(context, result)
             return result
         }
 
-        override fun render(context: CompilerRenderContext): CompilerFeatureRenderResult {
+        override fun render(
+            context: CompilerRenderContext<EmptyCompilerFeatureState, DtoFeatureState>,
+        ): CompilerFeatureRenderResult {
             return delegate.render(context)
+        }
+
+        override fun translateFailure(failure: Throwable): CompilerFailureTranslation? {
+            return delegate.translateFailure(failure)
+        }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                CapturingDtoFeature,
+                EmptyCompilerFeatureState,
+                DtoFeatureState,
+            >(EmptyCompilerFeatureState)
         }
     }
 
@@ -178,10 +202,10 @@ class JimmerDtoKspLifecycleTest {
         private val rounds = linkedMapOf<Pair<Int, Boolean>, CapturedRound>()
 
         fun record(
-            context: CompilerPrecompileContext,
-            result: CompilerFeaturePrecompileResult,
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, DtoFeatureState>,
+            result: CompilerFeaturePrecompileResult<DtoFeatureState>,
         ) {
-            val state = result.state as JimmerDtoCompilerFeatureState
+            val state = result.state
             rounds[context.round.number to context.round.isFinal] = CapturedRound(
                 status = state.status,
                 processedSymbols = result.processedSymbols,
@@ -234,7 +258,7 @@ class JimmerDtoKspLifecycleTest {
     }
 
     private data class CapturedRound(
-        val status: JimmerDtoCompilerFeatureStatus,
+        val status: DtoFeatureStatus,
         val processedSymbols: Set<LsiSymbolId>,
         val unresolvedSymbols: Set<LsiSymbolId>,
         val diagnosticCodes: List<String>,

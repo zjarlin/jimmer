@@ -34,16 +34,18 @@ import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import site.addzero.lsi.compiler.CompilerCollectContext
+import site.addzero.lsi.compiler.CompilerFeature
 import site.addzero.lsi.compiler.CompilerFeatureCollection
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
 import site.addzero.lsi.compiler.CompilerTypeSeedContext
 import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -80,7 +82,7 @@ class KspLsiCompilerDriverTest {
             declarations = { listOf(nested) },
         )
         sourceFile = file(listOf(root))
-        val provider = TypeSeedFeatureProvider()
+        val provider = TypeSeedFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -88,7 +90,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-type-seed-test",
         )
@@ -123,7 +125,7 @@ class KspLsiCompilerDriverTest {
             valid = true,
         )
         sourceFile = file(listOf(root), sourcePath.absolutePath)
-        val provider = InputDocumentFeatureProvider()
+        val provider = InputDocumentFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -131,7 +133,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-input-document-test",
         )
@@ -156,7 +158,7 @@ class KspLsiCompilerDriverTest {
             file.writeText("export Model")
         }
         val sourceFile = file(emptyList(), sourcePath.absolutePath)
-        val provider = InputDocumentFeatureProvider()
+        val provider = InputDocumentFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -164,7 +166,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-input-document-no-root-test",
         )
@@ -188,7 +190,7 @@ class KspLsiCompilerDriverTest {
             file.parentFile.mkdirs()
             file.writeText("export Model")
         }
-        val provider = InputDocumentFeatureProvider()
+        val provider = InputDocumentFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -196,7 +198,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-delayed-input-document-test",
         )
@@ -302,7 +304,7 @@ class KspLsiCompilerDriverTest {
             declarations = listOf(tag, marker, mode, payload, specialModel),
             path = projectDirectory.resolve("dependencies/demo/Types.kt").absolutePath,
         )
-        val provider = InputDocumentFeatureProvider()
+        val provider = InputDocumentFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -310,7 +312,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-document-seeds-test",
         )
@@ -368,7 +370,7 @@ class KspLsiCompilerDriverTest {
             path = "/workspace/src/main/kotlin/demo/Current.kt",
             annotations = sequenceOf(fileAnnotation("demo.CurrentFileMarker")),
         )
-        val provider = DriverFeatureProvider()
+        val provider = DriverFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -376,7 +378,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-current-roots-test",
         )
@@ -426,7 +428,7 @@ class KspLsiCompilerDriverTest {
             path = "/workspace/src/beta/Model.kt",
             annotations = sequenceOf(fileAnnotation("demo.CurrentFileMarker")),
         )
-        val provider = FileScopeFeatureProvider()
+        val provider = FileScopeFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -434,7 +436,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-same-file-name-test",
         )
@@ -475,7 +477,7 @@ class KspLsiCompilerDriverTest {
             path = sourcePath,
             annotations = sequenceOf(fileAnnotation("generated.FileMarker")),
         )
-        val provider = FileScopeFeatureProvider()
+        val provider = FileScopeFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -483,7 +485,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-file-annotation-defer-test",
         )
@@ -535,7 +537,7 @@ class KspLsiCompilerDriverTest {
         )
         val codeGenerator = CapturingCodeGenerator()
         val logger = CapturingLogger()
-        val provider = DriverFeatureProvider()
+        val provider = DriverFeature()
         val environment = SymbolProcessorEnvironment(
             emptyMap(),
             KotlinVersion.CURRENT,
@@ -544,7 +546,7 @@ class KspLsiCompilerDriverTest {
         )
         val driver = KspLsiCompilerDriver(
             environment = environment,
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-driver-test",
         )
@@ -609,7 +611,7 @@ class KspLsiCompilerDriverTest {
             path = "/workspace/src/main/java/demo/JavaService.java",
             origin = Origin.JAVA,
         )
-        val provider = FileScopeFeatureProvider()
+        val provider = FileScopeFeature()
         val driver = KspLsiCompilerDriver(
             environment = SymbolProcessorEnvironment(
                 emptyMap(),
@@ -617,7 +619,7 @@ class KspLsiCompilerDriverTest {
                 CapturingCodeGenerator(),
                 CapturingLogger(),
             ),
-            providers = listOf(provider),
+            features = listOf(provider),
             wiring = JimmerCompilerWiring,
             sessionId = "ksp-java-root-ownership-test",
         )
@@ -634,25 +636,28 @@ class KspLsiCompilerDriverTest {
         assertFalse(driver.finish().round.frontendDeferred)
     }
 
-    private class DriverFeatureProvider : CompilerFeatureProvider {
-        override val descriptor = CompilerFeatureDescriptor(
-            id = "ksp-driver-test",
+    private class DriverFeature : CompilerFeature<EmptyCompilerFeatureState, DriverFeatureState> {
+        override val key = Key
+
+        override val metadata = CompilerFeatureMetadata(
             classpathTypeIds = setOf(VALID_ID, MISSING_TYPE_ID),
             inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
 
         val rounds = mutableListOf<CompilerCollectContext>()
 
-        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
+        override fun collect(
+            context: CompilerCollectContext,
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return CompilerFeatureCollection()
+            return CompilerFeatureCollection(EmptyCompilerFeatureState)
         }
 
         override fun precompile(
-            context: CompilerPrecompileContext,
-        ): CompilerFeaturePrecompileResult {
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, DriverFeatureState>,
+        ): CompilerFeaturePrecompileResult<DriverFeatureState> {
             return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
                 unresolvedSymbols = if (context.round.isFinal) emptySet() else setOf(VALID_ID),
@@ -660,7 +665,7 @@ class KspLsiCompilerDriverTest {
         }
 
         override fun render(
-            context: CompilerRenderContext,
+            context: CompilerRenderContext<EmptyCompilerFeatureState, DriverFeatureState>,
         ): CompilerFeatureRenderResult {
             if (context.round.isFinal) {
                 return CompilerFeatureRenderResult(
@@ -694,10 +699,21 @@ class KspLsiCompilerDriverTest {
                 ),
             )
         }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                DriverFeature,
+                EmptyCompilerFeatureState,
+                DriverFeatureState,
+            >(EmptyCompilerFeatureState)
+        }
     }
 
-    private class TypeSeedFeatureProvider : CompilerFeatureProvider {
-        override val descriptor = CompilerFeatureDescriptor(id = "ksp-type-seed-test")
+    private class TypeSeedFeature : CompilerFeature<
+        EmptyCompilerFeatureState,
+        EmptyCompilerFeatureState,
+    > {
+        override val key = Key
 
         val rounds = mutableListOf<CompilerCollectContext>()
 
@@ -709,56 +725,93 @@ class KspLsiCompilerDriverTest {
             )
         }
 
-        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
+        override fun collect(
+            context: CompilerCollectContext,
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return CompilerFeatureCollection()
+            return CompilerFeatureCollection(EmptyCompilerFeatureState)
+        }
+
+        override fun precompile(
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, EmptyCompilerFeatureState>,
+        ): CompilerFeaturePrecompileResult<EmptyCompilerFeatureState> {
+            return CompilerFeaturePrecompileResult(EmptyCompilerFeatureState)
+        }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                TypeSeedFeature,
+                EmptyCompilerFeatureState,
+                EmptyCompilerFeatureState,
+            >(EmptyCompilerFeatureState)
         }
     }
 
-    private class InputDocumentFeatureProvider : CompilerFeatureProvider {
-        override val descriptor = CompilerFeatureDescriptor(
-            id = "ksp-input-document-test",
+    private class InputDocumentFeature : CompilerFeature<EmptyCompilerFeatureState, DriverFeatureState> {
+        override val key = Key
+
+        override val metadata = CompilerFeatureMetadata(
             inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
 
         val rounds = mutableListOf<CompilerCollectContext>()
 
-        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
+        override fun collect(
+            context: CompilerCollectContext,
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return CompilerFeatureCollection()
+            return CompilerFeatureCollection(EmptyCompilerFeatureState)
         }
 
         override fun precompile(
-            context: CompilerPrecompileContext,
-        ): CompilerFeaturePrecompileResult {
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, DriverFeatureState>,
+        ): CompilerFeaturePrecompileResult<DriverFeatureState> {
             return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
             )
+        }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                InputDocumentFeature,
+                EmptyCompilerFeatureState,
+                DriverFeatureState,
+            >(EmptyCompilerFeatureState)
         }
     }
 
-    private class FileScopeFeatureProvider : CompilerFeatureProvider {
-        override val descriptor = CompilerFeatureDescriptor(id = "ksp-file-scope-test")
+    private class FileScopeFeature : CompilerFeature<EmptyCompilerFeatureState, DriverFeatureState> {
+        override val key = Key
 
         val rounds = mutableListOf<CompilerCollectContext>()
 
-        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
+        override fun collect(
+            context: CompilerCollectContext,
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return CompilerFeatureCollection()
+            return CompilerFeatureCollection(EmptyCompilerFeatureState)
         }
 
         override fun precompile(
-            context: CompilerPrecompileContext,
-        ): CompilerFeaturePrecompileResult {
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, DriverFeatureState>,
+        ): CompilerFeaturePrecompileResult<DriverFeatureState> {
             return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
             )
+        }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                FileScopeFeature,
+                EmptyCompilerFeatureState,
+                DriverFeatureState,
+            >(EmptyCompilerFeatureState)
         }
     }
 

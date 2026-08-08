@@ -8,12 +8,11 @@ import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerResolutionStatus
 import site.addzero.lsi.compiler.CompilerRound
 import site.addzero.lsi.compiler.CompilerSession
-import site.addzero.lsi.compiler.CompilerFeatureProviders
-import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
-import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
-import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureLoader
+import org.babyfish.jimmer.compiler.error.ErrorFeature
+import org.babyfish.jimmer.compiler.error.ErrorFeatureStatus
+import org.babyfish.jimmer.compiler.dto.DtoFeature
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -35,14 +34,17 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
-class JimmerClientCompilerFeatureProviderTest {
+class ClientFeatureTest {
 
     @Test
     fun `registered client feature declares dto immutable and error dependencies`() {
-        val provider = CompilerFeatureProviders.load()
-            .single { candidate -> candidate.descriptor.id == "client" }
+        val feature = CompilerFeatureLoader.load()
+            .single { candidate -> candidate.key == ClientFeature.Key }
 
-        assertEquals(setOf("dto", "error", "immutable"), provider.descriptor.dependsOn)
+        assertEquals(
+            setOf(DtoFeature.Key, ErrorFeature.Key, ImmutableFeature.Key),
+            feature.dependencies,
+        )
     }
 
     @Test
@@ -64,8 +66,8 @@ class JimmerClientCompilerFeatureProviderTest {
         val firstResult = session.execute(
             round(number = 0, workspace = first, currentWorkspace = first)
         ).clientResult()
-        val firstState = firstResult.state as JimmerClientCompilerFeatureState
-        assertEquals(JimmerClientCompilerFeatureStatus.RESOLVED, firstState.status)
+        val firstState = firstResult.state
+        assertEquals(ClientFeatureStatus.RESOLVED, firstState.status)
         assertTrue(firstState.explicitApi)
         assertEquals(setOf(LsiSymbolId.type("demo.FirstController")), firstState.currentServiceTypeIds)
         assertTrue(firstResult.artifacts.isEmpty())
@@ -79,9 +81,9 @@ class JimmerClientCompilerFeatureProviderTest {
                 currentRootTypeIds = setOf(LsiSymbolId.type("demo.SecondController")),
             )
         ).clientResult()
-        val secondState = secondResult.state as JimmerClientCompilerFeatureState
+        val secondState = secondResult.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.RESOLVED, secondState.status)
+        assertEquals(ClientFeatureStatus.RESOLVED, secondState.status)
         assertEquals(
             setOf(
                 LsiSymbolId.type("demo.FirstController"),
@@ -117,9 +119,9 @@ class JimmerClientCompilerFeatureProviderTest {
                 platform = CompilerPlatform.APT,
             )
         ).clientResult()
-        val deferredState = deferredResult.state as JimmerClientCompilerFeatureState
+        val deferredState = deferredResult.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.DEFERRED, deferredState.status)
+        assertEquals(ClientFeatureStatus.DEFERRED, deferredState.status)
         assertEquals(setOf(LsiSymbolId.type("demo.BrokenService")), deferredState.unresolvedRootTypeIds)
         assertEquals(listOf("demo.ValidService"), deferredState.schema.services.map(ClientService::qualifiedName))
         assertEquals(deferredState.unresolvedRootTypeIds, deferredResult.unresolvedSymbols)
@@ -134,9 +136,9 @@ class JimmerClientCompilerFeatureProviderTest {
                 isFinal = true,
             )
         ).clientResult()
-        val finalState = finalResult.state as JimmerClientCompilerFeatureState
+        val finalState = finalResult.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.INVALID, finalState.status)
+        assertEquals(ClientFeatureStatus.INVALID, finalState.status)
         assertTrue(finalResult.unresolvedSymbols.isEmpty())
         assertEquals("jimmer.client.unresolved", finalResult.diagnostics.single().code)
         assertEquals(listOf("demo.ValidService"), finalState.schema.services.map(ClientService::qualifiedName))
@@ -159,9 +161,9 @@ class JimmerClientCompilerFeatureProviderTest {
                 platform = CompilerPlatform.KSP,
             )
         ).clientResult()
-        val state = result.state as JimmerClientCompilerFeatureState
+        val state = result.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.INVALID, state.status)
+        assertEquals(ClientFeatureStatus.INVALID, state.status)
         assertTrue(result.unresolvedSymbols.isEmpty())
         assertEquals("jimmer.client.unresolved", result.diagnostics.single().code)
     }
@@ -193,9 +195,9 @@ class JimmerClientCompilerFeatureProviderTest {
         val result = session("client-invalid-root").execute(
             round(number = 0, workspace = valid.merge(invalid), currentWorkspace = valid.merge(invalid))
         ).clientResult()
-        val state = result.state as JimmerClientCompilerFeatureState
+        val state = result.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.INVALID, state.status)
+        assertEquals(ClientFeatureStatus.INVALID, state.status)
         assertEquals(setOf(NESTED_SERVICE_ID), state.invalidRootTypeIds)
         assertEquals(listOf("demo.ValidService"), state.schema.services.map(ClientService::qualifiedName))
         assertEquals("jimmer.client.invalid", result.diagnostics.single().code)
@@ -217,10 +219,10 @@ class JimmerClientCompilerFeatureProviderTest {
         val oneCodeWorkspace = client.merge(errorFamilyWorkspace("NOT_FOUND"))
         val oneCodeState = session("client-error-schema-one-code").execute(
             round(number = 0, workspace = oneCodeWorkspace, currentWorkspace = oneCodeWorkspace)
-        ).clientResult().state as JimmerClientCompilerFeatureState
+        ).clientResult().state
         val operation = oneCodeState.schema.services.single().operations.single()
 
-        assertEquals(JimmerClientCompilerFeatureStatus.RESOLVED, oneCodeState.status)
+        assertEquals(ClientFeatureStatus.RESOLVED, oneCodeState.status)
         assertEquals(
             listOf(BOOK_EXCEPTION_ID, BOOK_NOT_FOUND_EXCEPTION_ID),
             operation.declaredExceptionTypeIds,
@@ -236,7 +238,7 @@ class JimmerClientCompilerFeatureProviderTest {
         val twoCodeWorkspace = client.merge(errorFamilyWorkspace("NOT_FOUND", "FORBIDDEN"))
         val twoCodeState = session("client-error-schema-two-codes").execute(
             round(number = 0, workspace = twoCodeWorkspace, currentWorkspace = twoCodeWorkspace)
-        ).clientResult().state as JimmerClientCompilerFeatureState
+        ).clientResult().state
 
         assertEquals(
             listOf(BOOK_NOT_FOUND_EXCEPTION_ID, BOOK_FORBIDDEN_EXCEPTION_ID),
@@ -266,9 +268,9 @@ class JimmerClientCompilerFeatureProviderTest {
                 platform = CompilerPlatform.APT,
             )
         ).clientResult()
-        val deferredState = deferredResult.state as JimmerClientCompilerFeatureState
+        val deferredState = deferredResult.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.DEPENDENCY_DEFERRED, deferredState.status)
+        assertEquals(ClientFeatureStatus.DEPENDENCY_DEFERRED, deferredState.status)
         assertEquals(CompilerResolutionStatus.DEFERRED, deferredState.dependencyStatus)
         assertFalse(deferredState.renderable)
         assertTrue(deferredState.immutableDependencyFingerprint.isNotBlank())
@@ -284,15 +286,15 @@ class JimmerClientCompilerFeatureProviderTest {
         val invalidRoundResult = session("client-dependency-invalid").execute(
             round(number = 0, workspace = invalidError, currentWorkspace = invalidError)
         )
-        val errorResult = requireNotNull(invalidRoundResult.featureResults["error"])
-        val errorState = errorResult.state as ErrorCompilerFeatureState
-        assertEquals(ErrorCompilerFeatureStatus.INVALID, errorState.status)
+        val errorResult = invalidRoundResult.featureResults.getValue(ErrorFeature.Key)
+        val errorState = errorResult.state
+        assertEquals(ErrorFeatureStatus.INVALID, errorState.status)
         assertTrue(errorResult.artifacts.isEmpty())
 
         val invalidResult = invalidRoundResult.clientResult()
-        val invalidState = invalidResult.state as JimmerClientCompilerFeatureState
+        val invalidState = invalidResult.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.DEPENDENCY_INVALID, invalidState.status)
+        assertEquals(ClientFeatureStatus.DEPENDENCY_INVALID, invalidState.status)
         assertEquals(CompilerResolutionStatus.INVALID, invalidState.dependencyStatus)
         assertFalse(invalidState.renderable)
         assertTrue(invalidState.errorDependencyFingerprint.startsWith("INVALID:"))
@@ -315,9 +317,9 @@ class JimmerClientCompilerFeatureProviderTest {
                 options = mapOf("jimmer.buddy.ignoreResourceGeneration" to "true"),
             )
         ).clientResult()
-        val state = result.state as JimmerClientCompilerFeatureState
+        val state = result.state
 
-        assertEquals(JimmerClientCompilerFeatureStatus.DISABLED, state.status)
+        assertEquals(ClientFeatureStatus.DISABLED, state.status)
         assertTrue(state.targetServiceTypeIds.isEmpty())
         assertTrue(state.schema.services.isEmpty())
         assertTrue(result.processedSymbols.isEmpty())
@@ -337,7 +339,7 @@ class JimmerClientCompilerFeatureProviderTest {
                 options = mapOf("jimmer.source.includes" to "demo.api"),
             )
         ).clientResult()
-        val state = result.state as JimmerClientCompilerFeatureState
+        val state = result.state
 
         assertEquals(setOf(LsiSymbolId.type("demo.api.Service")), state.targetServiceTypeIds)
         assertEquals(state.targetServiceTypeIds, state.currentServiceTypeIds)
@@ -359,7 +361,7 @@ class JimmerClientCompilerFeatureProviderTest {
                 platform = CompilerPlatform.KSP,
             )
         ).clientResult()
-        val state = result.state as JimmerClientCompilerFeatureState
+        val state = result.state
 
         assertEquals(setOf(LsiSymbolId.type("demo.KotlinService")), state.targetServiceTypeIds)
         assertEquals(listOf("demo.KotlinService"), state.schema.services.map(ClientService::qualifiedName))
@@ -369,17 +371,17 @@ class JimmerClientCompilerFeatureProviderTest {
     private fun session(id: String): CompilerSession {
         return CompilerSession(
             id = id,
-            providers = listOf(
-                ErrorCompilerFeatureProvider(),
-                JimmerImmutableCompilerFeatureProvider(),
-                JimmerDtoCompilerFeatureProvider(),
-                JimmerClientCompilerFeatureProvider(),
+            features = listOf(
+                ErrorFeature(),
+                ImmutableFeature(),
+                DtoFeature(),
+                ClientFeature(),
             ),
         )
     }
 
     private fun site.addzero.lsi.compiler.CompilerRoundResult.clientResult() =
-        requireNotNull(featureResults["client"])
+        featureResults.getValue(ClientFeature.Key)
 
     private fun round(
         number: Int,

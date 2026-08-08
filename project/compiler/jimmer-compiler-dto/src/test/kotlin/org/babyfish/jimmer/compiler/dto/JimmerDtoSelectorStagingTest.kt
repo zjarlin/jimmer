@@ -12,7 +12,7 @@ import site.addzero.lsi.compiler.CompilerRound
 import site.addzero.lsi.compiler.CompilerSession
 import site.addzero.lsi.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
@@ -194,9 +194,9 @@ class JimmerDtoSelectorStagingTest {
         )
         val result = CompilerSession(
             id = "dto-selector-platform-fallback",
-            providers = listOf(
-                JimmerImmutableCompilerFeatureProvider(),
-                JimmerDtoCompilerFeatureProvider(),
+            features = listOf(
+                ImmutableFeature(),
+                DtoFeature(),
             ),
         ).execute(
             CompilerRound(
@@ -211,19 +211,18 @@ class JimmerDtoSelectorStagingTest {
             ),
         )
 
-        val dtoState = result.featureResults.getValue("dto").state as JimmerDtoCompilerFeatureState
-        val immutableState = result.featureResults.getValue("immutable").state
-        assertTrue(immutableState is org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState)
+        val dtoResult = result.featureResults.getValue(DtoFeature.Key)
+        val dtoState = dtoResult.state
+        val immutableState = result.featureResults.getValue(ImmutableFeature.Key).state
         assertEquals(
             setOf(kotlinWildcardTarget),
-            (immutableState as org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState)
-                .targetTypeIds,
+            immutableState.targetTypeIds,
         )
         assertTrue(dtoState.graphs.isEmpty())
         assertTrue(dtoState.unresolvedDocuments.isEmpty())
         assertTrue(dtoState.failures.isEmpty())
-        assertTrue(javaTarget !in result.featureResults.getValue("dto").processedSymbols)
-        assertTrue(kotlinWildcardTarget !in result.featureResults.getValue("dto").processedSymbols)
+        assertTrue(javaTarget !in dtoResult.processedSymbols)
+        assertTrue(kotlinWildcardTarget !in dtoResult.processedSymbols)
     }
 
     private fun compile(

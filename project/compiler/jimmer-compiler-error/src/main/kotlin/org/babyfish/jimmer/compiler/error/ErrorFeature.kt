@@ -1,13 +1,15 @@
 package org.babyfish.jimmer.compiler.error
 
 import site.addzero.lsi.compiler.CompilerPlatform
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeature
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
@@ -24,16 +26,18 @@ import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class ErrorCompilerFeatureProvider : CompilerFeatureProvider {
-    override val descriptor = CompilerFeatureDescriptor(
-        id = "error",
+class ErrorFeature : CompilerFeature<EmptyCompilerFeatureState, ErrorFeatureState> {
+
+    override val key = Key
+
+    override val metadata = CompilerFeatureMetadata(
         aptAnnotationTypes = setOf("org.babyfish.jimmer.error.ErrorFamily"),
         supportedOptions = setOf("jimmer.client.checkedException"),
     )
 
     override fun precompile(
-        context: CompilerPrecompileContext,
-    ): CompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, ErrorFeatureState>,
+    ): CompilerFeaturePrecompileResult<ErrorFeatureState> {
         return try {
             val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
             val targetTypeIds = context.round.workspace
@@ -52,8 +56,8 @@ class ErrorCompilerFeatureProvider : CompilerFeatureProvider {
                 ),
                 targetTypeIds = targetTypeIds,
             )
-            val state = ErrorCompilerFeatureState(
-                status = ErrorCompilerFeatureStatus.RESOLVED,
+            val state = ErrorFeatureState(
+                status = ErrorFeatureStatus.RESOLVED,
                 schema = schema,
             )
             CompilerFeaturePrecompileResult(
@@ -62,7 +66,7 @@ class ErrorCompilerFeatureProvider : CompilerFeatureProvider {
             )
         } catch (exception: ErrorValidationException) {
             CompilerFeaturePrecompileResult(
-                state = ErrorCompilerFeatureState.invalid(exception),
+                state = ErrorFeatureState.invalid(exception),
                 diagnostics = listOf(
                     LsiDiagnostic(
                         code = "jimmer.error.invalid",
@@ -76,13 +80,13 @@ class ErrorCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     override fun render(
-        context: CompilerRenderContext,
+        context: CompilerRenderContext<EmptyCompilerFeatureState, ErrorFeatureState>,
     ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
             return CompilerFeatureRenderResult()
         }
-        val state = context.state as ErrorCompilerFeatureState
-        if (state.status != ErrorCompilerFeatureStatus.RESOLVED || state.schema.families.isEmpty()) {
+        val state = context.state
+        if (state.status != ErrorFeatureStatus.RESOLVED || state.schema.families.isEmpty()) {
             return CompilerFeatureRenderResult()
         }
         val renderer: LsiPoetRenderer = when (context.round.platform) {
@@ -94,6 +98,12 @@ class ErrorCompilerFeatureProvider : CompilerFeatureProvider {
             .toLsiPoetArtifacts(context.round.workspace)
             .map(renderer::render)
         return CompilerFeatureRenderResult(artifacts = artifacts)
+    }
+
+    companion object {
+        val Key = compilerFeatureKey<ErrorFeature, EmptyCompilerFeatureState, ErrorFeatureState>(
+            EmptyCompilerFeatureState
+        )
     }
 }
 
@@ -114,20 +124,20 @@ private fun LsiTypeDeclaration.isVisibleOn(platform: CompilerPlatform): Boolean 
     }
 }
 
-enum class ErrorCompilerFeatureStatus {
+enum class ErrorFeatureStatus {
     RESOLVED,
     INVALID,
 }
 
-data class ErrorCompilerFeatureState(
-    val status: ErrorCompilerFeatureStatus,
+data class ErrorFeatureState(
+    val status: ErrorFeatureStatus,
     val schema: ErrorSchema,
     override val fingerprint: String = "${status.name}:${schema.fingerprint()}",
 ) : CompilerFeatureState {
     companion object {
-        fun invalid(exception: ErrorValidationException): ErrorCompilerFeatureState {
-            return ErrorCompilerFeatureState(
-                status = ErrorCompilerFeatureStatus.INVALID,
+        fun invalid(exception: ErrorValidationException): ErrorFeatureState {
+            return ErrorFeatureState(
+                status = ErrorFeatureStatus.INVALID,
                 schema = ErrorSchema(emptyList()),
                 fingerprint = "INVALID:${exception.declarationId.value}:${exception.message.orEmpty()}",
             )

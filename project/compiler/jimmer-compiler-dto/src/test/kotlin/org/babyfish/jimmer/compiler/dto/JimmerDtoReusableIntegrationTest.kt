@@ -17,11 +17,14 @@ import site.addzero.lsi.compiler.CompilerSourceSet
 import site.addzero.lsi.compiler.CompilerSessionSnapshot
 import site.addzero.lsi.compiler.CompilerFeatureCollection
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureStates
 import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
 import site.addzero.lsi.jimmer.FormulaKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenPrecompiler
 import site.addzero.lsi.jimmer.PrimaryMapping
@@ -85,7 +88,7 @@ class JimmerDtoReusableIntegrationTest {
         )
         val state = result.dtoState()
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, state.status)
+        assertEquals(DtoFeatureStatus.RESOLVED, state.status)
         assertTrue(state.unresolvedDocuments.isEmpty())
         assertTrue(state.failures.isEmpty())
         assertTrue(result.diagnostics.isEmpty())
@@ -128,7 +131,7 @@ class JimmerDtoReusableIntegrationTest {
             workspace = workspace,
             platform = CompilerPlatform.APT,
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.DEFERRED, aptResult.dtoState().status)
+        assertEquals(DtoFeatureStatus.DEFERRED, aptResult.dtoState().status)
         assertEquals(setOf(missingTypeId), aptResult.unresolvedSymbols)
         assertTrue(aptResult.diagnostics.isEmpty())
 
@@ -137,7 +140,7 @@ class JimmerDtoReusableIntegrationTest {
             workspace = workspace,
             platform = CompilerPlatform.KSP,
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.PENDING, kspResult.dtoState().status)
+        assertEquals(DtoFeatureStatus.PENDING, kspResult.dtoState().status)
         assertTrue(kspResult.unresolvedSymbols.isEmpty())
         assertTrue(kspResult.diagnostics.isEmpty())
 
@@ -151,7 +154,7 @@ class JimmerDtoReusableIntegrationTest {
             val finalState = finalResult.dtoState()
             val diagnostic = finalResult.diagnostics.single()
 
-            assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, finalState.status)
+            assertEquals(DtoFeatureStatus.INVALID, finalState.status)
             assertEquals(listOf(missingTypeId), finalState.unresolvedDocuments.single().unresolvedTypeIds)
             assertTrue(finalResult.unresolvedSymbols.isEmpty())
             assertEquals("jimmer.dto.unresolved", diagnostic.code)
@@ -185,7 +188,7 @@ class JimmerDtoReusableIntegrationTest {
         )
         val state = result.dtoState()
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, state.status)
+        assertEquals(DtoFeatureStatus.RESOLVED, state.status)
         assertTrue(state.unresolvedDocuments.isEmpty())
         assertTrue(state.failures.isEmpty())
         assertTrue(result.diagnostics.isEmpty())
@@ -232,7 +235,7 @@ class JimmerDtoReusableIntegrationTest {
                 .map(graph.propsById::getValue)
                 .single { prop -> prop.name == "store" } as DtoBaseProp
 
-            assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, state.status)
+            assertEquals(DtoFeatureStatus.RESOLVED, state.status)
             assertTrue(state.unresolvedDocuments.isEmpty())
             assertTrue(state.failures.isEmpty())
             assertTrue(result.diagnostics.isEmpty())
@@ -282,7 +285,7 @@ class JimmerDtoReusableIntegrationTest {
         val failure = state.failures.single()
 
         assertEquals(2, reusableReferences.size)
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, state.status)
+        assertEquals(DtoFeatureStatus.INVALID, state.status)
         assertTrue(state.graphs.isEmpty())
         assertTrue(state.unresolvedDocuments.isEmpty())
         assertEquals("jimmer.dto.invalid", failure.code)
@@ -325,7 +328,7 @@ class JimmerDtoReusableIntegrationTest {
         val state = result.dtoState()
         val failure = state.failures.single()
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, state.status)
+        assertEquals(DtoFeatureStatus.INVALID, state.status)
         assertTrue(state.unresolvedDocuments.isEmpty())
         assertEquals("jimmer.dto.invalid", failure.code)
         assertEquals(LsiDiagnosticSeverity.ERROR, failure.severity)
@@ -348,7 +351,7 @@ class JimmerDtoReusableIntegrationTest {
         workspace: LsiWorkspace,
         platform: CompilerPlatform,
         isFinal: Boolean = false,
-    ): CompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult<DtoFeatureState> {
         return precompileSnapshots(
             snapshots = documents.map(::freeze),
             workspace = workspace,
@@ -362,7 +365,7 @@ class JimmerDtoReusableIntegrationTest {
         workspace: LsiWorkspace,
         platform: CompilerPlatform,
         isFinal: Boolean = false,
-    ): CompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult<DtoFeatureState> {
         val currentTypeIds = if (isFinal) {
             emptySet()
         } else {
@@ -377,7 +380,7 @@ class JimmerDtoReusableIntegrationTest {
             isFinal = isFinal,
             inputDocumentSnapshots = snapshots.sorted(),
         )
-        val immutableState = JimmerImmutableCompilerFeatureState(
+        val immutableState = ImmutableFeatureState(
             schema = IMMUTABLE_SCHEMA,
             draftCodegenSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
                 schema = IMMUTABLE_SCHEMA,
@@ -388,13 +391,15 @@ class JimmerDtoReusableIntegrationTest {
             semanticRootTypeIds = setOf(BOOK_TYPE_ID, STORE_TYPE_ID),
             currentTypeIds = currentTypeIds,
         )
-        return JimmerDtoCompilerFeatureProvider().precompile(
+        return DtoFeature().precompile(
             CompilerPrecompileContext(
                 session = CompilerSessionSnapshot("dto-reusable-integration", emptyList()),
                 round = round,
-                collection = CompilerFeatureCollection(),
+                collection = CompilerFeatureCollection(EmptyCompilerFeatureState),
                 previousState = null,
-                dependencyStates = mapOf("immutable" to immutableState),
+                dependencyStates = CompilerFeatureStates(
+                    mapOf(ImmutableFeature.Key to immutableState)
+                ),
             )
         )
     }
@@ -524,8 +529,8 @@ class JimmerDtoReusableIntegrationTest {
         return REFERENCE_FREEZER.freeze(document)
     }
 
-    private fun CompilerFeaturePrecompileResult.dtoState(): JimmerDtoCompilerFeatureState {
-        return state as JimmerDtoCompilerFeatureState
+    private fun CompilerFeaturePrecompileResult<DtoFeatureState>.dtoState(): DtoFeatureState {
+        return state
     }
 
     private companion object {

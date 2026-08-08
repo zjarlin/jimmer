@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerRound
 import site.addzero.lsi.compiler.CompilerSession
-import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerFeatureLoader
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -19,14 +19,14 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
-class JimmerExportDocCompilerFeatureProviderTest {
+class ExportDocFeatureTest {
 
     @Test
     fun `registered export doc feature is independent`() {
-        val provider = CompilerFeatureProviders.load()
-            .single { candidate -> candidate.descriptor.id == EXPORT_DOC_FEATURE_ID }
+        val feature = CompilerFeatureLoader.load()
+            .single { candidate -> candidate.key == ExportDocFeature.Key }
 
-        assertTrue(provider.descriptor.dependsOn.isEmpty())
+        assertTrue(feature.dependencies.isEmpty())
     }
 
     @Test
@@ -39,7 +39,7 @@ class JimmerExportDocCompilerFeatureProviderTest {
         )
         val session = CompilerSession(
             id = "export-doc-options",
-            providers = listOf(JimmerExportDocCompilerFeatureProvider()),
+            features = listOf(ExportDocFeature()),
         )
 
         val sourceRound = session.execute(
@@ -55,9 +55,9 @@ class JimmerExportDocCompilerFeatureProviderTest {
                 ),
             )
         )
-        val sourceFeature = requireNotNull(sourceRound.featureResults[EXPORT_DOC_FEATURE_ID])
-        val sourceState = sourceFeature.state as JimmerExportDocCompilerFeatureState
-        assertEquals(JimmerExportDocCompilerFeatureStatus.RESOLVED, sourceState.status)
+        val sourceFeature = sourceRound.featureResults.getValue(ExportDocFeature.Key)
+        val sourceState = sourceFeature.state
+        assertEquals(ExportDocFeatureStatus.RESOLVED, sourceState.status)
         assertEquals(listOf(type.id), sourceState.schema.exportedTypeIds)
         assertEquals(setOf(type.id), sourceFeature.processedSymbols)
         assertTrue(sourceFeature.artifacts.isEmpty())
@@ -77,7 +77,7 @@ class JimmerExportDocCompilerFeatureProviderTest {
             )
         )
         val artifact = requireNotNull(
-            finalRound.featureResults[EXPORT_DOC_FEATURE_ID]?.artifacts?.singleOrNull()
+            finalRound.featureResults[ExportDocFeature.Key]?.artifacts?.singleOrNull()
         )
         assertEquals(EXPORT_DOC_RESOURCE_PATH, artifact.path)
     }
@@ -94,7 +94,7 @@ class JimmerExportDocCompilerFeatureProviderTest {
         val workspace = LsiWorkspace(annotationScopes = listOf(fileScope, packageScope))
         val session = CompilerSession(
             id = "export-doc-conflict",
-            providers = listOf(JimmerExportDocCompilerFeatureProvider()),
+            features = listOf(ExportDocFeature()),
         )
 
         val result = session.execute(
@@ -105,10 +105,10 @@ class JimmerExportDocCompilerFeatureProviderTest {
                 currentRootTypeIds = emptySet(),
             )
         )
-        val feature = requireNotNull(result.featureResults[EXPORT_DOC_FEATURE_ID])
-        val state = feature.state as JimmerExportDocCompilerFeatureState
+        val feature = result.featureResults.getValue(ExportDocFeature.Key)
+        val state = feature.state
 
-        assertEquals(JimmerExportDocCompilerFeatureStatus.INVALID, state.status)
+        assertEquals(ExportDocFeatureStatus.INVALID, state.status)
         assertEquals(listOf(packageScope.id, fileScope.id).sorted(), state.failures.single().configurationIds)
         assertEquals("jimmer.export-doc.invalid", feature.diagnostics.single().code)
         assertEquals(state.failures.single().configurationIds.first(), feature.diagnostics.single().symbolId)

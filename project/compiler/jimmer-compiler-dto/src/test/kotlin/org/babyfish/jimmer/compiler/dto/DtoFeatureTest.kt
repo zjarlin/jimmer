@@ -19,14 +19,14 @@ import site.addzero.lsi.compiler.CompilerRoundResult
 import site.addzero.lsi.compiler.CompilerSession
 import site.addzero.lsi.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JacksonFamily
-import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerFeatureLoader
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
 import site.addzero.lsi.jimmer.FormulaKind
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
 import site.addzero.lsi.jimmer.PrimaryMapping
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -81,18 +81,18 @@ import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactEmissionMode
 import site.addzero.lsi.codegen.ArtifactKind
 
-class JimmerDtoCompilerFeatureProviderTest {
+class DtoFeatureTest {
     @Test
     fun `registered dto feature consumes immutable state and dto documents`() {
-        val providers = CompilerFeatureProviders.load()
-        val featureIds = providers.map { provider -> provider.descriptor.id }
-        val provider = providers.single { candidate -> candidate.descriptor.id == DTO_FEATURE_ID }
+        val features = CompilerFeatureLoader.load()
+        val featureKeys = features.map { feature -> feature.key }
+        val feature = features.single { candidate -> candidate.key == DtoFeature.Key }
 
-        assertEquals(setOf(IMMUTABLE_FEATURE_ID), provider.descriptor.dependsOn)
-        assertEquals(setOf(JACKSON_3_OBJECT_MAPPER_TYPE_ID), provider.descriptor.classpathTypeIds)
-        assertEquals(setOf(DTO_INPUT_DOCUMENT_KIND), provider.descriptor.inputDocumentKinds)
-        assertTrue(provider.descriptor.requiresSourceQuiescence)
-        assertTrue(featureIds.indexOf(IMMUTABLE_FEATURE_ID) < featureIds.indexOf(DTO_FEATURE_ID))
+        assertEquals(setOf(ImmutableFeature.Key), feature.dependencies)
+        assertEquals(setOf(JACKSON_3_OBJECT_MAPPER_TYPE_ID), feature.metadata.classpathTypeIds)
+        assertEquals(setOf(DTO_INPUT_DOCUMENT_KIND), feature.metadata.inputDocumentKinds)
+        assertTrue(feature.metadata.requiresSourceQuiescence)
+        assertTrue(featureKeys.indexOf(ImmutableFeature.Key) < featureKeys.indexOf(DtoFeature.Key))
     }
 
     @Test
@@ -237,7 +237,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         ).dtoState()
 
-        fun mutabilityByName(state: JimmerDtoCompilerFeatureState): Map<String, Boolean> {
+        fun mutabilityByName(state: DtoFeatureState): Map<String, Boolean> {
             val graph = state.graphs.single()
             return graph.rootTypeIds.associate { rootTypeId ->
                 requireNotNull(graph.typesById.getValue(rootTypeId).name) to
@@ -363,7 +363,7 @@ class JimmerDtoCompilerFeatureProviderTest {
     }
 
     @Test
-    fun `provider reports every multi target dto type as processed for apt and ksp`() {
+    fun `feature reports every multi target dto type as processed for apt and ksp`() {
         val inputDocument = document(
             relativePath = "shared/Shared.dto",
             content = """
@@ -387,7 +387,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 )
             )
 
-            assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
+            assertEquals(DtoFeatureStatus.RESOLVED, result.dtoState().status)
             assertEquals(setOf(BOOK_ID, AUTHOR_ID), result.dtoResult().processedSymbols)
             assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
             assertTrue(result.dtoState().failures.isEmpty())
@@ -555,7 +555,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         val typeApplications = contract.typePlansByTypeId.getValue(rootTypeId).applications
         val propApplications = contract.propPlansByPropId.getValue(namePropId).propertyApplications
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, state.status)
+        assertEquals(DtoFeatureStatus.RESOLVED, state.status)
         assertFalse(noTargetDeclaration.targetDeclared)
         assertEquals(
             listOf(DtoAnnotationPlacement.TYPE),
@@ -594,7 +594,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
 
         val state = result.dtoState()
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, state.status)
+        assertEquals(DtoFeatureStatus.INVALID, state.status)
         val graph = state.graphs.single()
         val contractDiagnostics =
             state.annotationContractsBySource.getValue(graph.source).diagnostics +
@@ -1131,7 +1131,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         )
         val firstState = first.dtoState()
-        assertEquals(JimmerDtoCompilerFeatureStatus.DEFERRED, firstState.status)
+        assertEquals(DtoFeatureStatus.DEFERRED, firstState.status)
         assertEquals(setOf(BOOK_ID), first.unresolvedSymbols)
         assertTrue(first.diagnostics.isEmpty())
 
@@ -1146,7 +1146,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         )
         val secondState = second.dtoState()
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, secondState.status)
+        assertEquals(DtoFeatureStatus.RESOLVED, secondState.status)
         val secondGraph = secondState.graphs.single()
         assertEquals(
             listOf("BookView"),
@@ -1187,7 +1187,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 inputDocuments = listOf(document),
             ),
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.DEFERRED, first.dtoState().status)
+        assertEquals(DtoFeatureStatus.DEFERRED, first.dtoState().status)
         assertEquals(listOf(FILTER_ID), first.dtoState().unresolvedDocuments.single().unresolvedTypeIds)
         assertEquals(setOf(FILTER_ID), first.unresolvedSymbols)
         assertTrue(first.diagnostics.isEmpty())
@@ -1202,7 +1202,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 inputDocuments = listOf(document),
             ),
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, second.dtoState().status)
+        assertEquals(DtoFeatureStatus.RESOLVED, second.dtoState().status)
         val contract = second.dtoState().configContractsBySource.values.single().contracts.single()
         assertEquals(FILTER_ID, contract.implementationTypeId)
         assertEquals(AUTHOR_ID, contract.targetEntityTypeId)
@@ -1223,7 +1223,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         val configReference = REFERENCE_FREEZER.freeze(document).references.single { reference ->
             reference.kind == DTO_CONFIG_IMPLEMENTATION_REFERENCE_KIND
         }
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, final.dtoState().status)
+        assertEquals(DtoFeatureStatus.INVALID, final.dtoState().status)
         assertEquals("jimmer.dto.unresolved", final.diagnostics.single().code)
         assertEquals(FILTER_ID, final.diagnostics.single().symbolId)
         assertEquals(configReference.location, final.diagnostics.single().location)
@@ -1243,7 +1243,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 inputDocuments = listOf(document),
             )
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.PENDING, first.dtoState().status)
+        assertEquals(DtoFeatureStatus.PENDING, first.dtoState().status)
         assertEquals(listOf(listOf(BOOK_ID)), first.dtoState().unresolvedDocuments.map { it.targetTypeIds })
         assertTrue(first.diagnostics.isEmpty())
         assertTrue(first.unresolvedSymbols.isEmpty())
@@ -1258,7 +1258,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 inputDocuments = listOf(document),
             )
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, second.dtoState().status)
+        assertEquals(DtoFeatureStatus.RESOLVED, second.dtoState().status)
         val secondGraph = second.dtoState().graphs.single()
         assertEquals(
             listOf("BookView"),
@@ -1293,7 +1293,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         )
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.INPUT_PENDING, active.dtoState().status)
+        assertEquals(DtoFeatureStatus.INPUT_PENDING, active.dtoState().status)
         assertTrue(active.dtoResult().processedSymbols.isEmpty())
         assertTrue(active.diagnostics.isEmpty())
         assertTrue(active.dtoResult().artifacts.isEmpty())
@@ -1313,7 +1313,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 ),
             )
         )
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, final.dtoState().status)
+        assertEquals(DtoFeatureStatus.INVALID, final.dtoState().status)
         assertEquals(listOf("jimmer.dto.input-discovery"), final.diagnostics.map { it.code })
         assertTrue(final.newArtifacts.isEmpty())
     }
@@ -1342,10 +1342,10 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         )
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, kspFinal.dtoState().status)
+        assertEquals(DtoFeatureStatus.INVALID, kspFinal.dtoState().status)
         assertEquals("jimmer.dto.unresolved", kspFinal.diagnostics.single().code)
         assertTrue(kspFinal.unresolvedSymbols.isEmpty())
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, aptFinal.dtoState().status)
+        assertEquals(DtoFeatureStatus.INVALID, aptFinal.dtoState().status)
         assertEquals("jimmer.dto.unresolved", aptFinal.diagnostics.single().code)
         assertTrue(aptFinal.unresolvedSymbols.isEmpty())
     }
@@ -1370,7 +1370,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                     inputDocuments = listOf(fixture.document),
                 )
             )
-            assertEquals(JimmerDtoCompilerFeatureStatus.DEFERRED, apt.dtoState().status)
+            assertEquals(DtoFeatureStatus.DEFERRED, apt.dtoState().status)
             assertEquals(
                 listOf(fixture.missingTypeId),
                 apt.dtoState().unresolvedDocuments.single().unresolvedTypeIds,
@@ -1387,7 +1387,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                     inputDocuments = listOf(fixture.document),
                 )
             )
-            assertEquals(JimmerDtoCompilerFeatureStatus.PENDING, ksp.dtoState().status)
+            assertEquals(DtoFeatureStatus.PENDING, ksp.dtoState().status)
             assertEquals(1, ksp.dtoState().unresolvedDocuments.size)
             assertEquals(
                 listOf(fixture.missingTypeId),
@@ -1411,7 +1411,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                         inputDocuments = listOf(fixture.document),
                     )
                 )
-                assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, final.dtoState().status)
+                assertEquals(DtoFeatureStatus.INVALID, final.dtoState().status)
                 assertEquals("jimmer.dto.unresolved", final.diagnostics.single().code)
                 assertEquals(fixture.missingTypeId, final.diagnostics.single().symbolId)
                 assertEquals(
@@ -1445,7 +1445,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 )
             )
 
-            assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
+            assertEquals(DtoFeatureStatus.RESOLVED, result.dtoState().status)
             assertTrue(result.dtoState().graphs.isEmpty())
             assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
             assertTrue(result.dtoState().failures.isEmpty())
@@ -1473,7 +1473,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 )
             )
 
-            assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
+            assertEquals(DtoFeatureStatus.RESOLVED, result.dtoState().status)
             assertTrue(result.dtoState().graphs.isEmpty())
             assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
             assertTrue(result.dtoState().failures.isEmpty())
@@ -1522,7 +1522,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 )
             )
 
-            assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
+            assertEquals(DtoFeatureStatus.RESOLVED, result.dtoState().status)
             assertTrue(result.dtoState().graphs.isEmpty())
             assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
             assertTrue(result.dtoState().failures.isEmpty())
@@ -1545,7 +1545,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         )
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, result.dtoState().status)
+        assertEquals(DtoFeatureStatus.INVALID, result.dtoState().status)
         assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
         assertEquals(listOf(BOOK_ID), result.dtoState().failures.single().targetTypeIds)
         assertEquals("jimmer.dto.invalid", result.diagnostics.single().code)
@@ -1567,7 +1567,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         )
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, result.dtoState().status)
+        assertEquals(DtoFeatureStatus.RESOLVED, result.dtoState().status)
         assertTrue(result.dtoState().graphs.isEmpty())
         assertTrue(result.dtoState().unresolvedDocuments.isEmpty())
         assertTrue(result.dtoState().failures.isEmpty())
@@ -1604,7 +1604,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
 
             val state = result.dtoState()
-            assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, state.status)
+            assertEquals(DtoFeatureStatus.RESOLVED, state.status)
             assertTrue(state.unresolvedDocuments.isEmpty())
             assertTrue(state.failures.isEmpty())
             assertTrue(result.diagnostics.isEmpty())
@@ -1643,8 +1643,8 @@ class JimmerDtoCompilerFeatureProviderTest {
             )
         ).dtoState()
 
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, apt.status)
-        assertEquals(JimmerDtoCompilerFeatureStatus.RESOLVED, ksp.status)
+        assertEquals(DtoFeatureStatus.RESOLVED, apt.status)
+        assertEquals(DtoFeatureStatus.RESOLVED, ksp.status)
         assertEquals(apt.resolvedInputFingerprint, ksp.resolvedInputFingerprint)
         assertEquals(
             apt.graphs.map { graph -> graph.normalizedSnapshot() },
@@ -1670,9 +1670,9 @@ class JimmerDtoCompilerFeatureProviderTest {
     private fun session(id: String): CompilerSession {
         return CompilerSession(
             id = id,
-            providers = listOf(
-                JimmerImmutableCompilerFeatureProvider(),
-                JimmerDtoCompilerFeatureProvider(),
+            features = listOf(
+                ImmutableFeature(),
+                DtoFeature(),
             ),
         )
     }
@@ -1720,10 +1720,10 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
     }
 
-    private fun CompilerRoundResult.dtoResult() = requireNotNull(featureResults[DTO_FEATURE_ID])
+    private fun CompilerRoundResult.dtoResult() = featureResults.getValue(DtoFeature.Key)
 
-    private fun CompilerRoundResult.dtoState(): JimmerDtoCompilerFeatureState {
-        return dtoResult().state as JimmerDtoCompilerFeatureState
+    private fun CompilerRoundResult.dtoState(): DtoFeatureState {
+        return dtoResult().state
     }
 
     private fun immutableWorkspace(language: LsiLanguage): LsiWorkspace {
@@ -1861,9 +1861,9 @@ class JimmerDtoCompilerFeatureProviderTest {
         )
     }
 
-    private fun dtoState(resolution: JimmerDtoRoundResolution): JimmerDtoCompilerFeatureState {
-        return JimmerDtoCompilerFeatureState(
-            status = JimmerDtoCompilerFeatureStatus.RESOLVED,
+    private fun dtoState(resolution: JimmerDtoRoundResolution): DtoFeatureState {
+        return DtoFeatureState(
+            status = DtoFeatureStatus.RESOLVED,
             dependencyStatus = CompilerResolutionStatus.RESOLVED,
             graphs = resolution.graphs,
             annotationContractsBySource = resolution.annotationContractsBySource,
@@ -2189,8 +2189,6 @@ class JimmerDtoCompilerFeatureProviderTest {
     }
 
     private companion object {
-        const val DTO_FEATURE_ID = "dto"
-        const val IMMUTABLE_FEATURE_ID = "immutable"
 
         val BOOK_ID: LsiSymbolId = LsiSymbolId.type("demo.Book")
         val AUTHOR_ID: LsiSymbolId = LsiSymbolId.type("demo.Author")

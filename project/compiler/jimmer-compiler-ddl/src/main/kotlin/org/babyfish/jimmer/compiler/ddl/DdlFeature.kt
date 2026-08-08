@@ -1,14 +1,15 @@
 package org.babyfish.jimmer.compiler.ddl
 
 import site.addzero.lsi.compiler.CompilerCollectContext
+import site.addzero.lsi.compiler.CompilerFeature
 import site.addzero.lsi.compiler.CompilerFeatureCollection
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
+import site.addzero.lsi.compiler.compilerFeatureKey
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompiler
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerFiles
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerResult
@@ -22,10 +23,11 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 /**
  * 在共享编译会话中收集实体，并在最终轮消费冻结后的 LSI 工作区。
  */
-class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
+class DdlFeature : CompilerFeature<DdlCollectionState, DdlFeatureState> {
 
-    override val descriptor = CompilerFeatureDescriptor(
-        id = DDL_FEATURE_ID,
+    override val key = Key
+
+    override val metadata = CompilerFeatureMetadata(
         supportedOptions = setOf(
             "jimmerDdl.enabled",
             "jimmerDdl.profiles",
@@ -57,7 +59,7 @@ class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
 
     override fun collect(
         context: CompilerCollectContext,
-    ): CompilerFeatureCollection {
+    ): CompilerFeatureCollection<DdlCollectionState> {
         val currentSourcePaths = context.round.currentRootTypeIds.mapNotNullTo(sortedSetOf()) { typeId ->
             (context.round.currentWorkspace[typeId] as? LsiTypeDeclaration)?.origin?.source?.path
         }
@@ -71,15 +73,15 @@ class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
             }
             .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
         return CompilerFeatureCollection(
-            state = JimmerDdlCompilerCollectionState(entityTypeIds),
+            state = DdlCollectionState(entityTypeIds),
         )
     }
 
     override fun precompile(
-        context: CompilerPrecompileContext,
-    ): CompilerFeaturePrecompileResult {
-        val collection = context.collection.state as JimmerDdlCompilerCollectionState
-        val previousState = context.previousState as? JimmerDdlCompilerFeatureState
+        context: CompilerPrecompileContext<DdlCollectionState, DdlFeatureState>,
+    ): CompilerFeaturePrecompileResult<DdlFeatureState> {
+        val collection = context.collection.state
+        val previousState = context.previousState
         val entityTypeIds = buildSet {
             previousState?.entityTypeIds?.let(::addAll)
             addAll(collection.entityTypeIds)
@@ -87,7 +89,7 @@ class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
         val optionsFingerprint = context.round.options.ddlFingerprint()
         if (!context.round.isFinal) {
             return CompilerFeaturePrecompileResult(
-                state = JimmerDdlCompilerFeatureState.collecting(
+                state = DdlFeatureState.collecting(
                     entityTypeIds = entityTypeIds,
                     optionsFingerprint = optionsFingerprint,
                 ),
@@ -121,7 +123,7 @@ class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
             }
         }
         return CompilerFeaturePrecompileResult(
-            state = JimmerDdlCompilerFeatureState.compiled(
+            state = DdlFeatureState.compiled(
                 entityTypeIds = entityTypeIds,
                 optionsFingerprint = optionsFingerprint,
                 results = results,
@@ -131,12 +133,12 @@ class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     override fun render(
-        context: CompilerRenderContext,
+        context: CompilerRenderContext<DdlCollectionState, DdlFeatureState>,
     ): CompilerFeatureRenderResult {
         if (!context.round.isFinal) {
             return CompilerFeatureRenderResult()
         }
-        val state = context.state as JimmerDdlCompilerFeatureState
+        val state = context.state
         if (!state.compiled || state.results.isEmpty()) {
             return CompilerFeatureRenderResult()
         }
@@ -145,14 +147,24 @@ class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
         )
     }
 
+    companion object {
+        val Key = compilerFeatureKey<DdlFeature, DdlCollectionState, DdlFeatureState>(
+            DdlCollectionState.EMPTY
+        )
+    }
 }
 
-private data class JimmerDdlCompilerCollectionState(
+data class DdlCollectionState(
     val entityTypeIds: Set<LsiSymbolId>,
     override val fingerprint: String = entityTypeIds.joinToString(",") { typeId -> typeId.value },
-) : CompilerFeatureState
+) : CompilerFeatureState {
 
-private data class JimmerDdlCompilerFeatureState(
+    companion object {
+        val EMPTY = DdlCollectionState(emptySet())
+    }
+}
+
+data class DdlFeatureState(
     val entityTypeIds: Set<LsiSymbolId>,
     val optionsFingerprint: String,
     val compiled: Boolean,
@@ -188,8 +200,8 @@ private data class JimmerDdlCompilerFeatureState(
         fun collecting(
             entityTypeIds: Set<LsiSymbolId>,
             optionsFingerprint: String,
-        ): JimmerDdlCompilerFeatureState {
-            return JimmerDdlCompilerFeatureState(
+        ): DdlFeatureState {
+            return DdlFeatureState(
                 entityTypeIds = entityTypeIds,
                 optionsFingerprint = optionsFingerprint,
                 compiled = false,
@@ -201,8 +213,8 @@ private data class JimmerDdlCompilerFeatureState(
             entityTypeIds: Set<LsiSymbolId>,
             optionsFingerprint: String,
             results: List<JimmerDdlCompilerResult>,
-        ): JimmerDdlCompilerFeatureState {
-            return JimmerDdlCompilerFeatureState(
+        ): DdlFeatureState {
+            return DdlFeatureState(
                 entityTypeIds = entityTypeIds,
                 optionsFingerprint = optionsFingerprint,
                 compiled = true,
@@ -257,7 +269,5 @@ private fun Map<String, String>.ddlFingerprint(): String {
         .sortedBy(Map.Entry<String, String>::key)
         .joinToString("|") { (name, value) -> "$name=${value.length}:$value" }
 }
-
-const val DDL_FEATURE_ID = "ddl"
 
 private val ENTITY_ANNOTATION_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")

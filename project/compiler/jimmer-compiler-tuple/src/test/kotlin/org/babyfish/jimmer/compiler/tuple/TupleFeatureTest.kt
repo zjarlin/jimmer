@@ -7,8 +7,20 @@ import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerRound
 import site.addzero.lsi.compiler.CompilerSessionSnapshot
 import site.addzero.lsi.compiler.CompilerFeatureCollection
-import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerFeatureLoader
+import site.addzero.lsi.compiler.CompilerFeatureStates
 import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import org.babyfish.jimmer.compiler.JacksonFamily
+import org.babyfish.jimmer.compiler.dto.DtoFeature
+import org.babyfish.jimmer.compiler.dto.DtoFeatureState
+import org.babyfish.jimmer.compiler.dto.DtoFeatureStatus
+import org.babyfish.jimmer.compiler.dto.JimmerDtoRendererOptions
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeatureState
+import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenSchema
+import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -20,13 +32,15 @@ import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
+import site.addzero.lsi.jimmer.ImmutableSchema
 
-class TypedTupleCompilerFeatureProviderTest {
+class TupleFeatureTest {
 
     @Test
     fun `apt defers recoverable tuple by stable type id`() {
-        val result = provider.precompile(context(CompilerPlatform.APT))
+        val result = feature.precompile(context(CompilerPlatform.APT))
 
         assertEquals(setOf(TYPE_ID), result.unresolvedSymbols)
         assertTrue(result.diagnostics.isEmpty())
@@ -61,7 +75,7 @@ class TypedTupleCompilerFeatureProviderTest {
             ),
         )
 
-        val result = provider.precompile(
+        val result = feature.precompile(
             context(CompilerPlatform.APT, roundWorkspace = multipleTupleWorkspace)
         )
 
@@ -70,7 +84,7 @@ class TypedTupleCompilerFeatureProviderTest {
 
     @Test
     fun `ksp does not defer a valid declaration to force another round`() {
-        val result = provider.precompile(context(CompilerPlatform.KSP))
+        val result = feature.precompile(context(CompilerPlatform.KSP))
 
         assertTrue(result.unresolvedSymbols.isEmpty())
         assertEquals("jimmer.tuple.unresolved", result.diagnostics.single().code)
@@ -78,7 +92,7 @@ class TypedTupleCompilerFeatureProviderTest {
 
     @Test
     fun `final apt round reports unresolved tuple`() {
-        val result = provider.precompile(context(CompilerPlatform.APT, isFinal = true))
+        val result = feature.precompile(context(CompilerPlatform.APT, isFinal = true))
 
         assertTrue(result.unresolvedSymbols.isEmpty())
         assertEquals("jimmer.tuple.unresolved", result.diagnostics.single().code)
@@ -86,18 +100,17 @@ class TypedTupleCompilerFeatureProviderTest {
 
     @Test
     fun `tuple feature declares immutable and dto dependencies`() {
-        val descriptor = CompilerFeatureProviders.load()
-            .single { candidate -> candidate.descriptor.id == "tuple" }
-            .descriptor
+        val feature = CompilerFeatureLoader.load()
+            .single { candidate -> candidate.key == TupleFeature.Key }
 
-        assertEquals(setOf("immutable", "dto"), descriptor.dependsOn)
+        assertEquals(setOf(ImmutableFeature.Key, DtoFeature.Key), feature.dependencies)
     }
 
     private fun context(
         platform: CompilerPlatform,
         isFinal: Boolean = false,
         roundWorkspace: LsiWorkspace = workspace,
-    ): CompilerPrecompileContext {
+    ): CompilerPrecompileContext<EmptyCompilerFeatureState, TupleFeatureState> {
         return CompilerPrecompileContext(
             session = CompilerSessionSnapshot("tuple-feature-test", emptyList()),
             round = CompilerRound(
@@ -109,9 +122,14 @@ class TypedTupleCompilerFeatureProviderTest {
                 isFinal = isFinal,
                 inputDocumentSnapshots = emptyList(),
             ),
-            collection = CompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(EmptyCompilerFeatureState),
             previousState = null,
-            dependencyStates = emptyMap(),
+            dependencyStates = CompilerFeatureStates(
+                mapOf(
+                    ImmutableFeature.Key to immutableState,
+                    DtoFeature.Key to dtoState,
+                )
+            ),
         )
     }
 
@@ -144,6 +162,37 @@ class TypedTupleCompilerFeatureProviderTest {
                 ),
             ),
         )
-        val provider = TypedTupleCompilerFeatureProvider()
+        val feature = TupleFeature()
+        val immutableState = ImmutableFeatureState(
+            schema = ImmutableSchema(emptyList()),
+            draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
+                jacksonFamily = JacksonFamily.JACKSON_2,
+                types = emptyList(),
+            ),
+            targetTypeIds = emptySet(),
+            semanticRootTypeIds = emptySet(),
+            currentTypeIds = emptySet(),
+        )
+        val dtoState = DtoFeatureState(
+            status = DtoFeatureStatus.RESOLVED,
+            dependencyStatus = CompilerResolutionStatus.RESOLVED,
+            graphs = emptyList(),
+            annotationContractsBySource = emptyMap(),
+            interfaceContractsBySource = emptyMap(),
+            configContractsBySource = emptyMap(),
+            resolvedInputFingerprint = "empty",
+            unresolvedDocuments = emptyList(),
+            failures = emptyList(),
+            defaultNullableInputModifier = DtoModifier.STATIC,
+            rendererOptions = JimmerDtoRendererOptions(
+                jacksonVersion = JacksonFamily.JACKSON_2,
+                hibernateValidatorEnhancement = false,
+                aptFieldVisibility = LsiVisibility.PRIVATE,
+                kspMutable = false,
+            ),
+            effectiveKspMutableByRootTypeId = emptyMap(),
+            inputDocumentDiscoveryComplete = true,
+            immutableDependencyFingerprint = immutableState.fingerprint,
+        )
     }
 }

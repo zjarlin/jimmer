@@ -6,7 +6,6 @@ import site.addzero.lsi.jimmer.ImmutableProp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import site.addzero.lsi.compiler.CompilerInputDocument
 import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
@@ -17,8 +16,9 @@ import site.addzero.lsi.compiler.CompilerRound
 import site.addzero.lsi.compiler.CompilerSessionSnapshot
 import site.addzero.lsi.compiler.CompilerSourceSet
 import site.addzero.lsi.compiler.CompilerFeatureCollection
-import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerFeatureStates
 import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -38,7 +38,7 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
-class JimmerImmutableCompilerFeatureProviderTest {
+class ImmutableFeatureTest {
 
     @Test
     fun `source filter excludes generation target but preserves mapped superclass semantics`() {
@@ -66,13 +66,13 @@ class JimmerImmutableCompilerFeatureProviderTest {
             ),
         )
 
-        val result = PROVIDER.precompile(
+        val result = FEATURE.precompile(
             context(
                 workspace = workspace,
                 options = mapOf("jimmer.source.includes" to "demo.api"),
             )
         )
-        val state = assertIs<JimmerImmutableCompilerFeatureState>(result.state)
+        val state = result.state
 
         assertEquals(CompilerResolutionStatus.RESOLVED, state.status)
         assertEquals(setOf(childId), state.targetTypeIds)
@@ -88,13 +88,13 @@ class JimmerImmutableCompilerFeatureProviderTest {
     fun `apt defers unresolved immutable root and final round reports it`() {
         val workspace = unresolvedWorkspace()
 
-        val deferred = PROVIDER.precompile(context(workspace, platform = CompilerPlatform.APT))
-        val deferredState = assertIs<JimmerImmutableCompilerFeatureState>(deferred.state)
+        val deferred = FEATURE.precompile(context(workspace, platform = CompilerPlatform.APT))
+        val deferredState = deferred.state
         assertEquals(CompilerResolutionStatus.DEFERRED, deferredState.status)
         assertEquals(setOf(BROKEN_ID), deferred.unresolvedSymbols)
         assertTrue(deferred.diagnostics.isEmpty())
 
-        val final = PROVIDER.precompile(
+        val final = FEATURE.precompile(
             context(
                 workspace = workspace,
                 currentWorkspace = LsiWorkspace.EMPTY,
@@ -102,7 +102,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
                 isFinal = true,
             )
         )
-        val finalState = assertIs<JimmerImmutableCompilerFeatureState>(final.state)
+        val finalState = final.state
         assertEquals(CompilerResolutionStatus.INVALID, finalState.status)
         assertTrue(final.unresolvedSymbols.isEmpty())
         assertEquals("jimmer.immutable.unresolved", final.diagnostics.single().code)
@@ -110,7 +110,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
 
     @Test
     fun `ksp never defers a valid unresolved immutable declaration`() {
-        val result = PROVIDER.precompile(
+        val result = FEATURE.precompile(
             context(unresolvedWorkspace(KOTLIN_ORIGIN), platform = CompilerPlatform.KSP)
         )
 
@@ -118,7 +118,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         assertEquals("jimmer.immutable.unresolved", result.diagnostics.single().code)
         assertEquals(
             CompilerResolutionStatus.INVALID,
-            assertIs<JimmerImmutableCompilerFeatureState>(result.state).status,
+            result.state.status,
         )
     }
 
@@ -136,7 +136,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         )
         val cumulative = firstWorkspace.merge(secondWorkspace)
 
-        val result = PROVIDER.precompile(
+        val result = FEATURE.precompile(
             context(
                 workspace = cumulative,
                 currentWorkspace = cumulative,
@@ -144,7 +144,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
                 platform = CompilerPlatform.KSP,
             )
         )
-        val state = assertIs<JimmerImmutableCompilerFeatureState>(result.state)
+        val state = result.state
 
         assertEquals(setOf(firstId, secondId), state.targetTypeIds)
         assertEquals(setOf(secondId), state.currentTypeIds)
@@ -189,7 +189,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
             )
         )
 
-        val result = PROVIDER.precompile(
+        val result = FEATURE.precompile(
             context(
                 workspace = localWorkspace.merge(binaryWorkspace),
                 currentWorkspace = localWorkspace,
@@ -197,7 +197,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
                 inputDocumentSnapshots = listOf(snapshot),
             )
         )
-        val state = assertIs<JimmerImmutableCompilerFeatureState>(result.state)
+        val state = result.state
 
         assertEquals(CompilerResolutionStatus.RESOLVED, state.status)
         assertEquals(setOf(localId), state.targetTypeIds)
@@ -227,8 +227,8 @@ class JimmerImmutableCompilerFeatureProviderTest {
             ),
         )
 
-        val result = PROVIDER.precompile(context(workspace, platform = CompilerPlatform.APT))
-        val state = assertIs<JimmerImmutableCompilerFeatureState>(result.state)
+        val result = FEATURE.precompile(context(workspace, platform = CompilerPlatform.APT))
+        val state = result.state
 
         assertTrue(state.targetTypeIds.isEmpty())
         assertTrue(result.processedSymbols.isEmpty())
@@ -237,11 +237,8 @@ class JimmerImmutableCompilerFeatureProviderTest {
 
     @Test
     fun `immutable feature is registered as a dependency-free shared stage`() {
-        val descriptor = CompilerFeatureProviders.load()
-            .single { provider -> provider.descriptor.id == "immutable" }
-            .descriptor
-
-        assertTrue(descriptor.dependsOn.isEmpty())
+        assertEquals(ImmutableFeature.Key, FEATURE.key)
+        assertTrue(FEATURE.dependencies.isEmpty())
     }
 
     private fun context(
@@ -254,7 +251,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
         inputDocumentSnapshots: List<CompilerInputDocumentSnapshot> = emptyList(),
-    ): CompilerPrecompileContext {
+    ): CompilerPrecompileContext<EmptyCompilerFeatureState, ImmutableFeatureState> {
         val completeWorkspace = workspace.completeEntityIdentities()
         val completeCurrentWorkspace = currentWorkspace.completeEntityIdentities()
         return CompilerPrecompileContext(
@@ -269,9 +266,9 @@ class JimmerImmutableCompilerFeatureProviderTest {
                 options = options,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),
-            collection = CompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(EmptyCompilerFeatureState),
             previousState = null,
-            dependencyStates = emptyMap(),
+            dependencyStates = CompilerFeatureStates.EMPTY,
         )
     }
 
@@ -357,7 +354,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         val ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, SOURCE)
         val KOTLIN_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, KOTLIN_SOURCE)
         val SECOND_ORIGIN = LsiOrigin(LsiOriginKind.GENERATED, SECOND_SOURCE)
-        val PROVIDER = JimmerImmutableCompilerFeatureProvider()
+        val FEATURE = ImmutableFeature()
         val BROKEN_ID = LsiSymbolId.type("demo.Broken")
         val STRING = LsiSymbolId.type("java.lang.String")
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")

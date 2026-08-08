@@ -1,15 +1,17 @@
 package org.babyfish.jimmer.compiler.tuple
 
 import site.addzero.lsi.compiler.CompilerPlatform
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeature
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
-import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
-import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
+import org.babyfish.jimmer.compiler.dto.DtoFeature
+import org.babyfish.jimmer.compiler.immutable.ImmutableFeature
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
@@ -27,26 +29,26 @@ import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class TypedTupleCompilerFeatureProvider : CompilerFeatureProvider {
+class TupleFeature : CompilerFeature<EmptyCompilerFeatureState, TupleFeatureState> {
 
-    override val descriptor = CompilerFeatureDescriptor(
-        id = TYPED_TUPLE_FEATURE_ID,
-        dependsOn = setOf(IMMUTABLE_FEATURE_ID, DTO_FEATURE_ID),
+    override val key = Key
+
+    override val dependencies = setOf(ImmutableFeature.Key, DtoFeature.Key)
+
+    override val metadata = CompilerFeatureMetadata(
         aptAnnotationTypes = setOf("org.babyfish.jimmer.sql.TypedTuple"),
     )
 
     override fun precompile(
-        context: CompilerPrecompileContext,
-    ): CompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext<EmptyCompilerFeatureState, TupleFeatureState>,
+    ): CompilerFeaturePrecompileResult<TupleFeatureState> {
         return try {
-            val immutableState = context.dependencyStates[IMMUTABLE_FEATURE_ID]
-                as? JimmerImmutableCompilerFeatureState
-            val dtoState = context.dependencyStates[DTO_FEATURE_ID]
-                as? JimmerDtoCompilerFeatureState
-            val entityTypeIds = immutableState?.schema?.types.orEmpty()
+            val immutableState = context.dependencyStates.getValue(ImmutableFeature.Key)
+            val dtoState = context.dependencyStates.getValue(DtoFeature.Key)
+            val entityTypeIds = immutableState.schema.types
                 .filter { type -> type.kind == ImmutableTypeKind.ENTITY }
                 .mapTo(sortedSetOf(), ImmutableType::id)
-            val dtoTypeIds = dtoState?.graphs.orEmpty()
+            val dtoTypeIds = dtoState.graphs
                 .flatMap(DtoGraph::types)
                 .mapNotNull(DtoType::qualifiedNameOrNull)
                 .mapTo(sortedSetOf()) { qualifiedName -> LsiSymbolId.type(qualifiedName) }
@@ -56,7 +58,7 @@ class TypedTupleCompilerFeatureProvider : CompilerFeatureProvider {
             )
             schema.validateCodegenNames()
             CompilerFeaturePrecompileResult(
-                state = TypedTupleCompilerFeatureState(schema),
+                state = TupleFeatureState(schema),
                 processedSymbols = schema.tuples.mapTo(sortedSetOf()) { tuple -> tuple.id },
             )
         } catch (exception: TypedTupleValidationException) {
@@ -70,9 +72,9 @@ class TypedTupleCompilerFeatureProvider : CompilerFeatureProvider {
             }
             CompilerFeaturePrecompileResult(
                 state = if (deferred) {
-                    TypedTupleCompilerFeatureState.deferred(exception)
+                    TupleFeatureState.deferred(exception)
                 } else {
-                    TypedTupleCompilerFeatureState.invalid(exception)
+                    TupleFeatureState.invalid(exception)
                 },
                 diagnostics = if (deferred) {
                     emptyList()
@@ -96,12 +98,12 @@ class TypedTupleCompilerFeatureProvider : CompilerFeatureProvider {
     }
 
     override fun render(
-        context: CompilerRenderContext,
+        context: CompilerRenderContext<EmptyCompilerFeatureState, TupleFeatureState>,
     ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
             return CompilerFeatureRenderResult()
         }
-        val state = context.state as TypedTupleCompilerFeatureState
+        val state = context.state
         if (!state.renderable || state.schema.tuples.isEmpty()) {
             return CompilerFeatureRenderResult()
         }
@@ -115,28 +117,34 @@ class TypedTupleCompilerFeatureProvider : CompilerFeatureProvider {
             .map(renderer::render)
         return CompilerFeatureRenderResult(artifacts = artifacts)
     }
+
+    companion object {
+        val Key = compilerFeatureKey<TupleFeature, EmptyCompilerFeatureState, TupleFeatureState>(
+            EmptyCompilerFeatureState
+        )
+    }
 }
 
-private data class TypedTupleCompilerFeatureState(
+data class TupleFeatureState(
     val schema: TypedTupleSchema,
     val renderable: Boolean = true,
     override val fingerprint: String = schema.fingerprint(),
 ) : CompilerFeatureState {
 
     companion object {
-        fun deferred(exception: TypedTupleValidationException): TypedTupleCompilerFeatureState {
+        fun deferred(exception: TypedTupleValidationException): TupleFeatureState {
             return failed("deferred", exception)
         }
 
-        fun invalid(exception: TypedTupleValidationException): TypedTupleCompilerFeatureState {
+        fun invalid(exception: TypedTupleValidationException): TupleFeatureState {
             return failed("invalid", exception)
         }
 
         private fun failed(
             status: String,
             exception: TypedTupleValidationException,
-        ): TypedTupleCompilerFeatureState {
-            return TypedTupleCompilerFeatureState(
+        ): TupleFeatureState {
+            return TupleFeatureState(
                 schema = TypedTupleSchema(emptyList()),
                 renderable = false,
                 fingerprint = "$status:${exception.declarationId.value}:${exception.message.orEmpty()}",
@@ -144,7 +152,3 @@ private data class TypedTupleCompilerFeatureState(
         }
     }
 }
-
-private const val TYPED_TUPLE_FEATURE_ID = "tuple"
-private const val IMMUTABLE_FEATURE_ID = "immutable"
-private const val DTO_FEATURE_ID = "dto"

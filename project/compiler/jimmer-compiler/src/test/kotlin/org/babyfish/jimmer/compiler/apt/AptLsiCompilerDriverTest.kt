@@ -19,15 +19,17 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import site.addzero.lsi.compiler.CompilerFeature
 import site.addzero.lsi.compiler.CompilerFeatureCollection
-import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeatureMetadata
 import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
-import site.addzero.lsi.compiler.CompilerFeatureProvider
 import site.addzero.lsi.compiler.CompilerFeatureRenderResult
 import site.addzero.lsi.compiler.CompilerFeatureState
 import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.compiler.CompilerRenderContext
 import site.addzero.lsi.compiler.CompilerTypeSeedContext
+import site.addzero.lsi.compiler.EmptyCompilerFeatureState
+import site.addzero.lsi.compiler.compilerFeatureKey
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -56,7 +58,7 @@ class AptLsiCompilerDriverTest {
         sourceFile.parentFile.mkdirs()
         sourceFile.writeText("package demo; interface Broken { Missing value(); }")
         val diagnostics = DiagnosticCollector<JavaFileObject>()
-        val provider = InputDocumentFeatureProvider("apt-error-state-test")
+        val feature = InputDocumentFeature()
         val compiler = ToolProvider.getSystemJavaCompiler()
             ?: error("APT integration tests require a JDK compiler")
         val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
@@ -70,13 +72,13 @@ class AptLsiCompilerDriverTest {
                 null,
                 fileManager.getJavaFileObjects(sourceFile),
             )
-            task.setProcessors(listOf(DriverProcessor(provider)))
+            task.setProcessors(listOf(DriverProcessor(feature)))
             task.call()
         }
 
         assertFalse(success)
-        assertTrue(provider.rounds.last().isFinal)
-        assertTrue(provider.rounds.last().frontendDeferred)
+        assertTrue(feature.rounds.last().isFinal)
+        assertTrue(feature.rounds.last().frontendDeferred)
     }
 
     @Test
@@ -92,7 +94,7 @@ class AptLsiCompilerDriverTest {
         generatedDir.mkdirs()
 
         val diagnostics = DiagnosticCollector<JavaFileObject>()
-        val provider = TypeSeedFeatureProvider()
+        val feature = TypeSeedFeature()
         val compiler = ToolProvider.getSystemJavaCompiler()
             ?: error("APT integration tests require a JDK compiler")
         val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
@@ -106,12 +108,12 @@ class AptLsiCompilerDriverTest {
                 null,
                 fileManager.getJavaFileObjects(sourceFile),
             )
-            task.setProcessors(listOf(DriverProcessor(provider)))
+            task.setProcessors(listOf(DriverProcessor(feature)))
             task.call()
         }
 
         assertTrue(success, diagnostics.diagnostics.joinToString("\n"))
-        val firstRound = provider.rounds.first()
+        val firstRound = feature.rounds.first()
         assertTrue(!firstRound.isFinal)
         assertTrue(
             assertIs<LsiTypeDeclaration>(firstRound.workspace[CHAR_SEQUENCE_ID]).memberIds.isNotEmpty(),
@@ -155,8 +157,8 @@ class AptLsiCompilerDriverTest {
         generatedDir.mkdirs()
 
         val diagnostics = DiagnosticCollector<JavaFileObject>()
-        val provider = DriverFeatureProvider()
-        val processor = DriverProcessor(provider)
+        val feature = DriverFeature()
+        val processor = DriverProcessor(feature)
         val compiler = ToolProvider.getSystemJavaCompiler()
             ?: error("APT integration tests require a JDK compiler")
         val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
@@ -185,23 +187,23 @@ class AptLsiCompilerDriverTest {
             "final",
             classesDir.resolve("META-INF/jimmer/driver-final").readText(),
         )
-        assertTrue(provider.rounds.size >= 3)
-        assertEquals("export Model", provider.rounds.first().inputDocumentSnapshots.single().document.content)
+        assertTrue(feature.rounds.size >= 3)
+        assertEquals("export Model", feature.rounds.first().inputDocumentSnapshots.single().document.content)
         assertEquals(
-            provider.rounds.first().inputDocumentSnapshots.single(),
-            provider.rounds.last().inputDocumentSnapshots.single(),
+            feature.rounds.first().inputDocumentSnapshots.single(),
+            feature.rounds.last().inputDocumentSnapshots.single(),
         )
-        val firstRoundProperty = assertIs<LsiProperty>(provider.rounds.first().workspace[PROPERTY_ID])
+        val firstRoundProperty = assertIs<LsiProperty>(feature.rounds.first().workspace[PROPERTY_ID])
         assertIs<LsiPackageAnnotationScope>(
-            provider.rounds.first().workspace.annotationScope(LsiSymbolId.packageScope("demo")),
+            feature.rounds.first().workspace.annotationScope(LsiSymbolId.packageScope("demo")),
         )
         assertIs<LsiUnresolvedType>(firstRoundProperty.type)
-        assertTrue(provider.rounds.first().frontendDeferred)
+        assertTrue(feature.rounds.first().frontendDeferred)
         assertEquals(
             "isActive",
-            assertIs<LsiProperty>(provider.rounds.first().workspace[ACTIVE_PROPERTY_ID]).name,
+            assertIs<LsiProperty>(feature.rounds.first().workspace[ACTIVE_PROPERTY_ID]).name,
         )
-        val refreshedRound = provider.rounds.single { round -> round.number == 1 }
+        val refreshedRound = feature.rounds.single { round -> round.number == 1 }
         assertFalse(refreshedRound.frontendDeferred)
         assertTrue(refreshedRound.currentWorkspace.contains(MODEL_ID))
         assertEquals(setOf(MODEL_ID, GENERATED_ID), refreshedRound.currentRootTypeIds)
@@ -211,13 +213,13 @@ class AptLsiCompilerDriverTest {
                 assertIs<LsiProperty>(refreshedRound.currentWorkspace[PROPERTY_ID]).type
             ).declarationId,
         )
-        assertTrue(provider.rounds.last().isFinal)
-        assertFalse(provider.rounds.last().frontendDeferred)
-        assertTrue(provider.rounds.last().workspace.contains(MODEL_ID))
-        assertTrue(provider.rounds.last().currentWorkspace.declarations.isEmpty())
-        assertTrue(provider.rounds.last().currentRootTypeIds.isEmpty())
-        assertEquals(setOf(JAVA_STRING_ID), provider.rounds.first().availableTypeIds)
-        assertEquals(setOf(JAVA_STRING_ID), provider.rounds.last().availableTypeIds)
+        assertTrue(feature.rounds.last().isFinal)
+        assertFalse(feature.rounds.last().frontendDeferred)
+        assertTrue(feature.rounds.last().workspace.contains(MODEL_ID))
+        assertTrue(feature.rounds.last().currentWorkspace.declarations.isEmpty())
+        assertTrue(feature.rounds.last().currentRootTypeIds.isEmpty())
+        assertEquals(setOf(JAVA_STRING_ID), feature.rounds.first().availableTypeIds)
+        assertEquals(setOf(JAVA_STRING_ID), feature.rounds.last().availableTypeIds)
         val warning = diagnostics.diagnostics.single { diagnostic ->
             diagnostic.kind == Diagnostic.Kind.WARNING &&
                 diagnostic.getMessage(null).contains("[driver.warning]")
@@ -252,7 +254,7 @@ class AptLsiCompilerDriverTest {
         generatedDir.mkdirs()
 
         val diagnostics = DiagnosticCollector<JavaFileObject>()
-        val provider = InputDocumentFeatureProvider("apt-document-seeds")
+        val feature = InputDocumentFeature()
         val compiler = ToolProvider.getSystemJavaCompiler()
             ?: error("APT integration tests require a JDK compiler")
         val success = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8).use { fileManager ->
@@ -270,12 +272,12 @@ class AptLsiCompilerDriverTest {
                 null,
                 fileManager.getJavaFileObjects(sourceFile),
             )
-            task.setProcessors(listOf(DriverProcessor(provider)))
+            task.setProcessors(listOf(DriverProcessor(feature)))
             task.call()
         }
 
         assertTrue(success, diagnostics.diagnostics.joinToString("\n"))
-        val workspace = provider.rounds.first().workspace
+        val workspace = feature.rounds.first().workspace
         assertTrue(workspace.contains(LsiSymbolId.type("demo.Model")))
         assertTrue(workspace.contains(LsiSymbolId.type("java.lang.Deprecated")))
         assertTrue(workspace.contains(LsiSymbolId.type("java.lang.Runnable")))
@@ -299,7 +301,7 @@ class AptLsiCompilerDriverTest {
     }
 
     private class DriverProcessor(
-        private val provider: CompilerFeatureProvider,
+        private val feature: CompilerFeature<*, *>,
     ) : AbstractProcessor() {
         private lateinit var driver: AptLsiCompilerDriver
 
@@ -307,7 +309,7 @@ class AptLsiCompilerDriverTest {
             super.init(processingEnvironment)
             driver = AptLsiCompilerDriver(
                 processingEnvironment = processingEnvironment,
-                providers = listOf(provider),
+                features = listOf(feature),
                 wiring = JimmerCompilerWiring,
                 sessionId = "apt-driver-test",
             )
@@ -326,11 +328,10 @@ class AptLsiCompilerDriverTest {
         }
     }
 
-    private class InputDocumentFeatureProvider(
-        id: String,
-    ) : CompilerFeatureProvider {
-        override val descriptor = CompilerFeatureDescriptor(
-            id = id,
+    private class InputDocumentFeature : EmptyFeature() {
+        override val key = Key
+
+        override val metadata = CompilerFeatureMetadata(
             inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
 
@@ -338,16 +339,24 @@ class AptLsiCompilerDriverTest {
 
         override fun collect(
             context: site.addzero.lsi.compiler.CompilerCollectContext,
-        ): CompilerFeatureCollection {
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             if (rounds.lastOrNull()?.number != context.round.number) {
                 rounds += context.round
             }
-            return CompilerFeatureCollection()
+            return CompilerFeatureCollection(EmptyCompilerFeatureState)
+        }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                InputDocumentFeature,
+                EmptyCompilerFeatureState,
+                EmptyCompilerFeatureState,
+            >(EmptyCompilerFeatureState)
         }
     }
 
-    private class TypeSeedFeatureProvider : CompilerFeatureProvider {
-        override val descriptor = CompilerFeatureDescriptor(id = "apt-type-seed-test")
+    private class TypeSeedFeature : EmptyFeature() {
+        override val key = Key
 
         val rounds = mutableListOf<site.addzero.lsi.compiler.CompilerRound>()
 
@@ -364,17 +373,26 @@ class AptLsiCompilerDriverTest {
 
         override fun collect(
             context: site.addzero.lsi.compiler.CompilerCollectContext,
-        ): CompilerFeatureCollection {
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             if (rounds.lastOrNull()?.number != context.round.number) {
                 rounds += context.round
             }
-            return CompilerFeatureCollection()
+            return CompilerFeatureCollection(EmptyCompilerFeatureState)
+        }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                TypeSeedFeature,
+                EmptyCompilerFeatureState,
+                EmptyCompilerFeatureState,
+            >(EmptyCompilerFeatureState)
         }
     }
 
-    private class DriverFeatureProvider : CompilerFeatureProvider {
-        override val descriptor = CompilerFeatureDescriptor(
-            id = "apt-driver-test",
+    private class DriverFeature : CompilerFeature<EmptyCompilerFeatureState, DriverFeatureState> {
+        override val key = Key
+
+        override val metadata = CompilerFeatureMetadata(
             classpathTypeIds = setOf(JAVA_STRING_ID, MISSING_TYPE_ID),
             inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
@@ -383,16 +401,16 @@ class AptLsiCompilerDriverTest {
 
         override fun collect(
             context: site.addzero.lsi.compiler.CompilerCollectContext,
-        ): CompilerFeatureCollection {
+        ): CompilerFeatureCollection<EmptyCompilerFeatureState> {
             if (rounds.lastOrNull()?.number != context.round.number) {
                 rounds += context.round
             }
-            return CompilerFeatureCollection()
+            return CompilerFeatureCollection(EmptyCompilerFeatureState)
         }
 
         override fun precompile(
-            context: CompilerPrecompileContext,
-        ): CompilerFeaturePrecompileResult {
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, DriverFeatureState>,
+        ): CompilerFeaturePrecompileResult<DriverFeatureState> {
             return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
                 unresolvedSymbols = if (context.round.number == 0) setOf(PROPERTY_ID) else emptySet(),
@@ -400,7 +418,7 @@ class AptLsiCompilerDriverTest {
         }
 
         override fun render(
-            context: CompilerRenderContext,
+            context: CompilerRenderContext<EmptyCompilerFeatureState, DriverFeatureState>,
         ): CompilerFeatureRenderResult {
             if (context.round.isFinal) {
                 return CompilerFeatureRenderResult(
@@ -449,6 +467,25 @@ class AptLsiCompilerDriverTest {
                     ),
                 ),
             )
+        }
+
+        companion object {
+            val Key = compilerFeatureKey<
+                DriverFeature,
+                EmptyCompilerFeatureState,
+                DriverFeatureState,
+            >(EmptyCompilerFeatureState)
+        }
+    }
+
+    private abstract class EmptyFeature : CompilerFeature<
+        EmptyCompilerFeatureState,
+        EmptyCompilerFeatureState,
+    > {
+        override fun precompile(
+            context: CompilerPrecompileContext<EmptyCompilerFeatureState, EmptyCompilerFeatureState>,
+        ): CompilerFeaturePrecompileResult<EmptyCompilerFeatureState> {
+            return CompilerFeaturePrecompileResult(EmptyCompilerFeatureState)
         }
     }
 
