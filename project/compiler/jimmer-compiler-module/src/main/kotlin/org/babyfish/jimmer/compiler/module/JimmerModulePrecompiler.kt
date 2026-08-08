@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.module
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType

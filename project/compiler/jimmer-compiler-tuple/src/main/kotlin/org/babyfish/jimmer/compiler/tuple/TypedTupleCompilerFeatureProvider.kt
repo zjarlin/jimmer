@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.compiler.tuple
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import site.addzero.lsi.core.LsiSymbolId
@@ -27,17 +27,17 @@ import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class TypedTupleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
+class TypedTupleCompilerFeatureProvider : CompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+    override val descriptor = CompilerFeatureDescriptor(
         id = TYPED_TUPLE_FEATURE_ID,
         dependsOn = setOf(IMMUTABLE_FEATURE_ID, DTO_FEATURE_ID),
         aptAnnotationTypes = setOf("org.babyfish.jimmer.sql.TypedTuple"),
     )
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         return try {
             val immutableState = context.dependencyStates[IMMUTABLE_FEATURE_ID]
                 as? JimmerImmutableCompilerFeatureState
@@ -55,7 +55,7 @@ class TypedTupleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 dtoTypeIds = dtoTypeIds,
             )
             schema.validateCodegenNames()
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = TypedTupleCompilerFeatureState(schema),
                 processedSymbols = schema.tuples.mapTo(sortedSetOf()) { tuple -> tuple.id },
             )
@@ -68,7 +68,7 @@ class TypedTupleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             } else {
                 emptySet()
             }
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = if (deferred) {
                     TypedTupleCompilerFeatureState.deferred(exception)
                 } else {
@@ -96,24 +96,24 @@ class TypedTupleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val state = context.state as TypedTupleCompilerFeatureState
         if (!state.renderable || state.schema.tuples.isEmpty()) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val renderer: LsiPoetRenderer = when (context.round.platform) {
             CompilerPlatform.APT -> LsiJavaPoetRenderer()
             CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
-            CompilerPlatform.UNKNOWN -> return JimmerCompilerFeatureRenderResult()
+            CompilerPlatform.UNKNOWN -> return CompilerFeatureRenderResult()
         }
         val artifacts = state.schema
             .toLsiPoetArtifacts(context.round.workspace)
             .map(renderer::render)
-        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+        return CompilerFeatureRenderResult(artifacts = artifacts)
     }
 }
 
@@ -121,7 +121,7 @@ private data class TypedTupleCompilerFeatureState(
     val schema: TypedTupleSchema,
     val renderable: Boolean = true,
     override val fingerprint: String = schema.fingerprint(),
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
 
     companion object {
         fun deferred(exception: TypedTupleValidationException): TypedTupleCompilerFeatureState {

@@ -8,7 +8,6 @@ dependencies {
     implementation(libs.kotlin.stdlib)
 
     testImplementation(projects.jimmerCompiler)
-    testImplementation(projects.jimmerCompilerRuntime)
     testImplementation(projects.lsiApt)
     testImplementation(projects.lsiKsp)
     testImplementation(projects.jimmerSql)

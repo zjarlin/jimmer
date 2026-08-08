@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.jimmer.input.*
+
 import java.lang.reflect.GenericArrayType
 import java.lang.reflect.Modifier
 import java.lang.reflect.ParameterizedType
@@ -14,13 +16,12 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.jimmer.client.toClientDefinitionDocumentation
@@ -697,7 +698,7 @@ class DtoGraphTest {
         )
         val schema = ImmutableSchema(listOf(root, organization, store))
         val document = CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
+            kind = DTO_INPUT_DOCUMENT_KIND,
             sourceSet = CompilerSourceSet.MAIN,
             origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = "demo/Client.dto",
@@ -881,7 +882,7 @@ class DtoGraphTest {
 
     private fun resolution(graph: DtoGraph): JimmerDtoRoundResolution {
         val document = CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
+            kind = DTO_INPUT_DOCUMENT_KIND,
             sourceSet = CompilerSourceSet.MAIN,
             origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = "demo/Book.dto",

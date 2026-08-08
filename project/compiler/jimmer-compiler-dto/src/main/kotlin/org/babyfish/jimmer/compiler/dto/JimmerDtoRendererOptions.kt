@@ -1,7 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiVisibility

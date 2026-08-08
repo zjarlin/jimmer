@@ -1,17 +1,17 @@
 package org.babyfish.jimmer.compiler.client
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
-import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
+import site.addzero.lsi.compiler.CompilerTypeSeedContext
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
 import org.babyfish.jimmer.compiler.dto.JimmerDtoCompilerFeatureState
@@ -51,9 +51,9 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiWorkspace
 
-class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
+class JimmerClientCompilerFeatureProvider : CompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+    override val descriptor = CompilerFeatureDescriptor(
         id = CLIENT_FEATURE_ID,
         dependsOn = setOf(DTO_FEATURE_ID, ERROR_FEATURE_ID, IMMUTABLE_FEATURE_ID),
         aptAnnotationTypes = setOf(
@@ -69,7 +69,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         ),
     )
 
-    override fun requestTypeSeeds(context: JimmerCompilerTypeSeedContext): Collection<LsiTypeSeed> {
+    override fun requestTypeSeeds(context: CompilerTypeSeedContext): Collection<LsiTypeSeed> {
         if (context.round.options[IGNORE_RESOURCE_GENERATION_OPTION] == "true") {
             return emptyList()
         }
@@ -95,11 +95,11 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         val dependencies = context.clientDependencies()
         if (context.round.options[IGNORE_RESOURCE_GENERATION_OPTION] == "true") {
-            return JimmerCompilerFeaturePrecompileResult(
+            return CompilerFeaturePrecompileResult(
                 state = disabledClientState(dependencies),
             )
         }
@@ -155,7 +155,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             dtoDependencyFingerprint = dependencies.dtoFingerprint,
         )
         val unavailableRootTypeIds = state.unresolvedRootTypeIds + state.invalidRootTypeIds
-        return JimmerCompilerFeaturePrecompileResult(
+        return CompilerFeaturePrecompileResult(
             state = state,
             diagnostics = outcome.diagnostics(deferred),
             processedSymbols = currentTargets.rootTypeIds - unavailableRootTypeIds,
@@ -164,11 +164,11 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         val state = context.state as JimmerClientCompilerFeatureState
         if (!context.round.isFinal || context.round.frontendDeferred || !state.renderable) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val originatingSymbols = buildSet {
             state.schema.services.mapTo(this, ClientService::id)
@@ -177,7 +177,7 @@ class JimmerClientCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         val originatingSources = originatingSymbols.mapNotNullTo(sortedSetOf()) { symbolId ->
             context.round.workspace[symbolId]?.origin?.source
         }
-        return JimmerCompilerFeatureRenderResult(
+        return CompilerFeatureRenderResult(
             artifacts = listOf(
                 GeneratedArtifact.create(
                     kind = ArtifactKind.RESOURCE,
@@ -255,7 +255,7 @@ internal data class JimmerClientCompilerFeatureState(
         append(':')
         append(dtoDependencyFingerprint)
     },
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
 
     val renderable: Boolean
         get() = status == JimmerClientCompilerFeatureStatus.RESOLVED
@@ -324,7 +324,7 @@ private fun disabledClientState(
     )
 }
 
-private fun JimmerCompilerPrecompileContext.clientDependencies(): ClientDependencies {
+private fun CompilerPrecompileContext.clientDependencies(): ClientDependencies {
     val immutableState = requireNotNull(
         dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
     ) {

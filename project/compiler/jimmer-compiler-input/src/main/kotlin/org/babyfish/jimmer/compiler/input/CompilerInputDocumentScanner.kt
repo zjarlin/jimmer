@@ -1,24 +1,27 @@
 package org.babyfish.jimmer.compiler.input
 
+import site.addzero.lsi.jimmer.input.*
+
 import java.io.File
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentKind
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerInputDocumentProvider
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerSourceSet
 
 class CompilerInputDocumentScanner(
     requestedKinds: Set<CompilerInputDocumentKind>,
     options: Map<String, String>,
     bundleClassLoader: ClassLoader = CompilerInputDocumentScanner::class.java.classLoader,
-) {
+) : CompilerInputDocumentProvider {
 
     private val referenceFreezer = CompilerInputDocumentReferenceFreezer()
 
-    private val scansDto = CompilerInputDocumentKind.DTO in requestedKinds
+    private val scansDto = DTO_INPUT_DOCUMENT_KIND in requestedKinds
 
     private val sourceRootsBySourceSet = if (scansDto) {
         CompilerSourceSet.entries.associateWith { sourceSet -> dtoSourceRoots(sourceSet, options) }
@@ -46,7 +49,7 @@ class CompilerInputDocumentScanner(
 
     private var fileSystemSourceSet: CompilerSourceSet? = null
 
-    fun scan(
+    override fun scan(
         startPaths: Collection<File>,
         sourceSet: CompilerSourceSet,
     ): List<CompilerInputDocumentSnapshot> {
@@ -69,7 +72,7 @@ class CompilerInputDocumentScanner(
         )
     }
 
-    fun isFileSystemDiscoveryComplete(sourceSet: CompilerSourceSet): Boolean {
+    override fun isFileSystemDiscoveryComplete(sourceSet: CompilerSourceSet): Boolean {
         return !scansDto || sourceRootsBySourceSet.getValue(sourceSet).isEmpty() || fileSystemSnapshots != null
     }
 
@@ -115,7 +118,7 @@ class CompilerInputDocumentScanner(
                 .map { file ->
                     val relativePath = file.relativeTo(sourceRootDirectory).invariantSeparatorsPath
                     CompilerInputDocument(
-                        kind = CompilerInputDocumentKind.DTO,
+                        kind = DTO_INPUT_DOCUMENT_KIND,
                         sourceSet = sourceSet,
                         origin = CompilerInputDocumentOrigin.Project(
                             projectName = root.name,

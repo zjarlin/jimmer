@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.apt
 
+import site.addzero.lsi.jimmer.input.*
+
 import java.io.File
 import java.nio.charset.StandardCharsets
 import javax.annotation.processing.AbstractProcessor
@@ -17,16 +19,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
-import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
+import site.addzero.lsi.compiler.CompilerTypeSeedContext
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -40,6 +41,8 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.model.LsiUnresolvedType
+import org.babyfish.jimmer.compiler.input.JimmerCompilerWiring
+import site.addzero.lsi.apt.AptLsiCompilerDriver
 
 class AptLsiCompilerDriverTest {
 
@@ -296,7 +299,7 @@ class AptLsiCompilerDriverTest {
     }
 
     private class DriverProcessor(
-        private val provider: JimmerCompilerFeatureProvider,
+        private val provider: CompilerFeatureProvider,
     ) : AbstractProcessor() {
         private lateinit var driver: AptLsiCompilerDriver
 
@@ -305,6 +308,7 @@ class AptLsiCompilerDriverTest {
             driver = AptLsiCompilerDriver(
                 processingEnvironment = processingEnvironment,
                 providers = listOf(provider),
+                wiring = JimmerCompilerWiring,
                 sessionId = "apt-driver-test",
             )
         }
@@ -324,31 +328,31 @@ class AptLsiCompilerDriverTest {
 
     private class InputDocumentFeatureProvider(
         id: String,
-    ) : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(
+    ) : CompilerFeatureProvider {
+        override val descriptor = CompilerFeatureDescriptor(
             id = id,
-            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+            inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
 
-        val rounds = mutableListOf<org.babyfish.jimmer.compiler.CompilerRound>()
+        val rounds = mutableListOf<site.addzero.lsi.compiler.CompilerRound>()
 
         override fun collect(
-            context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
-        ): JimmerCompilerFeatureCollection {
+            context: site.addzero.lsi.compiler.CompilerCollectContext,
+        ): CompilerFeatureCollection {
             if (rounds.lastOrNull()?.number != context.round.number) {
                 rounds += context.round
             }
-            return JimmerCompilerFeatureCollection()
+            return CompilerFeatureCollection()
         }
     }
 
-    private class TypeSeedFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(id = "apt-type-seed-test")
+    private class TypeSeedFeatureProvider : CompilerFeatureProvider {
+        override val descriptor = CompilerFeatureDescriptor(id = "apt-type-seed-test")
 
-        val rounds = mutableListOf<org.babyfish.jimmer.compiler.CompilerRound>()
+        val rounds = mutableListOf<site.addzero.lsi.compiler.CompilerRound>()
 
         override fun requestTypeSeeds(
-            context: JimmerCompilerTypeSeedContext,
+            context: CompilerTypeSeedContext,
         ): Collection<LsiTypeSeed> {
             val charSequence = context.round.workspace[CHAR_SEQUENCE_ID] as? LsiTypeDeclaration
             return if (charSequence?.memberIds.isNullOrEmpty()) {
@@ -359,47 +363,47 @@ class AptLsiCompilerDriverTest {
         }
 
         override fun collect(
-            context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
-        ): JimmerCompilerFeatureCollection {
+            context: site.addzero.lsi.compiler.CompilerCollectContext,
+        ): CompilerFeatureCollection {
             if (rounds.lastOrNull()?.number != context.round.number) {
                 rounds += context.round
             }
-            return JimmerCompilerFeatureCollection()
+            return CompilerFeatureCollection()
         }
     }
 
-    private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(
+    private class DriverFeatureProvider : CompilerFeatureProvider {
+        override val descriptor = CompilerFeatureDescriptor(
             id = "apt-driver-test",
             classpathTypeIds = setOf(JAVA_STRING_ID, MISSING_TYPE_ID),
-            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+            inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
 
-        val rounds = mutableListOf<org.babyfish.jimmer.compiler.CompilerRound>()
+        val rounds = mutableListOf<site.addzero.lsi.compiler.CompilerRound>()
 
         override fun collect(
-            context: org.babyfish.jimmer.compiler.JimmerCompilerCollectContext,
-        ): JimmerCompilerFeatureCollection {
+            context: site.addzero.lsi.compiler.CompilerCollectContext,
+        ): CompilerFeatureCollection {
             if (rounds.lastOrNull()?.number != context.round.number) {
                 rounds += context.round
             }
-            return JimmerCompilerFeatureCollection()
+            return CompilerFeatureCollection()
         }
 
         override fun precompile(
-            context: JimmerCompilerPrecompileContext,
-        ): JimmerCompilerFeaturePrecompileResult {
-            return JimmerCompilerFeaturePrecompileResult(
+            context: CompilerPrecompileContext,
+        ): CompilerFeaturePrecompileResult {
+            return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
                 unresolvedSymbols = if (context.round.number == 0) setOf(PROPERTY_ID) else emptySet(),
             )
         }
 
         override fun render(
-            context: JimmerCompilerRenderContext,
-        ): JimmerCompilerFeatureRenderResult {
+            context: CompilerRenderContext,
+        ): CompilerFeatureRenderResult {
             if (context.round.isFinal) {
-                return JimmerCompilerFeatureRenderResult(
+                return CompilerFeatureRenderResult(
                     artifacts = listOf(
                         GeneratedArtifact.create(
                             kind = ArtifactKind.RESOURCE,
@@ -411,10 +415,10 @@ class AptLsiCompilerDriverTest {
                 )
             }
             if (!context.round.currentWorkspace.contains(MODEL_ID)) {
-                return JimmerCompilerFeatureRenderResult()
+                return CompilerFeatureRenderResult()
             }
             if (context.round.number == 0) {
-                return JimmerCompilerFeatureRenderResult(
+                return CompilerFeatureRenderResult(
                     artifacts = listOf(
                         GeneratedArtifact.source(
                             kind = ArtifactKind.JAVA_SOURCE,
@@ -426,7 +430,7 @@ class AptLsiCompilerDriverTest {
                     ),
                 )
             }
-            return JimmerCompilerFeatureRenderResult(
+            return CompilerFeatureRenderResult(
                 artifacts = listOf(
                     GeneratedArtifact.source(
                         kind = ArtifactKind.JAVA_SOURCE,
@@ -450,7 +454,7 @@ class AptLsiCompilerDriverTest {
 
     private data class DriverFeatureState(
         override val fingerprint: String,
-    ) : JimmerCompilerFeatureState
+    ) : CompilerFeatureState
 
     private companion object {
         val MODEL_ID = LsiSymbolId.type("demo.Model")

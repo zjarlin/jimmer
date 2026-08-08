@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.input
 
+import site.addzero.lsi.jimmer.input.*
+
 import java.net.URLClassLoader
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -14,11 +16,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerSourceSet
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.core.LsiSourceKind
@@ -37,14 +38,14 @@ class CompilerInputDocumentBundleReaderTest {
         assertEquals(directoryDocuments, jarDocuments)
         assertEquals(
             listOf(
-                "dto-bundle/org.babyfish.jimmer.test.dto-root/src/main/dto/org/example/Author.dto",
-                "dto-bundle/org.babyfish.jimmer.test.dto-root/src/main/dto/org/example/Book.dto",
+                "compiler-input-bundle/org.babyfish.jimmer.test.dto-root/src/main/dto/org/example/Author.dto",
+                "compiler-input-bundle/org.babyfish.jimmer.test.dto-root/src/main/dto/org/example/Book.dto",
             ),
             directoryDocuments.map { document -> document.source.path },
         )
         assertEquals(listOf("AuthorView {\n    id\n}\n", "BookView {\n    id\n    name\n}\n"),
             directoryDocuments.map { document -> document.content })
-        assertTrue(directoryDocuments.all { document -> document.kind == CompilerInputDocumentKind.DTO })
+        assertTrue(directoryDocuments.all { document -> document.kind == DTO_INPUT_DOCUMENT_KIND })
         assertTrue(directoryDocuments.all { document -> document.sourceSet == CompilerSourceSet.MAIN })
         assertTrue(directoryDocuments.all { document -> document.source.kind == LsiSourceKind.BINARY })
         assertTrue(directoryDocuments.all { document -> document.origin is CompilerInputDocumentOrigin.Bundle })
@@ -179,7 +180,7 @@ class CompilerInputDocumentBundleReaderTest {
         Files.writeString(marker, "invalid")
         URLClassLoader(arrayOf(root.toUri().toURL()), null).use { classLoader ->
             val snapshots = CompilerInputDocumentScanner(
-                requestedKinds = setOf(CompilerInputDocumentKind.DTO),
+                requestedKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
                 options = mapOf(CompilerInputDocumentBundleReader.ENABLED_OPTION to "false"),
                 bundleClassLoader = classLoader,
             ).scan(emptyList(), CompilerSourceSet.MAIN)
@@ -191,7 +192,7 @@ class CompilerInputDocumentBundleReaderTest {
     fun `bundle only scanner freezes references without filesystem anchor`() {
         URLClassLoader(arrayOf(fixture("root").toUri().toURL()), null).use { classLoader ->
             val snapshots = CompilerInputDocumentScanner(
-                requestedKinds = setOf(CompilerInputDocumentKind.DTO),
+                requestedKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
                 options = mapOf("jimmer.dto.dirs" to "/"),
                 bundleClassLoader = classLoader,
             ).scan(emptyList(), CompilerSourceSet.MAIN)
@@ -285,7 +286,7 @@ class CompilerInputDocumentBundleReaderTest {
         )
         URLClassLoader(arrayOf(main.toUri().toURL(), test.toUri().toURL()), null).use { classLoader ->
             val scanner = CompilerInputDocumentScanner(
-                requestedKinds = setOf(CompilerInputDocumentKind.DTO),
+                requestedKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
                 options = emptyMap(),
                 bundleClassLoader = classLoader,
             )
@@ -365,7 +366,7 @@ class CompilerInputDocumentBundleReaderTest {
         relativePath: String,
         content: String,
     ): CompilerInputDocument = CompilerInputDocument(
-        kind = CompilerInputDocumentKind.DTO,
+        kind = DTO_INPUT_DOCUMENT_KIND,
         sourceSet = sourceSet,
         origin = CompilerInputDocumentOrigin.Project("catalog", sourceRoot),
         relativePath = relativePath,

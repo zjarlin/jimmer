@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.module
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiSymbolId
 

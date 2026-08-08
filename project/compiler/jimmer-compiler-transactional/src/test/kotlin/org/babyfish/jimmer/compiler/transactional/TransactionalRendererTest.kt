@@ -14,7 +14,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerFeatureProviders
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import site.addzero.lsi.core.LsiLanguage
@@ -83,7 +83,7 @@ class TransactionalRendererTest {
 
     @Test
     fun `transactional feature is loaded with shared compiler`() {
-        val featureIds = JimmerCompilerFeatureProviders.load().map { provider -> provider.descriptor.id }
+        val featureIds = CompilerFeatureProviders.load().map { provider -> provider.descriptor.id }
 
         assertTrue("transactional" in featureIds)
     }

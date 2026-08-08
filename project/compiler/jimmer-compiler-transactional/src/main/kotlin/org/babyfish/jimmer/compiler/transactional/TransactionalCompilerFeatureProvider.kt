@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.compiler.transactional
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.jimmer.transactional.TransactionalSchema
@@ -18,30 +18,30 @@ import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class TransactionalCompilerFeatureProvider : JimmerCompilerFeatureProvider {
+class TransactionalCompilerFeatureProvider : CompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+    override val descriptor = CompilerFeatureDescriptor(
         id = "transactional",
         aptAnnotationTypes = setOf("org.babyfish.jimmer.sql.transaction.Tx"),
         supportedOptions = setOf(IGNORE_RESOURCE_GENERATION_OPTION),
     )
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         if (context.round.options[IGNORE_RESOURCE_GENERATION_OPTION] == "true") {
-            return JimmerCompilerFeaturePrecompileResult(
+            return CompilerFeaturePrecompileResult(
                 state = TransactionalCompilerFeatureState(TransactionalSchema(emptyList())),
             )
         }
         return try {
             val schema = context.round.workspace.toTransactionalSchema()
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = TransactionalCompilerFeatureState(schema),
                 processedSymbols = schema.types.mapTo(sortedSetOf()) { type -> type.id },
             )
         } catch (exception: TransactionalValidationException) {
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = TransactionalCompilerFeatureState.invalid(exception),
                 diagnostics = listOf(
                     LsiDiagnostic(
@@ -56,24 +56,24 @@ class TransactionalCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val state = context.state as TransactionalCompilerFeatureState
         if (state.invalid || state.schema.types.isEmpty()) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val renderer: LsiPoetRenderer = when (context.round.platform) {
             CompilerPlatform.APT -> LsiJavaPoetRenderer()
             CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
-            CompilerPlatform.UNKNOWN -> return JimmerCompilerFeatureRenderResult()
+            CompilerPlatform.UNKNOWN -> return CompilerFeatureRenderResult()
         }
         val artifacts = state.schema
             .toLsiPoetArtifacts(context.round.workspace)
             .map(renderer::render)
-        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+        return CompilerFeatureRenderResult(artifacts = artifacts)
     }
 }
 
@@ -83,7 +83,7 @@ private data class TransactionalCompilerFeatureState(
     val schema: TransactionalSchema,
     val invalid: Boolean = false,
     override val fingerprint: String = schema.fingerprint(),
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
 
     companion object {
         fun invalid(exception: TransactionalValidationException): TransactionalCompilerFeatureState {

@@ -1,17 +1,19 @@
 package org.babyfish.jimmer.compiler.immutable
 
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerRound
+import site.addzero.lsi.jimmer.input.*
+
+import site.addzero.lsi.compiler.CompilerInputDocumentReferenceKind
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerRound
 import org.babyfish.jimmer.compiler.JacksonFamily
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.selectOwnerTarget
 import org.babyfish.jimmer.compiler.input.selectType
@@ -33,9 +35,9 @@ import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
+class JimmerImmutableCompilerFeatureProvider : CompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+    override val descriptor = CompilerFeatureDescriptor(
         id = JIMMER_IMMUTABLE_FEATURE_ID,
         aptAnnotationTypes = setOf(
             "org.babyfish.jimmer.Immutable",
@@ -54,8 +56,8 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     )
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
         val targetTypeIds = context.round.workspace.immutableTargetTypeIds(
             platform = context.round.platform,
@@ -96,7 +98,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 ),
             )
             schema.validateFetcherGenerationContracts(targetTypeIds)
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = JimmerImmutableCompilerFeatureState(
                     schema = schema,
                     draftCodegenSchema = draftCodegenSchema,
@@ -118,14 +120,14 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val state = context.state as JimmerImmutableCompilerFeatureState
         if (state.status != CompilerResolutionStatus.RESOLVED) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val fetcherTypes = state.schema.generatedFetcherTypes(state.targetTypeIds)
         val draftTypes = state.draftCodegenSchema.generatedDraftTypes(state.currentTypeIds)
@@ -177,7 +179,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             }
             CompilerPlatform.UNKNOWN -> emptyList()
         }
-        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+        return CompilerFeatureRenderResult(artifacts = artifacts)
     }
 
     private fun validateSourceLayout(
@@ -206,12 +208,12 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     private fun unresolvedResult(
-        context: JimmerCompilerPrecompileContext,
+        context: CompilerPrecompileContext,
         targetTypeIds: Set<LsiSymbolId>,
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
         unresolvedTypeIds: Set<LsiSymbolId>,
-    ): JimmerCompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult {
         val deferred = context.round.platform == CompilerPlatform.APT && !context.round.isFinal
         val resolvedTypeIds = semanticRootTypeIds - unresolvedTypeIds
         val (schema, draftCodegenSchema) = try {
@@ -234,7 +236,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 knownUnresolvedTypeIds = unresolvedTypeIds,
             )
         }
-        return JimmerCompilerFeaturePrecompileResult(
+        return CompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = schema,
                 draftCodegenSchema = draftCodegenSchema,
@@ -267,13 +269,13 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     private fun failedResult(
-        context: JimmerCompilerPrecompileContext,
+        context: CompilerPrecompileContext,
         targetTypeIds: Set<LsiSymbolId>,
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
         exception: ImmutablePrecompileException,
         knownUnresolvedTypeIds: Set<LsiSymbolId> = emptySet(),
-    ): JimmerCompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult {
         val affectedTypeId = exception.declarationId.rootTypeId()
             .takeIf { typeId -> typeId in semanticRootTypeIds }
             ?: semanticRootTypeIds.firstOrNull()
@@ -300,7 +302,7 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 unresolvedTypeIds = unresolvedTypeIds,
             )
         }
-        return JimmerCompilerFeaturePrecompileResult(
+        return CompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
@@ -334,8 +336,8 @@ class JimmerImmutableCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         semanticRootTypeIds: Set<LsiSymbolId>,
         currentTypeIds: Set<LsiSymbolId>,
         unresolvedTypeIds: Set<LsiSymbolId>,
-    ): JimmerCompilerFeaturePrecompileResult {
-        return JimmerCompilerFeaturePrecompileResult(
+    ): CompilerFeaturePrecompileResult {
+        return CompilerFeaturePrecompileResult(
             state = JimmerImmutableCompilerFeatureState(
                 schema = ImmutableSchema(emptyList()),
                 draftCodegenSchema = JimmerImmutableDraftCodegenSchema(
@@ -381,7 +383,7 @@ data class JimmerImmutableCompilerFeatureState(
         append(':')
         append(failure)
     },
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
     init {
         require(draftCodegenSchema.typesById.keys == schema.typesById.keys) {
             "Immutable draft codegen types must match immutable semantic types"
@@ -438,7 +440,7 @@ private fun CompilerRound.dtoSemanticRootTypeIds(
                 }
                 snapshot.references
                     .asSequence()
-                    .filter { reference -> reference.kind == CompilerInputDocumentReferenceKind.MODEL_TYPE }
+                    .filter { reference -> reference.kind == DTO_MODEL_TYPE_REFERENCE_KIND }
                     .filter { reference ->
                         val ownerSelection = reference.selectOwnerTarget(workspace)
                         ownerSelection == null ||
@@ -458,8 +460,8 @@ private fun CompilerRound.dtoSemanticRootTypeIds(
 }
 
 private fun CompilerInputDocumentReferenceKind.isDtoTarget(): Boolean {
-    return this == CompilerInputDocumentReferenceKind.SUBJECT_TYPE ||
-        this == CompilerInputDocumentReferenceKind.TARGET_TYPE
+    return this == DTO_SUBJECT_TYPE_REFERENCE_KIND ||
+        this == DTO_TARGET_TYPE_REFERENCE_KIND
 }
 
 private fun LsiWorkspace.isCompilerTargetVisible(

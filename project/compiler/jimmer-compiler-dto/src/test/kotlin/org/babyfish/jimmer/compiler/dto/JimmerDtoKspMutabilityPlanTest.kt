@@ -1,16 +1,17 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.jimmer.input.*
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JacksonFamily
 import org.babyfish.jimmer.dto.compiler.DtoModifier
 import site.addzero.lsi.core.LsiLocation
@@ -183,7 +184,7 @@ class JimmerDtoKspMutabilityPlanTest {
 
     private companion object {
         val DOCUMENT = CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
+            kind = DTO_INPUT_DOCUMENT_KIND,
             sourceSet = CompilerSourceSet.MAIN,
             origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = "demo/Book.dto",

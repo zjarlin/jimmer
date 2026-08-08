@@ -1,11 +1,11 @@
 package org.babyfish.jimmer.compiler.input
 
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReference
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
+import site.addzero.lsi.jimmer.input.*
+
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentReference
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerInputDocumentTypeSelector
 import org.babyfish.jimmer.dto.compiler.DtoDocumentReferenceKind
 import org.babyfish.jimmer.dto.compiler.DtoDocumentReferences
 import org.babyfish.jimmer.dto.compiler.DtoTypeNameSelector
@@ -16,9 +16,13 @@ import site.addzero.lsi.core.LsiSymbolId
 class CompilerInputDocumentReferenceFreezer {
 
     fun freeze(document: CompilerInputDocument): CompilerInputDocumentSnapshot {
-        val references = when (document.kind) {
-            CompilerInputDocumentKind.DTO -> freezeDtoReferences(document)
+        require(document.kind == DTO_INPUT_DOCUMENT_KIND) {
+            "Unsupported Jimmer compiler input document kind: '${document.kind.id}'"
         }
+        require(document.relativePath.endsWith(".dto")) {
+            "DTO compiler input document must use the .dto extension: '${document.relativePath}'"
+        }
+        val references = freezeDtoReferences(document)
         return CompilerInputDocumentSnapshot(document, references.sorted())
     }
 
@@ -30,21 +34,21 @@ class CompilerInputDocumentReferenceFreezer {
                 typeSelector = reference.typeSelector.toCompilerSelector(),
                 kind = when (reference.kind) {
                     DtoDocumentReferenceKind.SUBJECT_TYPE ->
-                        CompilerInputDocumentReferenceKind.SUBJECT_TYPE
+                        DTO_SUBJECT_TYPE_REFERENCE_KIND
                     DtoDocumentReferenceKind.TARGET_TYPE ->
-                        CompilerInputDocumentReferenceKind.TARGET_TYPE
+                        DTO_TARGET_TYPE_REFERENCE_KIND
                     DtoDocumentReferenceKind.ANNOTATION_TYPE ->
-                        CompilerInputDocumentReferenceKind.ANNOTATION_TYPE
+                        DTO_ANNOTATION_TYPE_REFERENCE_KIND
                     DtoDocumentReferenceKind.SUPER_TYPE ->
-                        CompilerInputDocumentReferenceKind.SUPER_TYPE
+                        DTO_SUPER_TYPE_REFERENCE_KIND
                     DtoDocumentReferenceKind.MODEL_TYPE ->
-                        CompilerInputDocumentReferenceKind.MODEL_TYPE
+                        DTO_MODEL_TYPE_REFERENCE_KIND
                     DtoDocumentReferenceKind.REUSABLE_DTO_TYPE ->
-                        CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE
+                        DTO_REUSABLE_TYPE_REFERENCE_KIND
                     DtoDocumentReferenceKind.TYPE_USAGE ->
-                        CompilerInputDocumentReferenceKind.TYPE_USAGE
+                        DTO_TYPE_USAGE_REFERENCE_KIND
                     DtoDocumentReferenceKind.CONFIG_IMPLEMENTATION ->
-                        CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION
+                        DTO_CONFIG_IMPLEMENTATION_REFERENCE_KIND
                 },
                 ownerTargetSelector = reference.ownerTargetSelector?.toCompilerSelector(),
                 location = LsiLocation(

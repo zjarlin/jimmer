@@ -28,7 +28,7 @@ internal fun List<JimmerDtoResolvedInput>.resolvedInputFingerprint(): String {
                     appendRecord(
                         "reference",
                         document.source.path,
-                        reference.kind.name,
+                        reference.kind.id,
                         reference.typeSelector.canonicalText(),
                         reference.ownerTargetSelector?.canonicalText().orEmpty(),
                         reference.location.start.line.toString(),

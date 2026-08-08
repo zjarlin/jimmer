@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.ksp
 
+import site.addzero.lsi.jimmer.input.*
+
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
@@ -31,18 +33,17 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.JimmerCompilerCollectContext
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
-import org.babyfish.jimmer.compiler.JimmerCompilerTypeSeedContext
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerCollectContext
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
+import site.addzero.lsi.compiler.CompilerTypeSeedContext
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -52,6 +53,8 @@ import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiFileAnnotationScope
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
+import org.babyfish.jimmer.compiler.input.JimmerCompilerWiring
+import site.addzero.lsi.ksp.KspLsiCompilerDriver
 
 class KspLsiCompilerDriverTest {
 
@@ -86,6 +89,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-type-seed-test",
         )
 
@@ -128,6 +132,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-input-document-test",
         )
 
@@ -160,6 +165,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-input-document-no-root-test",
         )
 
@@ -191,6 +197,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-delayed-input-document-test",
         )
 
@@ -304,6 +311,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-document-seeds-test",
         )
 
@@ -369,6 +377,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-current-roots-test",
         )
 
@@ -426,6 +435,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-same-file-name-test",
         )
 
@@ -474,6 +484,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-file-annotation-defer-test",
         )
 
@@ -534,6 +545,7 @@ class KspLsiCompilerDriverTest {
         val driver = KspLsiCompilerDriver(
             environment = environment,
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-driver-test",
         )
 
@@ -606,6 +618,7 @@ class KspLsiCompilerDriverTest {
                 CapturingLogger(),
             ),
             providers = listOf(provider),
+            wiring = JimmerCompilerWiring,
             sessionId = "ksp-java-root-ownership-test",
         )
 
@@ -621,36 +634,36 @@ class KspLsiCompilerDriverTest {
         assertFalse(driver.finish().round.frontendDeferred)
     }
 
-    private class DriverFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(
+    private class DriverFeatureProvider : CompilerFeatureProvider {
+        override val descriptor = CompilerFeatureDescriptor(
             id = "ksp-driver-test",
             classpathTypeIds = setOf(VALID_ID, MISSING_TYPE_ID),
-            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+            inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
 
-        val rounds = mutableListOf<JimmerCompilerCollectContext>()
+        val rounds = mutableListOf<CompilerCollectContext>()
 
-        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return JimmerCompilerFeatureCollection()
+            return CompilerFeatureCollection()
         }
 
         override fun precompile(
-            context: JimmerCompilerPrecompileContext,
-        ): JimmerCompilerFeaturePrecompileResult {
-            return JimmerCompilerFeaturePrecompileResult(
+            context: CompilerPrecompileContext,
+        ): CompilerFeaturePrecompileResult {
+            return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
                 unresolvedSymbols = if (context.round.isFinal) emptySet() else setOf(VALID_ID),
             )
         }
 
         override fun render(
-            context: JimmerCompilerRenderContext,
-        ): JimmerCompilerFeatureRenderResult {
+            context: CompilerRenderContext,
+        ): CompilerFeatureRenderResult {
             if (context.round.isFinal) {
-                return JimmerCompilerFeatureRenderResult(
+                return CompilerFeatureRenderResult(
                     artifacts = listOf(
                         GeneratedArtifact.create(
                             kind = ArtifactKind.RESOURCE,
@@ -661,7 +674,7 @@ class KspLsiCompilerDriverTest {
                     ),
                 )
             }
-            return JimmerCompilerFeatureRenderResult(
+            return CompilerFeatureRenderResult(
                 artifacts = listOf(
                     GeneratedArtifact.source(
                         kind = ArtifactKind.KOTLIN_SOURCE,
@@ -683,67 +696,67 @@ class KspLsiCompilerDriverTest {
         }
     }
 
-    private class TypeSeedFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(id = "ksp-type-seed-test")
+    private class TypeSeedFeatureProvider : CompilerFeatureProvider {
+        override val descriptor = CompilerFeatureDescriptor(id = "ksp-type-seed-test")
 
-        val rounds = mutableListOf<JimmerCompilerCollectContext>()
+        val rounds = mutableListOf<CompilerCollectContext>()
 
         override fun requestTypeSeeds(
-            context: JimmerCompilerTypeSeedContext,
+            context: CompilerTypeSeedContext,
         ): Collection<LsiTypeSeed> {
             return listOf(
                 LsiTypeSeed(EXTERNAL_PAYLOAD_ID, LsiTypeSeedMode.FULL_DECLARATION)
             )
         }
 
-        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return JimmerCompilerFeatureCollection()
+            return CompilerFeatureCollection()
         }
     }
 
-    private class InputDocumentFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(
+    private class InputDocumentFeatureProvider : CompilerFeatureProvider {
+        override val descriptor = CompilerFeatureDescriptor(
             id = "ksp-input-document-test",
-            inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+            inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         )
 
-        val rounds = mutableListOf<JimmerCompilerCollectContext>()
+        val rounds = mutableListOf<CompilerCollectContext>()
 
-        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return JimmerCompilerFeatureCollection()
+            return CompilerFeatureCollection()
         }
 
         override fun precompile(
-            context: JimmerCompilerPrecompileContext,
-        ): JimmerCompilerFeaturePrecompileResult {
-            return JimmerCompilerFeaturePrecompileResult(
+            context: CompilerPrecompileContext,
+        ): CompilerFeaturePrecompileResult {
+            return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
             )
         }
     }
 
-    private class FileScopeFeatureProvider : JimmerCompilerFeatureProvider {
-        override val descriptor = JimmerCompilerFeatureDescriptor(id = "ksp-file-scope-test")
+    private class FileScopeFeatureProvider : CompilerFeatureProvider {
+        override val descriptor = CompilerFeatureDescriptor(id = "ksp-file-scope-test")
 
-        val rounds = mutableListOf<JimmerCompilerCollectContext>()
+        val rounds = mutableListOf<CompilerCollectContext>()
 
-        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
             if (rounds.lastOrNull()?.round?.number != context.round.number) {
                 rounds += context
             }
-            return JimmerCompilerFeatureCollection()
+            return CompilerFeatureCollection()
         }
 
         override fun precompile(
-            context: JimmerCompilerPrecompileContext,
-        ): JimmerCompilerFeaturePrecompileResult {
-            return JimmerCompilerFeaturePrecompileResult(
+            context: CompilerPrecompileContext,
+        ): CompilerFeaturePrecompileResult {
+            return CompilerFeaturePrecompileResult(
                 state = DriverFeatureState("${context.round.number}:${context.round.isFinal}"),
             )
         }
@@ -816,7 +829,7 @@ class KspLsiCompilerDriverTest {
 
     private data class DriverFeatureState(
         override val fingerprint: String,
-    ) : JimmerCompilerFeatureState
+    ) : CompilerFeatureState
 
     private data class LogCall(
         val severity: LsiDiagnosticSeverity,

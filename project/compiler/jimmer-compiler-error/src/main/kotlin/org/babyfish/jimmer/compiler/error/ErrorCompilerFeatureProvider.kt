@@ -1,13 +1,13 @@
 package org.babyfish.jimmer.compiler.error
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOriginKind
@@ -24,16 +24,16 @@ import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+class ErrorCompilerFeatureProvider : CompilerFeatureProvider {
+    override val descriptor = CompilerFeatureDescriptor(
         id = "error",
         aptAnnotationTypes = setOf("org.babyfish.jimmer.error.ErrorFamily"),
         supportedOptions = setOf("jimmer.client.checkedException"),
     )
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         return try {
             val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
             val targetTypeIds = context.round.workspace
@@ -56,12 +56,12 @@ class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 status = ErrorCompilerFeatureStatus.RESOLVED,
                 schema = schema,
             )
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = state,
                 processedSymbols = schema.families.mapTo(sortedSetOf()) { family -> family.id },
             )
         } catch (exception: ErrorValidationException) {
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = ErrorCompilerFeatureState.invalid(exception),
                 diagnostics = listOf(
                     LsiDiagnostic(
@@ -76,24 +76,24 @@ class ErrorCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val state = context.state as ErrorCompilerFeatureState
         if (state.status != ErrorCompilerFeatureStatus.RESOLVED || state.schema.families.isEmpty()) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val renderer: LsiPoetRenderer = when (context.round.platform) {
             CompilerPlatform.APT -> LsiJavaPoetRenderer()
             CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
-            CompilerPlatform.UNKNOWN -> return JimmerCompilerFeatureRenderResult()
+            CompilerPlatform.UNKNOWN -> return CompilerFeatureRenderResult()
         }
         val artifacts = state.schema
             .toLsiPoetArtifacts(context.round.workspace)
             .map(renderer::render)
-        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+        return CompilerFeatureRenderResult(artifacts = artifacts)
     }
 }
 
@@ -123,7 +123,7 @@ data class ErrorCompilerFeatureState(
     val status: ErrorCompilerFeatureStatus,
     val schema: ErrorSchema,
     override val fingerprint: String = "${status.name}:${schema.fingerprint()}",
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
     companion object {
         fun invalid(exception: ErrorValidationException): ErrorCompilerFeatureState {
             return ErrorCompilerFeatureState(

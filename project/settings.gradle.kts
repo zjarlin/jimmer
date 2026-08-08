@@ -15,7 +15,6 @@ val moduleDirectories = linkedMapOf(
     "jimmer-compiler-immutable" to "compiler/jimmer-compiler-immutable",
     "jimmer-compiler-input" to "compiler/jimmer-compiler-input",
     "jimmer-compiler-module" to "compiler/jimmer-compiler-module",
-    "jimmer-compiler-runtime" to "compiler/jimmer-compiler-runtime",
     "jimmer-compiler-transactional" to "compiler/jimmer-compiler-transactional",
     "jimmer-compiler-tuple" to "compiler/jimmer-compiler-tuple",
     "jimmer-ddl-compiler" to "compiler/jimmer-ddl-compiler",

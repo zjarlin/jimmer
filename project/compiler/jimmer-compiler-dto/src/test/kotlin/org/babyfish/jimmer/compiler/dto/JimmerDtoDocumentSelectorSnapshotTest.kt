@@ -3,7 +3,7 @@ package org.babyfish.jimmer.compiler.dto
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
-import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
+import site.addzero.lsi.compiler.CompilerInputDocumentTypeSelector
 import site.addzero.lsi.core.LsiSymbolId
 
 class JimmerDtoDocumentSelectorSnapshotTest {

@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId

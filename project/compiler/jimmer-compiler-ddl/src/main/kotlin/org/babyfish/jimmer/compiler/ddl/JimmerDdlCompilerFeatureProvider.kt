@@ -1,14 +1,14 @@
 package org.babyfish.jimmer.compiler.ddl
 
-import org.babyfish.jimmer.compiler.JimmerCompilerCollectContext
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerCollectContext
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompiler
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerFiles
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerResult
@@ -22,9 +22,9 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 /**
  * 在共享编译会话中收集实体，并在最终轮消费冻结后的 LSI 工作区。
  */
-class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
+class JimmerDdlCompilerFeatureProvider : CompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+    override val descriptor = CompilerFeatureDescriptor(
         id = DDL_FEATURE_ID,
         supportedOptions = setOf(
             "jimmerDdl.enabled",
@@ -56,8 +56,8 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     )
 
     override fun collect(
-        context: JimmerCompilerCollectContext,
-    ): JimmerCompilerFeatureCollection {
+        context: CompilerCollectContext,
+    ): CompilerFeatureCollection {
         val currentSourcePaths = context.round.currentRootTypeIds.mapNotNullTo(sortedSetOf()) { typeId ->
             (context.round.currentWorkspace[typeId] as? LsiTypeDeclaration)?.origin?.source?.path
         }
@@ -70,14 +70,14 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                     )
             }
             .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
-        return JimmerCompilerFeatureCollection(
+        return CompilerFeatureCollection(
             state = JimmerDdlCompilerCollectionState(entityTypeIds),
         )
     }
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         val collection = context.collection.state as JimmerDdlCompilerCollectionState
         val previousState = context.previousState as? JimmerDdlCompilerFeatureState
         val entityTypeIds = buildSet {
@@ -86,7 +86,7 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }.toSortedSet()
         val optionsFingerprint = context.round.options.ddlFingerprint()
         if (!context.round.isFinal) {
-            return JimmerCompilerFeaturePrecompileResult(
+            return CompilerFeaturePrecompileResult(
                 state = JimmerDdlCompilerFeatureState.collecting(
                     entityTypeIds = entityTypeIds,
                     optionsFingerprint = optionsFingerprint,
@@ -99,7 +99,7 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             previousState.entityTypeIds == entityTypeIds &&
             previousState.optionsFingerprint == optionsFingerprint
         ) {
-            return JimmerCompilerFeaturePrecompileResult(
+            return CompilerFeaturePrecompileResult(
                 state = previousState,
                 diagnostics = previousState.results.flatMap(JimmerDdlCompilerResult::warningDiagnostics),
             )
@@ -120,7 +120,7 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 )
             }
         }
-        return JimmerCompilerFeaturePrecompileResult(
+        return CompilerFeaturePrecompileResult(
             state = JimmerDdlCompilerFeatureState.compiled(
                 entityTypeIds = entityTypeIds,
                 optionsFingerprint = optionsFingerprint,
@@ -131,16 +131,16 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         if (!context.round.isFinal) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val state = context.state as JimmerDdlCompilerFeatureState
         if (!state.compiled || state.results.isEmpty()) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
-        return JimmerCompilerFeatureRenderResult(
+        return CompilerFeatureRenderResult(
             diagnostics = JimmerDdlFileRenderer.render(state.results),
         )
     }
@@ -150,7 +150,7 @@ class JimmerDdlCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 private data class JimmerDdlCompilerCollectionState(
     val entityTypeIds: Set<LsiSymbolId>,
     override val fingerprint: String = entityTypeIds.joinToString(",") { typeId -> typeId.value },
-) : JimmerCompilerFeatureState
+) : CompilerFeatureState
 
 private data class JimmerDdlCompilerFeatureState(
     val entityTypeIds: Set<LsiSymbolId>,
@@ -182,7 +182,7 @@ private data class JimmerDdlCompilerFeatureState(
             }
         }
     },
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
 
     companion object {
         fun collecting(

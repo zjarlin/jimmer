@@ -1,8 +1,9 @@
 package org.babyfish.jimmer.compiler.input
 
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReference
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelection
+import site.addzero.lsi.jimmer.input.*
+
+import site.addzero.lsi.compiler.CompilerInputDocumentReference
+import site.addzero.lsi.compiler.CompilerInputDocumentTypeSelection
 import site.addzero.lsi.jimmer.isJimmerImmutableType
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiTypeDeclaration
@@ -14,19 +15,21 @@ fun CompilerInputDocumentReference.selectType(
 ): CompilerInputDocumentTypeSelection {
     return typeSelector.select { typeId ->
         when (kind) {
-            CompilerInputDocumentReferenceKind.SUBJECT_TYPE,
-            CompilerInputDocumentReferenceKind.TARGET_TYPE,
-            CompilerInputDocumentReferenceKind.MODEL_TYPE,
+            DTO_SUBJECT_TYPE_REFERENCE_KIND,
+            DTO_TARGET_TYPE_REFERENCE_KIND,
+            DTO_MODEL_TYPE_REFERENCE_KIND,
             -> workspace.isImmutableType(typeId)
 
-            CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE ->
+            DTO_REUSABLE_TYPE_REFERENCE_KIND ->
                 typeId in sourceDtoTypeIds || workspace[typeId] is LsiTypeDeclaration
 
-            CompilerInputDocumentReferenceKind.ANNOTATION_TYPE,
-            CompilerInputDocumentReferenceKind.SUPER_TYPE,
-            CompilerInputDocumentReferenceKind.TYPE_USAGE,
-            CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION,
+            DTO_ANNOTATION_TYPE_REFERENCE_KIND,
+            DTO_SUPER_TYPE_REFERENCE_KIND,
+            DTO_TYPE_USAGE_REFERENCE_KIND,
+            DTO_CONFIG_IMPLEMENTATION_REFERENCE_KIND,
             -> workspace[typeId] is LsiTypeDeclaration
+
+            else -> error("Unsupported Jimmer compiler input reference kind: '${kind.id}'")
         }
     }
 }

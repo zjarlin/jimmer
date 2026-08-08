@@ -1,23 +1,24 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.jimmer.input.*
+
 import site.addzero.lsi.jimmer.ImmutableProp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
-import org.babyfish.jimmer.compiler.CompilerSourceSet
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSessionSnapshot
+import site.addzero.lsi.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerPrecompileContext
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
@@ -173,7 +174,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
         )
         val snapshot = REFERENCE_FREEZER.freeze(
             CompilerInputDocument(
-                kind = CompilerInputDocumentKind.DTO,
+                kind = DTO_INPUT_DOCUMENT_KIND,
                 sourceSet = CompilerSourceSet.MAIN,
                 origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
                 relativePath = "demo/BinaryBook.dto",
@@ -236,7 +237,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
 
     @Test
     fun `immutable feature is registered as a dependency-free shared stage`() {
-        val descriptor = JimmerCompilerFeatureProviders.load()
+        val descriptor = CompilerFeatureProviders.load()
             .single { provider -> provider.descriptor.id == "immutable" }
             .descriptor
 
@@ -253,10 +254,10 @@ class JimmerImmutableCompilerFeatureProviderTest {
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
         inputDocumentSnapshots: List<CompilerInputDocumentSnapshot> = emptyList(),
-    ): JimmerCompilerPrecompileContext {
+    ): CompilerPrecompileContext {
         val completeWorkspace = workspace.completeEntityIdentities()
         val completeCurrentWorkspace = currentWorkspace.completeEntityIdentities()
-        return JimmerCompilerPrecompileContext(
+        return CompilerPrecompileContext(
             session = CompilerSessionSnapshot("immutable-feature-test", emptyList()),
             round = CompilerRound(
                 number = 0,
@@ -268,7 +269,7 @@ class JimmerImmutableCompilerFeatureProviderTest {
                 options = options,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),
-            collection = JimmerCompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(),
             previousState = null,
             dependencyStates = emptyMap(),
         )

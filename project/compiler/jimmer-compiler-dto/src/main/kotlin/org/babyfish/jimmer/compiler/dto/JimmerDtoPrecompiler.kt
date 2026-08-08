@@ -1,13 +1,14 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReference
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelection
-import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
-import org.babyfish.jimmer.compiler.CompilerPlatform
+import site.addzero.lsi.jimmer.input.*
+
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentReference
+import site.addzero.lsi.compiler.CompilerInputDocumentReferenceKind
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerInputDocumentTypeSelection
+import site.addzero.lsi.compiler.CompilerInputDocumentTypeSelector
+import site.addzero.lsi.compiler.CompilerPlatform
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.jimmer.ImmutableProp
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -60,7 +61,7 @@ internal class JimmerDtoPrecompiler {
         val targetLanguage = platform.dtoTargetLanguage()
         val failures = mutableListOf<JimmerDtoCompilerFailure>()
         val entries = inputDocumentSnapshots
-            .filter { snapshot -> snapshot.document.kind == CompilerInputDocumentKind.DTO }
+            .filter { snapshot -> snapshot.document.kind == DTO_INPUT_DOCUMENT_KIND }
             .sorted()
             .mapNotNull { snapshot ->
                 val inputDocument = snapshot.document
@@ -145,7 +146,7 @@ internal class JimmerDtoPrecompiler {
                     .asSequence()
                     .filterNot { reference ->
                         reference.kind.isDtoTarget() ||
-                            reference.kind == CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE
+                            reference.kind == DTO_REUSABLE_TYPE_REFERENCE_KIND
                     }
                     .filter { reference -> reference in entry.referenceResolution.typeIds }
                     .filter { reference ->
@@ -156,7 +157,7 @@ internal class JimmerDtoPrecompiler {
                         val typeId = entry.referenceResolution.typeIds.getValue(reference)
                         val declaration = workspace[typeId] as? LsiTypeDeclaration
                         when (reference.kind) {
-                            CompilerInputDocumentReferenceKind.MODEL_TYPE ->
+                            DTO_MODEL_TYPE_REFERENCE_KIND ->
                                 declaration == null ||
                                     declaration.isJimmerImmutableType() && typeId !in immutableSchema.typesById
 
@@ -222,7 +223,7 @@ internal class JimmerDtoPrecompiler {
             entry.inputSnapshot.references
                 .asSequence()
                 .filter { reference ->
-                    reference.kind == CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE
+                    reference.kind == DTO_REUSABLE_TYPE_REFERENCE_KIND
                 }
                 .filter { reference -> reference in entry.referenceResolution.ownerTargetTypeIds }
                 .filter { reference ->
@@ -510,7 +511,7 @@ private fun CompilerInputDocumentSnapshot.resolveStaticReferences(
                 return@referenceLoop
             }
             ownerTargetTypeIds[reference] = ownerTargetTypeId
-            if (reference.kind == CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE) {
+            if (reference.kind == DTO_REUSABLE_TYPE_REFERENCE_KIND) {
                 return@referenceLoop
             }
             val selection = reference.selectType(workspace)
@@ -544,8 +545,8 @@ private fun CompilerInputDocumentSnapshot.activeTargetTypeIds(
 }
 
 private fun CompilerInputDocumentReferenceKind.isDtoTarget(): Boolean {
-    return this == CompilerInputDocumentReferenceKind.SUBJECT_TYPE ||
-        this == CompilerInputDocumentReferenceKind.TARGET_TYPE
+    return this == DTO_SUBJECT_TYPE_REFERENCE_KIND ||
+        this == DTO_TARGET_TYPE_REFERENCE_KIND
 }
 
 private fun CompilerInputDocumentSnapshot.referenceLocation(typeId: LsiSymbolId): LsiLocation? {

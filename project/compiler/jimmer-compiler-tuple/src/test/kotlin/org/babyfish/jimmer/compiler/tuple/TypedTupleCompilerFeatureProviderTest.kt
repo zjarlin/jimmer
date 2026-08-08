@@ -3,12 +3,12 @@ package org.babyfish.jimmer.compiler.tuple
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSessionSnapshot
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -86,7 +86,7 @@ class TypedTupleCompilerFeatureProviderTest {
 
     @Test
     fun `tuple feature declares immutable and dto dependencies`() {
-        val descriptor = JimmerCompilerFeatureProviders.load()
+        val descriptor = CompilerFeatureProviders.load()
             .single { candidate -> candidate.descriptor.id == "tuple" }
             .descriptor
 
@@ -97,8 +97,8 @@ class TypedTupleCompilerFeatureProviderTest {
         platform: CompilerPlatform,
         isFinal: Boolean = false,
         roundWorkspace: LsiWorkspace = workspace,
-    ): JimmerCompilerPrecompileContext {
-        return JimmerCompilerPrecompileContext(
+    ): CompilerPrecompileContext {
+        return CompilerPrecompileContext(
             session = CompilerSessionSnapshot("tuple-feature-test", emptyList()),
             round = CompilerRound(
                 number = 0,
@@ -109,7 +109,7 @@ class TypedTupleCompilerFeatureProviderTest {
                 isFinal = isFinal,
                 inputDocumentSnapshots = emptyList(),
             ),
-            collection = JimmerCompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(),
             previousState = null,
             dependencyStates = emptyMap(),
         )

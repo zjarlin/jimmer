@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoKotlinMutability
 import site.addzero.lsi.jimmer.dto.DtoTypeId

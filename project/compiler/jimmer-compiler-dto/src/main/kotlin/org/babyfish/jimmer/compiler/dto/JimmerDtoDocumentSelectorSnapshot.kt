@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.compiler.CompilerInputDocumentTypeSelector
+import site.addzero.lsi.compiler.CompilerInputDocumentTypeSelector
 
 internal fun CompilerInputDocumentTypeSelector.canonicalText(): String {
     return buildString {

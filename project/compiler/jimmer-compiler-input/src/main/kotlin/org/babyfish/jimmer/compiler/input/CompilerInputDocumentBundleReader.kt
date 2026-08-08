@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.input
 
+import site.addzero.lsi.jimmer.input.*
+
 import java.io.IOException
 import java.net.JarURLConnection
 import java.net.URL
@@ -10,10 +12,9 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.security.MessageDigest
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerSourceSet
 
 class CompilerInputDocumentBundleReader(
     private val classLoader: ClassLoader,
@@ -120,7 +121,7 @@ class CompilerInputDocumentBundleReader(
                     "expected $expectedChecksum, actual $actualChecksum"
             }
             CompilerInputDocument(
-                kind = CompilerInputDocumentKind.DTO,
+                kind = DTO_INPUT_DOCUMENT_KIND,
                 sourceSet = sourceSet,
                 origin = CompilerInputDocumentOrigin.Bundle(
                     bundleId = bundleId,

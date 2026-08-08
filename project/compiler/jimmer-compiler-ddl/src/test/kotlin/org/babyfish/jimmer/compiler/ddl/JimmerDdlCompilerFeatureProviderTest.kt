@@ -2,10 +2,10 @@ package org.babyfish.jimmer.compiler.ddl
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
-import org.babyfish.jimmer.compiler.JimmerCompilerCollectContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSessionSnapshot
+import site.addzero.lsi.compiler.CompilerCollectContext
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -35,7 +35,7 @@ class JimmerDdlCompilerFeatureProviderTest {
         )
 
         val collection = JimmerDdlCompilerFeatureProvider().collect(
-            JimmerCompilerCollectContext(
+            CompilerCollectContext(
                 session = CompilerSessionSnapshot("ddl-collect", emptyList()),
                 round = CompilerRound(
                     number = 0,

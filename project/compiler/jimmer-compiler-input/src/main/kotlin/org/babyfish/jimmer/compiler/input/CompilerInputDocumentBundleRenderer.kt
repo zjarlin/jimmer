@@ -1,10 +1,11 @@
 package org.babyfish.jimmer.compiler.input
 
+import site.addzero.lsi.jimmer.input.*
+
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
 import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.codegen.ArtifactKind
 import site.addzero.lsi.codegen.GeneratedArtifact
@@ -19,7 +20,7 @@ class CompilerInputDocumentBundleRenderer {
         val documents = snapshots
             .map { snapshot -> snapshot.document }
             .filter { document ->
-                document.kind == CompilerInputDocumentKind.DTO &&
+                document.kind == DTO_INPUT_DOCUMENT_KIND &&
                     document.origin is CompilerInputDocumentOrigin.Project
             }
             .sorted()

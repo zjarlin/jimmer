@@ -15,15 +15,16 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.JimmerCompilerCollectContext
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerCollectContext
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.ksp.KspLsiCompilerDriver
+import org.babyfish.jimmer.compiler.input.JimmerCompilerWiring
+import site.addzero.lsi.ksp.KspLsiCompilerDriver
 import site.addzero.lsi.core.LsiSymbolId
 
 class JimmerDtoKspLifecycleTest {
@@ -109,6 +110,7 @@ class JimmerDtoKspLifecycleTest {
                     JimmerImmutableCompilerFeatureProvider(),
                     CapturingDtoFeatureProvider(capture),
                 ),
+                wiring = JimmerCompilerWiring,
                 sessionId = "dto-real-ksp-lifecycle",
             )
             return object : SymbolProcessor {
@@ -125,24 +127,24 @@ class JimmerDtoKspLifecycleTest {
 
     private class CapturingDtoFeatureProvider(
         private val capture: LifecycleCapture,
-    ) : JimmerCompilerFeatureProvider {
+    ) : CompilerFeatureProvider {
         private val delegate = JimmerDtoCompilerFeatureProvider()
 
         override val descriptor = delegate.descriptor
 
-        override fun collect(context: JimmerCompilerCollectContext): JimmerCompilerFeatureCollection {
+        override fun collect(context: CompilerCollectContext): CompilerFeatureCollection {
             return delegate.collect(context)
         }
 
         override fun precompile(
-            context: JimmerCompilerPrecompileContext,
-        ): JimmerCompilerFeaturePrecompileResult {
+            context: CompilerPrecompileContext,
+        ): CompilerFeaturePrecompileResult {
             val result = delegate.precompile(context)
             capture.record(context, result)
             return result
         }
 
-        override fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult {
+        override fun render(context: CompilerRenderContext): CompilerFeatureRenderResult {
             return delegate.render(context)
         }
     }
@@ -176,8 +178,8 @@ class JimmerDtoKspLifecycleTest {
         private val rounds = linkedMapOf<Pair<Int, Boolean>, CapturedRound>()
 
         fun record(
-            context: JimmerCompilerPrecompileContext,
-            result: JimmerCompilerFeaturePrecompileResult,
+            context: CompilerPrecompileContext,
+            result: CompilerFeaturePrecompileResult,
         ) {
             val state = result.state as JimmerDtoCompilerFeatureState
             rounds[context.round.number to context.round.isFinal] = CapturedRound(

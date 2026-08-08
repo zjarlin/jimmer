@@ -1,18 +1,19 @@
 package org.babyfish.jimmer.compiler.dto
 
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerFailureTranslation
-import org.babyfish.jimmer.compiler.CompilerFailureTranslator
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.jimmer.input.*
+
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerFailureTranslation
+import site.addzero.lsi.compiler.CompilerFailureTranslator
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleReader
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
@@ -32,8 +33,8 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 
-class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider, CompilerFailureTranslator {
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+class JimmerDtoCompilerFeatureProvider : CompilerFeatureProvider, CompilerFailureTranslator {
+    override val descriptor = CompilerFeatureDescriptor(
         id = DTO_FEATURE_ID,
         dependsOn = setOf(IMMUTABLE_FEATURE_ID),
         aptAnnotationTypes = setOf(ENABLE_DTO_GENERATION_ANNOTATION),
@@ -51,13 +52,13 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider, Compiler
             "jimmer.source.includes",
         ),
         classpathTypeIds = setOf(JACKSON_3_OBJECT_MAPPER_TYPE_ID),
-        inputDocumentKinds = setOf(CompilerInputDocumentKind.DTO),
+        inputDocumentKinds = setOf(DTO_INPUT_DOCUMENT_KIND),
         requiresSourceQuiescence = true,
     )
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         val immutableState = requireNotNull(
             context.dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
         ) {
@@ -119,7 +120,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider, Compiler
                 .flatMapTo(sortedSetOf()) { input -> input.targetTypeIds }
                 .minus(unavailableTypeIds)
         }
-        return JimmerCompilerFeaturePrecompileResult(
+        return CompilerFeaturePrecompileResult(
             state = state,
             diagnostics = resolution.diagnostics(
                 reportUnresolved = unresolvedStatus == JimmerDtoCompilerFeatureStatus.INVALID,
@@ -135,7 +136,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider, Compiler
         )
     }
 
-    override fun render(context: JimmerCompilerRenderContext): JimmerCompilerFeatureRenderResult {
+    override fun render(context: CompilerRenderContext): CompilerFeatureRenderResult {
         if (context.round.isFinal) {
             return renderInputDocumentBundle(context)
         }
@@ -143,7 +144,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider, Compiler
             "DTO feature render requires the frozen DTO compiler state"
         }
         if (state.status != JimmerDtoCompilerFeatureStatus.RESOLVED) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val immutableState = requireNotNull(
             context.dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
@@ -172,7 +173,7 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider, Compiler
             ).process()
             CompilerPlatform.UNKNOWN -> emptyList()
         }
-        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+        return CompilerFeatureRenderResult(artifacts = artifacts)
     }
 
     override fun translateFailure(failure: Throwable): CompilerFailureTranslation? {
@@ -185,17 +186,17 @@ class JimmerDtoCompilerFeatureProvider : JimmerCompilerFeatureProvider, Compiler
     }
 
     private fun renderInputDocumentBundle(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         if (!context.round.inputDocumentDiscoveryComplete) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val bundleId = context.round.options[CompilerInputDocumentBundleRenderer.BUNDLE_ID_OPTION]
-            ?: return JimmerCompilerFeatureRenderResult()
+            ?: return CompilerFeatureRenderResult()
         require(bundleId.isNotBlank() && bundleId == bundleId.trim()) {
             "Compiler option '${CompilerInputDocumentBundleRenderer.BUNDLE_ID_OPTION}' must be a canonical bundle id"
         }
-        return JimmerCompilerFeatureRenderResult(
+        return CompilerFeatureRenderResult(
             artifacts = CompilerInputDocumentBundleRenderer().render(
                 bundleId = bundleId,
                 snapshots = context.round.inputDocumentSnapshots,
@@ -285,7 +286,7 @@ data class JimmerDtoCompilerFeatureState(
         append(':')
         append(immutableDependencyFingerprint)
     },
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
     init {
         require(defaultNullableInputModifier.isInputStrategy) {
             "DTO feature state requires an input strategy modifier"
@@ -371,7 +372,7 @@ private fun dtoStatus(
 }
 
 private fun inputDiscoveryDiagnostics(
-    round: org.babyfish.jimmer.compiler.CompilerRound,
+    round: site.addzero.lsi.compiler.CompilerRound,
 ): List<LsiDiagnostic> {
     if (round.inputDocumentDiscoveryComplete || !round.isFinal) {
         return emptyList()
@@ -476,7 +477,7 @@ private fun StringBuilder.appendDtoDocumentState(
     append(inputSnapshot.document.fingerprint)
     inputSnapshot.references.forEach { reference ->
         append(':')
-        append(reference.kind.name)
+        append(reference.kind.id)
         appendLengthPrefixed(reference.typeSelector.canonicalText())
         appendLengthPrefixed(reference.ownerTargetSelector?.canonicalText().orEmpty())
         append(':')

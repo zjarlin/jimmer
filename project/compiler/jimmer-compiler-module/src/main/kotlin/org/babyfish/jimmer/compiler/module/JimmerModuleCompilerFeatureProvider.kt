@@ -1,23 +1,23 @@
 package org.babyfish.jimmer.compiler.module
 
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerSessionSnapshot
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
-class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
+class JimmerModuleCompilerFeatureProvider : CompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+    override val descriptor = CompilerFeatureDescriptor(
         id = MODULE_FEATURE_ID,
         dependsOn = setOf(IMMUTABLE_FEATURE_ID),
         supportedOptions = setOf(
@@ -37,8 +37,8 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     )
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         val immutableState = requireNotNull(
             context.dependencyStates[IMMUTABLE_FEATURE_ID] as? JimmerImmutableCompilerFeatureState
         ) {
@@ -46,7 +46,7 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
         }
         when (immutableState.status) {
             CompilerResolutionStatus.DEFERRED -> {
-                return JimmerCompilerFeaturePrecompileResult(
+                return CompilerFeaturePrecompileResult(
                     state = JimmerModuleCompilerFeatureState.blocked(
                         status = JimmerModuleCompilerFeatureStatus.DEPENDENCY_DEFERRED,
                         dependencyFingerprint = immutableState.fingerprint,
@@ -54,7 +54,7 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 )
             }
             CompilerResolutionStatus.INVALID -> {
-                return JimmerCompilerFeaturePrecompileResult(
+                return CompilerFeaturePrecompileResult(
                     state = JimmerModuleCompilerFeatureState.blocked(
                         status = JimmerModuleCompilerFeatureStatus.DEPENDENCY_INVALID,
                         dependencyFingerprint = immutableState.fingerprint,
@@ -66,7 +66,7 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
 
         val platform = context.round.platform
         if (platform == CompilerPlatform.UNKNOWN) {
-            return JimmerCompilerFeaturePrecompileResult(
+            return CompilerFeaturePrecompileResult(
                 state = JimmerModuleCompilerFeatureState.blocked(
                     status = JimmerModuleCompilerFeatureStatus.UNSUPPORTED_PLATFORM,
                     dependencyFingerprint = immutableState.fingerprint,
@@ -92,7 +92,7 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
             isFinal = context.round.isFinal,
             sourcePlanFingerprint = sourcePlanFingerprint,
         )
-        return JimmerCompilerFeaturePrecompileResult(
+        return CompilerFeaturePrecompileResult(
             state = JimmerModuleCompilerFeatureState.ready(
                 schema = schema,
                 sourcePlanFingerprint = sourcePlanFingerprint,
@@ -104,28 +104,28 @@ class JimmerModuleCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         val state = context.state as JimmerModuleCompilerFeatureState
-        val schema = state.schema ?: return JimmerCompilerFeatureRenderResult()
+        val schema = state.schema ?: return CompilerFeatureRenderResult()
         if (state.status != JimmerModuleCompilerFeatureStatus.READY) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         if (context.round.isFinal) {
-            return JimmerCompilerFeatureRenderResult(
+            return CompilerFeatureRenderResult(
                 artifacts = JimmerModuleResourceRenderer().render(schema, context.round.workspace)
             )
         }
         if (!state.sourceReady || context.session.hasRenderedModuleSources()) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val renderer: LsiPoetRenderer = when (context.round.platform) {
             CompilerPlatform.APT -> LsiJavaPoetRenderer()
             CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
-            CompilerPlatform.UNKNOWN -> return JimmerCompilerFeatureRenderResult()
+            CompilerPlatform.UNKNOWN -> return CompilerFeatureRenderResult()
         }
         val artifacts = schema.toLsiPoetArtifacts(context.round.workspace).map(renderer::render)
-        return JimmerCompilerFeatureRenderResult(artifacts = artifacts)
+        return CompilerFeatureRenderResult(artifacts = artifacts)
     }
 }
 
@@ -154,7 +154,7 @@ internal data class JimmerModuleCompilerFeatureState(
         append(':')
         append(dependencyFingerprint)
     },
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
 
     val sourceReady: Boolean
         get() = status == JimmerModuleCompilerFeatureStatus.READY && stableNonFinalRoundCount >= 2

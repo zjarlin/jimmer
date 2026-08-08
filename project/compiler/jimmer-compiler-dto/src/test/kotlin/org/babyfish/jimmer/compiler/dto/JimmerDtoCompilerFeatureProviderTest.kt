@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.jimmer.input.*
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -7,18 +9,17 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerRoundResult
-import org.babyfish.jimmer.compiler.CompilerSession
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerInputDocumentReferenceKind
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerRoundResult
+import site.addzero.lsi.compiler.CompilerSession
+import site.addzero.lsi.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JacksonFamily
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerFeatureProviders
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentBundleRenderer
 import org.babyfish.jimmer.compiler.input.CompilerInputDocumentReferenceFreezer
@@ -83,13 +84,13 @@ import site.addzero.lsi.codegen.ArtifactKind
 class JimmerDtoCompilerFeatureProviderTest {
     @Test
     fun `registered dto feature consumes immutable state and dto documents`() {
-        val providers = JimmerCompilerFeatureProviders.load()
+        val providers = CompilerFeatureProviders.load()
         val featureIds = providers.map { provider -> provider.descriptor.id }
         val provider = providers.single { candidate -> candidate.descriptor.id == DTO_FEATURE_ID }
 
         assertEquals(setOf(IMMUTABLE_FEATURE_ID), provider.descriptor.dependsOn)
         assertEquals(setOf(JACKSON_3_OBJECT_MAPPER_TYPE_ID), provider.descriptor.classpathTypeIds)
-        assertEquals(setOf(CompilerInputDocumentKind.DTO), provider.descriptor.inputDocumentKinds)
+        assertEquals(setOf(DTO_INPUT_DOCUMENT_KIND), provider.descriptor.inputDocumentKinds)
         assertTrue(provider.descriptor.requiresSourceQuiescence)
         assertTrue(featureIds.indexOf(IMMUTABLE_FEATURE_ID) < featureIds.indexOf(DTO_FEATURE_ID))
     }
@@ -1220,7 +1221,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             ),
         )
         val configReference = REFERENCE_FREEZER.freeze(document).references.single { reference ->
-            reference.kind == CompilerInputDocumentReferenceKind.CONFIG_IMPLEMENTATION
+            reference.kind == DTO_CONFIG_IMPLEMENTATION_REFERENCE_KIND
         }
         assertEquals(JimmerDtoCompilerFeatureStatus.INVALID, final.dtoState().status)
         assertEquals("jimmer.dto.unresolved", final.diagnostics.single().code)
@@ -1360,7 +1361,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                     .map { reference -> reference.typeSelector.fallbackTypeId },
             )
 
-            val apt = session("dto-missing-${fixture.kind.name.lowercase()}-apt").execute(
+            val apt = session("dto-missing-${fixture.kind.id}-apt").execute(
                 round(
                     number = 0,
                     workspace = fixture.workspace,
@@ -1377,7 +1378,7 @@ class JimmerDtoCompilerFeatureProviderTest {
             assertEquals(setOf(fixture.missingTypeId), apt.unresolvedSymbols)
             assertTrue(apt.diagnostics.isEmpty())
 
-            val ksp = session("dto-missing-${fixture.kind.name.lowercase()}-ksp").execute(
+            val ksp = session("dto-missing-${fixture.kind.id}-ksp").execute(
                 round(
                     number = 0,
                     workspace = fixture.workspace,
@@ -1398,7 +1399,7 @@ class JimmerDtoCompilerFeatureProviderTest {
 
             listOf(CompilerPlatform.APT, CompilerPlatform.KSP).forEach { platform ->
                 val final = session(
-                    "dto-missing-${fixture.kind.name.lowercase()}-${platform.name.lowercase()}-final"
+                    "dto-missing-${fixture.kind.id}-${platform.name.lowercase()}-final"
                 ).execute(
                     round(
                         number = 0,
@@ -2130,7 +2131,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         val bookWorkspace = immutableWorkspace(LsiLanguage.UNKNOWN)
         return listOf(
             MissingReferenceFixture(
-                kind = CompilerInputDocumentReferenceKind.TARGET_TYPE,
+                kind = DTO_TARGET_TYPE_REFERENCE_KIND,
                 missingTypeId = MISSING_BOOK_ID,
                 document = document(
                     relativePath = "shared/Shared.dto",
@@ -2139,7 +2140,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 workspace = LsiWorkspace.EMPTY,
             ),
             MissingReferenceFixture(
-                kind = CompilerInputDocumentReferenceKind.SUBJECT_TYPE,
+                kind = DTO_SUBJECT_TYPE_REFERENCE_KIND,
                 missingTypeId = MISSING_BOOK_ID,
                 document = document(
                     relativePath = "demo/MissingBook.dto",
@@ -2148,7 +2149,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 workspace = LsiWorkspace.EMPTY,
             ),
             MissingReferenceFixture(
-                kind = CompilerInputDocumentReferenceKind.MODEL_TYPE,
+                kind = DTO_MODEL_TYPE_REFERENCE_KIND,
                 missingTypeId = MISSING_MODEL_ID,
                 document = bookDocument(
                     """
@@ -2160,7 +2161,7 @@ class JimmerDtoCompilerFeatureProviderTest {
                 workspace = bookWorkspace,
             ),
             MissingReferenceFixture(
-                kind = CompilerInputDocumentReferenceKind.TYPE_USAGE,
+                kind = DTO_TYPE_USAGE_REFERENCE_KIND,
                 missingTypeId = MISSING_PAYLOAD_ID,
                 document = bookDocument(
                     """
@@ -2179,7 +2180,7 @@ class JimmerDtoCompilerFeatureProviderTest {
         content: String,
     ): CompilerInputDocument {
         return CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
+            kind = DTO_INPUT_DOCUMENT_KIND,
             sourceSet = CompilerSourceSet.MAIN,
             origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = relativePath,

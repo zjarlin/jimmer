@@ -3,10 +3,10 @@ package org.babyfish.jimmer.compiler.exportdoc
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerSession
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSession
+import site.addzero.lsi.compiler.CompilerFeatureProviders
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
@@ -23,7 +23,7 @@ class JimmerExportDocCompilerFeatureProviderTest {
 
     @Test
     fun `registered export doc feature is independent`() {
-        val provider = JimmerCompilerFeatureProviders.load()
+        val provider = CompilerFeatureProviders.load()
             .single { candidate -> candidate.descriptor.id == EXPORT_DOC_FEATURE_ID }
 
         assertTrue(provider.descriptor.dependsOn.isEmpty())

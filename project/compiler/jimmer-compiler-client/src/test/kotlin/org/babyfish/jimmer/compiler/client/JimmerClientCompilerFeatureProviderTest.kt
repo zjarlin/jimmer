@@ -4,11 +4,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerSession
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSession
+import site.addzero.lsi.compiler.CompilerFeatureProviders
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureState
 import org.babyfish.jimmer.compiler.error.ErrorCompilerFeatureStatus
@@ -39,7 +39,7 @@ class JimmerClientCompilerFeatureProviderTest {
 
     @Test
     fun `registered client feature declares dto immutable and error dependencies`() {
-        val provider = JimmerCompilerFeatureProviders.load()
+        val provider = CompilerFeatureProviders.load()
             .single { candidate -> candidate.descriptor.id == "client" }
 
         assertEquals(setOf("dto", "error", "immutable"), provider.descriptor.dependsOn)
@@ -378,7 +378,7 @@ class JimmerClientCompilerFeatureProviderTest {
         )
     }
 
-    private fun org.babyfish.jimmer.compiler.CompilerRoundResult.clientResult() =
+    private fun site.addzero.lsi.compiler.CompilerRoundResult.clientResult() =
         requireNotNull(featureResults["client"])
 
     private fun round(

@@ -1,15 +1,16 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.jimmer.input.*
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerSession
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSession
+import site.addzero.lsi.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -280,7 +281,7 @@ class JimmerDtoSelectorStagingTest {
 
     private fun document(relativePath: String, content: String): CompilerInputDocument {
         return CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
+            kind = DTO_INPUT_DOCUMENT_KIND,
             sourceSet = CompilerSourceSet.MAIN,
             origin = CompilerInputDocumentOrigin.Project("selector-test", "src/main/dto"),
             relativePath = relativePath,

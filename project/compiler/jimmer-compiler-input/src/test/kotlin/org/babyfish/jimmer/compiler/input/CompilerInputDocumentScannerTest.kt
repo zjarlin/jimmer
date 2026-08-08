@@ -1,14 +1,17 @@
 package org.babyfish.jimmer.compiler.input
 
+import site.addzero.lsi.jimmer.input.*
+
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentKind
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerSourceSet
 
 class CompilerInputDocumentScannerTest {
 
@@ -193,6 +196,21 @@ class CompilerInputDocumentScannerTest {
         assertTrue(snapshot.referencedTypeIds.contains(site.addzero.lsi.core.LsiSymbolId.type("demo.Broken")))
     }
 
+    @Test
+    fun `rejects non dto paths at the Jimmer input boundary`() {
+        val document = CompilerInputDocument(
+            kind = DTO_INPUT_DOCUMENT_KIND,
+            sourceSet = CompilerSourceSet.MAIN,
+            origin = CompilerInputDocumentOrigin.Project("catalog", "src/main/dto"),
+            relativePath = "Book.txt",
+            content = "export Book",
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            CompilerInputDocumentReferenceFreezer().freeze(document)
+        }
+    }
+
     private fun project(): File = createTempDirectory(prefix = "compiler-input-documents").toFile()
 
     private fun File.write(path: String, content: String): File {
@@ -203,7 +221,7 @@ class CompilerInputDocumentScannerTest {
     }
 
     private fun scanner(
-        requestedKinds: Set<CompilerInputDocumentKind> = setOf(CompilerInputDocumentKind.DTO),
+        requestedKinds: Set<CompilerInputDocumentKind> = setOf(DTO_INPUT_DOCUMENT_KIND),
         options: Map<String, String> = emptyMap(),
         classLoader: ClassLoader = EMPTY_CLASS_LOADER,
     ): CompilerInputDocumentScanner = CompilerInputDocumentScanner(

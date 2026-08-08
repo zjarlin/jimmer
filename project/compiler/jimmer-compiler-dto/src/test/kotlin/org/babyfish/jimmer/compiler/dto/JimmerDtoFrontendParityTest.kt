@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.jimmer.input.*
+
 import site.addzero.lsi.jimmer.toJimmerLsiFrontendOptions
 
 import com.google.devtools.ksp.impl.KotlinSymbolProcessing
@@ -26,11 +28,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerSourceSet
 import org.babyfish.jimmer.compiler.JimmerCompilerSourceFilter
 import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -239,7 +240,7 @@ class JimmerDtoFrontendParityTest {
     ): CompiledFixture {
         val immutableSchema = workspace.toImmutableSchema()
         val document = CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
+            kind = DTO_INPUT_DOCUMENT_KIND,
             sourceSet = CompilerSourceSet.MAIN,
             origin = CompilerInputDocumentOrigin.Project("demo-project", "src/main/dto"),
             relativePath = "demo/Book.dto",

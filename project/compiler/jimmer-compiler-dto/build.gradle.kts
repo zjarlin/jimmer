@@ -20,7 +20,6 @@ dependencies {
     implementation(libs.jackson2.databind)
 
     testImplementation(projects.jimmerCompiler)
-    testImplementation(projects.jimmerCompilerRuntime)
     testImplementation(testFixtures(projects.jimmerCompilerImmutable))
     testImplementation(projects.lsiApt)
     testImplementation(projects.lsiKsp)

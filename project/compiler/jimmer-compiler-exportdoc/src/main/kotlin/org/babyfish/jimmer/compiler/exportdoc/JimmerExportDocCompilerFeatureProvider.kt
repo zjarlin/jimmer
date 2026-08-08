@@ -1,12 +1,12 @@
 package org.babyfish.jimmer.compiler.exportdoc
 
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureDescriptor
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProvider
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureRenderResult
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureState
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerFeatureDescriptor
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerFeatureProvider
+import site.addzero.lsi.compiler.CompilerFeatureRenderResult
+import site.addzero.lsi.compiler.CompilerFeatureState
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import site.addzero.lsi.core.LsiLocation
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
@@ -16,9 +16,9 @@ import site.addzero.lsi.jimmer.exportdoc.ExportDocValidationException
 import site.addzero.lsi.jimmer.exportdoc.fingerprint
 import site.addzero.lsi.jimmer.exportdoc.toExportDocSchema
 
-class JimmerExportDocCompilerFeatureProvider : JimmerCompilerFeatureProvider {
+class JimmerExportDocCompilerFeatureProvider : CompilerFeatureProvider {
 
-    override val descriptor = JimmerCompilerFeatureDescriptor(
+    override val descriptor = CompilerFeatureDescriptor(
         id = EXPORT_DOC_FEATURE_ID,
         aptAnnotationTypes = setOf("org.babyfish.jimmer.client.ExportDoc"),
         supportedOptions = setOf(
@@ -29,11 +29,11 @@ class JimmerExportDocCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     )
 
     override fun precompile(
-        context: JimmerCompilerPrecompileContext,
-    ): JimmerCompilerFeaturePrecompileResult {
+        context: CompilerPrecompileContext,
+    ): CompilerFeaturePrecompileResult {
         return try {
             val schema = context.round.workspace.toExportDocSchema()
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = JimmerExportDocCompilerFeatureState.resolved(schema),
                 processedSymbols = schema.exportedTypeIds
                     .filterTo(sortedSetOf(), context.round.currentWorkspace::contains),
@@ -44,7 +44,7 @@ class JimmerExportDocCompilerFeatureProvider : JimmerCompilerFeatureProvider {
                 location = exception.location,
                 message = exception.message ?: "Invalid @ExportDoc configuration",
             )
-            JimmerCompilerFeaturePrecompileResult(
+            CompilerFeaturePrecompileResult(
                 state = JimmerExportDocCompilerFeatureState.invalid(failure),
                 diagnostics = listOf(failure.toDiagnostic()),
             )
@@ -52,16 +52,16 @@ class JimmerExportDocCompilerFeatureProvider : JimmerCompilerFeatureProvider {
     }
 
     override fun render(
-        context: JimmerCompilerRenderContext,
-    ): JimmerCompilerFeatureRenderResult {
+        context: CompilerRenderContext,
+    ): CompilerFeatureRenderResult {
         if (!context.round.isFinal) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
         val state = context.state as JimmerExportDocCompilerFeatureState
         if (state.status != JimmerExportDocCompilerFeatureStatus.RESOLVED) {
-            return JimmerCompilerFeatureRenderResult()
+            return CompilerFeatureRenderResult()
         }
-        return JimmerCompilerFeatureRenderResult(
+        return CompilerFeatureRenderResult(
             artifacts = listOfNotNull(
                 ExportDocResourceRenderer().render(state.schema, context.round.workspace)
             )
@@ -119,7 +119,7 @@ internal data class JimmerExportDocCompilerFeatureState(
             append(failure.message)
         }
     },
-) : JimmerCompilerFeatureState {
+) : CompilerFeatureState {
 
     init {
         require(status != JimmerExportDocCompilerFeatureStatus.RESOLVED || failures.isEmpty()) {

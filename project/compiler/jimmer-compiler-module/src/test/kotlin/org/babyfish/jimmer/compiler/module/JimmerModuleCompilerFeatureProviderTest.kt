@@ -7,16 +7,16 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerResolutionStatus
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerRoundResult
-import org.babyfish.jimmer.compiler.CompilerSession
-import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureProviders
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
-import org.babyfish.jimmer.compiler.JimmerCompilerRenderContext
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerResolutionStatus
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerRoundResult
+import site.addzero.lsi.compiler.CompilerSession
+import site.addzero.lsi.compiler.CompilerSessionSnapshot
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeatureProviders
+import site.addzero.lsi.compiler.CompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerRenderContext
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureProvider
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableCompilerFeatureState
 import org.babyfish.jimmer.compiler.immutable.JimmerImmutableDraftCodegenOptions
@@ -46,7 +46,7 @@ class JimmerModuleCompilerFeatureProviderTest {
 
     @Test
     fun `module feature is registered after immutable dependency`() {
-        val providers = JimmerCompilerFeatureProviders.load()
+        val providers = CompilerFeatureProviders.load()
         val featureIds = providers.map { provider -> provider.descriptor.id }
         val module = providers.single { provider -> provider.descriptor.id == MODULE_FEATURE_ID }
 
@@ -373,8 +373,8 @@ class JimmerModuleCompilerFeatureProviderTest {
         platform: CompilerPlatform = CompilerPlatform.APT,
         options: Map<String, String> = emptyMap(),
         inputResources: Map<String, String> = emptyMap(),
-    ): JimmerCompilerPrecompileContext {
-        return JimmerCompilerPrecompileContext(
+    ): CompilerPrecompileContext {
+        return CompilerPrecompileContext(
             session = CompilerSessionSnapshot("module-feature-direct", emptyList()),
             round = round(
                 number = 0,
@@ -384,7 +384,7 @@ class JimmerModuleCompilerFeatureProviderTest {
                 options = options,
                 inputResources = inputResources,
             ),
-            collection = JimmerCompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(),
             previousState = previousState,
             dependencyStates = mapOf(IMMUTABLE_FEATURE_ID to dependencyState),
         )
@@ -394,10 +394,10 @@ class JimmerModuleCompilerFeatureProviderTest {
         state: JimmerModuleCompilerFeatureState,
         dependencyState: JimmerImmutableCompilerFeatureState,
     ) = PROVIDER.render(
-        JimmerCompilerRenderContext(
+        CompilerRenderContext(
             session = CompilerSessionSnapshot("module-feature-render", emptyList()),
             round = round(0, LsiWorkspace.EMPTY, LsiWorkspace.EMPTY, CompilerPlatform.APT),
-            collection = JimmerCompilerFeatureCollection(),
+            collection = CompilerFeatureCollection(),
             state = state,
             dependencyStates = mapOf(IMMUTABLE_FEATURE_ID to dependencyState),
         )

@@ -1,23 +1,23 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.jimmer.input.*
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.babyfish.jimmer.compiler.CompilerInputDocument
-import org.babyfish.jimmer.compiler.CompilerInputDocumentKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentOrigin
-import org.babyfish.jimmer.compiler.CompilerInputDocumentReferenceKind
-import org.babyfish.jimmer.compiler.CompilerInputDocumentSnapshot
-import org.babyfish.jimmer.compiler.CompilerPlatform
-import org.babyfish.jimmer.compiler.CompilerRound
-import org.babyfish.jimmer.compiler.CompilerSourceSet
-import org.babyfish.jimmer.compiler.CompilerSessionSnapshot
-import org.babyfish.jimmer.compiler.JimmerCompilerFeatureCollection
-import org.babyfish.jimmer.compiler.JimmerCompilerFeaturePrecompileResult
-import org.babyfish.jimmer.compiler.JimmerCompilerPrecompileContext
+import site.addzero.lsi.compiler.CompilerInputDocument
+import site.addzero.lsi.compiler.CompilerInputDocumentOrigin
+import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
+import site.addzero.lsi.compiler.CompilerPlatform
+import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSourceSet
+import site.addzero.lsi.compiler.CompilerSessionSnapshot
+import site.addzero.lsi.compiler.CompilerFeatureCollection
+import site.addzero.lsi.compiler.CompilerFeaturePrecompileResult
+import site.addzero.lsi.compiler.CompilerPrecompileContext
 import site.addzero.lsi.jimmer.AssociationKind
 import site.addzero.lsi.jimmer.AssociationStorageKind
 import site.addzero.lsi.jimmer.FormulaKind
@@ -118,7 +118,7 @@ class JimmerDtoReusableIntegrationTest {
         )
         val snapshot = freeze(input)
         val reusableReference = snapshot.references.single { reference ->
-            reference.kind == CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE
+            reference.kind == DTO_REUSABLE_TYPE_REFERENCE_KIND
         }
         val missingTypeId = reusableReference.typeSelector.fallbackTypeId
         val workspace = workspace()
@@ -264,7 +264,7 @@ class JimmerDtoReusableIntegrationTest {
         )
         val snapshot = freeze(input)
         val reusableReferences = snapshot.references.filter { reference ->
-            reference.kind == CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE
+            reference.kind == DTO_REUSABLE_TYPE_REFERENCE_KIND
         }
         val workspace = workspace(
             externalDeclarations = listOf(
@@ -314,7 +314,7 @@ class JimmerDtoReusableIntegrationTest {
             """.trimIndent(),
         )
         val reusableLocation = freeze(input).references.single { reference ->
-            reference.kind == CompilerInputDocumentReferenceKind.REUSABLE_DTO_TYPE
+            reference.kind == DTO_REUSABLE_TYPE_REFERENCE_KIND
         }.location
 
         val result = precompileDocuments(
@@ -348,7 +348,7 @@ class JimmerDtoReusableIntegrationTest {
         workspace: LsiWorkspace,
         platform: CompilerPlatform,
         isFinal: Boolean = false,
-    ): JimmerCompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult {
         return precompileSnapshots(
             snapshots = documents.map(::freeze),
             workspace = workspace,
@@ -362,7 +362,7 @@ class JimmerDtoReusableIntegrationTest {
         workspace: LsiWorkspace,
         platform: CompilerPlatform,
         isFinal: Boolean = false,
-    ): JimmerCompilerFeaturePrecompileResult {
+    ): CompilerFeaturePrecompileResult {
         val currentTypeIds = if (isFinal) {
             emptySet()
         } else {
@@ -389,10 +389,10 @@ class JimmerDtoReusableIntegrationTest {
             currentTypeIds = currentTypeIds,
         )
         return JimmerDtoCompilerFeatureProvider().precompile(
-            JimmerCompilerPrecompileContext(
+            CompilerPrecompileContext(
                 session = CompilerSessionSnapshot("dto-reusable-integration", emptyList()),
                 round = round,
-                collection = JimmerCompilerFeatureCollection(),
+                collection = CompilerFeatureCollection(),
                 previousState = null,
                 dependencyStates = mapOf("immutable" to immutableState),
             )
@@ -512,7 +512,7 @@ class JimmerDtoReusableIntegrationTest {
         content: String,
     ): CompilerInputDocument {
         return CompilerInputDocument(
-            kind = CompilerInputDocumentKind.DTO,
+            kind = DTO_INPUT_DOCUMENT_KIND,
             sourceSet = CompilerSourceSet.MAIN,
             origin = CompilerInputDocumentOrigin.Project("dto-reusable-integration", "src/main/dto"),
             relativePath = relativePath,
@@ -524,7 +524,7 @@ class JimmerDtoReusableIntegrationTest {
         return REFERENCE_FREEZER.freeze(document)
     }
 
-    private fun JimmerCompilerFeaturePrecompileResult.dtoState(): JimmerDtoCompilerFeatureState {
+    private fun CompilerFeaturePrecompileResult.dtoState(): JimmerDtoCompilerFeatureState {
         return state as JimmerDtoCompilerFeatureState
     }
 

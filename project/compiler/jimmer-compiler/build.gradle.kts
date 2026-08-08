@@ -8,7 +8,9 @@ plugins {
 }
 
 dependencies {
-    implementation(projects.jimmerCompilerRuntime)
+    implementation(projects.jimmerCompilerInput)
+    api(projects.lsiApt)
+    api(projects.lsiKsp)
     runtimeOnly(projects.jimmerCompilerClient)
     runtimeOnly(projects.jimmerCompilerDdl)
     runtimeOnly(projects.jimmerCompilerDto)
@@ -27,6 +29,7 @@ dependencies {
     testImplementation(projects.jimmerCore)
     testImplementation(projects.jimmerSql)
     testImplementation(projects.jimmerSqlKotlin)
+    testImplementation(projects.lsiJimmer)
     testImplementation(libs.hibernate.validation)
     testImplementation(libs.jackson3.databind)
     testImplementation(libs.ksp.symbolProcessing.aa.embeddable)
@@ -83,6 +86,9 @@ val verifyCompilerEntrypoints by tasks.registering(VerifyCompilerEntrypoints::cl
 
 tasks.named("check") {
     dependsOn(
+        ":lsi-core:check",
+        ":lsi-apt:check",
+        ":lsi-ksp:check",
         ":jimmer-compiler-client:check",
         ":jimmer-compiler-ddl:check",
         ":jimmer-compiler-dto:check",
@@ -91,7 +97,6 @@ tasks.named("check") {
         ":jimmer-compiler-immutable:check",
         ":jimmer-compiler-input:check",
         ":jimmer-compiler-module:check",
-        ":jimmer-compiler-runtime:check",
         ":jimmer-compiler-transactional:check",
         ":jimmer-compiler-tuple:check",
     )
