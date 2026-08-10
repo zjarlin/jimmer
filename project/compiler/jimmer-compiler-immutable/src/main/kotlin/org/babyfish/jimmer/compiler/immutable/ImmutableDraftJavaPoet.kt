@@ -18,6 +18,7 @@ import site.addzero.lsi.type.LsiTypeParameter
 import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.type.LsiUnresolvedType
+import site.addzero.lsi.type.copy
 import site.addzero.lsi.anno.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder

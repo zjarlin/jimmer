@@ -57,6 +57,7 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiTypeParameter
 import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
+import site.addzero.lsi.type.copy as copyType
 import site.addzero.lsi.model.LsiWorkspace
 
 class ImmutableWorkspaceExtensionsTest {
@@ -3110,7 +3111,7 @@ class ImmutableWorkspaceExtensionsTest {
             declarationId = LsiSymbolId.type("java.util.List"),
             arguments = listOf(LsiTypeArgument.invariant(boxedInt)),
         )
-        val kotlinMutableList = javaList.copy(
+        val kotlinMutableList = javaList.copyType(
             declarationId = LsiSymbolId.type("kotlin.collections.MutableList"),
         )
         val listSchema = compile(javaList, kotlinMutableList)

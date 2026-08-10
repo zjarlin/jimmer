@@ -6,6 +6,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.copy
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiAccessor
 import site.addzero.lsi.anno.LsiAnnotation

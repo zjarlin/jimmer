@@ -41,6 +41,7 @@ import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.type.LsiUnresolvedType
+import site.addzero.lsi.type.copy
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.anno.LsiSourceAnnotationArgument
 import site.addzero.lsi.codegen.LsiSourceArtifact

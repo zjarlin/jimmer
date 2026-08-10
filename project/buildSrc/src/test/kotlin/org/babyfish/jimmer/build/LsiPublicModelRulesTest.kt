@@ -15,11 +15,16 @@ class LsiPublicModelRulesTest {
                     """
                     package site.addzero.lsi.type
                     sealed interface LsiType
+                    interface LsiDeclaredType : LsiType
                     internal data class FrozenLsiType(val name: String) : LsiType
+                    internal data class FrozenLsiDeclaredType(val name: String) : LsiDeclaredType
                     """.trimIndent(),
                 ),
             ),
-            requiredInterfaces = setOf("site.addzero.lsi.type.LsiType"),
+            requiredInterfaces = setOf(
+                "site.addzero.lsi.type.LsiType",
+                "site.addzero.lsi.type.LsiDeclaredType",
+            ),
             forbiddenLegacyNames = LEGACY_NAMES,
         )
 
@@ -36,6 +41,7 @@ class LsiPublicModelRulesTest {
                     package site.addzero.lsi.model
                     data class LsiType(val name: String)
                     typealias LsiClass = LsiType
+                    data class LsiOverride(val target: String)
                     interface LsiFunction
                     """.trimIndent(),
                 ),
@@ -43,6 +49,7 @@ class LsiPublicModelRulesTest {
             requiredInterfaces = setOf(
                 "site.addzero.lsi.type.LsiType",
                 "site.addzero.lsi.clazz.LsiClass",
+                "site.addzero.lsi.model.LsiOverride",
             ),
             forbiddenLegacyNames = LEGACY_NAMES,
         )
@@ -50,10 +57,12 @@ class LsiPublicModelRulesTest {
         assertEquals(
             listOf(
                 "missing required LSI interface site.addzero.lsi.clazz.LsiClass",
+                "missing required LSI interface site.addzero.lsi.model.LsiOverride",
                 "missing required LSI interface site.addzero.lsi.type.LsiType",
                 "model/Legacy.kt:2: structural LSI declaration LsiType must be an interface",
                 "model/Legacy.kt:3: structural LSI declaration LsiClass must be an interface",
-                "model/Legacy.kt:4: forbidden legacy LSI declaration LsiFunction",
+                "model/Legacy.kt:4: structural LSI declaration LsiOverride must be an interface",
+                "model/Legacy.kt:5: forbidden legacy LSI declaration LsiFunction",
             ),
             violations,
         )

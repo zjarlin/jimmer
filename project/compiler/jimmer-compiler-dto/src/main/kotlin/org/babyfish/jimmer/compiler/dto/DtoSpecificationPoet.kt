@@ -41,6 +41,7 @@ import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.type.LsiUnresolvedType
+import site.addzero.lsi.type.copy
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
