@@ -9,24 +9,24 @@ import site.addzero.lsi.jimmer.dto.mappingsByConstant
 import site.addzero.lsi.jimmer.dto.mappingsByValue
 import site.addzero.lsi.jimmer.dto.scalarType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 把冻结的枚举映射降级为枚举值到 DTO 标量值的转换 lambda。 */
 internal fun DtoBaseProp.toEnumToScalarLambdaPoetCodeBlock(
     targetLanguage: LsiLanguage,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     val enumType = requireNotNull(enumType) {
         "DTO enum conversion requires an enum mapping: ${id.value}"
     }
     val enumTypeRef = enumTypeRef(graph, immutableSchema)
     return when (targetLanguage.requireDtoEnumTargetLanguage()) {
-        LsiLanguage.JAVA -> LsiPoetCodeBlock.build {
+        LsiLanguage.JAVA -> LsiCodeBlock.build {
             text("arg -> {")
             indent {
                 line()
@@ -57,7 +57,7 @@ internal fun DtoBaseProp.toEnumToScalarLambdaPoetCodeBlock(
             }
             text("}")
         }
-        LsiLanguage.KOTLIN -> LsiPoetCodeBlock.build {
+        LsiLanguage.KOTLIN -> LsiCodeBlock.build {
             text("{")
             indent {
                 line()
@@ -88,9 +88,9 @@ internal fun DtoBaseProp.toScalarToEnumLambdaPoetCodeBlock(
     targetLanguage: LsiLanguage,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     val language = targetLanguage.requireDtoEnumTargetLanguage()
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         text(if (language == LsiLanguage.JAVA) "arg -> {" else "{")
         indent {
             line()
@@ -113,7 +113,7 @@ internal fun DtoBaseProp.toScalarToEnumPoetCodeBlock(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     variableName: String,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     require(variableName.isNotBlank()) { "DTO enum conversion variable name cannot be blank" }
     val language = targetLanguage.requireDtoEnumTargetLanguage()
     val enumType = requireNotNull(enumType) {
@@ -121,7 +121,7 @@ internal fun DtoBaseProp.toScalarToEnumPoetCodeBlock(
     }
     val enumTypeRef = enumTypeRef(graph, immutableSchema)
     val scalarType = enumType.scalarType(language)
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         beginControlFlow {
             text(if (language == LsiLanguage.JAVA) "switch ((" else "when (")
             if (language == LsiLanguage.JAVA) {
@@ -169,15 +169,15 @@ internal fun DtoBaseProp.toScalarToEnumPoetCodeBlock(
 
 /** 为独立枚举转换代码块解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoEnumPoetTypeNames(
-    codeBlock: LsiPoetCodeBlock,
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
+    codeBlock: LsiCodeBlock,
+): List<LsiTypeName> {
+    return toLsiTypeNames(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES,
     )
 }
 
-private fun LsiPoetCodeBuilder.javaIllegalEnumValue(
+private fun LsiCodeBuilder.javaIllegalEnumValue(
     variableName: String,
     enumQualifiedName: String,
 ) {
@@ -196,7 +196,7 @@ private fun LsiPoetCodeBuilder.javaIllegalEnumValue(
     }
 }
 
-private fun LsiPoetCodeBuilder.kotlinIllegalEnumValue(
+private fun LsiCodeBuilder.kotlinIllegalEnumValue(
     variableName: String,
     enumQualifiedName: String,
 ) {

@@ -42,13 +42,12 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentLayout
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -99,8 +98,8 @@ class DtoInputBuilderPoetTest {
             ),
             javaType.members.map { member ->
                 when (member) {
-                    is LsiPoetField -> member.name
-                    is LsiPoetFunction -> member.name
+                    is LsiField -> member.name
+                    is LsiFunction -> member.name
                     else -> error("Unexpected Java InputBuilder member: $member")
                 }
             },
@@ -121,14 +120,14 @@ class DtoInputBuilderPoetTest {
             ),
             kotlinType.members.map { member ->
                 when (member) {
-                    is LsiPoetProperty -> member.name
-                    is LsiPoetFunction -> member.name
+                    is LsiProperty -> member.name
+                    is LsiFunction -> member.name
                     else -> error("Unexpected Kotlin InputBuilder member: $member")
                 }
             },
         )
-        assertIs<LsiPoetField>(javaType.members.first())
-        assertIs<LsiPoetProperty>(kotlinType.members.first())
+        assertIs<LsiField>(javaType.members.first())
+        assertIs<LsiProperty>(kotlinType.members.first())
 
         val javaSource = LsiJavaPoetRenderer().renderType(javaType, TYPE_NAMES).toString()
         val kotlinSource = LsiKotlinPoetRenderer().renderType(kotlinType, TYPE_NAMES).toString()
@@ -200,14 +199,14 @@ class DtoInputBuilderPoetTest {
 
         assertEquals(
             listOf("zeta", "alpha"),
-            javaOrdered.arguments.filterIsInstance<LsiPoetAnnotationArgument.Named>().map { it.name },
+            javaOrdered.sourceArguments.filterIsInstance<LsiSourceAnnotationArgument.Named>().map { it.name },
         )
-        assertEquals(javaOrdered.arguments, kotlinOrdered.arguments)
-        assertIs<LsiPoetAnnotationValue.ArrayValue>(
-            assertIs<LsiPoetAnnotationArgument.Named>(javaTags.arguments.single()).value,
+        assertEquals(javaOrdered.sourceArguments, kotlinOrdered.sourceArguments)
+        assertIs<LsiAnnotationValue.ArrayValue>(
+            assertIs<LsiSourceAnnotationArgument.Named>(javaTags.sourceArguments.single()).value,
         )
-        assertEquals(2, kotlinTags.arguments.filterIsInstance<LsiPoetAnnotationArgument.Positional>().size)
-        assertEquals(LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT, kotlinTags.argumentLayout)
+        assertEquals(2, kotlinTags.sourceArguments.filterIsInstance<LsiSourceAnnotationArgument.Positional>().size)
+        assertEquals(LsiAnnotationArgumentLayout.PLATFORM_DEFAULT, kotlinTags.argumentLayout)
     }
 
     @Test
@@ -301,15 +300,15 @@ class DtoInputBuilderPoetTest {
         val javaSetter = inputBuilderSetter(graph, contract, LsiLanguage.JAVA)
         val kotlinSetter = inputBuilderSetter(graph, contract, LsiLanguage.KOTLIN)
         val kotlinTags = kotlinSetter.annotations.single { it.type == TAGS_ANNOTATION_TYPE_ID }
-        assertEquals(LsiPoetAnnotationArgumentLayout.SINGLE_LINE, kotlinTags.argumentLayout)
-        assertEquals(2, kotlinTags.arguments.filterIsInstance<LsiPoetAnnotationArgument.Positional>().size)
+        assertEquals(LsiAnnotationArgumentLayout.SINGLE_LINE, kotlinTags.argumentLayout)
+        assertEquals(2, kotlinTags.sourceArguments.filterIsInstance<LsiSourceAnnotationArgument.Positional>().size)
 
         val javaNested = javaSetter.nestedAnnotation()
         val kotlinNested = kotlinSetter.nestedAnnotation()
-        assertIs<LsiPoetAnnotationArgument.Positional>(javaNested.arguments.single())
-        assertEquals(LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT, javaNested.argumentLayout)
-        assertIs<LsiPoetAnnotationArgument.Positional>(kotlinNested.arguments.single())
-        assertEquals(LsiPoetAnnotationArgumentLayout.SINGLE_LINE, kotlinNested.argumentLayout)
+        assertIs<LsiSourceAnnotationArgument.Positional>(javaNested.sourceArguments.single())
+        assertEquals(LsiAnnotationArgumentLayout.PLATFORM_DEFAULT, javaNested.argumentLayout)
+        assertIs<LsiSourceAnnotationArgument.Positional>(kotlinNested.sourceArguments.single())
+        assertEquals(LsiAnnotationArgumentLayout.SINGLE_LINE, kotlinNested.argumentLayout)
     }
 
     private fun graph(
@@ -545,7 +544,7 @@ class DtoInputBuilderPoetTest {
         graph: DtoGraph,
         contract: DtoAnnotationContract,
         language: LsiLanguage,
-    ): LsiPoetFunction {
+    ): LsiFunction {
         val type = graph.types.single().toInputBuilderPoetType(
             graph = graph,
             immutableSchema = immutableSchema(),
@@ -556,15 +555,15 @@ class DtoInputBuilderPoetTest {
             jsonPojoBuilderAnnotationTypeId = JSON_POJO_BUILDER_TYPE_ID,
             jsonNamingAnnotationTypeId = JSON_NAMING_TYPE_ID,
         )
-        return type.members.filterIsInstance<LsiPoetFunction>().single { function ->
+        return type.members.filterIsInstance<LsiFunction>().single { function ->
             function.name == "dynamicName"
         }
     }
 
-    private fun LsiPoetFunction.nestedAnnotation(): site.addzero.lsi.poet.LsiPoetAnnotation {
+    private fun LsiFunction.nestedAnnotation(): LsiAnnotation {
         val wrapper = annotations.single { annotation -> annotation.type == WRAPPER_ANNOTATION_TYPE_ID }
-        val wrapperArgument = assertIs<LsiPoetAnnotationArgument.Named>(wrapper.arguments.single())
-        return assertIs<LsiPoetAnnotationValue.NestedAnnotationValue>(wrapperArgument.value).annotation
+        val wrapperArgument = assertIs<LsiSourceAnnotationArgument.Named>(wrapper.sourceArguments.single())
+        return assertIs<LsiAnnotationValue.NestedAnnotationValue>(wrapperArgument.value).annotation
     }
 
     private fun explicit(value: LsiAnnotationValue): LsiAnnotationArgument {
@@ -598,25 +597,25 @@ class DtoInputBuilderPoetTest {
         val WRAPPER_ANNOTATION_TYPE_ID = LsiSymbolId.type("demo.Wrapper")
         val NAMING_STRATEGY_TYPE_ID = LsiSymbolId.type("demo.SnakeCaseStrategy")
         val TYPE_NAMES = listOf(
-            LsiPoetTypeName(DTO_DECLARATION_TYPE_ID, "demo", listOf("BookInput")),
-            LsiPoetTypeName(BUILDER_TYPE_ID, "demo", listOf("BookInput", "Builder")),
-            LsiPoetTypeName(JAVA_STRING_TYPE_ID, "java.lang", listOf("String")),
-            LsiPoetTypeName(KOTLIN_STRING_TYPE_ID, "kotlin", listOf("String")),
-            LsiPoetTypeName(INPUT_TYPE_ID, "org.babyfish.jimmer", listOf("Input")),
-            LsiPoetTypeName(OBJECTS_TYPE_ID, "java.util", listOf("Objects")),
-            LsiPoetTypeName(GENERATED_BY_TYPE_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
-            LsiPoetTypeName(
+            LsiTypeName(DTO_DECLARATION_TYPE_ID, "demo", listOf("BookInput")),
+            LsiTypeName(BUILDER_TYPE_ID, "demo", listOf("BookInput", "Builder")),
+            LsiTypeName(JAVA_STRING_TYPE_ID, "java.lang", listOf("String")),
+            LsiTypeName(KOTLIN_STRING_TYPE_ID, "kotlin", listOf("String")),
+            LsiTypeName(INPUT_TYPE_ID, "org.babyfish.jimmer", listOf("Input")),
+            LsiTypeName(OBJECTS_TYPE_ID, "java.util", listOf("Objects")),
+            LsiTypeName(GENERATED_BY_TYPE_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
+            LsiTypeName(
                 JSON_POJO_BUILDER_TYPE_ID,
                 "com.fasterxml.jackson.databind.annotation",
                 listOf("JsonPOJOBuilder"),
             ),
-            LsiPoetTypeName(
+            LsiTypeName(
                 JSON_NAMING_TYPE_ID,
                 "com.fasterxml.jackson.databind.annotation",
                 listOf("JsonNaming"),
             ),
-            LsiPoetTypeName(JSON_ALIAS_TYPE_ID, "com.fasterxml.jackson.annotation", listOf("JsonAlias")),
-            LsiPoetTypeName(NAMING_STRATEGY_TYPE_ID, "demo", listOf("SnakeCaseStrategy")),
+            LsiTypeName(JSON_ALIAS_TYPE_ID, "com.fasterxml.jackson.annotation", listOf("JsonAlias")),
+            LsiTypeName(NAMING_STRATEGY_TYPE_ID, "demo", listOf("SnakeCaseStrategy")),
         )
 
         val EXPECTED_JAVA =

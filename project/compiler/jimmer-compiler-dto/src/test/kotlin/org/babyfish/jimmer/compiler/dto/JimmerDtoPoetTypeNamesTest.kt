@@ -28,7 +28,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.generatedTargetType
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 
 class JimmerDtoPoetTypeNamesTest {
 
@@ -179,7 +179,7 @@ class JimmerDtoPoetTypeNamesTest {
             packageName = "demo.dto",
             simpleNames = listOf("RootView"),
         )
-        val typeIdsByTypeName = emptyMap<LsiPoetTypeName, DtoTypeId>()
+        val typeIdsByTypeName = emptyMap<LsiTypeName, DtoTypeId>()
 
         assertNull(
             JimmerDtoPoetTypeNames.directChildOccurrenceOrNull(
@@ -248,7 +248,7 @@ class JimmerDtoPoetTypeNamesTest {
         )
         assertEquals(BRANCH_MERGED_TYPE_ID, generatedTypes[branchOccurrence])
 
-        fun resolve(propId: DtoPropId, ownerOccurrence: LsiPoetTypeName): LsiPoetTypeName? {
+        fun resolve(propId: DtoPropId, ownerOccurrence: LsiTypeName): LsiTypeName? {
             return JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
                 graph = fixture.graph,
                 prop = fixture.graph.propsById.getValue(propId),
@@ -395,7 +395,7 @@ class JimmerDtoPoetTypeNamesTest {
         )
         val rootOccurrence = batchRootTypeNames.getValue(rootType.id)
 
-        fun resolve(prop: DtoProp): LsiPoetTypeName? {
+        fun resolve(prop: DtoProp): LsiTypeName? {
             return JimmerDtoPoetTypeNames.generatedTargetTypeNameOrNull(
                 graph = graph,
                 prop = prop,

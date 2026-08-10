@@ -42,45 +42,45 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetBodyStyle
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiBodyStyle
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 将冻结的 Specification 基础类型语义降低为平台中立的 entityType 函数。 */
 internal fun DtoType.toLsiSpecificationEntityTypePoetFunction(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiPoetFunction {
+): LsiFunction {
     val language = targetLanguage.requireSpecificationTargetLanguage()
     val baseType = LsiDeclaredType(specificationBaseType(immutableSchema).id)
     val modifiers = buildSet {
         if (language == LsiLanguage.JAVA) {
-            add(LsiPoetModifier.PUBLIC)
+            add(LsiModifier.PUBLIC)
         }
         if (!isNestedSpecificationFragment(immutableSchema)) {
-            add(LsiPoetModifier.OVERRIDE)
+            add(LsiModifier.OVERRIDE)
         }
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = "entityType",
         modifiers = modifiers,
         returnType = LsiDeclaredType(
             declarationId = CLASS_TYPE_ID,
             arguments = listOf(LsiTypeArgument.invariant(baseType)),
         ),
-        body = LsiPoetCodeBlock.build {
+        body = LsiCodeBlock.build {
             returnValue {
                 type(baseType)
                 text(if (language == LsiLanguage.JAVA) ".class" else "::class.java")
             }
         },
-        bodyStyle = LsiPoetBodyStyle.BLOCK,
+        bodyStyle = LsiBodyStyle.BLOCK,
     )
 }
 
@@ -89,7 +89,7 @@ internal fun DtoType.toLsiSpecificationApplyToPoetFunction(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiPoetFunction {
+): LsiFunction {
     val language = targetLanguage.requireSpecificationTargetLanguage()
     require(DtoModifier.SPECIFICATION in modifiers) {
         "DTO applyTo lowering requires a specification type: ${id.value}"
@@ -98,7 +98,7 @@ internal fun DtoType.toLsiSpecificationApplyToPoetFunction(
     val nested = isNestedSpecificationFragment(immutableSchema)
     val argsName = "args"
     val applierName = if (language == LsiLanguage.JAVA) "__applier" else "_applier"
-    val body = LsiPoetCodeBlock.build {
+    val body = LsiCodeBlock.build {
         if (!nested) {
             declareSpecificationApplier(language, argsName, applierName)
         }
@@ -147,23 +147,23 @@ internal fun DtoType.toLsiSpecificationApplyToPoetFunction(
     }
     val modifiers = buildSet {
         if (language == LsiLanguage.JAVA) {
-            add(LsiPoetModifier.PUBLIC)
+            add(LsiModifier.PUBLIC)
         }
         if (!nested) {
-            add(LsiPoetModifier.OVERRIDE)
+            add(LsiModifier.OVERRIDE)
         }
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = "applyTo",
         modifiers = modifiers,
         parameters = listOf(
-            LsiPoetParameter(
+            LsiParameter(
                 name = if (nested) applierName else argsName,
                 type = specificationApplyToParameterType(language, baseType, nested),
             ),
         ),
         body = body,
-        bodyStyle = LsiPoetBodyStyle.BLOCK,
+        bodyStyle = LsiBodyStyle.BLOCK,
     )
 }
 
@@ -172,7 +172,7 @@ internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiPoetFunction? {
+): LsiFunction? {
     val language = targetLanguage.requireSpecificationTargetLanguage()
     if (!requiresSpecificationConverter(graph, immutableSchema)) {
         return null
@@ -180,7 +180,7 @@ internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
     val inputType = specificationConverterInputType(graph, immutableSchema, language)
     val outputType = specificationConverterOutputType(graph, immutableSchema, language)
     val propName = name
-    val body = LsiPoetCodeBlock.build {
+    val body = LsiCodeBlock.build {
         if (language == LsiLanguage.JAVA || nullable) {
             beginControlFlow {
                 text("if (")
@@ -222,43 +222,43 @@ internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
             }
         }
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = specificationConverterName(language, graph),
         modifiers = setOf(
             if (language == LsiLanguage.JAVA) {
-                LsiPoetModifier.PRIVATE
+                LsiModifier.PRIVATE
             } else {
-                LsiPoetModifier.PUBLIC
+                LsiModifier.PUBLIC
             },
         ),
         parameters = listOf(
-            LsiPoetParameter(
+            LsiParameter(
                 name = SPECIFICATION_CONVERTER_VALUE_NAME,
                 type = inputType,
             ),
         ),
         returnType = outputType,
         body = body,
-        bodyStyle = LsiPoetBodyStyle.BLOCK,
+        bodyStyle = LsiBodyStyle.BLOCK,
     )
 }
 
 /** 解析 Specification lowering 引用的精确源码类型名称。 */
 internal fun LsiWorkspace.dtoSpecificationPoetTypeNames(
-    function: LsiPoetFunction,
+    function: LsiFunction,
     immutableSchema: ImmutableSchema,
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
+): List<LsiTypeName> {
+    return toLsiTypeNames(
         typeIds = function.referencedTypeIds,
         additional = (
             DTO_COMMON_POET_TYPE_NAMES +
                 SPECIFICATION_POET_TYPE_NAMES +
                 immutableSchema.toLsiGeneratedQueryPoetTypeNames()
-            ).distinctBy(LsiPoetTypeName::typeId),
+            ).distinctBy(LsiTypeName::typeId),
     )
 }
 
-private fun LsiPoetCodeBuilder.declareSpecificationApplier(
+private fun LsiCodeBuilder.declareSpecificationApplier(
     targetLanguage: LsiLanguage,
     argsName: String,
     applierName: String,
@@ -277,7 +277,7 @@ private fun LsiPoetCodeBuilder.declareSpecificationApplier(
     }
 }
 
-private fun LsiPoetCodeBuilder.changeSpecificationPath(
+private fun LsiCodeBuilder.changeSpecificationPath(
     currentPath: List<ImmutableProp>,
     nextPath: List<ImmutableProp>,
     immutableSchema: ImmutableSchema,
@@ -303,7 +303,7 @@ private fun LsiPoetCodeBuilder.changeSpecificationPath(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendSpecificationFold(
+private fun LsiCodeBuilder.appendSpecificationFold(
     prop: DtoFoldProp,
     targetLanguage: LsiLanguage,
     nested: Boolean,
@@ -336,7 +336,7 @@ private fun LsiPoetCodeBuilder.appendSpecificationFold(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendSpecificationTarget(
+private fun LsiCodeBuilder.appendSpecificationTarget(
     prop: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
@@ -386,7 +386,7 @@ private fun LsiPoetCodeBuilder.appendSpecificationTarget(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendSpecificationTargetArgument(
+private fun LsiCodeBuilder.appendSpecificationTargetArgument(
     targetLanguage: LsiLanguage,
     entityAssociation: Boolean,
     nested: Boolean,
@@ -410,7 +410,7 @@ private fun LsiPoetCodeBuilder.appendSpecificationTargetArgument(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendSpecificationOperation(
+private fun LsiCodeBuilder.appendSpecificationOperation(
     prop: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
@@ -440,7 +440,7 @@ private fun LsiPoetCodeBuilder.appendSpecificationOperation(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendSpecificationPropArgument(
+private fun LsiCodeBuilder.appendSpecificationPropArgument(
     prop: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
@@ -467,7 +467,7 @@ private fun LsiPoetCodeBuilder.appendSpecificationPropArgument(
     text(if (targetLanguage == LsiLanguage.JAVA) " }" else ")")
 }
 
-private fun LsiPoetCodeBuilder.appendSpecificationValue(
+private fun LsiCodeBuilder.appendSpecificationValue(
     prop: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
@@ -480,7 +480,7 @@ private fun LsiPoetCodeBuilder.appendSpecificationValue(
     }
 }
 
-private fun LsiPoetCodeBuilder.immutablePropReference(
+private fun LsiCodeBuilder.immutablePropReference(
     immutableSchema: ImmutableSchema,
     prop: ImmutableProp,
 ) {
@@ -537,7 +537,7 @@ private const val SPECIFICATION_CONVERTER_VALUE_NAME = "value"
 
 private val CLASS_TYPE_ID = LsiSymbolId.type("java.lang.Class")
 
-private val CLASS_TYPE_NAME = LsiPoetTypeName(CLASS_TYPE_ID, "java.lang", listOf("Class"))
+private val CLASS_TYPE_NAME = LsiTypeName(CLASS_TYPE_ID, "java.lang", listOf("Class"))
 
 private val SPECIFICATION_ARGS_TYPE_ID =
     LsiSymbolId.type("org.babyfish.jimmer.sql.ast.query.specification.SpecificationArgs")
@@ -552,22 +552,22 @@ private val IMMUTABLE_PROP_TYPE = LsiDeclaredType(LsiSymbolId.type("org.babyfish
 
 private val SPECIFICATION_POET_TYPE_NAMES = listOf(
     CLASS_TYPE_NAME,
-    LsiPoetTypeName(
+    LsiTypeName(
         SPECIFICATION_ARGS_TYPE_ID,
         "org.babyfish.jimmer.sql.ast.query.specification",
         listOf("SpecificationArgs"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         K_SPECIFICATION_ARGS_TYPE_ID,
         "org.babyfish.jimmer.sql.kt.ast.query.specification",
         listOf("KSpecificationArgs"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         PREDICATE_APPLIER_TYPE.declarationId,
         "org.babyfish.jimmer.sql.ast.query.specification",
         listOf("PredicateApplier"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         IMMUTABLE_PROP_TYPE.declarationId,
         "org.babyfish.jimmer.meta",
         listOf("ImmutableProp"),

@@ -15,7 +15,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将共享 InputBuilder 模型渲染为可嵌入 APT DTO 的 JavaPoet 类型。 */
@@ -31,8 +31,8 @@ internal object AptDtoInputBuilderRenderer {
         jacksonVersion: JacksonFamily,
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
-        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
-        batchRootDtoTypeNames: Collection<LsiPoetTypeName>,
+        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
+        batchRootDtoTypeNames: Collection<LsiTypeName>,
     ): TypeSpec {
         val currentDtoTypeName = JimmerDtoPoetTypeNames.create(
             generatedDtoPackageName,

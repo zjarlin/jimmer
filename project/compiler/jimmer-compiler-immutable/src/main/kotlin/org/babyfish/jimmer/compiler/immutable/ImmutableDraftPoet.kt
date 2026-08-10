@@ -10,17 +10,18 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.collectImmutableValidationDependencies
 import site.addzero.lsi.jimmer.semanticDependencySymbols
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
-import site.addzero.lsi.poet.referencedSymbolIds
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.model.referencedSymbolIds
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /**
  * 将 Draft 预编译语义降低为统一的 LSI Poet 产物。
@@ -30,7 +31,7 @@ internal fun ImmutableSchema.toDraftPoetArtifacts(
     types: List<JimmerImmutableDraftTypePlan>,
     language: LsiLanguage,
     workspace: LsiWorkspace,
-): List<LsiPoetArtifact> {
+): List<LsiSourceArtifact> {
     require(language == LsiLanguage.JAVA || language == LsiLanguage.KOTLIN) {
         "Immutable draft Poet generation requires Java or Kotlin"
     }
@@ -52,10 +53,10 @@ internal fun ImmutableSchema.toDraftPoetArtifacts(
 
 private fun ImmutableSchema.draftArtifact(
     type: JimmerImmutableDraftTypePlan,
-    file: LsiPoetFile,
+    file: LsiFile,
     workspace: LsiWorkspace,
     draftSchema: JimmerImmutableDraftCodegenSchema,
-): LsiPoetArtifact {
+): LsiSourceArtifact {
     val originatingSymbols = setOf(type.typeId)
     val originatingSources = workspace.nonBinarySources(originatingSymbols)
     val semanticProps = type.propsBySlot.map { prop ->
@@ -77,9 +78,9 @@ private fun ImmutableSchema.draftArtifact(
     // 源文件增量关系只能由稳定语义输入决定。渲染 IR 还会引用本轮生成的 Draft
     // 类型；下一轮它们进入 workspace 后，不能反过来把自己的产物变成新增输入。
     val dependencySources = workspace.nonBinarySources(semanticDependencySymbols)
-    return LsiPoetArtifact(
+    return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiPoetTypeNames(
+        typeNames = workspace.toLsiTypeNames(
             file.referencedTypeIds,
             additional = draftSchema.generatedPoetTypeNames() + DRAFT_RUNTIME_TYPE_NAMES,
         ),
@@ -96,13 +97,13 @@ private fun ImmutableSchema.draftArtifact(
     )
 }
 
-private fun JimmerImmutableDraftCodegenSchema.generatedPoetTypeNames(): List<site.addzero.lsi.poet.LsiPoetTypeName> {
+private fun JimmerImmutableDraftCodegenSchema.generatedPoetTypeNames(): List<LsiTypeName> {
     return types.flatMap { type ->
         val packageName = type.qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
         val simpleName = type.qualifiedName.substringAfterLast('.')
         val draftSimpleName = "$simpleName$DRAFT_TYPE_SUFFIX"
         listOf(
-            generatedTopLevelPoetTypeName(packageName, draftSimpleName),
+            generatedTopLevelTypeName(packageName, draftSimpleName),
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "Producer")),
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "Producer", "Implementor")),
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "Producer", "Impl")),
@@ -206,6 +207,6 @@ private val DRAFT_RUNTIME_TYPE_NAMES = DRAFT_RUNTIME_TYPE_IDS.map(
     listOf("Pattern", "Flag"),
 )
 
-internal fun draftCode(block: LsiPoetCodeBuilder.() -> Unit): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build(block)
+internal fun draftCode(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock {
+    return LsiCodeBlock.build(block)
 }

@@ -10,11 +10,11 @@ import site.addzero.lsi.jimmer.dto.generatedValueType
 import site.addzero.lsi.jimmer.dto.requiresDtoPropAccessor
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 将 immutable-to-DTO 基础属性读取表达式降低为平台中立代码。 */
 internal fun DtoBaseProp.toBaseValuePoetCodeBlock(
@@ -28,7 +28,7 @@ internal fun DtoBaseProp.toBaseValuePoetCodeBlock(
     conversionErrorMessage: String,
     javaBaseProducerType: LsiDeclaredType? = null,
     javaBaseSlotName: String? = null,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     val language = targetLanguage.requireDtoBaseValueTargetLanguage()
     val direct = !requiresDtoPropAccessor(
         graph = graph,
@@ -36,7 +36,7 @@ internal fun DtoBaseProp.toBaseValuePoetCodeBlock(
         targetLanguage = language,
         generatedTargetType = generatedTargetType,
     )
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         if (direct) {
             when (language) {
                 LsiLanguage.JAVA -> if (nullable) {
@@ -80,16 +80,16 @@ internal fun DtoBaseProp.toBaseValuePoetCodeBlock(
 
 /** 解析 initializer 代码块引用的完整 DTO、运行时和 Draft 类型名。 */
 internal fun LsiWorkspace.dtoBaseValuePoetTypeNames(
-    codeBlock: LsiPoetCodeBlock,
-    additional: Collection<LsiPoetTypeName> = emptyList(),
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
+    codeBlock: LsiCodeBlock,
+    additional: Collection<LsiTypeName> = emptyList(),
+): List<LsiTypeName> {
+    return toLsiTypeNames(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + DTO_BASE_VALUE_POET_TYPE_NAMES + additional,
     )
 }
 
-private fun LsiPoetCodeBuilder.javaDirectValue(
+private fun LsiCodeBuilder.javaDirectValue(
     baseParameterName: String,
     baseValueAccessorName: String,
     javaBaseProducerType: LsiDeclaredType,
@@ -113,7 +113,7 @@ private fun LsiPoetCodeBuilder.javaDirectValue(
     literal("null")
 }
 
-private fun LsiPoetCodeBuilder.accessorValue(
+private fun LsiCodeBuilder.accessorValue(
     prop: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,

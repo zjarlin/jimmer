@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import org.babyfish.jimmer.client.meta.Doc
 import site.addzero.lsi.codegen.classifyArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
@@ -28,36 +30,35 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetAccessor
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetConstructor
-import site.addzero.lsi.poet.LsiPoetDelegationCall
-import site.addzero.lsi.poet.LsiPoetDelegationTarget
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFileNameStyle
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiAccessor
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiDelegationCall
+import site.addzero.lsi.model.LsiDelegationTarget
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFileNameStyle
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 internal fun ImmutableSchema.toEmbeddablePoetArtifacts(
     types: List<ImmutableType>,
     language: LsiLanguage,
     workspace: LsiWorkspace,
-): List<LsiPoetArtifact> {
+): List<LsiSourceArtifact> {
     require(language == LsiLanguage.JAVA || language == LsiLanguage.KOTLIN) {
         "Immutable embeddable Poet generation requires Java or Kotlin"
     }
@@ -238,12 +239,12 @@ private fun ImmutableType.toJavaPoetArtifacts(
     workspace: LsiWorkspace,
     propsDependencies: EmbeddableArtifactDependencies,
     expressionDependencies: EmbeddableArtifactDependencies,
-): List<LsiPoetArtifact> {
+): List<LsiSourceArtifact> {
     return listOf(
         propsDependencies.artifact(
             workspace,
             schema,
-            LsiPoetFile(
+            LsiFile(
                 language = LsiLanguage.JAVA,
                 packageName = packageName,
                 fileName = propsSimpleName,
@@ -253,7 +254,7 @@ private fun ImmutableType.toJavaPoetArtifacts(
         expressionDependencies.artifact(
             workspace,
             schema,
-            LsiPoetFile(
+            LsiFile(
                 language = LsiLanguage.JAVA,
                 packageName = packageName,
                 fileName = propExpressionSimpleName,
@@ -263,12 +264,12 @@ private fun ImmutableType.toJavaPoetArtifacts(
     )
 }
 
-private fun ImmutableType.javaPropsType(schema: ImmutableSchema): LsiPoetType {
-    return LsiPoetType(
+private fun ImmutableType.javaPropsType(schema: ImmutableSchema): LsiTypeDeclaration {
+    return LsiTypeDeclaration(
         name = propsSimpleName,
         kind = LsiTypeDeclarationKind.INTERFACE,
         annotations = listOf(generatedByAnnotation(modelType)),
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         members = props.map { prop -> javaTypedPropField(schema, prop) },
     )
 }
@@ -276,9 +277,9 @@ private fun ImmutableType.javaPropsType(schema: ImmutableSchema): LsiPoetType {
 private fun ImmutableType.javaTypedPropField(
     schema: ImmutableSchema,
     prop: ImmutableProp,
-): LsiPoetField {
+): LsiField {
     val kind = schema.typedPropValueCategory(prop)
-    return LsiPoetField(
+    return LsiField(
         name = prop.fieldName(),
         type = declaredType(
             kind.typedPropTypeId,
@@ -286,9 +287,9 @@ private fun ImmutableType.javaTypedPropField(
             prop.elementTypeOrSelf().withoutTypeAnnotations(),
         ),
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.STATIC,
-            LsiPoetModifier.FINAL,
+            LsiModifier.PUBLIC,
+            LsiModifier.STATIC,
+            LsiModifier.FINAL,
         ),
         initializer = code {
             line()
@@ -311,38 +312,38 @@ private fun ImmutableType.javaTypedPropField(
 private fun ImmutableType.javaPropExpressionType(
     schema: ImmutableSchema,
     typeSystem: LsiTypeSystem,
-): LsiPoetType {
-    return LsiPoetType(
+): LsiTypeDeclaration {
+    return LsiTypeDeclaration(
         name = propExpressionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(generatedByAnnotation(modelType)),
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         superClass = declaredType(ABSTRACT_TYPED_EMBEDDED_PROP_EXPRESSION_ID, modelType),
         members = buildList {
             add(
-                LsiPoetConstructor(
-                    modifiers = setOf(LsiPoetModifier.PUBLIC),
+                LsiConstructor(
+                    modifiers = setOf(LsiModifier.PUBLIC),
                     parameters = listOf(
-                        LsiPoetParameter(
+                        LsiParameter(
                             name = "raw",
                             type = declaredType(EMBEDDED_PROP_EXPRESSION_ID, modelType),
                         )
                     ),
-                    delegationCall = LsiPoetDelegationCall(
-                        target = LsiPoetDelegationTarget.SUPER,
+                    delegationCall = LsiDelegationCall(
+                        target = LsiDelegationTarget.SUPER,
                         arguments = listOf(code { name("raw") }),
                     ),
                 )
             )
             add(
-                LsiPoetConstructor(
-                    modifiers = setOf(LsiPoetModifier.PUBLIC),
+                LsiConstructor(
+                    modifiers = setOf(LsiModifier.PUBLIC),
                     parameters = listOf(
-                        LsiPoetParameter("base", propExpressionType),
-                        LsiPoetParameter("baseTableOwner", BASE_TABLE_OWNER_TYPE),
+                        LsiParameter("base", propExpressionType),
+                        LsiParameter("baseTableOwner", BASE_TABLE_OWNER_TYPE),
                     ),
-                    delegationCall = LsiPoetDelegationCall(
-                        target = LsiPoetDelegationTarget.SUPER,
+                    delegationCall = LsiDelegationCall(
+                        target = LsiDelegationTarget.SUPER,
                         arguments = listOf(
                             code { name("base") },
                             code { name("baseTableOwner") },
@@ -360,12 +361,12 @@ private fun ImmutableType.javaPropFunction(
     schema: ImmutableSchema,
     prop: ImmutableProp,
     typeSystem: LsiTypeSystem,
-): LsiPoetFunction {
+): LsiFunction {
     val targetType = schema.targetTypeOf(prop)
     val returnType = targetType?.propExpressionType ?: prop.javaExpressionType(typeSystem)
-    return LsiPoetFunction(
+    return LsiFunction(
         name = prop.name,
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         documentation = prop.documentation?.let(Doc::parse)?.value,
         returnType = returnType,
         body = code {
@@ -388,14 +389,14 @@ private fun ImmutableType.javaPropFunction(
     )
 }
 
-private fun ImmutableType.javaBaseTableOwnerFunction(): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun ImmutableType.javaBaseTableOwnerFunction(): LsiFunction {
+    return LsiFunction(
         name = "__baseTableOwner",
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.OVERRIDE,
+            LsiModifier.PUBLIC,
+            LsiModifier.OVERRIDE,
         ),
-        parameters = listOf(LsiPoetParameter("baseTableOwner", BASE_TABLE_OWNER_TYPE)),
+        parameters = listOf(LsiParameter("baseTableOwner", BASE_TABLE_OWNER_TYPE)),
         returnType = propExpressionType,
         body = code {
             returnValue {
@@ -428,16 +429,16 @@ private fun ImmutableType.toKotlinPoetArtifact(
     schema: ImmutableSchema,
     workspace: LsiWorkspace,
     dependencies: EmbeddableArtifactDependencies,
-): LsiPoetArtifact {
+): LsiSourceArtifact {
     val sourceBaseName = workspace.immutableSourceBaseName(this)
     return dependencies.artifact(
         workspace,
         schema,
-        LsiPoetFile(
+        LsiFile(
             language = LsiLanguage.KOTLIN,
             packageName = packageName,
             fileName = "${sourceBaseName}Props",
-            fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
+            fileNameStyle = LsiFileNameStyle.KOTLIN_SOURCE_STEM,
             annotations = listOf(
                 FILE_WARNING_SUPPRESSION,
                 generatedByAnnotation(modelType, LsiAnnotationUseSiteTarget.FILE),
@@ -458,7 +459,7 @@ private fun ImmutableType.toKotlinPoetArtifact(
 private fun ImmutableType.kotlinEmbeddedProp(
     prop: ImmutableProp,
     nullable: Boolean,
-): LsiPoetProperty? {
+): LsiProperty? {
     if (!nullable && prop.nullable) {
         return null
     }
@@ -478,12 +479,12 @@ private fun ImmutableType.kotlinEmbeddedProp(
         else -> K_NON_NULL_PROP_EXPRESSION_ID
     }
     val returnType = declaredType(returnTypeId, propType)
-    return LsiPoetProperty(
+    return LsiProperty(
         name = prop.name,
         type = returnType,
         mutable = false,
         receiverType = receiverType,
-        getter = LsiPoetAccessor(
+        getter = LsiAccessor(
             annotations = listOf(generatedByAnnotation(modelType)),
             body = code {
                 returnValue {
@@ -508,18 +509,18 @@ private fun ImmutableType.kotlinEmbeddedProp(
     )
 }
 
-private fun ImmutableType.kotlinFetchByFunction(nullable: Boolean): LsiPoetFunction {
+private fun ImmutableType.kotlinFetchByFunction(nullable: Boolean): LsiFunction {
     val receiverTypeId = if (nullable) {
         K_NULLABLE_EMBEDDED_PROP_EXPRESSION_ID
     } else {
         K_NON_NULL_EMBEDDED_PROP_EXPRESSION_ID
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = "fetchBy",
         annotations = listOf(generatedByAnnotation(modelType)),
         receiverType = declaredType(receiverTypeId, modelType),
         parameters = listOf(
-            LsiPoetParameter(
+            LsiParameter(
                 name = "block",
                 type = LsiFunctionType(
                     receiverType = fetcherDslType,
@@ -547,8 +548,8 @@ private fun ImmutableType.kotlinFetchByFunction(nullable: Boolean): LsiPoetFunct
     )
 }
 
-private fun ImmutableType.kotlinPropsObject(schema: ImmutableSchema): LsiPoetType {
-    return LsiPoetType(
+private fun ImmutableType.kotlinPropsObject(schema: ImmutableSchema): LsiTypeDeclaration {
+    return LsiTypeDeclaration(
         name = propsSimpleName,
         kind = LsiTypeDeclarationKind.OBJECT,
         annotations = listOf(generatedByAnnotation(modelType)),
@@ -559,9 +560,9 @@ private fun ImmutableType.kotlinPropsObject(schema: ImmutableSchema): LsiPoetTyp
 private fun ImmutableType.kotlinTypedProp(
     schema: ImmutableSchema,
     prop: ImmutableProp,
-): LsiPoetProperty {
+): LsiProperty {
     val kind = schema.typedPropValueCategory(prop)
-    return LsiPoetProperty(
+    return LsiProperty(
         name = prop.fieldName(),
         type = declaredType(
             kind.typedPropTypeId,
@@ -587,13 +588,13 @@ private fun ImmutableType.kotlinTypedProp(
 private fun generatedByAnnotation(
     type: LsiTypeRef,
     useSiteTarget: LsiAnnotationUseSiteTarget? = null,
-): LsiPoetAnnotation {
-    return LsiPoetAnnotation(
+): LsiAnnotation {
+    return sourceLsiAnnotation(
         type = GENERATED_BY_ID,
         arguments = listOf(
-            LsiPoetAnnotationArgument.Named(
+            LsiSourceAnnotationArgument.Named(
                 name = "type",
-                value = LsiPoetAnnotationValue.ClassValue(type),
+                value = LsiAnnotationValue.ClassValue(type),
             )
         ),
         useSiteTarget = useSiteTarget,
@@ -656,8 +657,8 @@ private fun LsiTypeRef.withoutTypeAnnotations(): LsiTypeRef {
     }
 }
 
-private fun code(block: LsiPoetCodeBuilder.() -> Unit): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build(block)
+private fun code(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock {
+    return LsiCodeBlock.build(block)
 }
 
 private val ImmutableType.modelType: LsiDeclaredType
@@ -706,11 +707,11 @@ private val ImmutablePropValueCategory.factoryName: String
 private fun EmbeddableArtifactDependencies.artifact(
     workspace: LsiWorkspace,
     schema: ImmutableSchema,
-    file: LsiPoetFile,
-): LsiPoetArtifact {
-    return LsiPoetArtifact(
+    file: LsiFile,
+): LsiSourceArtifact {
+    return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiPoetTypeNames(
+        typeNames = workspace.toLsiTypeNames(
             file.referencedTypeIds,
             additional = schema.generatedEmbeddablePoetTypeNames() + EMBEDDABLE_RUNTIME_TYPE_NAMES,
         ),
@@ -726,12 +727,12 @@ private fun EmbeddableArtifactDependencies.artifact(
     )
 }
 
-private fun ImmutableSchema.generatedEmbeddablePoetTypeNames(): List<site.addzero.lsi.poet.LsiPoetTypeName> {
+private fun ImmutableSchema.generatedEmbeddablePoetTypeNames(): List<LsiTypeName> {
     return types.flatMap { type ->
         listOf(
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Props"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}PropExpression"),
-            generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}FetcherDsl"),
+            generatedTopLevelTypeName(type.packageName, "${type.simpleName}Props"),
+            generatedTopLevelTypeName(type.packageName, "${type.simpleName}PropExpression"),
+            generatedTopLevelTypeName(type.packageName, "${type.simpleName}FetcherDsl"),
         )
     }.distinctBy { typeName -> typeName.typeId }
 }
@@ -788,11 +789,11 @@ private val SELECTION_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.ast.Selecti
 private const val NEW_FETCHER_PACKAGE = "org.babyfish.jimmer.sql.kt.fetcher"
 private const val TO_IMMUTABLE_PROP_PACKAGE = "org.babyfish.jimmer.kt"
 
-private val FILE_WARNING_SUPPRESSION = LsiPoetAnnotation(
+private val FILE_WARNING_SUPPRESSION = sourceLsiAnnotation(
     type = KOTLIN_SUPPRESS_ID,
     arguments = listOf(
-        LsiPoetAnnotationArgument.Positional(
-            LsiPoetAnnotationValue.StringValue("warnings")
+        LsiSourceAnnotationArgument.Positional(
+            LsiAnnotationValue.StringValue("warnings")
         )
     ),
     useSiteTarget = LsiAnnotationUseSiteTarget.FILE,

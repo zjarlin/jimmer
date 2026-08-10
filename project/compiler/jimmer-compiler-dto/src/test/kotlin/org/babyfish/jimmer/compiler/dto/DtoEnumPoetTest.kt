@@ -31,7 +31,7 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
+import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -195,14 +195,14 @@ class DtoEnumPoetTest {
         assertEquals("kotlin.Int?", renderedKotlinScalarType.copy(nullable = fixture.prop.nullable).toString())
     }
 
-    private fun renderJava(codeBlock: LsiPoetCodeBlock): String {
+    private fun renderJava(codeBlock: LsiCodeBlock): String {
         return LsiJavaPoetRenderer().renderCodeBlock(
             codeBlock = codeBlock,
             typeNames = WORKSPACE.dtoEnumPoetTypeNames(codeBlock),
         ).toString()
     }
 
-    private fun renderKotlin(codeBlock: LsiPoetCodeBlock): String {
+    private fun renderKotlin(codeBlock: LsiCodeBlock): String {
         return LsiKotlinPoetRenderer().renderCodeBlock(
             codeBlock = codeBlock,
             typeNames = WORKSPACE.dtoEnumPoetTypeNames(codeBlock),

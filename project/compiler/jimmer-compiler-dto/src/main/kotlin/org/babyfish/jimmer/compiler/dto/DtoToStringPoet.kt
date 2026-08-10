@@ -10,19 +10,19 @@ import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.toStringInclusion
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.poet.LsiPoetBodyStyle
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiBodyStyle
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiTypeName
 
 /** 将冻结的 DTO 属性顺序与包含条件降低为平台中立的 toString 函数。 */
 internal fun DtoType.toDtoToStringPoetFunction(
     graph: DtoGraph,
     targetLanguage: LsiLanguage,
     generatedSimpleNamePath: String,
-): LsiPoetFunction {
+): LsiFunction {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO toString requires Java or Kotlin target language"
     }
@@ -49,12 +49,12 @@ internal fun DtoType.toDtoToStringPoetFunction(
         generatedSimpleNamePath = generatedSimpleNamePath,
         hasConditionalProps = hasConditionalProps,
     )
-    return LsiPoetFunction(
+    return LsiFunction(
         name = "toString",
-        modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
+        modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         returnType = STRING_TYPE,
         body = body,
-        bodyStyle = LsiPoetBodyStyle.BLOCK,
+        bodyStyle = LsiBodyStyle.BLOCK,
     )
 }
 
@@ -65,13 +65,13 @@ private fun builderBody(
     targetLanguage: LsiLanguage,
     generatedSimpleNamePath: String,
     hasConditionalProps: Boolean,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     val reservedNames = (props.map(DtoProp::name) + loadedStateNameByProp.values).toMutableSet()
     val builderName = reservedNames.reserveLocalName("builder")
     val separatorName = reservedNames.reserveLocalName(
         if (targetLanguage == LsiLanguage.JAVA) "_sp" else "separator",
     )
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         declareBuilder(targetLanguage, builderName)
         if (targetLanguage == LsiLanguage.KOTLIN && hasConditionalProps) {
             declareSeparator(targetLanguage, separatorName)
@@ -133,7 +133,7 @@ private fun builderBody(
     }
 }
 
-private fun LsiPoetCodeBuilder.declareBuilder(
+private fun LsiCodeBuilder.declareBuilder(
     targetLanguage: LsiLanguage,
     builderName: String,
 ) {
@@ -150,7 +150,7 @@ private fun LsiPoetCodeBuilder.declareBuilder(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendTypePrefix(
+private fun LsiCodeBuilder.appendTypePrefix(
     builderName: String,
     generatedSimpleNamePath: String,
 ) {
@@ -164,7 +164,7 @@ private fun LsiPoetCodeBuilder.appendTypePrefix(
     }
 }
 
-private fun LsiPoetCodeBuilder.declareSeparator(
+private fun LsiCodeBuilder.declareSeparator(
     targetLanguage: LsiLanguage,
     separatorName: String,
 ) {
@@ -193,6 +193,6 @@ private fun MutableSet<String>.reserveLocalName(baseName: String): String {
 private val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
 private val STRING_TYPE = LsiDeclaredType(STRING_TYPE_ID)
 
-internal val DTO_TO_STRING_POET_TYPE_NAMES: List<LsiPoetTypeName> = listOf(
-    LsiPoetTypeName(STRING_TYPE_ID, "java.lang", listOf("String")),
+internal val DTO_TO_STRING_POET_TYPE_NAMES: List<LsiTypeName> = listOf(
+    LsiTypeName(STRING_TYPE_ID, "java.lang", listOf("String")),
 )

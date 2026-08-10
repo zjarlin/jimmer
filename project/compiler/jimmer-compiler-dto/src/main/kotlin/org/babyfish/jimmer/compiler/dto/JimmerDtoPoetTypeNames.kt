@@ -19,15 +19,15 @@ import site.addzero.lsi.jimmer.dto.tailProp
 import site.addzero.lsi.jimmer.dto.toLsiType
 import site.addzero.lsi.jimmer.dto.typeBranchesInDeclarationOrder
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 
 /** 使用显式包名和简单名链创建 DTO 生成声明的精确源码名称。 */
 internal object JimmerDtoPoetTypeNames {
 
     /** 为一次 DTO 处理批次建立唯一的根声明名称索引。 */
     @JvmStatic
-    fun roots(graphs: Collection<DtoGraph>): Map<DtoTypeId, LsiPoetTypeName> {
-        val result = linkedMapOf<DtoTypeId, LsiPoetTypeName>()
+    fun roots(graphs: Collection<DtoGraph>): Map<DtoTypeId, LsiTypeName> {
+        val result = linkedMapOf<DtoTypeId, LsiTypeName>()
         val typeIdsByCanonicalName = linkedMapOf<String, DtoTypeId>()
         graphs
             .flatMap { graph -> graph.rootTypeIds.map(graph.typesById::getValue) }
@@ -51,8 +51,8 @@ internal object JimmerDtoPoetTypeNames {
     @JvmStatic
     fun rootTypeName(
         rootType: DtoType,
-        batchRootTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
-    ): LsiPoetTypeName = requireNotNull(batchRootTypeNames[rootType.id]) {
+        batchRootTypeNames: Map<DtoTypeId, LsiTypeName>,
+    ): LsiTypeName = requireNotNull(batchRootTypeNames[rootType.id]) {
         "Frozen root DTO type has no batch generated name: ${rootType.id.value}"
     }
 
@@ -61,8 +61,8 @@ internal object JimmerDtoPoetTypeNames {
     fun forRoot(
         graph: DtoGraph,
         rootType: DtoType,
-        batchRootTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
-    ): Map<LsiPoetTypeName, DtoTypeId> {
+        batchRootTypeNames: Map<DtoTypeId, LsiTypeName>,
+    ): Map<LsiTypeName, DtoTypeId> {
         require(graph.typesById[rootType.id] === rootType) {
             "Frozen root DTO type does not belong to its graph: ${rootType.id.value}"
         }
@@ -76,7 +76,7 @@ internal object JimmerDtoPoetTypeNames {
         require(rootTypeName == create(rootType.packageName, listOf(rootName))) {
             "Frozen root DTO type has an unexpected batch generated name: ${rootTypeName.canonicalName}"
         }
-        val typeIdsByTypeName = linkedMapOf<LsiPoetTypeName, DtoTypeId>()
+        val typeIdsByTypeName = linkedMapOf<LsiTypeName, DtoTypeId>()
         batchRootTypeNames.forEach { (typeId, typeName) ->
             val previousTypeId = typeIdsByTypeName.put(typeName, typeId)
             require(previousTypeId == null || previousTypeId == typeId) {
@@ -91,14 +91,14 @@ internal object JimmerDtoPoetTypeNames {
     fun create(
         packageName: String,
         simpleNames: List<String>,
-    ): LsiPoetTypeName {
+    ): LsiTypeName {
         val qualifiedName = buildList {
             if (packageName.isNotEmpty()) {
                 add(packageName)
             }
             addAll(simpleNames)
         }.joinToString(".")
-        return LsiPoetTypeName(
+        return LsiTypeName(
             typeId = LsiSymbolId.type(qualifiedName),
             packageName = packageName,
             simpleNames = simpleNames,
@@ -110,9 +110,9 @@ internal object JimmerDtoPoetTypeNames {
     fun register(
         graph: DtoGraph,
         type: DtoType,
-        typeNamesByTypeId: MutableMap<DtoTypeId, LsiPoetTypeName>,
+        typeNamesByTypeId: MutableMap<DtoTypeId, LsiTypeName>,
         locallyRegisteredTypeIds: MutableSet<DtoTypeId>,
-        typeName: LsiPoetTypeName,
+        typeName: LsiTypeName,
     ) {
         require(graph.typesById[type.id] === type) {
             "Current frozen DTO type does not belong to its graph: ${type.id.value}"
@@ -138,8 +138,8 @@ internal object JimmerDtoPoetTypeNames {
     fun requirePlanned(
         graph: DtoGraph,
         type: DtoType,
-        typeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-        typeName: LsiPoetTypeName,
+        typeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+        typeName: LsiTypeName,
     ) {
         require(graph.typesById[type.id] === type) {
             "Current frozen DTO type does not belong to its graph: ${type.id.value}"
@@ -154,10 +154,10 @@ internal object JimmerDtoPoetTypeNames {
     /** 返回指定生成声明直属子级中的唯一目标 occurrence。 */
     @JvmStatic
     fun requireDirectChildOccurrence(
-        ownerTypeName: LsiPoetTypeName,
+        ownerTypeName: LsiTypeName,
         targetTypeId: DtoTypeId,
-        typeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-    ): LsiPoetTypeName {
+        typeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+    ): LsiTypeName {
         return requireNotNull(
             directChildOccurrenceOrNull(ownerTypeName, targetTypeId, typeIdsByTypeName)
         ) {
@@ -169,9 +169,9 @@ internal object JimmerDtoPoetTypeNames {
     /** 返回指定生成声明直属目标 occurrence 的最后一级简单名。 */
     @JvmStatic
     fun requireDirectChildSimpleName(
-        ownerTypeName: LsiPoetTypeName,
+        ownerTypeName: LsiTypeName,
         targetType: DtoType,
-        typeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
+        typeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
     ): String {
         return requireDirectChildOccurrence(
             ownerTypeName = ownerTypeName,
@@ -183,10 +183,10 @@ internal object JimmerDtoPoetTypeNames {
     /** 返回指定生成声明直属子级中的可选目标 occurrence。 */
     @JvmStatic
     fun directChildOccurrenceOrNull(
-        ownerTypeName: LsiPoetTypeName,
+        ownerTypeName: LsiTypeName,
         targetTypeId: DtoTypeId,
-        typeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-    ): LsiPoetTypeName? {
+        typeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+    ): LsiTypeName? {
         val matches = typeIdsByTypeName.entries.filter { (typeName, typeId) ->
             typeId == targetTypeId &&
                 typeName.packageName == ownerTypeName.packageName &&
@@ -204,8 +204,8 @@ internal object JimmerDtoPoetTypeNames {
     @JvmStatic
     fun requireRegistered(
         type: DtoType,
-        typeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
-    ): LsiPoetTypeName {
+        typeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
+    ): LsiTypeName {
         return requireNotNull(typeNamesByTypeId[type.id]) {
             "Frozen DTO type has no registered generated name: ${type.id.value}"
         }
@@ -215,8 +215,8 @@ internal object JimmerDtoPoetTypeNames {
     @JvmStatic
     fun reusableTarget(
         reference: DtoReusableTypeReference,
-        rootTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
-    ): LsiPoetTypeName? {
+        rootTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
+    ): LsiTypeName? {
         val matches = rootTypeNamesByTypeId.values.filter { typeName ->
             typeName.canonicalName == reference.qualifiedName
         }
@@ -231,9 +231,9 @@ internal object JimmerDtoPoetTypeNames {
     fun toLsiGeneratedTargetType(
         graph: DtoGraph,
         prop: DtoProp,
-        generatedOwnerTypeName: LsiPoetTypeName,
-        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-        batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
+        generatedOwnerTypeName: LsiTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
     ): LsiDeclaredType {
         val generatedTypeName = generatedTargetTypeNameOrNull(
             graph = graph,
@@ -270,10 +270,10 @@ internal object JimmerDtoPoetTypeNames {
     fun generatedTargetTypeNameOrNull(
         graph: DtoGraph,
         prop: DtoProp,
-        generatedOwnerTypeName: LsiPoetTypeName,
-        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-        batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
-    ): LsiPoetTypeName? {
+        generatedOwnerTypeName: LsiTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
+    ): LsiTypeName? {
         require(graph.propsById[prop.id] === prop) {
             "Frozen DTO property does not belong to its graph: ${prop.id.value}"
         }
@@ -316,10 +316,10 @@ internal object JimmerDtoPoetTypeNames {
 
     private fun DtoBaseProp.generatedTargetTypeNameOrNull(
         graph: DtoGraph,
-        generatedOwnerTypeName: LsiPoetTypeName,
-        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-        batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
-    ): LsiPoetTypeName? {
+        generatedOwnerTypeName: LsiTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
+    ): LsiTypeName? {
         val targetProp = tailProp(graph)
         targetProp.targetTypeReference?.let { reference ->
             return reusableTarget(reference, batchRootDtoTypeNames)
@@ -342,9 +342,9 @@ internal object JimmerDtoPoetTypeNames {
     private fun generatedTargetTypeName(
         graph: DtoGraph,
         targetType: DtoType,
-        generatedOwnerTypeName: LsiPoetTypeName,
-        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-    ): LsiPoetTypeName {
+        generatedOwnerTypeName: LsiTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+    ): LsiTypeName {
         require(graph.typesById[targetType.id] === targetType) {
             "Frozen DTO target type does not belong to its graph: ${targetType.id.value}"
         }
@@ -361,9 +361,9 @@ internal object JimmerDtoPoetTypeNames {
     private fun promotedRootPropAndOwnerOccurrenceOrNull(
         graph: DtoGraph,
         prop: DtoProp,
-        generatedOwnerTypeName: LsiPoetTypeName,
-        generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-    ): Pair<DtoProp, LsiPoetTypeName>? {
+        generatedOwnerTypeName: LsiTypeName,
+        generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+    ): Pair<DtoProp, LsiTypeName>? {
         val polymorphicParents = graph.types.filter { candidate ->
             candidate.polymorphism?.branches?.any { branch ->
                 branch.mergedTypeId == prop.ownerTypeId
@@ -390,9 +390,9 @@ internal object JimmerDtoPoetTypeNames {
 
     private class RootPlanner(
         private val graph: DtoGraph,
-        private val typeIdsByTypeName: MutableMap<LsiPoetTypeName, DtoTypeId>,
+        private val typeIdsByTypeName: MutableMap<LsiTypeName, DtoTypeId>,
     ) {
-        private val typeNamesByCanonicalName = linkedMapOf<String, LsiPoetTypeName>()
+        private val typeNamesByCanonicalName = linkedMapOf<String, LsiTypeName>()
 
         init {
             typeIdsByTypeName.keys.forEach(::registerCanonicalName)
@@ -400,15 +400,15 @@ internal object JimmerDtoPoetTypeNames {
 
         fun plan(
             rootType: DtoType,
-            rootTypeName: LsiPoetTypeName,
-        ): Map<LsiPoetTypeName, DtoTypeId> {
+            rootTypeName: LsiTypeName,
+        ): Map<LsiTypeName, DtoTypeId> {
             visit(rootType, rootTypeName, null)
             return typeIdsByTypeName.toMap()
         }
 
         private fun visit(
             type: DtoType,
-            typeName: LsiPoetTypeName,
+            typeName: LsiTypeName,
             polymorphicRoot: DtoType?,
         ) {
             require(graph.typesById[type.id] === type) {
@@ -451,7 +451,7 @@ internal object JimmerDtoPoetTypeNames {
             }
         }
 
-        private fun registerCanonicalName(typeName: LsiPoetTypeName) {
+        private fun registerCanonicalName(typeName: LsiTypeName) {
             val previousTypeName = typeNamesByCanonicalName.put(typeName.canonicalName, typeName)
             require(previousTypeName == null || previousTypeName == typeName) {
                 "Generated DTO canonical name '${typeName.canonicalName}' has conflicting source structures"
@@ -460,7 +460,7 @@ internal object JimmerDtoPoetTypeNames {
 
         private fun visitTarget(
             targetType: DtoType,
-            ownerTypeName: LsiPoetTypeName,
+            ownerTypeName: LsiTypeName,
             propName: String,
         ) {
             require(targetType.name == null) {
@@ -485,9 +485,9 @@ internal object JimmerDtoPoetTypeNames {
         }
 
         private fun nested(
-            ownerTypeName: LsiPoetTypeName,
+            ownerTypeName: LsiTypeName,
             simpleName: String,
-        ): LsiPoetTypeName = create(
+        ): LsiTypeName = create(
             ownerTypeName.packageName,
             ownerTypeName.simpleNames + simpleName,
         )

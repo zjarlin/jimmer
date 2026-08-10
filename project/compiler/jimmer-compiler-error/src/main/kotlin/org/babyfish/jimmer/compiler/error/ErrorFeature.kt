@@ -95,7 +95,7 @@ class ErrorFeature : CompilerFeature<EmptyCompilerFeatureState, ErrorFeatureStat
             CompilerPlatform.UNKNOWN -> return CompilerFeatureRenderResult()
         }
         val artifacts = state.schema
-            .toLsiPoetArtifacts(context.round.workspace)
+            .toLsiSourceArtifacts(context.round.workspace)
             .map(renderer::render)
         return CompilerFeatureRenderResult(artifacts = artifacts)
     }

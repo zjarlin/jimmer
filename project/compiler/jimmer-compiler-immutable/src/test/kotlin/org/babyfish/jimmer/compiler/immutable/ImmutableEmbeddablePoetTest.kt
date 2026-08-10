@@ -30,7 +30,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -343,14 +343,14 @@ class ImmutableEmbeddablePoetTest {
 
         assertEquals(
             setOf("LocationProps", "LocationPropExpression"),
-            javaArtifacts.mapTo(linkedSetOf(), LsiPoetArtifact::qualifiedFileName),
+            javaArtifacts.mapTo(linkedSetOf(), LsiSourceArtifact::qualifiedFileName),
         )
         assertEquals("LocationProps", kotlinArtifact.qualifiedFileName)
         javaArtifacts.forEach(LsiJavaPoetRenderer()::render)
         LsiKotlinPoetRenderer().render(kotlinArtifact)
     }
 
-    private fun List<LsiPoetArtifact>.semanticDependencySymbols(
+    private fun List<LsiSourceArtifact>.semanticDependencySymbols(
         workspace: LsiWorkspace,
     ): Set<LsiSymbolId> {
         return flatMapTo(sortedSetOf()) { artifact ->

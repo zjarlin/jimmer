@@ -41,7 +41,7 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetFileNameStyle
+import site.addzero.lsi.model.LsiFileNameStyle
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class ImmutableFetcherPoetTest {
@@ -260,7 +260,7 @@ class ImmutableFetcherPoetTest {
                 "${sourceImport.packageName}.${sourceImport.simpleName}"
             },
         )
-        assertEquals(LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM, kotlinArtifact.file.fileNameStyle)
+        assertEquals(LsiFileNameStyle.KOTLIN_SOURCE_STEM, kotlinArtifact.file.fileNameStyle)
         assertEquals("demo/order-item.partFetcher.kt", generated.path)
     }
 

@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.tuple
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import site.addzero.lsi.codegen.classifyArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
@@ -23,34 +25,34 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetAccessor
+import site.addzero.lsi.model.LsiAccessor
 import site.addzero.lsi.model.toJvmReferenceType
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetConstructor
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
-internal fun TypedTupleSchema.toLsiPoetArtifacts(
+internal fun TypedTupleSchema.toLsiSourceArtifacts(
     workspace: LsiWorkspace,
-): List<LsiPoetArtifact> {
+): List<LsiSourceArtifact> {
     return tuples.flatMap { tuple -> tuple.toLsiPoet(workspace) }
 }
 
-private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiPoetArtifact> {
+private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiSourceArtifact> {
     val originatingSymbols = setOf(id)
     val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencies.symbolIds.toSet()
@@ -58,7 +60,7 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiPoetArtif
     val files = when (sourceLanguage) {
         LsiLanguage.JAVA -> buildList {
             add(
-                LsiPoetFile(
+                LsiFile(
                     language = sourceLanguage,
                     packageName = packageName,
                     fileName = mapperSimpleName,
@@ -67,7 +69,7 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiPoetArtif
             )
             if (baseTableProjection != null) {
                 add(
-                    LsiPoetFile(
+                    LsiFile(
                         language = sourceLanguage,
                         packageName = packageName,
                         fileName = tableSimpleName,
@@ -77,7 +79,7 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiPoetArtif
             }
         }
         LsiLanguage.KOTLIN -> listOf(
-            LsiPoetFile(
+            LsiFile(
                 language = sourceLanguage,
                 packageName = packageName,
                 fileName = mapperSimpleName,
@@ -97,9 +99,9 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiPoetArtif
         dependencySources = dependencySources,
     )
     return files.map { file ->
-        LsiPoetArtifact(
+        LsiSourceArtifact(
             file = file,
-            typeNames = workspace.toLsiPoetTypeNames(
+            typeNames = workspace.toLsiTypeNames(
                 typeIds = file.referencedTypeIds,
                 additional = generatedTypeNames(),
             ),
@@ -112,11 +114,11 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiPoetArtif
     }
 }
 
-private fun TypedTupleType.generatedTypeNames(): List<LsiPoetTypeName> {
+private fun TypedTupleType.generatedTypeNames(): List<LsiTypeName> {
     return buildList {
         addAll(BUILT_IN_TYPE_NAMES)
         add(
-            LsiPoetTypeName(
+            LsiTypeName(
                 typeId = LsiSymbolId.type(mapperQualifiedName),
                 packageName = packageName,
                 simpleNames = listOf(mapperSimpleName),
@@ -126,7 +128,7 @@ private fun TypedTupleType.generatedTypeNames(): List<LsiPoetTypeName> {
         if (projection != null) {
             add(topLevelGeneratedTypeName(tableQualifiedName))
             add(
-                LsiPoetTypeName(
+                LsiTypeName(
                     typeId = nullableTableType.declarationId,
                     packageName = packageName,
                     simpleNames = listOf(tableSimpleName, "Nullable"),
@@ -140,7 +142,7 @@ private fun TypedTupleType.generatedTypeNames(): List<LsiPoetTypeName> {
         }
         properties.drop(1).forEach { property ->
             add(
-                LsiPoetTypeName(
+                LsiTypeName(
                     typeId = LsiSymbolId.type("$mapperQualifiedName.${property.builderSimpleName}"),
                     packageName = packageName,
                     simpleNames = listOf(mapperSimpleName, property.builderSimpleName),
@@ -150,7 +152,7 @@ private fun TypedTupleType.generatedTypeNames(): List<LsiPoetTypeName> {
     }
 }
 
-private fun TypedTupleType.mapperType(): LsiPoetType {
+private fun TypedTupleType.mapperType(): LsiTypeDeclaration {
     return when (sourceLanguage) {
         LsiLanguage.JAVA -> javaMapperType()
         LsiLanguage.KOTLIN -> kotlinMapperType()
@@ -158,13 +160,13 @@ private fun TypedTupleType.mapperType(): LsiPoetType {
     }
 }
 
-private fun TypedTupleType.javaMapperType(): LsiPoetType {
+private fun TypedTupleType.javaMapperType(): LsiTypeDeclaration {
     val tupleType = declaredType(qualifiedName)
     val mapperType = declaredType(mapperQualifiedName)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = mapperSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         superInterfaces = buildList {
             add(tupleMapperType(tupleType))
             if (baseTableProjection != null) {
@@ -187,15 +189,15 @@ private fun TypedTupleType.javaMapperType(): LsiPoetType {
     )
 }
 
-private fun TypedTupleType.kotlinMapperType(): LsiPoetType {
+private fun TypedTupleType.kotlinMapperType(): LsiTypeDeclaration {
     val tupleType = declaredType(qualifiedName)
     val mapperType = declaredType(mapperQualifiedName)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = mapperSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
-        primaryConstructor = LsiPoetConstructor(
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
-            parameters = listOf(LsiPoetParameter("selections", KOTLIN_SELECTION_ARRAY_TYPE)),
+        primaryConstructor = LsiConstructor(
+            modifiers = setOf(LsiModifier.PRIVATE),
+            parameters = listOf(LsiParameter("selections", KOTLIN_SELECTION_ARRAY_TYPE)),
         ),
         superInterfaces = buildList {
             add(tupleMapperType(tupleType))
@@ -205,11 +207,11 @@ private fun TypedTupleType.kotlinMapperType(): LsiPoetType {
         },
         members = buildList {
             add(
-                LsiPoetProperty(
+                LsiProperty(
                     name = "selections",
                     type = KOTLIN_SELECTION_ARRAY_TYPE,
                     mutable = false,
-                    modifiers = setOf(LsiPoetModifier.PRIVATE),
+                    modifiers = setOf(LsiModifier.PRIVATE),
                     initializer = code { name("selections") },
                 )
             )
@@ -227,25 +229,25 @@ private fun TypedTupleType.kotlinMapperType(): LsiPoetType {
     )
 }
 
-private fun TypedTupleType.javaBaseTableType(): LsiPoetType {
+private fun TypedTupleType.javaBaseTableType(): LsiTypeDeclaration {
     val projection = requireNotNull(baseTableProjection)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = tableSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
-        modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.FINAL),
+        modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.FINAL),
         superClass = declaredType(ABSTRACT_TYPED_BASE_TABLE_ID, tableType),
-        primaryConstructor = LsiPoetConstructor(
-            parameters = listOf(LsiPoetParameter("baseTable", BASE_TABLE_TYPE)),
+        primaryConstructor = LsiConstructor(
+            parameters = listOf(LsiParameter("baseTable", BASE_TABLE_TYPE)),
             body = code {
                 statement { text("super(baseTable)") }
             },
         ),
         members = buildList {
             add(
-                LsiPoetField(
+                LsiField(
                     name = "FACTORY",
                     type = declaredType(BASE_TABLE_FACTORY_ID, tableType, tableType),
-                    modifiers = setOf(LsiPoetModifier.STATIC, LsiPoetModifier.FINAL),
+                    modifiers = setOf(LsiModifier.STATIC, LsiModifier.FINAL),
                     initializer = code {
                         type(BASE_TABLE_FACTORY_TYPE)
                         text(".of(")
@@ -257,9 +259,9 @@ private fun TypedTupleType.javaBaseTableType(): LsiPoetType {
             projection.selections.forEach { selection ->
                 val property = properties[selection.propertyIndex]
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = property.javaGetterName,
-                        modifiers = setOf(LsiPoetModifier.PUBLIC),
+                        modifiers = setOf(LsiModifier.PUBLIC),
                         returnType = javaBaseTableSelectionType(property, selection),
                         body = code {
                             returnValue {
@@ -275,17 +277,17 @@ private fun TypedTupleType.javaBaseTableType(): LsiPoetType {
     )
 }
 
-private fun TypedTupleType.kotlinBaseTableType(): LsiPoetType {
+private fun TypedTupleType.kotlinBaseTableType(): LsiTypeDeclaration {
     val projection = requireNotNull(baseTableProjection)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = tableSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         superClass = ABSTRACT_K_BASE_TABLE_TYPE,
         superClassConstructorArguments = listOf(code { name("baseTable") }),
         superInterfaces = listOf(declaredType(K_NON_NULL_BASE_TABLE_ID, nullableTableType)),
-        primaryConstructor = LsiPoetConstructor(
-            modifiers = setOf(LsiPoetModifier.INTERNAL),
-            parameters = listOf(LsiPoetParameter("baseTable", BASE_TABLE_TYPE)),
+        primaryConstructor = LsiConstructor(
+            modifiers = setOf(LsiModifier.INTERNAL),
+            parameters = listOf(LsiParameter("baseTable", BASE_TABLE_TYPE)),
         ),
         members = buildList {
             projection.selections.forEach { selection ->
@@ -300,16 +302,16 @@ private fun TypedTupleType.kotlinBaseTableType(): LsiPoetType {
 
 private fun TypedTupleType.kotlinNullableBaseTableType(
     selections: List<TypedTupleBaseTableSelection>,
-): LsiPoetType {
-    return LsiPoetType(
+): LsiTypeDeclaration {
+    return LsiTypeDeclaration(
         name = "Nullable",
         kind = LsiTypeDeclarationKind.CLASS,
         superClass = ABSTRACT_K_BASE_TABLE_TYPE,
         superClassConstructorArguments = listOf(code { name("baseTable") }),
         superInterfaces = listOf(K_NULLABLE_BASE_TABLE_TYPE),
-        primaryConstructor = LsiPoetConstructor(
-            modifiers = setOf(LsiPoetModifier.INTERNAL),
-            parameters = listOf(LsiPoetParameter("baseTable", BASE_TABLE_TYPE)),
+        primaryConstructor = LsiConstructor(
+            modifiers = setOf(LsiModifier.INTERNAL),
+            parameters = listOf(LsiParameter("baseTable", BASE_TABLE_TYPE)),
         ),
         members = buildList {
             selections.forEach { selection ->
@@ -323,13 +325,13 @@ private fun TypedTupleType.kotlinNullableBaseTableType(
 private fun TypedTupleType.kotlinBaseTableProperty(
     selection: TypedTupleBaseTableSelection,
     outerNullable: Boolean,
-): LsiPoetProperty {
+): LsiProperty {
     val property = properties[selection.propertyIndex]
-    return LsiPoetProperty(
+    return LsiProperty(
         name = property.name,
         type = kotlinBaseTableSelectionType(property, selection, outerNullable),
         mutable = false,
-        getter = LsiPoetAccessor(
+        getter = LsiAccessor(
             body = code {
                 returnValue {
                     text("selection(")
@@ -345,17 +347,17 @@ private fun TypedTupleType.kotlinBaseTableProperty(
 
 private fun TypedTupleType.kotlinBaseTableCompanionType(
     selections: List<TypedTupleBaseTableSelection>,
-): LsiPoetType {
-    return LsiPoetType(
+): LsiTypeDeclaration {
+    return LsiTypeDeclaration(
         name = "Companion",
         kind = LsiTypeDeclarationKind.OBJECT,
-        modifiers = setOf(LsiPoetModifier.COMPANION),
+        modifiers = setOf(LsiModifier.COMPANION),
         members = listOf(
-            LsiPoetProperty(
+            LsiProperty(
                 name = "FACTORY",
                 type = declaredType(BASE_TABLE_FACTORY_ID, tableType, nullableTableType),
                 mutable = false,
-                modifiers = setOf(LsiPoetModifier.INTERNAL),
+                modifiers = setOf(LsiModifier.INTERNAL),
                 initializer = code {
                     type(BASE_TABLE_FACTORY_TYPE)
                     text(".of(")
@@ -373,11 +375,11 @@ private fun TypedTupleType.kotlinBaseTableCompanionType(
                     text(")")
                 },
             ),
-            LsiPoetProperty(
+            LsiProperty(
                 name = "SELECTION_LAYOUT",
                 type = BASE_TABLE_SELECTION_LAYOUT_TYPE,
                 mutable = false,
-                modifiers = setOf(LsiPoetModifier.INTERNAL),
+                modifiers = setOf(LsiModifier.INTERNAL),
                 initializer = code {
                     type(BASE_TABLE_SELECTION_LAYOUT_TYPE)
                     text(".of(")
@@ -401,10 +403,10 @@ private fun TypedTupleType.kotlinBaseTableCompanionType(
     )
 }
 
-private fun TypedTupleType.javaGetBaseTableFactoryFunction(): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TypedTupleType.javaGetBaseTableFactoryFunction(): LsiFunction {
+    return LsiFunction(
         name = "getBaseTableFactory",
-        modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
+        modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         returnType = declaredType(BASE_TABLE_FACTORY_ID, tableType, tableType),
         body = code {
             returnValue {
@@ -415,10 +417,10 @@ private fun TypedTupleType.javaGetBaseTableFactoryFunction(): LsiPoetFunction {
     )
 }
 
-private fun TypedTupleType.kotlinGetBaseTableFactoryFunction(): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TypedTupleType.kotlinGetBaseTableFactoryFunction(): LsiFunction {
+    return LsiFunction(
         name = "getBaseTableFactory",
-        modifiers = setOf(LsiPoetModifier.OVERRIDE),
+        modifiers = setOf(LsiModifier.OVERRIDE),
         returnType = declaredType(BASE_TABLE_FACTORY_ID, tableType, nullableTableType),
         body = code {
             returnValue {
@@ -429,10 +431,10 @@ private fun TypedTupleType.kotlinGetBaseTableFactoryFunction(): LsiPoetFunction 
     )
 }
 
-private fun TypedTupleType.kotlinGetSelectionLayoutFunction(): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TypedTupleType.kotlinGetSelectionLayoutFunction(): LsiFunction {
+    return LsiFunction(
         name = "getSelectionLayout",
-        modifiers = setOf(LsiPoetModifier.OVERRIDE),
+        modifiers = setOf(LsiModifier.OVERRIDE),
         returnType = BASE_TABLE_SELECTION_LAYOUT_TYPE,
         body = code {
             returnValue {
@@ -445,7 +447,7 @@ private fun TypedTupleType.kotlinGetSelectionLayoutFunction(): LsiPoetFunction {
 
 private fun TypedTupleType.kotlinWeakJoinFunctions(
     sourceType: LsiTypeRef,
-): List<LsiPoetFunction> {
+): List<LsiFunction> {
     return listOf(
         kotlinWeakJoinFunction(sourceType, byType = false, outer = false),
         kotlinWeakJoinFunction(sourceType, byType = true, outer = false),
@@ -458,7 +460,7 @@ private fun TypedTupleType.kotlinWeakJoinFunction(
     sourceType: LsiTypeRef,
     byType: Boolean,
     outer: Boolean,
-): LsiPoetFunction {
+): LsiFunction {
     val functionOwnerId = LsiSymbolId.function(
         LsiSymbolId.type(tableQualifiedName),
         "${if (outer) "weakOuterJoin" else "weakJoin"}:${if (byType) "type" else "lambda"}",
@@ -472,7 +474,7 @@ private fun TypedTupleType.kotlinWeakJoinFunction(
         if (outer) nullableTargetType else null,
     )
     val weakJoinType = declaredType(K_PROPS_WEAK_JOIN_ID, sourceType, targetType)
-    return LsiPoetFunction(
+    return LsiFunction(
         name = if (outer) "weakOuterJoin" else "weakJoin",
         typeParameters = buildList {
             if (outer) {
@@ -493,11 +495,11 @@ private fun TypedTupleType.kotlinWeakJoinFunction(
             )
         },
         parameters = listOf(
-            LsiPoetParameter(
+            LsiParameter(
                 name = "targetSymbol",
                 type = declaredType(K_BASE_TABLE_SYMBOL_ID, targetType),
             ),
-            LsiPoetParameter(
+            LsiParameter(
                 name = if (byType) "weakJoinType" else "weakJoinLambda",
                 type = if (byType) {
                     LsiDeclaredType(
@@ -553,20 +555,20 @@ private fun kotlinBaseTableSelectionType(
     return declaredType(typeId, valueType)
 }
 
-private fun TypedTupleType.javaSelectionsField(): LsiPoetField {
-    return LsiPoetField(
+private fun TypedTupleType.javaSelectionsField(): LsiField {
+    return LsiField(
         name = "selections",
         type = JAVA_SELECTION_ARRAY_TYPE,
         modifiers = setOf(
-            LsiPoetModifier.PRIVATE,
-            LsiPoetModifier.FINAL,
+            LsiModifier.PRIVATE,
+            LsiModifier.FINAL,
         ),
     )
 }
 
-private fun TypedTupleType.javaSelectionsConstructor(): LsiPoetConstructor {
-    return LsiPoetConstructor(
-        parameters = listOf(LsiPoetParameter("selections", JAVA_SELECTION_ARRAY_TYPE)),
+private fun TypedTupleType.javaSelectionsConstructor(): LsiConstructor {
+    return LsiConstructor(
+        parameters = listOf(LsiParameter("selections", JAVA_SELECTION_ARRAY_TYPE)),
         body = code {
             statement {
                 text("this.selections = ")
@@ -576,12 +578,12 @@ private fun TypedTupleType.javaSelectionsConstructor(): LsiPoetConstructor {
     )
 }
 
-private fun TypedTupleType.javaGetSelectionsFunction(): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TypedTupleType.javaGetSelectionsFunction(): LsiFunction {
+    return LsiFunction(
         name = "getSelections",
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.OVERRIDE,
+            LsiModifier.PUBLIC,
+            LsiModifier.OVERRIDE,
         ),
         returnType = listType(SELECTION_STAR_TYPE),
         body = code {
@@ -597,20 +599,20 @@ private fun TypedTupleType.javaGetSelectionsFunction(): LsiPoetFunction {
     )
 }
 
-private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiTypeRef): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiTypeRef): LsiFunction {
+    return LsiFunction(
         name = "createTuple",
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.OVERRIDE,
+            LsiModifier.PUBLIC,
+            LsiModifier.OVERRIDE,
         ),
-        parameters = listOf(LsiPoetParameter("args", JAVA_ARGUMENT_ARRAY_TYPE)),
+        parameters = listOf(LsiParameter("args", JAVA_ARGUMENT_ARRAY_TYPE)),
         returnType = tupleType,
         body = javaCreateTupleBody(tupleType),
     )
 }
 
-private fun TypedTupleType.javaCreateTupleBody(tupleType: LsiTypeRef): LsiPoetCodeBlock {
+private fun TypedTupleType.javaCreateTupleBody(tupleType: LsiTypeRef): LsiCodeBlock {
     return when (val plan = construction) {
         is TypedTupleJavaConstructorConstruction -> javaPositionalTupleBody(plan, tupleType)
         is TypedTupleJavaSetterConstruction -> javaSetterTupleBody(plan, tupleType)
@@ -621,7 +623,7 @@ private fun TypedTupleType.javaCreateTupleBody(tupleType: LsiTypeRef): LsiPoetCo
 private fun TypedTupleType.javaPositionalTupleBody(
     plan: TypedTupleJavaConstructorConstruction,
     tupleType: LsiTypeRef,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     return code {
         returnValue {
             text("new ")
@@ -653,7 +655,7 @@ private fun TypedTupleType.javaPositionalTupleBody(
 private fun TypedTupleType.javaSetterTupleBody(
     plan: TypedTupleJavaSetterConstruction,
     tupleType: LsiTypeRef,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     return code {
         statement {
             type(tupleType)
@@ -682,17 +684,17 @@ private fun TypedTupleType.javaSetterTupleBody(
     }
 }
 
-private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiTypeRef): LsiPoetFunction {
+private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiTypeRef): LsiFunction {
     val property = properties.first()
     val returnType = stepType(property, mapperType)
-    return LsiPoetFunction(
+    return LsiFunction(
         name = property.name,
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.STATIC,
+            LsiModifier.PUBLIC,
+            LsiModifier.STATIC,
         ),
         parameters = listOf(
-            LsiPoetParameter("selection", javaSelectionType(property)),
+            LsiParameter("selection", javaSelectionType(property)),
         ),
         returnType = returnType,
         body = code {
@@ -717,24 +719,24 @@ private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiTypeRef): Ls
 private fun TypedTupleType.javaBuilderType(
     property: TypedTupleProperty,
     mapperType: LsiTypeRef,
-): LsiPoetType {
+): LsiTypeDeclaration {
     val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = builderSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.STATIC,
+            LsiModifier.PUBLIC,
+            LsiModifier.STATIC,
         ),
         members = listOf(
             javaSelectionsField(),
             javaSelectionsConstructor(),
-            LsiPoetFunction(
+            LsiFunction(
                 name = property.name,
-                modifiers = setOf(LsiPoetModifier.PUBLIC),
+                modifiers = setOf(LsiModifier.PUBLIC),
                 parameters = listOf(
-                    LsiPoetParameter("selection", javaSelectionType(property)),
+                    LsiParameter("selection", javaSelectionType(property)),
                 ),
                 returnType = returnType,
                 body = code {
@@ -750,11 +752,11 @@ private fun TypedTupleType.javaBuilderType(
     )
 }
 
-private fun TypedTupleType.kotlinGetSelectionsFunction(): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TypedTupleType.kotlinGetSelectionsFunction(): LsiFunction {
+    return LsiFunction(
         name = "getSelections",
         annotations = listOf(UNCHECKED_CAST_SUPPRESSION),
-        modifiers = setOf(LsiPoetModifier.OVERRIDE),
+        modifiers = setOf(LsiModifier.OVERRIDE),
         returnType = listType(SELECTION_STAR_TYPE),
         body = code {
             returnValue {
@@ -769,17 +771,17 @@ private fun TypedTupleType.kotlinGetSelectionsFunction(): LsiPoetFunction {
     )
 }
 
-private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiTypeRef): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiTypeRef): LsiFunction {
+    return LsiFunction(
         name = "createTuple",
-        modifiers = setOf(LsiPoetModifier.OVERRIDE),
-        parameters = listOf(LsiPoetParameter("args", KOTLIN_ARGUMENT_ARRAY_TYPE)),
+        modifiers = setOf(LsiModifier.OVERRIDE),
+        parameters = listOf(LsiParameter("args", KOTLIN_ARGUMENT_ARRAY_TYPE)),
         returnType = tupleType,
         body = kotlinCreateTupleBody(tupleType),
     )
 }
 
-private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiTypeRef): LsiPoetCodeBlock {
+private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiTypeRef): LsiCodeBlock {
     val plan = construction as? TypedTupleKotlinConstructorConstruction
         ?: error("Kotlin typed tuple '${id.value}' has unsupported construction plan '$construction'")
     return code {
@@ -812,28 +814,28 @@ private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiTypeRef): LsiPoet
 private fun TypedTupleType.kotlinBuilderType(
     property: TypedTupleProperty,
     mapperType: LsiTypeRef,
-): LsiPoetType {
+): LsiTypeDeclaration {
     val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = builderSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
-        primaryConstructor = LsiPoetConstructor(
-            modifiers = setOf(LsiPoetModifier.INTERNAL),
-            parameters = listOf(LsiPoetParameter("selections", KOTLIN_SELECTION_ARRAY_TYPE)),
+        primaryConstructor = LsiConstructor(
+            modifiers = setOf(LsiModifier.INTERNAL),
+            parameters = listOf(LsiParameter("selections", KOTLIN_SELECTION_ARRAY_TYPE)),
         ),
         members = listOf(
-            LsiPoetProperty(
+            LsiProperty(
                 name = "selections",
                 type = KOTLIN_SELECTION_ARRAY_TYPE,
                 mutable = false,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
                 initializer = code { name("selections") },
             ),
-            LsiPoetFunction(
+            LsiFunction(
                 name = property.name,
                 parameters = listOf(
-                    LsiPoetParameter("selection", kotlinSelectionType(property)),
+                    LsiParameter("selection", kotlinSelectionType(property)),
                 ),
                 returnType = returnType,
                 body = code {
@@ -848,18 +850,18 @@ private fun TypedTupleType.kotlinBuilderType(
     )
 }
 
-private fun TypedTupleType.kotlinCompanionType(mapperType: LsiTypeRef): LsiPoetType {
+private fun TypedTupleType.kotlinCompanionType(mapperType: LsiTypeRef): LsiTypeDeclaration {
     val property = properties.first()
     val returnType = stepType(property, mapperType)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = "Companion",
         kind = LsiTypeDeclarationKind.OBJECT,
-        modifiers = setOf(LsiPoetModifier.COMPANION),
+        modifiers = setOf(LsiModifier.COMPANION),
         members = listOf(
-            LsiPoetFunction(
+            LsiFunction(
                 name = property.name,
                 parameters = listOf(
-                    LsiPoetParameter("selection", kotlinSelectionType(property)),
+                    LsiParameter("selection", kotlinSelectionType(property)),
                 ),
                 returnType = returnType,
                 body = code {
@@ -922,7 +924,7 @@ private fun listType(elementType: LsiTypeRef): LsiDeclaredType {
     )
 }
 
-private fun LsiPoetCodeBuilder.selectionAssignment(property: TypedTupleProperty) {
+private fun LsiCodeBuilder.selectionAssignment(property: TypedTupleProperty) {
     statement {
         name("selections")
         text("[")
@@ -933,9 +935,9 @@ private fun LsiPoetCodeBuilder.selectionAssignment(property: TypedTupleProperty)
 }
 
 private fun code(
-    block: LsiPoetCodeBuilder.() -> Unit,
-): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build(block)
+    block: LsiCodeBuilder.() -> Unit,
+): LsiCodeBlock {
+    return LsiCodeBlock.build(block)
 }
 
 private fun declaredType(qualifiedName: String): LsiDeclaredType {
@@ -965,9 +967,9 @@ private fun LsiTypeRef.asNonNullType(): LsiTypeRef {
     }
 }
 
-private fun topLevelGeneratedTypeName(qualifiedName: String): LsiPoetTypeName {
+private fun topLevelGeneratedTypeName(qualifiedName: String): LsiTypeName {
     val packageName = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
-    return LsiPoetTypeName(
+    return LsiTypeName(
         typeId = LsiSymbolId.type(qualifiedName),
         packageName = packageName,
         simpleNames = listOf(qualifiedName.substringAfterLast('.')),
@@ -1018,65 +1020,65 @@ private val ARRAYS_TYPE = declaredType("java.util.Arrays")
 private val OBJECT_TYPE = declaredType("java.lang.Object")
 private val SUPPRESS_ID = LsiSymbolId.type("kotlin.Suppress")
 private val BUILT_IN_TYPE_NAMES = listOf(
-    LsiPoetTypeName(SELECTION_ID, "org.babyfish.jimmer.sql.ast", listOf("Selection")),
-    LsiPoetTypeName(TUPLE_MAPPER_ID, "org.babyfish.jimmer.sql.runtime", listOf("TupleMapper")),
-    LsiPoetTypeName(BASE_TABLE_PROJECTION_ID, "org.babyfish.jimmer.sql.ast.query", listOf("BaseTableProjection")),
-    LsiPoetTypeName(BASE_TABLE_ID, "org.babyfish.jimmer.sql.ast.table", listOf("BaseTable")),
-    LsiPoetTypeName(BASE_TABLE_FACTORY_ID, "org.babyfish.jimmer.sql.ast.table.spi", listOf("BaseTableFactory")),
-    LsiPoetTypeName(
+    LsiTypeName(SELECTION_ID, "org.babyfish.jimmer.sql.ast", listOf("Selection")),
+    LsiTypeName(TUPLE_MAPPER_ID, "org.babyfish.jimmer.sql.runtime", listOf("TupleMapper")),
+    LsiTypeName(BASE_TABLE_PROJECTION_ID, "org.babyfish.jimmer.sql.ast.query", listOf("BaseTableProjection")),
+    LsiTypeName(BASE_TABLE_ID, "org.babyfish.jimmer.sql.ast.table", listOf("BaseTable")),
+    LsiTypeName(BASE_TABLE_FACTORY_ID, "org.babyfish.jimmer.sql.ast.table.spi", listOf("BaseTableFactory")),
+    LsiTypeName(
         BASE_TABLE_SELECTION_KIND_ID,
         "org.babyfish.jimmer.sql.ast.table.spi",
         listOf("BaseTableSelectionKind"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         BASE_TABLE_SELECTION_LAYOUT_ID,
         "org.babyfish.jimmer.sql.ast.table.spi",
         listOf("BaseTableSelectionLayout"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         ABSTRACT_TYPED_BASE_TABLE_ID,
         "org.babyfish.jimmer.sql.ast.table.spi",
         listOf("AbstractTypedBaseTable"),
     ),
-    LsiPoetTypeName(EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("Expression")),
-    LsiPoetTypeName(STRING_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("StringExpression")),
-    LsiPoetTypeName(NUMERIC_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("NumericExpression")),
-    LsiPoetTypeName(DATE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("DateExpression")),
-    LsiPoetTypeName(TEMPORAL_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("TemporalExpression")),
-    LsiPoetTypeName(COMPARABLE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("ComparableExpression")),
-    LsiPoetTypeName(
+    LsiTypeName(EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("Expression")),
+    LsiTypeName(STRING_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("StringExpression")),
+    LsiTypeName(NUMERIC_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("NumericExpression")),
+    LsiTypeName(DATE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("DateExpression")),
+    LsiTypeName(TEMPORAL_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("TemporalExpression")),
+    LsiTypeName(COMPARABLE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("ComparableExpression")),
+    LsiTypeName(
         K_BASE_TABLE_PROJECTION_ID,
         "org.babyfish.jimmer.sql.kt.ast.query",
         listOf("KBaseTableProjection"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         ABSTRACT_K_BASE_TABLE_ID,
         "org.babyfish.jimmer.sql.kt.ast.table.impl",
         listOf("AbstractKBaseTable"),
     ),
-    LsiPoetTypeName(K_NON_NULL_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullBaseTable")),
-    LsiPoetTypeName(K_NULLABLE_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableBaseTable")),
-    LsiPoetTypeName(K_BASE_TABLE_SYMBOL_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KBaseTableSymbol")),
-    LsiPoetTypeName(K_PROPS_WEAK_JOIN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoin")),
-    LsiPoetTypeName(K_PROPS_WEAK_JOIN_FUN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoinFun")),
-    LsiPoetTypeName(K_NON_NULL_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullTable")),
-    LsiPoetTypeName(K_NULLABLE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableTable")),
-    LsiPoetTypeName(
+    LsiTypeName(K_NON_NULL_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullBaseTable")),
+    LsiTypeName(K_NULLABLE_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableBaseTable")),
+    LsiTypeName(K_BASE_TABLE_SYMBOL_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KBaseTableSymbol")),
+    LsiTypeName(K_PROPS_WEAK_JOIN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoin")),
+    LsiTypeName(K_PROPS_WEAK_JOIN_FUN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoinFun")),
+    LsiTypeName(K_NON_NULL_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullTable")),
+    LsiTypeName(K_NULLABLE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableTable")),
+    LsiTypeName(
         K_NON_NULL_EXPRESSION_ID,
         "org.babyfish.jimmer.sql.kt.ast.expression",
         listOf("KNonNullExpression"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         K_NULLABLE_EXPRESSION_ID,
         "org.babyfish.jimmer.sql.kt.ast.expression",
         listOf("KNullableExpression"),
     ),
-    LsiPoetTypeName(K_CLASS_ID, "kotlin.reflect", listOf("KClass")),
-    LsiPoetTypeName(LIST_ID, "java.util", listOf("List")),
-    LsiPoetTypeName(COLLECTIONS_TYPE.declarationId, "java.util", listOf("Collections")),
-    LsiPoetTypeName(ARRAYS_TYPE.declarationId, "java.util", listOf("Arrays")),
-    LsiPoetTypeName(OBJECT_TYPE.declarationId, "java.lang", listOf("Object")),
-    LsiPoetTypeName(SUPPRESS_ID, "kotlin", listOf("Suppress")),
+    LsiTypeName(K_CLASS_ID, "kotlin.reflect", listOf("KClass")),
+    LsiTypeName(LIST_ID, "java.util", listOf("List")),
+    LsiTypeName(COLLECTIONS_TYPE.declarationId, "java.util", listOf("Collections")),
+    LsiTypeName(ARRAYS_TYPE.declarationId, "java.util", listOf("Arrays")),
+    LsiTypeName(OBJECT_TYPE.declarationId, "java.lang", listOf("Object")),
+    LsiTypeName(SUPPRESS_ID, "kotlin", listOf("Suppress")),
 )
 private val SELECTION_STAR_TYPE = LsiDeclaredType(
     declarationId = SELECTION_ID,
@@ -1092,11 +1094,11 @@ private val JAVA_ARGUMENT_ARRAY_TYPE = LsiArrayType(OBJECT_TYPE)
 private val KOTLIN_ARGUMENT_ARRAY_TYPE = LsiArrayType(
     OBJECT_TYPE.copy(nullability = LsiNullability.NULLABLE),
 )
-private val UNCHECKED_CAST_SUPPRESSION = LsiPoetAnnotation(
+private val UNCHECKED_CAST_SUPPRESSION = sourceLsiAnnotation(
     type = SUPPRESS_ID,
     arguments = listOf(
-        LsiPoetAnnotationArgument.Positional(
-            LsiPoetAnnotationValue.StringValue("UNCHECKED_CAST")
+        LsiSourceAnnotationArgument.Positional(
+            LsiAnnotationValue.StringValue("UNCHECKED_CAST")
         ),
     ),
 )

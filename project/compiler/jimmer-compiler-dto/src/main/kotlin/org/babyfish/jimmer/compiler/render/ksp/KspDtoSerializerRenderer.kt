@@ -10,7 +10,7 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将共享 DTO Serializer 模型渲染为可嵌入 KSP DTO 的 KotlinPoet 类型。 */
@@ -24,7 +24,7 @@ internal object KspDtoSerializerRenderer {
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
     ): TypeSpec {
-        val generatedDtoTypeName = LsiPoetTypeName(
+        val generatedDtoTypeName = LsiTypeName(
             typeId = LsiSymbolId.type(
                 listOf(generatedDtoPackageName, generatedDtoSimpleNames.joinToString("."))
                     .filter(String::isNotEmpty)

@@ -59,8 +59,8 @@ import site.addzero.lsi.jimmer.dto.userPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetImport
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiImport
+import site.addzero.lsi.model.LsiTypeName
 import java.util.*
 
 internal class KspDtoGenerator private constructor(
@@ -73,7 +73,7 @@ internal class KspDtoGenerator private constructor(
     private val annotationContract: DtoAnnotationContract,
     private val interfaceContractResolution: DtoInterfaceContractResolution,
     private val configContractResolution: DtoConfigContractResolution,
-    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
+    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
     private val generatedDtoPackageName: String,
     private val generatedDtoSimpleNames: List<String>,
     private val parent: KspDtoGenerator?,
@@ -111,16 +111,16 @@ internal class KspDtoGenerator private constructor(
     private val polymorphicBranch: Boolean
         get() = lsiPolymorphicBranch != null
 
-    private val generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId> =
+    private val generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId> =
         parent?.generatedDtoTypeIdsByTypeName
             ?: JimmerDtoPoetTypeNames.forRoot(lsiGraph, lsiDtoType, rootDtoTypeNamesByTypeId)
 
-    private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiPoetTypeName> =
+    private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiTypeName> =
         (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
 
     private val locallyGeneratedDtoTypeIds = mutableSetOf<DtoTypeId>()
 
-    private val metadataFetcherPoetImports: MutableSet<LsiPoetImport> =
+    private val metadataFetcherPoetImports: MutableSet<LsiImport> =
         parent?.metadataFetcherPoetImports ?: linkedSetOf()
 
     private val interfacePropNames = interfaceContractResolution
@@ -160,7 +160,7 @@ internal class KspDtoGenerator private constructor(
         annotationContract: DtoAnnotationContract,
         interfaceContractResolution: DtoInterfaceContractResolution,
         configContractResolution: DtoConfigContractResolution,
-        rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
+        rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
     ) : this(
         mutable,
         lsiGraph,
@@ -366,9 +366,9 @@ internal class KspDtoGenerator private constructor(
     private fun FileSpec.Builder.addImports() {
         val packages = lsiDtoType.kotlinByImportPackages(lsiGraph, immutableSchema)
         val imports = sortedSetOf(
-            compareBy<LsiPoetImport>({ it.packageName }, { it.simpleName })
+            compareBy<LsiImport>({ it.packageName }, { it.simpleName })
         )
-        packages.mapTo(imports) { packageName -> LsiPoetImport(packageName, "by") }
+        packages.mapTo(imports) { packageName -> LsiImport(packageName, "by") }
         imports += metadataFetcherPoetImports
         for (sourceImport in imports) {
             addImport(sourceImport.packageName, sourceImport.simpleName)

@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import org.babyfish.jimmer.client.meta.Doc
 import org.babyfish.jimmer.impl.util.StringUtil
 import site.addzero.lsi.codegen.ArtifactAggregationMode
@@ -37,37 +39,36 @@ import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetConstructor
-import site.addzero.lsi.poet.LsiPoetDelegationCall
-import site.addzero.lsi.poet.LsiPoetDelegationTarget
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFileNameStyle
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetImport
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetNameStyle
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiDelegationCall
+import site.addzero.lsi.model.LsiDelegationTarget
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFileNameStyle
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiImport
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiNameStyle
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 internal fun ImmutableSchema.toFetcherPoetArtifacts(
     types: List<ImmutableType>,
     language: LsiLanguage,
     workspace: LsiWorkspace,
-): List<LsiPoetArtifact> {
+): List<LsiSourceArtifact> {
     require(language == LsiLanguage.JAVA || language == LsiLanguage.KOTLIN) {
         "Immutable fetcher Poet generation requires Java or Kotlin"
     }
@@ -95,7 +96,7 @@ private class FetcherPoetContext(
     fun artifact(
         language: LsiLanguage,
         dependencies: FetcherArtifactDependencies,
-    ): LsiPoetArtifact {
+    ): LsiSourceArtifact {
         val file = when (language) {
             LsiLanguage.JAVA -> javaFile()
             LsiLanguage.KOTLIN -> kotlinFile()
@@ -111,9 +112,9 @@ private class FetcherPoetContext(
                 dependencySources = dependencies.dependencySources,
             )
         }
-        return LsiPoetArtifact(
+        return LsiSourceArtifact(
             file = file,
-            typeNames = workspace.toLsiPoetTypeNames(
+            typeNames = workspace.toLsiTypeNames(
                 file.referencedTypeIds,
                 additional = schema.generatedFetcherPoetTypeNames() + FETCHER_RUNTIME_TYPE_IDS.map(
                     LsiSymbolId::topLevelPoetTypeName
@@ -132,18 +133,18 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun ImmutableSchema.generatedFetcherPoetTypeNames(): List<site.addzero.lsi.poet.LsiPoetTypeName> {
+    private fun ImmutableSchema.generatedFetcherPoetTypeNames(): List<LsiTypeName> {
         return types.flatMap { immutableType ->
             listOf(
-                generatedTopLevelPoetTypeName(
+                generatedTopLevelTypeName(
                     immutableType.packageName,
                     "${immutableType.simpleName}$FETCHER_SUFFIX",
                 ),
-                generatedTopLevelPoetTypeName(
+                generatedTopLevelTypeName(
                     immutableType.packageName,
                     "${immutableType.simpleName}$FETCHER_DSL_SUFFIX",
                 ),
-                generatedTopLevelPoetTypeName(
+                generatedTopLevelTypeName(
                     immutableType.packageName,
                     "${immutableType.simpleName}Table",
                 ),
@@ -151,8 +152,8 @@ private class FetcherPoetContext(
         }.distinctBy { typeName -> typeName.typeId }
     }
 
-    private fun javaFile(): LsiPoetFile {
-        return LsiPoetFile(
+    private fun javaFile(): LsiFile {
+        return LsiFile(
             language = LsiLanguage.JAVA,
             packageName = type.packageName,
             fileName = "${type.simpleName}$FETCHER_SUFFIX",
@@ -160,12 +161,12 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaFetcherType(): LsiPoetType {
-        return LsiPoetType(
+    private fun javaFetcherType(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = "${type.simpleName}$FETCHER_SUFFIX",
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(modelType)),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             superClass = declaredType(ABSTRACT_TYPED_FETCHER_ID, modelType, fetcherClassType),
             members = buildList {
                 add(javaRootField())
@@ -183,14 +184,14 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaRootField(): LsiPoetField {
-        return LsiPoetField(
+    private fun javaRootField(): LsiField {
+        return LsiField(
             name = "$",
             type = fetcherClassType,
             modifiers = setOf(
-                LsiPoetModifier.PUBLIC,
-                LsiPoetModifier.STATIC,
-                LsiPoetModifier.FINAL,
+                LsiModifier.PUBLIC,
+                LsiModifier.STATIC,
+                LsiModifier.FINAL,
             ),
             initializer = code {
                 text("new ")
@@ -200,11 +201,11 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaFromFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun javaFromFunction(): LsiFunction {
+        return LsiFunction(
             name = "\$from",
-            modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC),
-            parameters = listOf(LsiPoetParameter("base", fetcherType)),
+            modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.STATIC),
+            parameters = listOf(LsiParameter("base", fetcherType)),
             returnType = fetcherClassType,
             body = code {
                 text("return base instanceof ")
@@ -220,14 +221,14 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaBaseConstructor(): LsiPoetConstructor {
-        return LsiPoetConstructor(
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+    private fun javaBaseConstructor(): LsiConstructor {
+        return LsiConstructor(
+            modifiers = setOf(LsiModifier.PRIVATE),
             parameters = listOf(
-                LsiPoetParameter("base", declaredType(FETCHER_IMPL_ID, modelType))
+                LsiParameter("base", declaredType(FETCHER_IMPL_ID, modelType))
             ),
-            delegationCall = LsiPoetDelegationCall(
-                target = LsiPoetDelegationTarget.SUPER,
+            delegationCall = LsiDelegationCall(
+                target = LsiDelegationTarget.SUPER,
                 arguments = listOf(
                     code {
                         type(modelType)
@@ -239,7 +240,7 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaForTypeFunction(): LsiPoetFunction? {
+    private fun javaForTypeFunction(): LsiFunction? {
         if (strictTypeBranches.isEmpty()) {
             return null
         }
@@ -250,13 +251,13 @@ private class FetcherPoetContext(
             upperBounds = listOf(modelType),
         )
         val typeParameterRef = LsiTypeParameterRef(typeParameterId)
-        return LsiPoetFunction(
+        return LsiFunction(
             name = "forType",
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             typeParameters = listOf(typeParameter),
             parameters = listOf(
-                LsiPoetParameter("typeBranchFetcher", declaredType(FETCHER_ID, typeParameterRef))
+                LsiParameter("typeBranchFetcher", declaredType(FETCHER_ID, typeParameterRef))
             ),
             returnType = fetcherClassType,
             body = code {
@@ -269,7 +270,7 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaPropFunctions(prop: ImmutableProp): List<LsiPoetFunction> {
+    private fun javaPropFunctions(prop: ImmutableProp): List<LsiFunction> {
         if (prop.primaryMapping == PrimaryMapping.ID || !prop.fetchable) {
             return emptyList()
         }
@@ -294,11 +295,11 @@ private class FetcherPoetContext(
         }
     }
 
-    private fun javaSimpleProp(prop: ImmutableProp): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun javaSimpleProp(prop: ImmutableProp): LsiFunction {
+        return LsiFunction(
             name = prop.name,
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             documentation = prop.fetcherDocumentation(),
             returnType = fetcherClassType,
             body = code {
@@ -311,13 +312,13 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaEnabledProp(prop: ImmutableProp): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun javaEnabledProp(prop: ImmutableProp): LsiFunction {
+        return LsiFunction(
             name = prop.name,
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             documentation = prop.fetcherDocumentation(),
-            parameters = listOf(LsiPoetParameter("enabled", BOOLEAN_TYPE)),
+            parameters = listOf(LsiParameter("enabled", BOOLEAN_TYPE)),
             returnType = fetcherClassType,
             body = code {
                 returnValue {
@@ -334,14 +335,14 @@ private class FetcherPoetContext(
     private fun javaChildProp(
         prop: ImmutableProp,
         targetType: ImmutableType?,
-    ): LsiPoetFunction {
+    ): LsiFunction {
         val targetModelType = targetType.requiredModelType(prop)
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             parameters = listOf(
-                LsiPoetParameter("childFetcher", declaredType(FETCHER_ID, targetModelType))
+                LsiParameter("childFetcher", declaredType(FETCHER_ID, targetModelType))
             ),
             returnType = fetcherClassType,
             body = code {
@@ -354,7 +355,7 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaIdOnlyProp(prop: ImmutableProp): LsiPoetFunction? {
+    private fun javaIdOnlyProp(prop: ImmutableProp): LsiFunction? {
         val associationProp = schema.idViewBasePropOrSelf(prop)
         if (
             associationProp.primaryMapping == PrimaryMapping.TRANSIENT ||
@@ -365,11 +366,11 @@ private class FetcherPoetContext(
         ) {
             return null
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
-            parameters = listOf(LsiPoetParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE)),
+            modifiers = setOf(LsiModifier.PUBLIC),
+            parameters = listOf(LsiParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE)),
             returnType = fetcherClassType,
             body = code {
                 returnValue {
@@ -384,7 +385,7 @@ private class FetcherPoetContext(
     private fun javaFieldConfigProp(
         prop: ImmutableProp,
         targetType: ImmutableType?,
-    ): LsiPoetFunction {
+    ): LsiFunction {
         val targetModelType = targetType.requiredModelType(prop)
         val fieldConfigId = if (prop.list) LIST_FIELD_CONFIG_ID else REFERENCE_FIELD_CONFIG_ID
         val fieldConfigType = declaredType(
@@ -392,13 +393,13 @@ private class FetcherPoetContext(
             targetModelType,
             targetType.requiredTableType(prop),
         )
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             parameters = listOf(
-                LsiPoetParameter("childFetcher", declaredType(FETCHER_ID, targetModelType)),
-                LsiPoetParameter("fieldConfig", declaredType(CONSUMER_ID, fieldConfigType)),
+                LsiParameter("childFetcher", declaredType(FETCHER_ID, targetModelType)),
+                LsiParameter("fieldConfig", declaredType(CONSUMER_ID, fieldConfigType)),
             ),
             returnType = fetcherClassType,
             body = code {
@@ -414,14 +415,14 @@ private class FetcherPoetContext(
     private fun javaReferenceFetchTypeProp(
         prop: ImmutableProp,
         targetType: ImmutableType?,
-    ): LsiPoetFunction {
-        return LsiPoetFunction(
+    ): LsiFunction {
+        return LsiFunction(
             name = prop.name,
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             parameters = listOf(
-                LsiPoetParameter("fetchType", REFERENCE_FETCH_TYPE),
-                LsiPoetParameter(
+                LsiParameter("fetchType", REFERENCE_FETCH_TYPE),
+                LsiParameter(
                     "childFetcher",
                     declaredType(FETCHER_ID, targetType.requiredModelType(prop)),
                 ),
@@ -440,7 +441,7 @@ private class FetcherPoetContext(
         prop: ImmutableProp,
         targetType: ImmutableType?,
         withConfig: Boolean,
-    ): LsiPoetFunction? {
+    ): LsiFunction? {
         if (!prop.recursive) {
             return null
         }
@@ -455,14 +456,14 @@ private class FetcherPoetContext(
                 targetType.requiredModelType(prop),
                 targetType.requiredTableType(prop),
             )
-            listOf(LsiPoetParameter("fieldConfig", declaredType(CONSUMER_ID, configType)))
+            listOf(LsiParameter("fieldConfig", declaredType(CONSUMER_ID, configType)))
         } else {
             emptyList()
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = StringUtil.identifier("recursive", prop.name),
             annotations = listOf(NEW_CHAIN_ANNOTATION),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             parameters = parameters,
             returnType = fetcherClassType,
             body = code {
@@ -477,80 +478,80 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaNegativeConstructor(): LsiPoetConstructor {
+    private fun javaNegativeConstructor(): LsiConstructor {
         return javaPrivateConstructor(
             parameters = listOf(
-                LsiPoetParameter("prev", fetcherClassType),
-                LsiPoetParameter("prop", IMMUTABLE_PROP_TYPE),
-                LsiPoetParameter("negative", BOOLEAN_TYPE),
-                LsiPoetParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE),
+                LsiParameter("prev", fetcherClassType),
+                LsiParameter("prop", IMMUTABLE_PROP_TYPE),
+                LsiParameter("negative", BOOLEAN_TYPE),
+                LsiParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE),
             )
         )
     }
 
-    private fun javaFieldConfigConstructor(): LsiPoetConstructor {
+    private fun javaFieldConfigConstructor(): LsiConstructor {
         return javaPrivateConstructor(
             parameters = listOf(
-                LsiPoetParameter("prev", fetcherClassType),
-                LsiPoetParameter("prop", IMMUTABLE_PROP_TYPE),
-                LsiPoetParameter("fieldConfig", fieldConfigWildcardType()),
+                LsiParameter("prev", fetcherClassType),
+                LsiParameter("prop", IMMUTABLE_PROP_TYPE),
+                LsiParameter("fieldConfig", fieldConfigWildcardType()),
             )
         )
     }
 
-    private fun javaTypeBranchConstructor(): LsiPoetConstructor {
+    private fun javaTypeBranchConstructor(): LsiConstructor {
         return javaPrivateConstructor(
             parameters = listOf(
-                LsiPoetParameter("prev", fetcherClassType),
-                LsiPoetParameter("typeBranchFetcher", declaredType(FETCHER_IMPL_ID, LsiTypeArgument.STAR)),
+                LsiParameter("prev", fetcherClassType),
+                LsiParameter("typeBranchFetcher", declaredType(FETCHER_IMPL_ID, LsiTypeArgument.STAR)),
             )
         )
     }
 
     private fun javaPrivateConstructor(
-        parameters: List<LsiPoetParameter>,
-    ): LsiPoetConstructor {
-        return LsiPoetConstructor(
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+        parameters: List<LsiParameter>,
+    ): LsiConstructor {
+        return LsiConstructor(
+            modifiers = setOf(LsiModifier.PRIVATE),
             parameters = parameters,
-            delegationCall = LsiPoetDelegationCall(
-                target = LsiPoetDelegationTarget.SUPER,
+            delegationCall = LsiDelegationCall(
+                target = LsiDelegationTarget.SUPER,
                 arguments = parameters.map { parameter -> code { name(parameter.name) } },
             ),
         )
     }
 
-    private fun javaNegativeCreator(): LsiPoetFunction {
+    private fun javaNegativeCreator(): LsiFunction {
         return javaCreator(
             parameters = listOf(
-                LsiPoetParameter("prop", IMMUTABLE_PROP_TYPE),
-                LsiPoetParameter("negative", BOOLEAN_TYPE),
-                LsiPoetParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE),
+                LsiParameter("prop", IMMUTABLE_PROP_TYPE),
+                LsiParameter("negative", BOOLEAN_TYPE),
+                LsiParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE),
             )
         )
     }
 
-    private fun javaFieldConfigCreator(): LsiPoetFunction {
+    private fun javaFieldConfigCreator(): LsiFunction {
         return javaCreator(
             parameters = listOf(
-                LsiPoetParameter("prop", IMMUTABLE_PROP_TYPE),
-                LsiPoetParameter("fieldConfig", fieldConfigWildcardType()),
+                LsiParameter("prop", IMMUTABLE_PROP_TYPE),
+                LsiParameter("fieldConfig", fieldConfigWildcardType()),
             )
         )
     }
 
-    private fun javaTypeBranchCreator(): LsiPoetFunction {
+    private fun javaTypeBranchCreator(): LsiFunction {
         return javaCreator(
             parameters = listOf(
-                LsiPoetParameter("typeBranchFetcher", declaredType(FETCHER_IMPL_ID, LsiTypeArgument.STAR))
+                LsiParameter("typeBranchFetcher", declaredType(FETCHER_IMPL_ID, LsiTypeArgument.STAR))
             )
         )
     }
 
-    private fun javaCreator(parameters: List<LsiPoetParameter>): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun javaCreator(parameters: List<LsiParameter>): LsiFunction {
+        return LsiFunction(
             name = "createFetcher",
-            modifiers = setOf(LsiPoetModifier.PROTECTED, LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.PROTECTED, LsiModifier.OVERRIDE),
             parameters = parameters,
             returnType = fetcherClassType,
             body = code {
@@ -582,13 +583,13 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinFile(): LsiPoetFile {
+    private fun kotlinFile(): LsiFile {
         val sourceBaseName = workspace.immutableSourceBaseName(type)
-        return LsiPoetFile(
+        return LsiFile(
             language = LsiLanguage.KOTLIN,
             packageName = type.packageName,
             fileName = "$sourceBaseName$FETCHER_SUFFIX",
-            fileNameStyle = LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM,
+            fileNameStyle = LsiFileNameStyle.KOTLIN_SOURCE_STEM,
             annotations = listOf(
                 FILE_WARNING_SUPPRESSION,
                 generatedByAnnotation(modelType, fileTarget = true),
@@ -603,7 +604,7 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinCrossPackageByImports(): List<LsiPoetImport> {
+    private fun kotlinCrossPackageByImports(): List<LsiImport> {
         return type.props.asSequence()
             .filter(schema::isConcreteEntityAssociation)
             .mapNotNull(schema::targetTypeOf)
@@ -613,20 +614,20 @@ private class FetcherPoetContext(
             .map(ImmutableType::packageName)
             .distinct()
             .sorted()
-            .map { packageName -> LsiPoetImport(packageName, "by") }
+            .map { packageName -> LsiImport(packageName, "by") }
             .toList()
     }
 
-    private fun kotlinByFunction(withBase: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun kotlinByFunction(withBase: Boolean): LsiFunction {
+        return LsiFunction(
             name = "by",
             annotations = listOf(generatedByAnnotation(modelType)),
             receiverType = declaredType(FETCHER_CREATOR_ID, modelType),
             parameters = buildList {
                 if (withBase) {
-                    add(LsiPoetParameter("base", fetcherType.withRootNullability(nullable = true)))
+                    add(LsiParameter("base", fetcherType.withRootNullability(nullable = true)))
                 }
-                add(LsiPoetParameter("block", receiverFunctionType(fetcherDslType)))
+                add(LsiParameter("block", receiverFunctionType(fetcherDslType)))
             },
             returnType = fetcherType,
             body = code {
@@ -646,15 +647,15 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinFetcherDslType(): LsiPoetType {
-        return LsiPoetType(
+    private fun kotlinFetcherDslType(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = "${type.simpleName}$FETCHER_DSL_SUFFIX",
             kind = LsiTypeDeclarationKind.CLASS,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             annotations = listOf(DSL_SCOPE_ANNOTATION, generatedByAnnotation(modelType)),
-            primaryConstructor = LsiPoetConstructor(
+            primaryConstructor = LsiConstructor(
                 parameters = listOf(
-                    LsiPoetParameter(
+                    LsiParameter(
                         name = "fetcher",
                         type = fetcherType,
                         defaultValue = code { name(emptyFetcherName) },
@@ -663,11 +664,11 @@ private class FetcherPoetContext(
             ),
             members = buildList {
                 add(
-                    LsiPoetProperty(
+                    LsiProperty(
                         name = "_fetcher",
                         type = fetcherType,
                         mutable = true,
-                        modifiers = setOf(LsiPoetModifier.PRIVATE),
+                        modifiers = setOf(LsiModifier.PRIVATE),
                         initializer = code { name("fetcher") },
                     )
                 )
@@ -696,16 +697,16 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinInternallyGetFetcherFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun kotlinInternallyGetFetcherFunction(): LsiFunction {
+        return LsiFunction(
             name = "internallyGetFetcher",
             returnType = fetcherType,
             body = code { returnValue { name("_fetcher") } },
         )
     }
 
-    private fun kotlinDeleteFunction(name: String): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun kotlinDeleteFunction(name: String): LsiFunction {
+        return LsiFunction(
             name = name,
             body = code {
                 text("_fetcher = _fetcher.")
@@ -715,7 +716,7 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinInheritanceFunctions(): List<LsiPoetFunction> {
+    private fun kotlinInheritanceFunctions(): List<LsiFunction> {
         if (strictTypeBranches.isEmpty()) {
             return emptyList()
         }
@@ -725,11 +726,11 @@ private class FetcherPoetContext(
             name = "S",
             upperBounds = listOf(modelType),
         )
-        val genericFunction = LsiPoetFunction(
+        val genericFunction = LsiFunction(
             name = "forType",
             typeParameters = listOf(typeParameter),
             parameters = listOf(
-                LsiPoetParameter(
+                LsiParameter(
                     "typeBranchFetcher",
                     declaredType(FETCHER_ID, LsiTypeParameterRef(typeParameterId)),
                 )
@@ -745,27 +746,27 @@ private class FetcherPoetContext(
         return listOf(genericFunction) + strictTypeBranches.map(::kotlinTypeBranchFunction)
     }
 
-    private fun kotlinTypeBranchFunction(typeBranch: ImmutableType): LsiPoetFunction {
+    private fun kotlinTypeBranchFunction(typeBranch: ImmutableType): LsiFunction {
         val branchType = LsiDeclaredType(typeBranch.id)
         val branchFetcherDslType = LsiDeclaredType(
             typeBranch.generatedTypeId("${typeBranch.simpleName}$FETCHER_DSL_SUFFIX")
         )
-        return LsiPoetFunction(
+        return LsiFunction(
             name = "forType",
             annotations = listOf(
-                LsiPoetAnnotation(
+                sourceLsiAnnotation(
                     type = KOTLIN_SUPPRESS_ID,
                     arguments = listOf(
-                        LsiPoetAnnotationArgument.Positional(
-                            LsiPoetAnnotationValue.StringValue("UNUSED_PARAMETER")
+                        LsiSourceAnnotationArgument.Positional(
+                            LsiAnnotationValue.StringValue("UNUSED_PARAMETER")
                         )
                     ),
                 ),
-                LsiPoetAnnotation(
+                sourceLsiAnnotation(
                     type = JVM_NAME_ID,
                     arguments = listOf(
-                        LsiPoetAnnotationArgument.Positional(
-                            LsiPoetAnnotationValue.StringValue(
+                        LsiSourceAnnotationArgument.Positional(
+                            LsiAnnotationValue.StringValue(
                                 "forType_${typeBranch.qualifiedName.replace('.', '_')}"
                             )
                         )
@@ -773,8 +774,8 @@ private class FetcherPoetContext(
                 ),
             ),
             parameters = listOf(
-                LsiPoetParameter("type", declaredType(K_CLASS_ID, branchType)),
-                LsiPoetParameter("block", receiverFunctionType(branchFetcherDslType)),
+                LsiParameter("type", declaredType(K_CLASS_ID, branchType)),
+                LsiParameter("block", receiverFunctionType(branchFetcherDslType)),
             ),
             body = code {
                 statement {
@@ -792,12 +793,12 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinSimplePropFunction(prop: ImmutableProp): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun kotlinSimplePropFunction(prop: ImmutableProp): LsiFunction {
+        return LsiFunction(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             parameters = listOf(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "enabled",
                     type = BOOLEAN_TYPE,
                     defaultValue = code { text("true") },
@@ -822,7 +823,7 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinIdOnlyFetchTypeFunction(prop: ImmutableProp): LsiPoetFunction? {
+    private fun kotlinIdOnlyFetchTypeFunction(prop: ImmutableProp): LsiFunction? {
         val associationProp = schema.idViewBasePropOrSelf(prop)
         if (
             associationProp.primaryMapping == PrimaryMapping.TRANSIENT ||
@@ -837,10 +838,10 @@ private class FetcherPoetContext(
         ) {
             return null
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
-            parameters = listOf(LsiPoetParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE)),
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
+            parameters = listOf(LsiParameter("idOnlyFetchType", ID_ONLY_FETCH_TYPE)),
             body = code {
                 text("_fetcher = _fetcher.add(")
                 string(prop.name)
@@ -854,7 +855,7 @@ private class FetcherPoetContext(
         enabled: Boolean,
         lambda: Boolean,
         config: Boolean,
-    ): LsiPoetFunction? {
+    ): LsiFunction? {
         val targetType = schema.targetTypeOf(prop) ?: return null
         if (targetType.kind != ImmutableTypeKind.ENTITY && targetType.kind != ImmutableTypeKind.EMBEDDABLE) {
             return null
@@ -868,27 +869,27 @@ private class FetcherPoetContext(
             targetType.generatedTypeId("${targetType.simpleName}$FETCHER_DSL_SUFFIX")
         )
         val (configDslId, configTransformName) = kotlinConfigDsl(prop)
-        val configBlockParameter = LsiPoetParameter(
+        val configBlockParameter = LsiParameter(
             name = "cfgBlock",
             type = receiverFunctionType(
                 declaredType(configDslId, targetTypeRef),
                 nullable = true,
             ),
         )
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             parameters = buildList {
                 if (enabled) {
-                    add(LsiPoetParameter("enabled", BOOLEAN_TYPE))
+                    add(LsiParameter("enabled", BOOLEAN_TYPE))
                 }
                 if (lambda) {
                     if (config) {
                         add(configBlockParameter)
                     }
-                    add(LsiPoetParameter("childBlock", receiverFunctionType(targetFetcherDslType)))
+                    add(LsiParameter("childBlock", receiverFunctionType(targetFetcherDslType)))
                 } else {
-                    add(LsiPoetParameter("childFetcher", declaredType(FETCHER_ID, targetTypeRef)))
+                    add(LsiParameter("childFetcher", declaredType(FETCHER_ID, targetTypeRef)))
                     if (config) {
                         add(configBlockParameter)
                     }
@@ -912,7 +913,7 @@ private class FetcherPoetContext(
         prop: ImmutableProp,
         lambda: Boolean,
         config: Boolean,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return code {
             beginControlFlow { text("if (!enabled)") }
             statement {
@@ -946,7 +947,7 @@ private class FetcherPoetContext(
         lambda: Boolean,
         config: Boolean,
         configTransformName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return code {
             text("_fetcher = _fetcher.add(")
             line()
@@ -978,7 +979,7 @@ private class FetcherPoetContext(
     private fun kotlinReferenceFetchTypeFunction(
         prop: ImmutableProp,
         lambda: Boolean,
-    ): LsiPoetFunction? {
+    ): LsiFunction? {
         if (prop.remote || prop.list || !schema.isConcreteEntityAssociation(prop)) {
             return null
         }
@@ -988,15 +989,15 @@ private class FetcherPoetContext(
         val targetFetcherDslType = LsiDeclaredType(
             targetType.generatedTypeId("${targetType.simpleName}$FETCHER_DSL_SUFFIX")
         )
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             parameters = buildList {
-                add(LsiPoetParameter("fetchType", REFERENCE_FETCH_TYPE))
+                add(LsiParameter("fetchType", REFERENCE_FETCH_TYPE))
                 if (lambda) {
-                    add(LsiPoetParameter("childBlock", receiverFunctionType(targetFetcherDslType)))
+                    add(LsiParameter("childBlock", receiverFunctionType(targetFetcherDslType)))
                 } else {
-                    add(LsiPoetParameter("childFetcher", declaredType(FETCHER_ID, targetTypeRef)))
+                    add(LsiParameter("childFetcher", declaredType(FETCHER_ID, targetTypeRef)))
                 }
             },
             body = code {
@@ -1029,7 +1030,7 @@ private class FetcherPoetContext(
     private fun kotlinRecursiveFunction(
         prop: ImmutableProp,
         config: Boolean,
-    ): LsiPoetFunction? {
+    ): LsiFunction? {
         if (!prop.recursive) {
             return null
         }
@@ -1041,7 +1042,7 @@ private class FetcherPoetContext(
         }
         val parameters = if (config) {
             listOf(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "cfgBlock",
                     type = receiverFunctionType(
                         declaredType(configDslId, targetTypeRef),
@@ -1052,9 +1053,9 @@ private class FetcherPoetContext(
         } else {
             emptyList()
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = "${prop.name}*",
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             parameters = parameters,
             body = code {
                 text("_fetcher = _fetcher.addRecursion(")
@@ -1093,13 +1094,13 @@ private class FetcherPoetContext(
             .withoutTypeAnnotations()
     }
 
-    private fun kotlinEmptyFetcherProperty(): LsiPoetProperty {
-        return LsiPoetProperty(
+    private fun kotlinEmptyFetcherProperty(): LsiProperty {
+        return LsiProperty(
             name = emptyFetcherName,
             type = fetcherType,
             mutable = false,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
+            modifiers = setOf(LsiModifier.PRIVATE),
             initializer = code {
                 type(LsiDeclaredType(FETCHER_IMPL_ID))
                 text("(")
@@ -1282,13 +1283,13 @@ private fun MutableSet<LsiSymbolId>.addAnnotationValueDependencies(value: LsiAnn
 private fun generatedByAnnotation(
     type: LsiTypeRef,
     fileTarget: Boolean = false,
-): LsiPoetAnnotation {
-    return LsiPoetAnnotation(
+): LsiAnnotation {
+    return sourceLsiAnnotation(
         type = GENERATED_BY_ID,
         arguments = listOf(
-            LsiPoetAnnotationArgument.Named(
+            LsiSourceAnnotationArgument.Named(
                 name = "type",
-                value = LsiPoetAnnotationValue.ClassValue(type),
+                value = LsiAnnotationValue.ClassValue(type),
             )
         ),
         useSiteTarget = if (fileTarget) {
@@ -1376,8 +1377,8 @@ private fun LsiTypeRef.withoutTypeAnnotations(): LsiTypeRef {
     }
 }
 
-private fun code(block: LsiPoetCodeBuilder.() -> Unit): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build(block)
+private fun code(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock {
+    return LsiCodeBlock.build(block)
 }
 
 private fun ImmutableType.generatedTypeId(generatedSimpleName: String): LsiSymbolId {
@@ -1477,13 +1478,13 @@ private val REFERENCE_FETCH_TYPE = LsiDeclaredType(REFERENCE_FETCH_TYPE_ID)
 private val IMMUTABLE_PROP_TYPE = LsiDeclaredType(IMMUTABLE_PROP_ID)
 private val JAVA_FIELD_CONFIG_UTILS_TYPE = LsiDeclaredType(JAVA_FIELD_CONFIG_UTILS_ID)
 
-private val NEW_CHAIN_ANNOTATION = LsiPoetAnnotation(NEW_CHAIN_ID)
-private val DSL_SCOPE_ANNOTATION = LsiPoetAnnotation(DSL_SCOPE_ID)
-private val FILE_WARNING_SUPPRESSION = LsiPoetAnnotation(
+private val NEW_CHAIN_ANNOTATION = sourceLsiAnnotation(NEW_CHAIN_ID)
+private val DSL_SCOPE_ANNOTATION = sourceLsiAnnotation(DSL_SCOPE_ID)
+private val FILE_WARNING_SUPPRESSION = sourceLsiAnnotation(
     type = KOTLIN_SUPPRESS_ID,
     arguments = listOf(
-        LsiPoetAnnotationArgument.Positional(
-            LsiPoetAnnotationValue.StringValue("warnings")
+        LsiSourceAnnotationArgument.Positional(
+            LsiAnnotationValue.StringValue("warnings")
         )
     ),
     useSiteTarget = LsiAnnotationUseSiteTarget.FILE,

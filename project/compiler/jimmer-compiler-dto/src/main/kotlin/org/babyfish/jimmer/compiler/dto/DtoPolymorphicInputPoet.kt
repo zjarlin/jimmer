@@ -18,13 +18,13 @@ import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNull
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
-import site.addzero.lsi.poet.generatedTopLevelPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.LsiTypeReferenceStyle
+import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 将类型多态输入分支的判别值校验降低为可由两端 Poet 渲染的代码块。 */
 internal fun DtoType.toTypedPolymorphicInputDiscriminatorValidationPoetCodeBlock(
@@ -33,8 +33,8 @@ internal fun DtoType.toTypedPolymorphicInputDiscriminatorValidationPoetCodeBlock
     discriminatorProp: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
-    generatedDtoTypeName: LsiPoetTypeName,
-): LsiPoetCodeBlock {
+    generatedDtoTypeName: LsiTypeName,
+): LsiCodeBlock {
     require(graph.typesById[id] === this) {
         "DTO polymorphic input branch does not belong to this graph: ${id.value}"
     }
@@ -56,7 +56,7 @@ internal fun DtoType.toTypedPolymorphicInputDiscriminatorValidationPoetCodeBlock
     val baseType = requireNotNull(immutableSchema.typesById[baseTypeId]) {
         "No immutable base type '${baseTypeId.value}' for DTO polymorphic input branch: ${id.value}"
     }
-    val discriminatorValue = baseType.discriminatorValue ?: return LsiPoetCodeBlock.EMPTY
+    val discriminatorValue = baseType.discriminatorValue ?: return LsiCodeBlock.EMPTY
     val rootTypeId = baseType.inheritanceRootTypeId ?: baseType.id
     require(immutableSchema.typesById.containsKey(rootTypeId)) {
         "No immutable inheritance root '${rootTypeId.value}' for DTO polymorphic input branch: ${id.value}"
@@ -93,10 +93,10 @@ internal fun DtoType.toDefaultPolymorphicInputBodyPoetCodeBlock(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     workspace: LsiWorkspace,
-    generatedDtoTypeName: LsiPoetTypeName,
+    generatedDtoTypeName: LsiTypeName,
     idParameterName: String? = null,
     blockParameterName: String? = null,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     require(graph.typesById[id] === this) {
         "DTO polymorphic input branch does not belong to this graph: ${id.value}"
     }
@@ -142,7 +142,7 @@ internal fun DtoType.toDefaultPolymorphicInputBodyPoetCodeBlock(
         graph = graph,
         immutableSchema = immutableSchema,
     )
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         concreteTypes.forEach { concreteType ->
             val discriminatorValue = concreteType.discriminatorValue ?: return@forEach
             beginControlFlow {
@@ -235,15 +235,15 @@ internal fun DtoType.toDefaultPolymorphicInputBodyPoetCodeBlock(
 
 /** 为多态输入代码块解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoPolymorphicInputPoetTypeNames(
-    codeBlock: LsiPoetCodeBlock,
+    codeBlock: LsiCodeBlock,
     immutableSchema: ImmutableSchema,
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
+): List<LsiTypeName> {
+    return toLsiTypeNames(
         typeIds = codeBlock.referencedTypeIds,
         additional = POLYMORPHIC_INPUT_RUNTIME_TYPE_NAMES + immutableSchema.types.flatMap { type ->
             listOf(
-                generatedTopLevelPoetTypeName(type.packageName, type.simpleName),
-                generatedTopLevelPoetTypeName(type.packageName, "${type.simpleName}Draft"),
+                generatedTopLevelTypeName(type.packageName, type.simpleName),
+                generatedTopLevelTypeName(type.packageName, "${type.simpleName}Draft"),
             )
         },
     )
@@ -254,22 +254,22 @@ private fun ImmutableType.javaDraftType(): LsiDeclaredType {
 }
 
 private fun ImmutableType.javaDraftTypeReferenceStyle(
-    generatedDtoTypeName: LsiPoetTypeName,
-): LsiPoetTypeReferenceStyle {
+    generatedDtoTypeName: LsiTypeName,
+): LsiTypeReferenceStyle {
     return if (simpleName + "Draft" in generatedDtoTypeName.simpleNames) {
-        LsiPoetTypeReferenceStyle.FULLY_QUALIFIED
+        LsiTypeReferenceStyle.FULLY_QUALIFIED
     } else {
-        LsiPoetTypeReferenceStyle.IMPORTED
+        LsiTypeReferenceStyle.IMPORTED
     }
 }
 
 private fun ImmutableType.entityTypeReferenceStyle(
-    generatedDtoTypeName: LsiPoetTypeName,
-): LsiPoetTypeReferenceStyle {
+    generatedDtoTypeName: LsiTypeName,
+): LsiTypeReferenceStyle {
     return if (simpleName in generatedDtoTypeName.simpleNames) {
-        LsiPoetTypeReferenceStyle.FULLY_QUALIFIED
+        LsiTypeReferenceStyle.FULLY_QUALIFIED
     } else {
-        LsiPoetTypeReferenceStyle.IMPORTED
+        LsiTypeReferenceStyle.IMPORTED
     }
 }
 
@@ -278,9 +278,9 @@ private fun javaTypedDiscriminatorValidation(
     discriminatorValue: String,
     rootTypeId: LsiSymbolId,
     entityTypeName: String,
-    generatedDtoTypeName: LsiPoetTypeName,
-): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build {
+    generatedDtoTypeName: LsiTypeName,
+): LsiCodeBlock {
+    return LsiCodeBlock.build {
         beginControlFlow {
             text("if (!")
             type(LsiDeclaredType(JAVA_OBJECTS_TYPE_ID))
@@ -313,9 +313,9 @@ private fun kotlinTypedDiscriminatorValidation(
     discriminatorValue: String,
     rootTypeId: LsiSymbolId,
     entityTypeName: String,
-    generatedDtoTypeName: LsiPoetTypeName,
-): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build {
+    generatedDtoTypeName: LsiTypeName,
+): LsiCodeBlock {
+    return LsiCodeBlock.build {
         beginControlFlow {
             text("if (")
             name(accessorName)
@@ -341,13 +341,13 @@ private fun kotlinTypedDiscriminatorValidation(
     }
 }
 
-private fun LsiPoetCodeBuilder.javaDiscriminatorAccessor(accessorName: String) {
+private fun LsiCodeBuilder.javaDiscriminatorAccessor(accessorName: String) {
     text("this.")
     name(accessorName)
     text("()")
 }
 
-private fun LsiPoetCodeBuilder.runtimeDiscriminatorValue(
+private fun LsiCodeBuilder.runtimeDiscriminatorValue(
     rootTypeId: LsiSymbolId,
     discriminatorValue: String,
     targetLanguage: LsiLanguage,

@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -11,21 +13,19 @@ import site.addzero.lsi.jimmer.dto.generatedJacksonPolymorphicRootAnnotations
 import site.addzero.lsi.jimmer.dto.generatedJacksonPolymorphicTypeNameAnnotationOrNull
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationArgumentNameStyle
-import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.model.LsiAnnotationArrayStyle
+import site.addzero.lsi.model.LsiTypeName
 
 /** 将完整的多态输入根 LSI 注解转换为平台中立的源码注解。 */
 internal fun DtoType.toJacksonPolymorphicRootPoetAnnotations(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     annotationContract: DtoAnnotationContract,
-    generatedRootTypeName: LsiPoetTypeName,
+    generatedRootTypeName: LsiTypeName,
     targetLanguage: LsiLanguage,
-): List<LsiPoetAnnotation> {
+): List<LsiAnnotation> {
     targetLanguage.requireJacksonPolymorphismTargetLanguage()
     return generatedJacksonPolymorphicRootAnnotations(
         graph = graph,
@@ -43,7 +43,7 @@ internal fun DtoPolymorphicBranch.toJacksonPolymorphicTypeNamePoetAnnotationOrNu
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     annotationContract: DtoAnnotationContract,
-): LsiPoetAnnotation? {
+): LsiAnnotation? {
     val annotation = generatedJacksonPolymorphicTypeNameAnnotationOrNull(
         rootType = rootType,
         graph = graph,
@@ -58,8 +58,8 @@ internal fun DtoPolymorphicBranch.toJacksonPolymorphicTypeNamePoetAnnotationOrNu
 
 /** 返回 Jackson 多态注解及生成分支引用需要的精确源码类型名。 */
 internal fun DtoType.jacksonPolymorphismPoetTypeNames(
-    generatedRootTypeName: LsiPoetTypeName,
-): List<LsiPoetTypeName> {
+    generatedRootTypeName: LsiTypeName,
+): List<LsiTypeName> {
     val generatedBranchTypeNames = polymorphism
         ?.branches
         .orEmpty()
@@ -68,13 +68,13 @@ internal fun DtoType.jacksonPolymorphismPoetTypeNames(
         JACKSON_POLYMORPHISM_POET_TYPE_NAMES +
             generatedRootTypeName +
             generatedBranchTypeNames
-        ).distinctBy(LsiPoetTypeName::typeId)
+        ).distinctBy(LsiTypeName::typeId)
 }
 
 private fun LsiAnnotation.toJacksonPolymorphismPoetAnnotation(
     targetLanguage: LsiLanguage?,
     positionalValueArgument: Boolean = false,
-): LsiPoetAnnotation {
+): LsiAnnotation {
     val argumentNames = if (explicitArgumentNamesInSourceOrder.isNotEmpty()) {
         explicitArgumentNamesInSourceOrder
     } else {
@@ -94,16 +94,16 @@ private fun LsiAnnotation.toJacksonPolymorphismPoetAnnotation(
         }
         val value = argument.value.toJacksonPolymorphismPoetValue(targetLanguage)
         if (positionalValueArgument) {
-            LsiPoetAnnotationArgument.Positional(value)
+            LsiSourceAnnotationArgument.Positional(value)
         } else {
-            LsiPoetAnnotationArgument.Named(
+            LsiSourceAnnotationArgument.Named(
                 name = name,
                 value = value,
-                nameStyle = LsiPoetAnnotationArgumentNameStyle.VERBATIM,
+                nameStyle = LsiAnnotationArgumentNameStyle.VERBATIM,
             )
         }
     }
-    return LsiPoetAnnotation(
+    return sourceLsiAnnotation(
         type = type,
         arguments = poetArguments,
         useSiteTarget = useSiteTarget,
@@ -112,23 +112,23 @@ private fun LsiAnnotation.toJacksonPolymorphismPoetAnnotation(
 
 private fun LsiAnnotationValue.toJacksonPolymorphismPoetValue(
     targetLanguage: LsiLanguage?,
-): LsiPoetAnnotationValue {
+): LsiAnnotationValue {
     return when (this) {
-        is LsiAnnotationValue.BooleanValue -> LsiPoetAnnotationValue.BooleanValue(value)
-        is LsiAnnotationValue.ByteValue -> LsiPoetAnnotationValue.ByteValue(value)
-        is LsiAnnotationValue.ShortValue -> LsiPoetAnnotationValue.ShortValue(value)
-        is LsiAnnotationValue.IntValue -> LsiPoetAnnotationValue.IntValue(value)
-        is LsiAnnotationValue.LongValue -> LsiPoetAnnotationValue.LongValue(value)
-        is LsiAnnotationValue.FloatValue -> LsiPoetAnnotationValue.FloatValue(value)
-        is LsiAnnotationValue.DoubleValue -> LsiPoetAnnotationValue.DoubleValue(value)
-        is LsiAnnotationValue.CharValue -> LsiPoetAnnotationValue.CharValue(value)
-        is LsiAnnotationValue.StringValue -> LsiPoetAnnotationValue.StringValue(value)
-        is LsiAnnotationValue.EnumValue -> LsiPoetAnnotationValue.EnumValue(enumType, entryName)
-        is LsiAnnotationValue.ClassValue -> LsiPoetAnnotationValue.ClassValue(type)
-        is LsiAnnotationValue.NestedAnnotationValue -> LsiPoetAnnotationValue.NestedAnnotationValue(
+        is LsiAnnotationValue.BooleanValue -> LsiAnnotationValue.BooleanValue(value)
+        is LsiAnnotationValue.ByteValue -> LsiAnnotationValue.ByteValue(value)
+        is LsiAnnotationValue.ShortValue -> LsiAnnotationValue.ShortValue(value)
+        is LsiAnnotationValue.IntValue -> LsiAnnotationValue.IntValue(value)
+        is LsiAnnotationValue.LongValue -> LsiAnnotationValue.LongValue(value)
+        is LsiAnnotationValue.FloatValue -> LsiAnnotationValue.FloatValue(value)
+        is LsiAnnotationValue.DoubleValue -> LsiAnnotationValue.DoubleValue(value)
+        is LsiAnnotationValue.CharValue -> LsiAnnotationValue.CharValue(value)
+        is LsiAnnotationValue.StringValue -> LsiAnnotationValue.StringValue(value)
+        is LsiAnnotationValue.EnumValue -> LsiAnnotationValue.EnumValue(enumType, entryName)
+        is LsiAnnotationValue.ClassValue -> LsiAnnotationValue.ClassValue(type)
+        is LsiAnnotationValue.NestedAnnotationValue -> LsiAnnotationValue.NestedAnnotationValue(
             annotation.toJacksonPolymorphismPoetAnnotation(targetLanguage)
         )
-        is LsiAnnotationValue.ArrayValue -> LsiPoetAnnotationValue.ArrayValue(
+        is LsiAnnotationValue.ArrayValue -> LsiAnnotationValue.ArrayValue(
             elements = elements.map { element ->
                 element.toJacksonPolymorphismPoetValue(targetLanguage)
             },
@@ -139,17 +139,17 @@ private fun LsiAnnotationValue.toJacksonPolymorphismPoetValue(
 
 private fun LsiLanguage?.jacksonPolymorphismArrayStyle(
     elementCount: Int,
-): LsiPoetAnnotationArrayStyle {
+): LsiAnnotationArrayStyle {
     return when {
-        this == LsiLanguage.JAVA -> LsiPoetAnnotationArrayStyle.COMPACT_MULTI_LINE_LITERAL
+        this == LsiLanguage.JAVA -> LsiAnnotationArrayStyle.COMPACT_MULTI_LINE_LITERAL
         this == LsiLanguage.KOTLIN && elementCount > 1 ->
-            LsiPoetAnnotationArrayStyle.LINE_SEPARATED_LITERAL
-        this == LsiLanguage.KOTLIN -> LsiPoetAnnotationArrayStyle.LITERAL
+            LsiAnnotationArrayStyle.LINE_SEPARATED_LITERAL
+        this == LsiLanguage.KOTLIN -> LsiAnnotationArrayStyle.LITERAL
         else -> error("Jackson annotation array conversion requires a source target language")
     }
 }
 
-private fun LsiPoetTypeName.nestedType(simpleName: String): LsiPoetTypeName {
+private fun LsiTypeName.nestedType(simpleName: String): LsiTypeName {
     return JimmerDtoPoetTypeNames.create(packageName, simpleNames + simpleName)
 }
 

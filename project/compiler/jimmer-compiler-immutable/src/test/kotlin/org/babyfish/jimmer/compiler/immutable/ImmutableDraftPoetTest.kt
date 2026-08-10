@@ -25,7 +25,7 @@ import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetArtifact
+import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -277,12 +277,12 @@ class ImmutableDraftPoetTest {
         val secondArtifacts = secondWorkspace.draftArtifacts(bookId)
 
         assertEquals(
-            firstArtifacts.map(LsiPoetArtifact::aggregationMode),
-            secondArtifacts.map(LsiPoetArtifact::aggregationMode),
+            firstArtifacts.map(LsiSourceArtifact::aggregationMode),
+            secondArtifacts.map(LsiSourceArtifact::aggregationMode),
         )
         assertEquals(
-            firstArtifacts.map(LsiPoetArtifact::dependencySources),
-            secondArtifacts.map(LsiPoetArtifact::dependencySources),
+            firstArtifacts.map(LsiSourceArtifact::dependencySources),
+            secondArtifacts.map(LsiSourceArtifact::dependencySources),
         )
         assertTrue(secondArtifacts.all { artifact ->
             generatedDraftSource !in artifact.dependencySources
@@ -429,7 +429,7 @@ class ImmutableDraftPoetTest {
         assertContains(content, "this.type = value as String?")
     }
 
-    private fun LsiWorkspace.draftArtifacts(typeId: LsiSymbolId): List<LsiPoetArtifact> {
+    private fun LsiWorkspace.draftArtifacts(typeId: LsiSymbolId): List<LsiSourceArtifact> {
         val schema = toImmutableSchema()
         val draftSchema = JimmerImmutableDraftCodegenPrecompiler().compile(
             schema = schema,
@@ -447,7 +447,7 @@ class ImmutableDraftPoetTest {
         }
     }
 
-    private fun assertGeneratedArtifactBoundary(artifact: LsiPoetArtifact) {
+    private fun assertGeneratedArtifactBoundary(artifact: LsiSourceArtifact) {
         val content = "generated"
         val generated = artifact.generatedArtifact(content)
 

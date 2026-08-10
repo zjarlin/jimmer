@@ -9,7 +9,7 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
-import site.addzero.lsi.poet.LsiPoetModifier
+import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 internal object AptDtoLoadedStateRenderer {
@@ -45,11 +45,11 @@ internal object AptDtoLoadedStateRenderer {
     }
 }
 
-private fun Modifier.toLsiPoetVisibility(): LsiPoetModifier {
+private fun Modifier.toLsiPoetVisibility(): LsiModifier {
     return when (this) {
-        Modifier.PUBLIC -> LsiPoetModifier.PUBLIC
-        Modifier.PROTECTED -> LsiPoetModifier.PROTECTED
-        Modifier.PRIVATE -> LsiPoetModifier.PRIVATE
+        Modifier.PUBLIC -> LsiModifier.PUBLIC
+        Modifier.PROTECTED -> LsiModifier.PROTECTED
+        Modifier.PRIVATE -> LsiModifier.PRIVATE
         else -> error("APT DTO field visibility must be public, protected or private: $this")
     }
 }

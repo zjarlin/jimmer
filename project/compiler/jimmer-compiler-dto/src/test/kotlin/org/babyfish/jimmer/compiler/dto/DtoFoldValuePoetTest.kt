@@ -20,7 +20,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 
 class DtoFoldValuePoetTest {
 
@@ -95,7 +95,7 @@ class DtoFoldValuePoetTest {
         val FOLD_PROP_ID = DtoPropId("demo.dto.BookView#prop:summary")
         val GUARD_PROP_ID = DtoPropId("demo.dto.BookView#prop:summaryGuard")
         val IMMUTABLE_PROP_ID = LsiSymbolId.property(LsiSymbolId.type("demo.Book"), "summary")
-        val TARGET_TYPE_NAME = LsiPoetTypeName(
+        val TARGET_TYPE_NAME = LsiTypeName(
             typeId = LsiSymbolId.type("demo.dto.BookView.TargetOf_summary"),
             packageName = "demo.dto",
             simpleNames = listOf("BookView", "TargetOf_summary"),

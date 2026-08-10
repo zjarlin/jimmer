@@ -44,7 +44,7 @@ import site.addzero.lsi.jimmer.dto.*
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import java.util.*
 import javax.lang.model.element.Modifier
 
@@ -56,7 +56,7 @@ internal class AptDtoGenerator private constructor(
     configContractResolution: DtoConfigContractResolution?,
     immutableSchema: ImmutableSchema?,
     lsiWorkspace: LsiWorkspace?,
-    batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>?,
+    batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>?,
     rendererOptions: JimmerDtoRendererOptions?,
     parent: AptDtoGenerator?,
     innerClassName: String?,
@@ -77,7 +77,7 @@ internal class AptDtoGenerator private constructor(
 
     private val lsiWorkspace: LsiWorkspace
 
-    private val batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>
+    private val batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>
 
     private val generatedDtoPackageName: String
 
@@ -95,13 +95,13 @@ internal class AptDtoGenerator private constructor(
 
     private val innerClassName: String?
 
-    private val generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>
+    private val generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>
 
-    private val generatedDtoTypeNames: MutableMap<DtoTypeId, LsiPoetTypeName>
+    private val generatedDtoTypeNames: MutableMap<DtoTypeId, LsiTypeName>
 
     private val locallyGeneratedDtoTypeIds: MutableSet<DtoTypeId> = HashSet()
 
-    private val readOnlyGeneratedDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>
+    private val readOnlyGeneratedDtoTypeNames: Map<DtoTypeId, LsiTypeName>
 
     private val polymorphicSuperInterfaceName: TypeName?
 
@@ -121,7 +121,7 @@ internal class AptDtoGenerator private constructor(
         configContractResolution: DtoConfigContractResolution,
         immutableSchema: ImmutableSchema,
         lsiWorkspace: LsiWorkspace,
-        batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
         rendererOptions: JimmerDtoRendererOptions,
     ) : this(
         lsiGraph,
@@ -511,7 +511,7 @@ internal class AptDtoGenerator private constructor(
         )
     }
 
-    private fun getGeneratedDtoTypeNames(): Map<DtoTypeId, LsiPoetTypeName> {
+    private fun getGeneratedDtoTypeNames(): Map<DtoTypeId, LsiTypeName> {
         return readOnlyGeneratedDtoTypeNames
     }
 

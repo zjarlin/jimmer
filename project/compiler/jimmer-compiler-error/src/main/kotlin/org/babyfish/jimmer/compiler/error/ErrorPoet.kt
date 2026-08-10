@@ -23,42 +23,40 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.toJvmReferenceType
-import site.addzero.lsi.poet.LsiPoetAccessor
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetConstructor
-import site.addzero.lsi.poet.LsiPoetDelegationCall
-import site.addzero.lsi.poet.LsiPoetDelegationTarget
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetMember
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.model.LsiAccessor
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiDelegationCall
+import site.addzero.lsi.model.LsiDelegationTarget
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiMember
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.model.toLsiTypeNames
 
-internal fun ErrorSchema.toLsiPoetArtifacts(
+internal fun ErrorSchema.toLsiSourceArtifacts(
     workspace: LsiWorkspace,
-): List<LsiPoetArtifact> {
-    return families.map { family -> family.toLsiPoetArtifact(workspace) }
+): List<LsiSourceArtifact> {
+    return families.map { family -> family.toLsiSourceArtifact(workspace) }
 }
 
-private fun ErrorFamily.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtifact {
+private fun ErrorFamily.toLsiSourceArtifact(workspace: LsiWorkspace): LsiSourceArtifact {
     val language = sourceLanguage(workspace)
     val originatingSymbols = setOf(id)
     val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencySymbols(language)
     val dependencySources = workspace.originatingSources(dependencySymbols)
-    val file = LsiPoetFile(
+    val file = LsiFile(
         language = language,
         packageName = packageName,
         fileName = exceptionSimpleName,
@@ -72,9 +70,9 @@ private fun ErrorFamily.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtif
             }
         ),
     )
-    return LsiPoetArtifact(
+    return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiPoetTypeNames(
+        typeNames = workspace.toLsiTypeNames(
             file.referencedTypeIds,
             additional = generatedTypeNames(),
         ),
@@ -90,13 +88,13 @@ private fun ErrorFamily.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtif
     )
 }
 
-private fun ErrorFamily.generatedTypeNames(): List<LsiPoetTypeName> {
+private fun ErrorFamily.generatedTypeNames(): List<LsiTypeName> {
     return buildList {
         addAll(BUILT_IN_TYPE_NAMES)
-        add(LsiPoetTypeName(exceptionTypeId, packageName, listOf(exceptionSimpleName)))
+        add(LsiTypeName(exceptionTypeId, packageName, listOf(exceptionSimpleName)))
         codes.forEach { code ->
             add(
-                LsiPoetTypeName(
+                LsiTypeName(
                     typeId = code.exceptionTypeId,
                     packageName = packageName,
                     simpleNames = listOf(exceptionSimpleName, code.exceptionSimpleName),
@@ -106,9 +104,9 @@ private fun ErrorFamily.generatedTypeNames(): List<LsiPoetTypeName> {
     }
 }
 
-private fun ErrorFamily.toJavaPoetType(): LsiPoetType {
+private fun ErrorFamily.toJavaPoetType(): LsiTypeDeclaration {
     val enumType = LsiDeclaredType(id)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(
@@ -116,8 +114,8 @@ private fun ErrorFamily.toJavaPoetType(): LsiPoetType {
             clientExceptionAnnotation(),
         ),
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.ABSTRACT,
+            LsiModifier.PUBLIC,
+            LsiModifier.ABSTRACT,
         ),
         documentation = documentation.withTrailingLineBreak(),
         superClass = codeBasedExceptionType(),
@@ -132,9 +130,9 @@ private fun ErrorFamily.toJavaPoetType(): LsiPoetType {
     )
 }
 
-private fun ErrorFamily.toKotlinPoetType(): LsiPoetType {
+private fun ErrorFamily.toKotlinPoetType(): LsiTypeDeclaration {
     val enumType = LsiDeclaredType(id)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(
@@ -142,8 +140,8 @@ private fun ErrorFamily.toKotlinPoetType(): LsiPoetType {
             clientExceptionAnnotation(),
         ),
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.ABSTRACT,
+            LsiModifier.PUBLIC,
+            LsiModifier.ABSTRACT,
         ),
         documentation = documentation.withTrailingLineBreak(),
         superClass = codeBasedExceptionType(),
@@ -163,7 +161,7 @@ private fun ErrorFamily.javaCommonMembers(
     declaredFields: List<ErrorField>,
     allFields: List<ErrorField>,
     sharedFields: List<ErrorField>?,
-): List<LsiPoetMember> {
+): List<LsiMember> {
     return buildList {
         declaredFields.forEach { field -> add(field.toJavaField()) }
         add(javaConstructor(declaredFields, allFields, sharedFields))
@@ -175,17 +173,17 @@ private fun ErrorFamily.javaConstructor(
     declaredFields: List<ErrorField>,
     allFields: List<ErrorField>,
     sharedFields: List<ErrorField>?,
-): LsiPoetConstructor {
+): LsiConstructor {
     val superArguments = buildList {
         add(codeName("message"))
         add(codeName("cause"))
         sharedFields?.forEach { field -> add(codeName(field.name)) }
     }
-    return LsiPoetConstructor(
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+    return LsiConstructor(
+        modifiers = setOf(LsiModifier.PUBLIC),
         parameters = buildList {
-            add(LsiPoetParameter("message", JAVA_STRING_TYPE))
-            add(LsiPoetParameter("cause", JAVA_THROWABLE_TYPE))
+            add(LsiParameter("message", JAVA_STRING_TYPE))
+            add(LsiParameter("cause", JAVA_THROWABLE_TYPE))
             allFields.forEach { field -> add(field.toJavaParameter()) }
         },
         body = code {
@@ -198,26 +196,26 @@ private fun ErrorFamily.javaConstructor(
                 }
             }
         },
-        delegationCall = LsiPoetDelegationCall(
-            target = LsiPoetDelegationTarget.SUPER,
+        delegationCall = LsiDelegationCall(
+            target = LsiDelegationTarget.SUPER,
             arguments = superArguments,
         ),
     )
 }
 
-private fun ErrorFamily.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun ErrorFamily.javaEnumFunction(enumType: LsiTypeRef): LsiFunction {
+    return LsiFunction(
         name = "get${qualifiedName.substringAfterLast('.')}",
         annotations = listOf(JSON_IGNORE_ANNOTATION),
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.ABSTRACT,
+            LsiModifier.PUBLIC,
+            LsiModifier.ABSTRACT,
         ),
         returnType = enumType,
     )
 }
 
-private fun ErrorCode.javaCreatorFunctions(fields: List<ErrorField>): List<LsiPoetFunction> {
+private fun ErrorCode.javaCreatorFunctions(fields: List<ErrorField>): List<LsiFunction> {
     return listOf(
         javaCreatorFunction(fields, withMessage = false, withCause = false),
         javaCreatorFunction(fields, withMessage = true, withCause = false),
@@ -229,18 +227,18 @@ private fun ErrorCode.javaCreatorFunction(
     fields: List<ErrorField>,
     withMessage: Boolean,
     withCause: Boolean,
-): LsiPoetFunction {
+): LsiFunction {
     val nestedType = LsiDeclaredType(exceptionTypeId)
-    return LsiPoetFunction(
+    return LsiFunction(
         name = creatorName,
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.STATIC,
+            LsiModifier.PUBLIC,
+            LsiModifier.STATIC,
         ),
         parameters = buildList {
             if (withMessage) {
                 add(
-                    LsiPoetParameter(
+                    LsiParameter(
                         name = "message",
                         type = JAVA_STRING_TYPE,
                         annotations = listOf(NON_NULL_ANNOTATION),
@@ -249,7 +247,7 @@ private fun ErrorCode.javaCreatorFunction(
             }
             if (withCause) {
                 add(
-                    LsiPoetParameter(
+                    LsiParameter(
                         name = "cause",
                         type = JAVA_THROWABLE_TYPE,
                         annotations = listOf(NULLABLE_ANNOTATION),
@@ -292,15 +290,15 @@ private fun ErrorCode.javaCreatorFunction(
 private fun ErrorCode.toJavaPoetType(
     family: ErrorFamily,
     enumType: LsiTypeRef,
-): LsiPoetType {
+): LsiTypeDeclaration {
     val allFields = family.declaredFields + declaredFields
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(clientExceptionAnnotation(family.family)),
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.STATIC,
+            LsiModifier.PUBLIC,
+            LsiModifier.STATIC,
         ),
         documentation = documentation.withTrailingLineBreak(),
         superClass = LsiDeclaredType(family.exceptionTypeId),
@@ -312,16 +310,16 @@ private fun ErrorCode.toJavaPoetType(
     )
 }
 
-private fun ErrorCode.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun ErrorCode.javaEnumFunction(enumType: LsiTypeRef): LsiFunction {
+    return LsiFunction(
         name = "get${enumType.declarationSimpleName()}",
         annotations = listOf(
             JSON_IGNORE_ANNOTATION,
             JAVA_OVERRIDE_ANNOTATION,
         ),
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.OVERRIDE,
+            LsiModifier.PUBLIC,
+            LsiModifier.OVERRIDE,
         ),
         returnType = enumType,
         body = code {
@@ -334,13 +332,13 @@ private fun ErrorCode.javaEnumFunction(enumType: LsiTypeRef): LsiPoetFunction {
     )
 }
 
-private fun ErrorCode.javaFieldsFunction(fields: List<ErrorField>): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun ErrorCode.javaFieldsFunction(fields: List<ErrorField>): LsiFunction {
+    return LsiFunction(
         name = "getFields",
         annotations = listOf(JAVA_OVERRIDE_ANNOTATION),
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.OVERRIDE,
+            LsiModifier.PUBLIC,
+            LsiModifier.OVERRIDE,
         ),
         returnType = MAP_OF_STRING_OBJECT_TYPE,
         body = code {
@@ -381,34 +379,34 @@ private fun ErrorCode.javaFieldsFunction(fields: List<ErrorField>): LsiPoetFunct
     )
 }
 
-private fun ErrorField.toJavaField(): LsiPoetField {
-    return LsiPoetField(
+private fun ErrorField.toJavaField(): LsiField {
+    return LsiField(
         name = name,
         type = javaType(),
         annotations = listOf(nullabilityAnnotation()),
-        modifiers = setOf(LsiPoetModifier.FINAL),
+        modifiers = setOf(LsiModifier.FINAL),
     )
 }
 
-private fun ErrorField.toJavaParameter(): LsiPoetParameter {
-    return LsiPoetParameter(
+private fun ErrorField.toJavaParameter(): LsiParameter {
+    return LsiParameter(
         name = name,
         type = javaType(),
         annotations = listOf(nullabilityAnnotation()),
     )
 }
 
-private fun ErrorField.toJavaGetter(): LsiPoetFunction {
+private fun ErrorField.toJavaGetter(): LsiFunction {
     val fieldType = type
     val prefix = if (fieldType is LsiPrimitiveType && fieldType.kind == LsiPrimitiveKind.BOOLEAN && !list) {
         "is"
     } else {
         "get"
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = prefix + name.replaceFirstChar(Char::uppercaseChar),
         annotations = listOf(nullabilityAnnotation()),
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         documentation = documentation.withTrailingLineBreak(),
         returnType = javaType(),
         body = code { returnValue { name(this@toJavaGetter.name) } },
@@ -426,22 +424,22 @@ private fun ErrorField.javaType(): LsiTypeRef {
     }
 }
 
-private fun ErrorField.nullabilityAnnotation(): LsiPoetAnnotation {
+private fun ErrorField.nullabilityAnnotation(): LsiAnnotation {
     return if (nullable) NULLABLE_ANNOTATION else NON_NULL_ANNOTATION
 }
 
-private fun ErrorFamily.kotlinPrimaryConstructor(fields: List<ErrorField>): LsiPoetConstructor {
-    return LsiPoetConstructor(
+private fun ErrorFamily.kotlinPrimaryConstructor(fields: List<ErrorField>): LsiConstructor {
+    return LsiConstructor(
         parameters = buildList {
             add(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "message",
                     type = KOTLIN_STRING_TYPE.copy(nullability = LsiNullability.NULLABLE),
                     defaultValue = codeLiteral("null"),
                 )
             )
             add(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "cause",
                     type = KOTLIN_THROWABLE_TYPE.copy(nullability = LsiNullability.NULLABLE),
                     defaultValue = codeLiteral("null"),
@@ -452,20 +450,20 @@ private fun ErrorFamily.kotlinPrimaryConstructor(fields: List<ErrorField>): LsiP
     )
 }
 
-private fun ErrorField.toKotlinParameter(): LsiPoetParameter {
-    return LsiPoetParameter(
+private fun ErrorField.toKotlinParameter(): LsiParameter {
+    return LsiParameter(
         name = name,
         type = kotlinType(),
         defaultValue = if (nullable) codeLiteral("null") else null,
     )
 }
 
-private fun ErrorField.toKotlinProperty(): LsiPoetProperty {
-    return LsiPoetProperty(
+private fun ErrorField.toKotlinProperty(): LsiProperty {
+    return LsiProperty(
         name = name,
         type = kotlinType(),
         mutable = false,
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         documentation = documentation.withTrailingLineBreak(),
         initializer = codeName(name),
     )
@@ -486,18 +484,18 @@ private fun ErrorField.kotlinType(): LsiTypeRef {
 private fun ErrorFamily.kotlinEnumProperty(
     enumType: LsiTypeRef,
     code: ErrorCode?,
-): LsiPoetProperty {
-    return LsiPoetProperty(
+): LsiProperty {
+    return LsiProperty(
         name = enumType.declarationSimpleName().replaceFirstChar(Char::lowercaseChar),
         type = enumType,
         mutable = false,
         annotations = listOf(JSON_IGNORE_GETTER_ANNOTATION),
         modifiers = buildSet {
-            add(LsiPoetModifier.PUBLIC)
-            add(if (code == null) LsiPoetModifier.ABSTRACT else LsiPoetModifier.OVERRIDE)
+            add(LsiModifier.PUBLIC)
+            add(if (code == null) LsiModifier.ABSTRACT else LsiModifier.OVERRIDE)
         },
         getter = code?.let { errorCode ->
-            LsiPoetAccessor(
+            LsiAccessor(
                 body = code {
                     returnValue {
                         type(enumType)
@@ -510,13 +508,13 @@ private fun ErrorFamily.kotlinEnumProperty(
     )
 }
 
-private fun ErrorFamily.kotlinFieldsProperty(fields: List<ErrorField>): LsiPoetProperty {
-    return LsiPoetProperty(
+private fun ErrorFamily.kotlinFieldsProperty(fields: List<ErrorField>): LsiProperty {
+    return LsiProperty(
         name = "fields",
         type = KOTLIN_FIELDS_MAP_TYPE,
         mutable = false,
-        modifiers = setOf(LsiPoetModifier.OVERRIDE),
-        getter = LsiPoetAccessor(
+        modifiers = setOf(LsiModifier.OVERRIDE),
+        getter = LsiAccessor(
             body = code {
                 if (fields.isEmpty()) {
                     returnValue { text("emptyMap()") }
@@ -544,33 +542,33 @@ private fun ErrorFamily.kotlinFieldsProperty(fields: List<ErrorField>): LsiPoetP
     )
 }
 
-private fun ErrorFamily.kotlinCompanionType(): LsiPoetType {
-    return LsiPoetType(
+private fun ErrorFamily.kotlinCompanionType(): LsiTypeDeclaration {
+    return LsiTypeDeclaration(
         name = "Companion",
         kind = LsiTypeDeclarationKind.OBJECT,
-        modifiers = setOf(LsiPoetModifier.COMPANION),
+        modifiers = setOf(LsiModifier.COMPANION),
         members = codes.map { code ->
             code.kotlinFactoryFunction(declaredFields + code.declaredFields)
         },
     )
 }
 
-private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiPoetFunction {
+private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiFunction {
     val nestedType = LsiDeclaredType(exceptionTypeId)
-    return LsiPoetFunction(
+    return LsiFunction(
         name = creatorName,
         annotations = listOf(JVM_STATIC_ANNOTATION),
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         parameters = buildList {
             add(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "message",
                     type = KOTLIN_STRING_TYPE.copy(nullability = LsiNullability.NULLABLE),
                     defaultValue = codeLiteral("null"),
                 )
             )
             add(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "cause",
                     type = KOTLIN_THROWABLE_TYPE.copy(nullability = LsiNullability.NULLABLE),
                     defaultValue = codeLiteral("null"),
@@ -604,13 +602,13 @@ private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiPoetFu
 private fun ErrorCode.toKotlinPoetType(
     family: ErrorFamily,
     enumType: LsiTypeRef,
-): LsiPoetType {
+): LsiTypeDeclaration {
     val allFields = family.declaredFields + declaredFields
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(clientExceptionAnnotation(family.family)),
-        modifiers = setOf(LsiPoetModifier.PUBLIC),
+        modifiers = setOf(LsiModifier.PUBLIC),
         documentation = documentation.withTrailingLineBreak(),
         superClass = LsiDeclaredType(family.exceptionTypeId),
         superClassConstructorArguments = buildList {
@@ -627,35 +625,35 @@ private fun ErrorCode.toKotlinPoetType(
     )
 }
 
-private fun ErrorFamily.generatedByAnnotation(enumType: LsiTypeRef): LsiPoetAnnotation {
-    return LsiPoetAnnotation(
+private fun ErrorFamily.generatedByAnnotation(enumType: LsiTypeRef): LsiAnnotation {
+    return sourceLsiAnnotation(
         type = GENERATED_BY_ID,
         arguments = listOf(
-            LsiPoetAnnotationArgument.Named(
+            LsiSourceAnnotationArgument.Named(
                 name = "type",
-                value = LsiPoetAnnotationValue.ClassValue(enumType),
+                value = LsiAnnotationValue.ClassValue(enumType),
             )
         ),
     )
 }
 
-private fun ErrorFamily.clientExceptionAnnotation(): LsiPoetAnnotation {
-    return LsiPoetAnnotation(
+private fun ErrorFamily.clientExceptionAnnotation(): LsiAnnotation {
+    return sourceLsiAnnotation(
         type = CLIENT_EXCEPTION_ID,
         arguments = buildList {
             add(
-                LsiPoetAnnotationArgument.Named(
+                LsiSourceAnnotationArgument.Named(
                     name = "family",
-                    value = LsiPoetAnnotationValue.StringValue(family),
+                    value = LsiAnnotationValue.StringValue(family),
                 )
             )
             if (codes.isNotEmpty()) {
                 add(
-                    LsiPoetAnnotationArgument.Named(
+                    LsiSourceAnnotationArgument.Named(
                         name = "subTypes",
-                        value = LsiPoetAnnotationValue.ArrayValue(
+                        value = LsiAnnotationValue.ArrayValue(
                             codes.map { code ->
-                                LsiPoetAnnotationValue.ClassValue(
+                                LsiAnnotationValue.ClassValue(
                                     LsiDeclaredType(code.exceptionTypeId)
                                 )
                             }
@@ -667,17 +665,17 @@ private fun ErrorFamily.clientExceptionAnnotation(): LsiPoetAnnotation {
     )
 }
 
-private fun ErrorCode.clientExceptionAnnotation(family: String): LsiPoetAnnotation {
-    return LsiPoetAnnotation(
+private fun ErrorCode.clientExceptionAnnotation(family: String): LsiAnnotation {
+    return sourceLsiAnnotation(
         type = CLIENT_EXCEPTION_ID,
         arguments = listOf(
-            LsiPoetAnnotationArgument.Named(
+            LsiSourceAnnotationArgument.Named(
                 name = "family",
-                value = LsiPoetAnnotationValue.StringValue(family),
+                value = LsiAnnotationValue.StringValue(family),
             ),
-            LsiPoetAnnotationArgument.Named(
+            LsiSourceAnnotationArgument.Named(
                 name = "code",
-                value = LsiPoetAnnotationValue.StringValue(code),
+                value = LsiAnnotationValue.StringValue(code),
             ),
         ),
     )
@@ -802,15 +800,15 @@ private fun String?.withTrailingLineBreak(): String? {
     return this?.let { documentation -> "$documentation\n" }
 }
 
-private fun code(block: LsiPoetCodeBuilder.() -> Unit): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build(block)
+private fun code(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock {
+    return LsiCodeBlock.build(block)
 }
 
-private fun codeName(name: String): LsiPoetCodeBlock {
+private fun codeName(name: String): LsiCodeBlock {
     return code { name(name) }
 }
 
-private fun codeLiteral(value: String): LsiPoetCodeBlock {
+private fun codeLiteral(value: String): LsiCodeBlock {
     return code { literal(value) }
 }
 
@@ -834,30 +832,30 @@ private val MAP_ID = LsiSymbolId.type("java.util.Map")
 private val COLLECTIONS_ID = LsiSymbolId.type("java.util.Collections")
 private val LINKED_HASH_MAP_ID = LsiSymbolId.type("java.util.LinkedHashMap")
 private val BUILT_IN_TYPE_NAMES = listOf(
-    LsiPoetTypeName(CLIENT_EXCEPTION_ID, "org.babyfish.jimmer", listOf("ClientException")),
-    LsiPoetTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
-    LsiPoetTypeName(CODE_BASED_EXCEPTION_ID, "org.babyfish.jimmer.error", listOf("CodeBasedException")),
-    LsiPoetTypeName(
+    LsiTypeName(CLIENT_EXCEPTION_ID, "org.babyfish.jimmer", listOf("ClientException")),
+    LsiTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
+    LsiTypeName(CODE_BASED_EXCEPTION_ID, "org.babyfish.jimmer.error", listOf("CodeBasedException")),
+    LsiTypeName(
         CODE_BASED_RUNTIME_EXCEPTION_ID,
         "org.babyfish.jimmer.error",
         listOf("CodeBasedRuntimeException"),
     ),
-    LsiPoetTypeName(JSON_IGNORE_ID, "com.fasterxml.jackson.annotation", listOf("JsonIgnore")),
-    LsiPoetTypeName(NON_NULL_ID, "org.jspecify.annotations", listOf("NonNull")),
-    LsiPoetTypeName(NULLABLE_ID, "org.jspecify.annotations", listOf("Nullable")),
-    LsiPoetTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
-    LsiPoetTypeName(JVM_STATIC_ID, "kotlin.jvm", listOf("JvmStatic")),
-    LsiPoetTypeName(JAVA_STRING_ID, "java.lang", listOf("String")),
-    LsiPoetTypeName(JAVA_OBJECT_ID, "java.lang", listOf("Object")),
-    LsiPoetTypeName(JAVA_THROWABLE_ID, "java.lang", listOf("Throwable")),
-    LsiPoetTypeName(KOTLIN_STRING_ID, "kotlin", listOf("String")),
-    LsiPoetTypeName(KOTLIN_ANY_ID, "kotlin", listOf("Any")),
-    LsiPoetTypeName(KOTLIN_THROWABLE_ID, "kotlin", listOf("Throwable")),
-    LsiPoetTypeName(LIST_ID, "java.util", listOf("List")),
-    LsiPoetTypeName(MAP_ID, "java.util", listOf("Map")),
-    LsiPoetTypeName(COLLECTIONS_ID, "java.util", listOf("Collections")),
-    LsiPoetTypeName(LINKED_HASH_MAP_ID, "java.util", listOf("LinkedHashMap")),
-    LsiPoetTypeName(
+    LsiTypeName(JSON_IGNORE_ID, "com.fasterxml.jackson.annotation", listOf("JsonIgnore")),
+    LsiTypeName(NON_NULL_ID, "org.jspecify.annotations", listOf("NonNull")),
+    LsiTypeName(NULLABLE_ID, "org.jspecify.annotations", listOf("Nullable")),
+    LsiTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
+    LsiTypeName(JVM_STATIC_ID, "kotlin.jvm", listOf("JvmStatic")),
+    LsiTypeName(JAVA_STRING_ID, "java.lang", listOf("String")),
+    LsiTypeName(JAVA_OBJECT_ID, "java.lang", listOf("Object")),
+    LsiTypeName(JAVA_THROWABLE_ID, "java.lang", listOf("Throwable")),
+    LsiTypeName(KOTLIN_STRING_ID, "kotlin", listOf("String")),
+    LsiTypeName(KOTLIN_ANY_ID, "kotlin", listOf("Any")),
+    LsiTypeName(KOTLIN_THROWABLE_ID, "kotlin", listOf("Throwable")),
+    LsiTypeName(LIST_ID, "java.util", listOf("List")),
+    LsiTypeName(MAP_ID, "java.util", listOf("Map")),
+    LsiTypeName(COLLECTIONS_ID, "java.util", listOf("Collections")),
+    LsiTypeName(LINKED_HASH_MAP_ID, "java.util", listOf("LinkedHashMap")),
+    LsiTypeName(
         LsiSymbolId.type("java.time.LocalDateTime"),
         "java.time",
         listOf("LocalDateTime"),
@@ -890,12 +888,12 @@ private val KOTLIN_FIELDS_MAP_TYPE = LsiDeclaredType(
     ),
 )
 
-private val JSON_IGNORE_ANNOTATION = LsiPoetAnnotation(JSON_IGNORE_ID)
-private val JSON_IGNORE_GETTER_ANNOTATION = LsiPoetAnnotation(
+private val JSON_IGNORE_ANNOTATION = sourceLsiAnnotation(JSON_IGNORE_ID)
+private val JSON_IGNORE_GETTER_ANNOTATION = sourceLsiAnnotation(
     type = JSON_IGNORE_ID,
     useSiteTarget = LsiAnnotationUseSiteTarget.GETTER,
 )
-private val NON_NULL_ANNOTATION = LsiPoetAnnotation(NON_NULL_ID)
-private val NULLABLE_ANNOTATION = LsiPoetAnnotation(NULLABLE_ID)
-private val JAVA_OVERRIDE_ANNOTATION = LsiPoetAnnotation(JAVA_OVERRIDE_ID)
-private val JVM_STATIC_ANNOTATION = LsiPoetAnnotation(JVM_STATIC_ID)
+private val NON_NULL_ANNOTATION = sourceLsiAnnotation(NON_NULL_ID)
+private val NULLABLE_ANNOTATION = sourceLsiAnnotation(NULLABLE_ID)
+private val JAVA_OVERRIDE_ANNOTATION = sourceLsiAnnotation(JAVA_OVERRIDE_ID)
+private val JVM_STATIC_ANNOTATION = sourceLsiAnnotation(JVM_STATIC_ID)

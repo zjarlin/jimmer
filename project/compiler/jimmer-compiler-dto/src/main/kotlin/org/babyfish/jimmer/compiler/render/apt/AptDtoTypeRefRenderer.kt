@@ -9,7 +9,7 @@ import site.addzero.lsi.jimmer.dto.toLsiType
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将冻结的 DTO 类型引用渲染为 JavaPoet 类型。 */
@@ -29,14 +29,14 @@ internal object AptDtoTypeRefRenderer {
     fun render(
         typeRef: DtoReusableTypeReference,
         workspace: LsiWorkspace,
-        generatedTypeName: LsiPoetTypeName?,
+        generatedTypeName: LsiTypeName?,
     ): TypeName {
         return render(typeRef.toLsiType(), workspace, listOfNotNull(generatedTypeName))
     }
 
     /** 将已注册的 DTO 生成类型名渲染为 JavaPoet 类型。 */
     @JvmStatic
-    fun render(typeName: LsiPoetTypeName, workspace: LsiWorkspace): TypeName {
+    fun render(typeName: LsiTypeName, workspace: LsiWorkspace): TypeName {
         return render(LsiDeclaredType(typeName.typeId), workspace, listOf(typeName))
     }
 
@@ -44,7 +44,7 @@ internal object AptDtoTypeRefRenderer {
     fun render(
         type: LsiTypeRef,
         workspace: LsiWorkspace,
-        generatedTypeNames: Collection<LsiPoetTypeName>,
+        generatedTypeNames: Collection<LsiTypeName>,
     ): TypeName {
         return LsiJavaPoetRenderer().renderTypeName(
             type = type,

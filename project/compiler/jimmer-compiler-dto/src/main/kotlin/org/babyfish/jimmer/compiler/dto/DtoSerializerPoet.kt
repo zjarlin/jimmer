@@ -13,12 +13,12 @@ import site.addzero.lsi.jimmer.dto.dtoValueAccessorName
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeName
 
 internal fun DtoType.toSerializerPoetType(
     graph: DtoGraph,
@@ -26,18 +26,18 @@ internal fun DtoType.toSerializerPoetType(
     targetLanguage: LsiLanguage,
     jacksonVersion: JacksonFamily,
     dtoType: LsiDeclaredType,
-): LsiPoetType {
+): LsiTypeDeclaration {
     require(requiresDynamicInputSerialization(graph)) {
         "DTO type does not require dynamic input serialization: ${id.value}"
     }
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO Serializer requires Java or Kotlin target language"
     }
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = "Serializer",
         kind = LsiTypeDeclarationKind.CLASS,
         modifiers = if (targetLanguage == LsiLanguage.JAVA) {
-            setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC)
+            setOf(LsiModifier.PUBLIC, LsiModifier.STATIC)
         } else {
             emptySet()
         },
@@ -46,17 +46,17 @@ internal fun DtoType.toSerializerPoetType(
             arguments = listOf(LsiTypeArgument.invariant(dtoType)),
         ),
         members = listOf(
-            LsiPoetFunction(
+            LsiFunction(
                 name = "serialize",
                 modifiers = if (targetLanguage == LsiLanguage.JAVA) {
-                    setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE)
+                    setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE)
                 } else {
-                    setOf(LsiPoetModifier.OVERRIDE)
+                    setOf(LsiModifier.OVERRIDE)
                 },
                 parameters = listOf(
-                    LsiPoetParameter("input", dtoType),
-                    LsiPoetParameter("gen", LsiDeclaredType(jacksonVersion.generatorTypeId())),
-                    LsiPoetParameter("provider", LsiDeclaredType(jacksonVersion.providerTypeId())),
+                    LsiParameter("input", dtoType),
+                    LsiParameter("gen", LsiDeclaredType(jacksonVersion.generatorTypeId())),
+                    LsiParameter("provider", LsiDeclaredType(jacksonVersion.providerTypeId())),
                 ),
                 thrownTypes = if (
                     targetLanguage == LsiLanguage.JAVA &&
@@ -82,7 +82,7 @@ private fun DtoType.serializerBody(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
     jacksonVersion: JacksonFamily,
-): LsiPoetCodeBlock = LsiPoetCodeBlock.build {
+): LsiCodeBlock = LsiCodeBlock.build {
     statement {
         name("gen")
         text(".writeStartObject()")
@@ -169,8 +169,8 @@ private val JACKSON_3_PROVIDER_TYPE_ID =
 private val JAVA_IO_EXCEPTION_TYPE_ID = LsiSymbolId.type("java.io.IOException")
 
 internal fun JacksonFamily.serializerPoetTypeNames(
-    dtoTypeName: LsiPoetTypeName,
-): List<LsiPoetTypeName> {
+    dtoTypeName: LsiTypeName,
+): List<LsiTypeName> {
     val jacksonTypeNames = when (this) {
         JacksonFamily.JACKSON_2 -> JACKSON_2_POET_TYPE_NAMES
         JacksonFamily.JACKSON_3 -> JACKSON_3_POET_TYPE_NAMES
@@ -179,40 +179,40 @@ internal fun JacksonFamily.serializerPoetTypeNames(
 }
 
 private val JACKSON_2_POET_TYPE_NAMES = listOf(
-    LsiPoetTypeName(
+    LsiTypeName(
         JACKSON_2_SERIALIZER_TYPE_ID,
         "com.fasterxml.jackson.databind",
         listOf("JsonSerializer"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         JACKSON_2_GENERATOR_TYPE_ID,
         "com.fasterxml.jackson.core",
         listOf("JsonGenerator"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         JACKSON_2_PROVIDER_TYPE_ID,
         "com.fasterxml.jackson.databind",
         listOf("SerializerProvider"),
     ),
 )
 private val JACKSON_3_POET_TYPE_NAMES = listOf(
-    LsiPoetTypeName(
+    LsiTypeName(
         JACKSON_3_SERIALIZER_TYPE_ID,
         "tools.jackson.databind",
         listOf("ValueSerializer"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         JACKSON_3_GENERATOR_TYPE_ID,
         "tools.jackson.core",
         listOf("JsonGenerator"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         JACKSON_3_PROVIDER_TYPE_ID,
         "tools.jackson.databind",
         listOf("SerializationContext"),
     ),
 )
-private val JAVA_IO_EXCEPTION_POET_TYPE_NAME = LsiPoetTypeName(
+private val JAVA_IO_EXCEPTION_POET_TYPE_NAME = LsiTypeName(
     JAVA_IO_EXCEPTION_TYPE_ID,
     "java.io",
     listOf("IOException"),

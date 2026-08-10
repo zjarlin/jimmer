@@ -24,37 +24,36 @@ import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetConstructor
-import site.addzero.lsi.poet.LsiPoetDelegationCall
-import site.addzero.lsi.poet.LsiPoetDelegationTarget
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
-import site.addzero.lsi.poet.toLsiPoetAnnotation
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiDelegationCall
+import site.addzero.lsi.model.LsiDelegationTarget
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.model.toSourceAnnotation
 
-internal fun TransactionalSchema.toLsiPoetArtifacts(
+internal fun TransactionalSchema.toLsiSourceArtifacts(
     workspace: LsiWorkspace,
-): List<LsiPoetArtifact> {
-    return types.map { type -> type.toLsiPoetArtifact(workspace) }
+): List<LsiSourceArtifact> {
+    return types.map { type -> type.toLsiSourceArtifact(workspace) }
 }
 
-private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoetArtifact {
+private fun TransactionalType.toLsiSourceArtifact(workspace: LsiWorkspace): LsiSourceArtifact {
     val originatingSymbols = setOf(id)
     val originatingSources = workspace.originatingSources(originatingSymbols)
     val dependencySymbols = dependencySymbols()
     val dependencySources = workspace.originatingSources(dependencySymbols)
-    val file = LsiPoetFile(
+    val file = LsiFile(
         language = sqlClient.language,
         packageName = packageName,
         fileName = generatedSimpleName,
@@ -63,11 +62,11 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
         } else {
             emptyList()
         },
-        members = listOf(toLsiPoetType()),
+        members = listOf(toLsiTypeDeclaration()),
     )
-    return LsiPoetArtifact(
+    return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiPoetTypeNames(file.referencedTypeIds, BUILT_IN_TYPE_NAMES),
+        typeNames = workspace.toLsiTypeNames(file.referencedTypeIds, BUILT_IN_TYPE_NAMES),
         aggregationMode = classifyArtifactAggregationMode(
             originatingSymbols = originatingSymbols,
             originatingSources = originatingSources,
@@ -80,7 +79,7 @@ private fun TransactionalType.toLsiPoetArtifact(workspace: LsiWorkspace): LsiPoe
     )
 }
 
-private fun TransactionalType.toLsiPoetType(): LsiPoetType {
+private fun TransactionalType.toLsiTypeDeclaration(): LsiTypeDeclaration {
     return when (sqlClient.language) {
         LsiLanguage.JAVA -> toJavaPoetType()
         LsiLanguage.KOTLIN -> toKotlinPoetType()
@@ -88,17 +87,17 @@ private fun TransactionalType.toLsiPoetType(): LsiPoetType {
     }
 }
 
-private fun TransactionalType.toJavaPoetType(): LsiPoetType {
-    return LsiPoetType(
+private fun TransactionalType.toJavaPoetType(): LsiTypeDeclaration {
+    return LsiTypeDeclaration(
         name = generatedSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = typeAnnotations(),
         modifiers = buildSet {
             if (visibility == LsiVisibility.PUBLIC) {
-                add(LsiPoetModifier.PUBLIC)
+                add(LsiModifier.PUBLIC)
             }
             if (modality == LsiModality.ABSTRACT) {
-                add(LsiPoetModifier.ABSTRACT)
+                add(LsiModifier.ABSTRACT)
             }
         },
         superClass = LsiDeclaredType(id),
@@ -109,20 +108,20 @@ private fun TransactionalType.toJavaPoetType(): LsiPoetType {
     )
 }
 
-private fun TransactionalType.toKotlinPoetType(): LsiPoetType {
+private fun TransactionalType.toKotlinPoetType(): LsiTypeDeclaration {
     val primaryConstructor = constructors.singleOrNull(TransactionalConstructor::primary)
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = generatedSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = typeAnnotations(),
         modifiers = buildSet {
             when (visibility) {
-                LsiVisibility.INTERNAL -> add(LsiPoetModifier.INTERNAL)
-                LsiVisibility.PUBLIC -> add(LsiPoetModifier.PUBLIC)
+                LsiVisibility.INTERNAL -> add(LsiModifier.INTERNAL)
+                LsiVisibility.PUBLIC -> add(LsiModifier.PUBLIC)
                 else -> Unit
             }
             if (modality == LsiModality.ABSTRACT) {
-                add(LsiPoetModifier.ABSTRACT)
+                add(LsiModifier.ABSTRACT)
             }
         },
         superClass = LsiDeclaredType(id),
@@ -142,34 +141,34 @@ private fun TransactionalType.toKotlinPoetType(): LsiPoetType {
     )
 }
 
-private fun TransactionalType.typeAnnotations(): List<LsiPoetAnnotation> {
+private fun TransactionalType.typeAnnotations(): List<LsiAnnotation> {
     return buildList {
         copiedAnnotations
             .filter { annotation ->
                 annotation.useSiteTarget == null ||
                     annotation.useSiteTarget == LsiAnnotationUseSiteTarget.TYPE
             }
-            .mapTo(this, LsiAnnotation::toLsiPoetAnnotation)
+            .mapTo(this, LsiAnnotation::toSourceAnnotation)
         targetAnnotationTypeId?.let { annotationTypeId ->
-            add(LsiPoetAnnotation(annotationTypeId))
+            add(sourceLsiAnnotation(annotationTypeId))
         }
     }
 }
 
-private fun TransactionalConstructor.toJavaPoetConstructor(): LsiPoetConstructor {
-    return LsiPoetConstructor(
+private fun TransactionalConstructor.toJavaPoetConstructor(): LsiConstructor {
+    return LsiConstructor(
         annotations = copiedAnnotations
             .filter { annotation ->
                 annotation.useSiteTarget == null ||
                     annotation.useSiteTarget == LsiAnnotationUseSiteTarget.CONSTRUCTOR
             }
-            .map(LsiAnnotation::toLsiPoetAnnotation),
+            .map(LsiAnnotation::toSourceAnnotation),
         documentation = documentation.withTrailingLineBreak(),
         typeParameters = typeParameters,
         parameters = parameters.map(TransactionalParameter::toJavaPoetParameter),
         thrownTypes = thrownTypes,
-        delegationCall = LsiPoetDelegationCall(
-            target = LsiPoetDelegationTarget.SUPER,
+        delegationCall = LsiDelegationCall(
+            target = LsiDelegationTarget.SUPER,
             arguments = parameters.map(TransactionalParameter::toJavaArgument),
         ),
     )
@@ -177,27 +176,27 @@ private fun TransactionalConstructor.toJavaPoetConstructor(): LsiPoetConstructor
 
 private fun TransactionalConstructor.toKotlinPoetConstructor(
     secondary: Boolean = false,
-): LsiPoetConstructor {
-    return LsiPoetConstructor(
+): LsiConstructor {
+    return LsiConstructor(
         annotations = copiedAnnotations
             .filter { annotation ->
                 annotation.useSiteTarget == null ||
                     annotation.useSiteTarget == LsiAnnotationUseSiteTarget.CONSTRUCTOR
             }
-            .map(LsiAnnotation::toLsiPoetAnnotation),
+            .map(LsiAnnotation::toSourceAnnotation),
         modifiers = buildSet {
             when (visibility) {
-                LsiVisibility.PROTECTED -> add(LsiPoetModifier.PROTECTED)
-                LsiVisibility.INTERNAL -> add(LsiPoetModifier.INTERNAL)
-                LsiVisibility.PRIVATE -> add(LsiPoetModifier.PRIVATE)
+                LsiVisibility.PROTECTED -> add(LsiModifier.PROTECTED)
+                LsiVisibility.INTERNAL -> add(LsiModifier.INTERNAL)
+                LsiVisibility.PRIVATE -> add(LsiModifier.PRIVATE)
                 else -> Unit
             }
         },
         documentation = documentation.withTrailingLineBreak(),
         parameters = parameters.map(TransactionalParameter::toKotlinPoetParameter),
         delegationCall = if (secondary) {
-            LsiPoetDelegationCall(
-                target = LsiPoetDelegationTarget.SUPER,
+            LsiDelegationCall(
+                target = LsiDelegationTarget.SUPER,
                 arguments = parameters.map(TransactionalParameter::toKotlinArgument),
             )
         } else {
@@ -206,8 +205,8 @@ private fun TransactionalConstructor.toKotlinPoetConstructor(
     )
 }
 
-private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): LsiPoetFunction {
-    return LsiPoetFunction(
+private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): LsiFunction {
+    return LsiFunction(
         name = name,
         annotations = buildList {
             // JavaPoet 必须先写 @Override，保持它位于复制的方法注解之前。
@@ -217,13 +216,13 @@ private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): Lsi
                     annotation.useSiteTarget == null ||
                         annotation.useSiteTarget == LsiAnnotationUseSiteTarget.METHOD
                 }
-                .mapTo(this, LsiAnnotation::toLsiPoetAnnotation)
+                .mapTo(this, LsiAnnotation::toSourceAnnotation)
         },
         modifiers = buildSet {
-            add(LsiPoetModifier.OVERRIDE)
+            add(LsiModifier.OVERRIDE)
             when (visibility) {
-                LsiVisibility.PUBLIC -> add(LsiPoetModifier.PUBLIC)
-                LsiVisibility.PROTECTED -> add(LsiPoetModifier.PROTECTED)
+                LsiVisibility.PUBLIC -> add(LsiModifier.PUBLIC)
+                LsiVisibility.PROTECTED -> add(LsiModifier.PROTECTED)
                 else -> Unit
             }
         },
@@ -238,20 +237,20 @@ private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): Lsi
 
 private fun TransactionalMethod.toKotlinPoetFunction(
     type: TransactionalType,
-): LsiPoetFunction {
-    return LsiPoetFunction(
+): LsiFunction {
+    return LsiFunction(
         name = name,
         annotations = copiedAnnotations
             .filter { annotation ->
                 annotation.useSiteTarget == null ||
                     annotation.useSiteTarget == LsiAnnotationUseSiteTarget.METHOD
             }
-            .map(LsiAnnotation::toLsiPoetAnnotation),
+            .map(LsiAnnotation::toSourceAnnotation),
         modifiers = buildSet {
-            add(LsiPoetModifier.OVERRIDE)
+            add(LsiModifier.OVERRIDE)
             when (visibility) {
-                LsiVisibility.PROTECTED -> add(LsiPoetModifier.PROTECTED)
-                LsiVisibility.INTERNAL -> add(LsiPoetModifier.INTERNAL)
+                LsiVisibility.PROTECTED -> add(LsiModifier.PROTECTED)
+                LsiVisibility.INTERNAL -> add(LsiModifier.INTERNAL)
                 else -> Unit
             }
         },
@@ -263,12 +262,12 @@ private fun TransactionalMethod.toKotlinPoetFunction(
     )
 }
 
-private fun TransactionalMethod.javaTransactionBody(type: TransactionalType): LsiPoetCodeBlock {
+private fun TransactionalMethod.javaTransactionBody(type: TransactionalType): LsiCodeBlock {
     val methodReturnType = returnType
     val returnsVoid = methodReturnType is LsiPrimitiveType &&
         methodReturnType.kind in setOf(LsiPrimitiveKind.UNIT, LsiPrimitiveKind.VOID)
     return code {
-        val prefix: LsiPoetCodeBuilder.() -> Unit = {
+        val prefix: LsiCodeBuilder.() -> Unit = {
             name(type.sqlClient.name)
             text(".transaction(")
             type(PROPAGATION_TYPE)
@@ -276,7 +275,7 @@ private fun TransactionalMethod.javaTransactionBody(type: TransactionalType): Ls
             literal(propagation)
             text(", () -> ")
         }
-        val body: LsiPoetCodeBuilder.() -> Unit = {
+        val body: LsiCodeBuilder.() -> Unit = {
             if (returnsVoid) {
                 statement { javaSuperMethodCall(this@javaTransactionBody) }
                 returnValue { literal("null") }
@@ -284,7 +283,7 @@ private fun TransactionalMethod.javaTransactionBody(type: TransactionalType): Ls
                 returnValue { javaSuperMethodCall(this@javaTransactionBody) }
             }
         }
-        val suffix: LsiPoetCodeBuilder.() -> Unit = { text(")") }
+        val suffix: LsiCodeBuilder.() -> Unit = { text(")") }
         if (returnsVoid) {
             statementBracedExpression(prefix, body, suffix)
         } else {
@@ -293,7 +292,7 @@ private fun TransactionalMethod.javaTransactionBody(type: TransactionalType): Ls
     }
 }
 
-private fun TransactionalMethod.kotlinTransactionBody(type: TransactionalType): LsiPoetCodeBlock {
+private fun TransactionalMethod.kotlinTransactionBody(type: TransactionalType): LsiCodeBlock {
     val methodName = name
     val methodPropagation = propagation
     val methodParameters = parameters
@@ -326,7 +325,7 @@ private fun TransactionalMethod.kotlinTransactionBody(type: TransactionalType): 
     }
 }
 
-private fun LsiPoetCodeBuilder.javaSuperMethodCall(method: TransactionalMethod) {
+private fun LsiCodeBuilder.javaSuperMethodCall(method: TransactionalMethod) {
     text("super.")
     name(method.name)
     text("(")
@@ -339,29 +338,29 @@ private fun LsiPoetCodeBuilder.javaSuperMethodCall(method: TransactionalMethod) 
     text(")")
 }
 
-private fun TransactionalParameter.toJavaPoetParameter(): LsiPoetParameter {
-    return LsiPoetParameter(
+private fun TransactionalParameter.toJavaPoetParameter(): LsiParameter {
+    return LsiParameter(
         name = name,
         type = type,
-        annotations = annotations.map(LsiAnnotation::toLsiPoetAnnotation),
-        modifiers = if (vararg) setOf(LsiPoetModifier.VARARG) else emptySet(),
+        annotations = annotations.map(LsiAnnotation::toSourceAnnotation),
+        modifiers = if (vararg) setOf(LsiModifier.VARARG) else emptySet(),
     )
 }
 
-private fun TransactionalParameter.toKotlinPoetParameter(): LsiPoetParameter {
-    return LsiPoetParameter(
+private fun TransactionalParameter.toKotlinPoetParameter(): LsiParameter {
+    return LsiParameter(
         name = name,
         type = type,
-        annotations = annotations.map(LsiAnnotation::toLsiPoetAnnotation),
-        modifiers = if (vararg) setOf(LsiPoetModifier.VARARG) else emptySet(),
+        annotations = annotations.map(LsiAnnotation::toSourceAnnotation),
+        modifiers = if (vararg) setOf(LsiModifier.VARARG) else emptySet(),
     )
 }
 
-private fun TransactionalParameter.toJavaArgument(): LsiPoetCodeBlock {
+private fun TransactionalParameter.toJavaArgument(): LsiCodeBlock {
     return code { name(this@toJavaArgument.name) }
 }
 
-private fun TransactionalParameter.toKotlinArgument(): LsiPoetCodeBlock {
+private fun TransactionalParameter.toKotlinArgument(): LsiCodeBlock {
     return code {
         if (vararg) {
             text("*")
@@ -472,8 +471,8 @@ private fun String?.withTrailingLineBreak(): String? {
     return this?.let { documentation -> "$documentation\n" }
 }
 
-private fun code(block: LsiPoetCodeBuilder.() -> Unit): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build(block)
+private fun code(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock {
+    return LsiCodeBlock.build(block)
 }
 
 private val PROPAGATION_TYPE = LsiDeclaredType(
@@ -482,34 +481,34 @@ private val PROPAGATION_TYPE = LsiDeclaredType(
 private val JAVA_OVERRIDE_ID = LsiSymbolId.type("java.lang.Override")
 private val KOTLIN_SUPPRESS_ID = LsiSymbolId.type("kotlin.Suppress")
 private val BUILT_IN_TYPE_NAMES = listOf(
-    LsiPoetTypeName(
+    LsiTypeName(
         PROPAGATION_TYPE.declarationId,
         "org.babyfish.jimmer.sql.transaction",
         listOf("Propagation"),
     ),
-    LsiPoetTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
-    LsiPoetTypeName(KOTLIN_SUPPRESS_ID, "kotlin", listOf("Suppress")),
-    LsiPoetTypeName(LsiSymbolId.type("java.lang.String"), "java.lang", listOf("String")),
-    LsiPoetTypeName(LsiSymbolId.type("java.io.IOException"), "java.io", listOf("IOException")),
-    LsiPoetTypeName(
+    LsiTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
+    LsiTypeName(KOTLIN_SUPPRESS_ID, "kotlin", listOf("Suppress")),
+    LsiTypeName(LsiSymbolId.type("java.lang.String"), "java.lang", listOf("String")),
+    LsiTypeName(LsiSymbolId.type("java.io.IOException"), "java.io", listOf("IOException")),
+    LsiTypeName(
         LsiSymbolId.type("org.babyfish.jimmer.sql.JSqlClient"),
         "org.babyfish.jimmer.sql",
         listOf("JSqlClient"),
     ),
-    LsiPoetTypeName(
+    LsiTypeName(
         LsiSymbolId.type("org.babyfish.jimmer.sql.kt.KSqlClient"),
         "org.babyfish.jimmer.sql.kt",
         listOf("KSqlClient"),
     ),
 )
-private val JAVA_OVERRIDE_ANNOTATION = LsiPoetAnnotation(
+private val JAVA_OVERRIDE_ANNOTATION = sourceLsiAnnotation(
     JAVA_OVERRIDE_ID
 )
-private val FILE_WARNING_SUPPRESSION = LsiPoetAnnotation(
+private val FILE_WARNING_SUPPRESSION = sourceLsiAnnotation(
     type = KOTLIN_SUPPRESS_ID,
     arguments = listOf(
-        LsiPoetAnnotationArgument.Positional(
-            LsiPoetAnnotationValue.StringValue("warnings")
+        LsiSourceAnnotationArgument.Positional(
+            LsiAnnotationValue.StringValue("warnings")
         )
     ),
     useSiteTarget = LsiAnnotationUseSiteTarget.FILE,

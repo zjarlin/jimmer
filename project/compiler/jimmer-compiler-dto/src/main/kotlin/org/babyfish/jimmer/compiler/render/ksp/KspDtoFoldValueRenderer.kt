@@ -9,7 +9,7 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将折叠 DTO 的基础对象构造表达式渲染为 KotlinPoet 代码块。 */
@@ -22,7 +22,7 @@ internal object KspDtoFoldValueRenderer {
         baseParameterName: String,
         nullGuardAccessorName: String,
         generatedTargetType: (DtoProp) -> LsiDeclaredType,
-        generatedTypeNames: Collection<LsiPoetTypeName>,
+        generatedTypeNames: Collection<LsiTypeName>,
     ): CodeBlock {
         val initializer = prop.toFoldValuePoetCodeBlock(
             graph = graph,

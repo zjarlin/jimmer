@@ -22,7 +22,7 @@ import site.addzero.lsi.jimmer.dto.toLsiType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -144,12 +144,12 @@ class DtoTypeRefPoetTest {
             JimmerDtoPoetTypeNames.reusableTarget(
                 reference,
                 mapOf(
-                    DtoTypeId("nested") to LsiPoetTypeName(
+                    DtoTypeId("nested") to LsiTypeName(
                         typeId = typeId,
                         packageName = "demo",
                         simpleNames = listOf("BookView", "Target"),
                     ),
-                    DtoTypeId("top-level") to LsiPoetTypeName(
+                    DtoTypeId("top-level") to LsiTypeName(
                         typeId = typeId,
                         packageName = "demo.BookView",
                         simpleNames = listOf("Target"),

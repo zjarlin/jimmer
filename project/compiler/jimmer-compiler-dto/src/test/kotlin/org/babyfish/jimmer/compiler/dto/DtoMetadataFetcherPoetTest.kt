@@ -44,9 +44,9 @@ import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeFragment
-import site.addzero.lsi.poet.LsiPoetImport
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiCodeFragment
+import site.addzero.lsi.model.LsiImport
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -68,7 +68,7 @@ class DtoMetadataFetcherPoetTest {
 
         assertEquals(emptyList(), fixture.fragment(LsiLanguage.JAVA).imports)
         assertEquals(
-            listOf(LsiPoetImport("demo", "by")),
+            listOf(LsiImport("demo", "by")),
             fixture.fragment(LsiLanguage.KOTLIN).imports,
         )
     }
@@ -370,7 +370,7 @@ class DtoMetadataFetcherPoetTest {
             ).sortedBy(DtoProp::id),
         )
         val batchRootTypeNames = JimmerDtoPoetTypeNames.roots(listOf(graph)) + mapOf(
-            REUSABLE_STORE_VIEW_DTO_TYPE_ID to LsiPoetTypeName(
+            REUSABLE_STORE_VIEW_DTO_TYPE_ID to LsiTypeName(
                 typeId = REUSABLE_STORE_VIEW_TYPE_ID,
                 packageName = "demo.dto",
                 simpleNames = listOf("StoreView"),
@@ -645,11 +645,11 @@ class DtoMetadataFetcherPoetTest {
         val graph: DtoGraph,
         val immutableSchema: ImmutableSchema,
         val workspace: LsiWorkspace,
-        val generatedDtoTypeName: LsiPoetTypeName,
-        val generatedDtoTypeIdsByTypeName: Map<LsiPoetTypeName, DtoTypeId>,
-        val batchRootDtoTypeNames: Map<DtoTypeId, LsiPoetTypeName>,
+        val generatedDtoTypeName: LsiTypeName,
+        val generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
+        val batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
     ) {
-        fun fragment(targetLanguage: LsiLanguage): LsiPoetCodeFragment {
+        fun fragment(targetLanguage: LsiLanguage): LsiCodeFragment {
             return rootType.toLsiMetadataFetcherPoetFragment(
                 targetLanguage = targetLanguage,
                 graph = graph,

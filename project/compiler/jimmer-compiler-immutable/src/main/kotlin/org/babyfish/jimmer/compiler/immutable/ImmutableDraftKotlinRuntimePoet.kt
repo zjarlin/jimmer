@@ -1,26 +1,28 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.poet.LsiPoetAccessor
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetBodyStyle
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetConstructor
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetMember
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetNameStyle
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.model.LsiAccessor
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentLayout
+import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiBodyStyle
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiMember
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiNameStyle
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 
 /**
@@ -32,21 +34,21 @@ internal class ImmutableDraftKotlinRuntimePoet(
 
     private val type = context.type
 
-    fun implementor(): LsiPoetType {
-        return LsiPoetType(
+    fun implementor(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = KOTLIN_DRAFT_IMPLEMENTOR,
             kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = listOf(context.generatedByAnnotation(), propertyOrderAnnotation()),
-            modifiers = setOf(LsiPoetModifier.PRIVATE, LsiPoetModifier.ABSTRACT),
+            modifiers = setOf(LsiModifier.PRIVATE, LsiModifier.ABSTRACT),
             superInterfaces = listOf(context.modelType, IMMUTABLE_SPI_TYPE),
             members = buildList {
                 add(dummyJacksonProperty())
                 add(implementorGet(DraftPropertyArgument.ID))
                 add(implementorGet(DraftPropertyArgument.NAME))
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__type",
-                        modifiers = setOf(LsiPoetModifier.OVERRIDE),
+                        modifiers = setOf(LsiModifier.OVERRIDE),
                         returnType = KOTLIN_DRAFT_IMMUTABLE_TYPE,
                         body = draftCode {
                             returnValue {
@@ -61,12 +63,12 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    fun impl(): LsiPoetType {
-        return LsiPoetType(
+    fun impl(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = KOTLIN_DRAFT_IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(context.generatedByAnnotation()),
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+            modifiers = setOf(LsiModifier.PRIVATE),
             superInterfaces = listOf(
                 context.implementorType,
                 KOTLIN_CLONEABLE_TYPE,
@@ -85,10 +87,10 @@ internal class ImmutableDraftKotlinRuntimePoet(
                 add(hashCodeFunction(shallow = true))
                 add(hashCodeFunction(shallow = false))
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__hashCode",
-                        modifiers = setOf(LsiPoetModifier.OVERRIDE),
-                        parameters = listOf(LsiPoetParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE)),
+                        modifiers = setOf(LsiModifier.OVERRIDE),
+                        parameters = listOf(LsiParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE)),
                         returnType = KOTLIN_DRAFT_INT_TYPE,
                         body = draftCode {
                             returnValue {
@@ -100,12 +102,12 @@ internal class ImmutableDraftKotlinRuntimePoet(
                 add(equalsFunction(shallow = true))
                 add(equalsFunction(shallow = false))
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__equals",
-                        modifiers = setOf(LsiPoetModifier.OVERRIDE),
+                        modifiers = setOf(LsiModifier.OVERRIDE),
                         parameters = listOf(
-                            LsiPoetParameter("obj", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true)),
-                            LsiPoetParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE),
+                            LsiParameter("obj", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true)),
+                            LsiParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE),
                         ),
                         returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
                         body = draftCode {
@@ -120,17 +122,17 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    fun draftImpl(): LsiPoetType {
-        return LsiPoetType(
+    fun draftImpl(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = KOTLIN_DRAFT_DRAFT_IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(context.generatedByAnnotation()),
-            modifiers = setOf(LsiPoetModifier.INTERNAL),
+            modifiers = setOf(LsiModifier.INTERNAL),
             superInterfaces = listOf(context.implementorType, context.draftType, DRAFT_SPI_TYPE),
-            primaryConstructor = LsiPoetConstructor(
+            primaryConstructor = LsiConstructor(
                 parameters = listOf(
-                    LsiPoetParameter("ctx", DRAFT_CONTEXT_TYPE.withDraftRootNullability(true)),
-                    LsiPoetParameter("base", context.modelType.withDraftRootNullability(true)),
+                    LsiParameter("ctx", DRAFT_CONTEXT_TYPE.withDraftRootNullability(true)),
+                    LsiParameter("base", context.modelType.withDraftRootNullability(true)),
                 ),
             ),
             members = buildList {
@@ -166,43 +168,43 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun dummyJacksonProperty(): LsiPoetProperty {
-        return LsiPoetProperty(
+    private fun dummyJacksonProperty(): LsiProperty {
+        return LsiProperty(
             name = "dummyPropForJacksonError__",
             type = KOTLIN_DRAFT_INT_TYPE,
             mutable = false,
-            getter = LsiPoetAccessor(
+            getter = LsiAccessor(
                 body = draftCode {
                     text("throw ")
                     type(IMMUTABLE_MODULE_REQUIRED_EXCEPTION_TYPE)
                     text("()")
                 },
-                bodyStyle = LsiPoetBodyStyle.EXPRESSION,
+                bodyStyle = LsiBodyStyle.EXPRESSION,
             ),
         )
     }
 
-    private fun propertyOrderAnnotation(): LsiPoetAnnotation {
+    private fun propertyOrderAnnotation(): LsiAnnotation {
         val propertyNames = buildList {
             add("dummyPropForJacksonError__")
             addAll(type.propsBySlot.map(JimmerImmutableDraftPropPlan::name))
         }
-        return LsiPoetAnnotation(
+        return sourceLsiAnnotation(
             type = JSON_PROPERTY_ORDER_TYPE_ID,
             arguments = propertyNames.map { propertyName ->
-                LsiPoetAnnotationArgument.Positional(
-                    LsiPoetAnnotationValue.StringValue(propertyName)
+                LsiSourceAnnotationArgument.Positional(
+                    LsiAnnotationValue.StringValue(propertyName)
                 )
             },
-            argumentLayout = LsiPoetAnnotationArgumentLayout.SINGLE_LINE,
+            argumentLayout = LsiAnnotationArgumentLayout.SINGLE_LINE,
         )
     }
 
-    private fun implementorGet(argument: DraftPropertyArgument): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implementorGet(argument: DraftPropertyArgument): LsiFunction {
+        return LsiFunction(
             name = "__get",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            parameters = listOf(LsiPoetParameter("prop", argument.type)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            parameters = listOf(LsiParameter("prop", argument.type)),
             returnType = KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true),
             body = draftCode {
                 addPropertyWhen(
@@ -210,25 +212,25 @@ internal class ImmutableDraftKotlinRuntimePoet(
                     expression = { prop -> draftCode { name(prop.name) } },
                 )
             },
-            bodyStyle = LsiPoetBodyStyle.EXPRESSION,
+            bodyStyle = LsiBodyStyle.EXPRESSION,
         )
     }
 
-    private fun implementorCompanion(): LsiPoetType? {
+    private fun implementorCompanion(): LsiTypeDeclaration? {
         val deeperProps = context.propsInDeclarationOrder.filter { prop ->
             prop.kotlinDeeperPropIdName != null
         }
         if (deeperProps.isEmpty()) {
             return null
         }
-        return LsiPoetType(
+        return LsiTypeDeclaration(
             name = "Companion",
             kind = LsiTypeDeclarationKind.OBJECT,
-            modifiers = setOf(LsiPoetModifier.COMPANION),
+            modifiers = setOf(LsiModifier.COMPANION),
             members = deeperProps.map { prop ->
-                LsiPoetProperty(
+                LsiProperty(
                     name = requireNotNull(prop.kotlinDeeperPropIdName),
-                    nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                    nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
                     type = KOTLIN_DRAFT_PROP_ID_TYPE,
                     mutable = false,
                     initializer = draftCode {
@@ -242,18 +244,18 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun visibilityProperty(): LsiPoetProperty {
-        return LsiPoetProperty(
+    private fun visibilityProperty(): LsiProperty {
+        return LsiProperty(
             name = VISIBILITY_FIELD,
             type = VISIBILITY_TYPE.withDraftRootNullability(true),
             mutable = true,
             annotations = listOf(context.jsonIgnoreAnnotation()),
-            modifiers = setOf(LsiPoetModifier.INTERNAL),
+            modifiers = setOf(LsiModifier.INTERNAL),
             initializer = draftCode { text("null") },
         )
     }
 
-    private fun MutableList<LsiPoetMember>.addStorageProperties(
+    private fun MutableList<LsiMember>.addStorageProperties(
         prop: JimmerImmutableDraftPropPlan,
     ) {
         prop.valueFieldName?.let { fieldName ->
@@ -264,38 +266,38 @@ internal class ImmutableDraftKotlinRuntimePoet(
                 context.propType(prop).withDraftRootNullability(!prop.primitive)
             }
             add(
-                LsiPoetProperty(
+                LsiProperty(
                     name = fieldName,
-                    nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                    nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
                     type = fieldType,
                     mutable = true,
                     annotations = listOf(context.jsonIgnoreAnnotation()),
-                    modifiers = setOf(LsiPoetModifier.INTERNAL),
+                    modifiers = setOf(LsiModifier.INTERNAL),
                     initializer = primitiveDefault(prop),
                 )
             )
         }
         prop.loadedStateFieldName?.let { fieldName ->
             add(
-                LsiPoetProperty(
+                LsiProperty(
                     name = fieldName,
-                    nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                    nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
                     type = KOTLIN_DRAFT_BOOLEAN_TYPE,
                     mutable = true,
                     annotations = listOf(context.jsonIgnoreAnnotation()),
-                    modifiers = setOf(LsiPoetModifier.INTERNAL),
+                    modifiers = setOf(LsiModifier.INTERNAL),
                     initializer = draftCode { text("false") },
                 )
             )
         }
     }
 
-    private fun visibilityConstructor(): LsiPoetConstructor? {
+    private fun visibilityConstructor(): LsiConstructor? {
         val hiddenProps = context.propsInDeclarationOrder.filter { prop -> !prop.valueState.hasValue }
         if (hiddenProps.isEmpty()) {
             return null
         }
-        return LsiPoetConstructor(
+        return LsiConstructor(
             body = draftCode {
                 statement {
                     text("val __visibility = ")
@@ -314,21 +316,21 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun implProperty(prop: JimmerImmutableDraftPropPlan): LsiPoetProperty? {
+    private fun implProperty(prop: JimmerImmutableDraftPropPlan): LsiProperty? {
         if (prop.languageFormula) {
             return null
         }
-        return LsiPoetProperty(
+        return LsiProperty(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             type = context.propType(prop),
             mutable = false,
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            getter = LsiPoetAccessor(body = implGetter(prop)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            getter = LsiAccessor(body = implGetter(prop)),
         )
     }
 
-    private fun implGetter(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun implGetter(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         val idViewBase = prop.idViewBasePropId?.let(context::prop)
         val manyToManyBase = prop.manyToManyBasePropId?.let(context::prop)
         return draftCode {
@@ -404,10 +406,10 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun cloneFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun cloneFunction(): LsiFunction {
+        return LsiFunction(
             name = "clone",
-            modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
             returnType = context.implType,
             body = draftCode {
                 statement {
@@ -433,11 +435,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun implIsLoaded(argument: DraftPropertyArgument): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implIsLoaded(argument: DraftPropertyArgument): LsiFunction {
+        return LsiFunction(
             name = "__isLoaded",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            parameters = listOf(LsiPoetParameter("prop", argument.type)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            parameters = listOf(LsiParameter("prop", argument.type)),
             returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
             body = draftCode {
                 addPropertyWhen(
@@ -446,11 +448,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
                     idNameFallback = draftCode { text("__isLoaded(prop.asName())") },
                 )
             },
-            bodyStyle = LsiPoetBodyStyle.EXPRESSION,
+            bodyStyle = LsiBodyStyle.EXPRESSION,
         )
     }
 
-    private fun loadedExpression(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun loadedExpression(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         val idViewBase = prop.idViewBasePropId?.let(context::prop)
         val manyToManyBase = prop.manyToManyBasePropId?.let(context::prop)
         return when {
@@ -523,7 +525,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun formulaLoadedExpression(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun formulaLoadedExpression(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         if (prop.formulaDependencyPaths.isEmpty()) {
             return draftCode { text("true") }
         }
@@ -555,11 +557,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun implIsVisible(argument: DraftPropertyArgument): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implIsVisible(argument: DraftPropertyArgument): LsiFunction {
+        return LsiFunction(
             name = "__isVisible",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            parameters = listOf(LsiPoetParameter("prop", argument.type)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            parameters = listOf(LsiParameter("prop", argument.type)),
             returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
             body = draftCode {
                 statement { text("val __visibility = this.$VISIBILITY_FIELD ?: return true") }
@@ -581,10 +583,10 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun hashCodeFunction(shallow: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun hashCodeFunction(shallow: Boolean): LsiFunction {
+        return LsiFunction(
             name = if (shallow) "__shallowHashCode" else "hashCode",
-            modifiers = if (shallow) emptySet() else setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = if (shallow) emptySet() else setOf(LsiModifier.OVERRIDE),
             returnType = KOTLIN_DRAFT_INT_TYPE,
             body = draftCode {
                 statement { text("var hash = $VISIBILITY_FIELD?.hashCode() ?: 0") }
@@ -625,12 +627,12 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun equalsFunction(shallow: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun equalsFunction(shallow: Boolean): LsiFunction {
+        return LsiFunction(
             name = if (shallow) "__shallowEquals" else "equals",
-            modifiers = if (shallow) emptySet() else setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = if (shallow) emptySet() else setOf(LsiModifier.OVERRIDE),
             parameters = listOf(
-                LsiPoetParameter("other", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true))
+                LsiParameter("other", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true))
             ),
             returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
             body = draftCode {
@@ -708,10 +710,10 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun toStringFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun toStringFunction(): LsiFunction {
+        return LsiFunction(
             name = "toString",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             returnType = KOTLIN_DRAFT_STRING_TYPE,
             body = draftCode {
                 returnValue {
@@ -722,48 +724,48 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftFields(): List<LsiPoetProperty> {
+    private fun draftFields(): List<LsiProperty> {
         return listOf(
-            LsiPoetProperty(
+            LsiProperty(
                 name = DRAFT_CONTEXT_FIELD,
                 type = DRAFT_CONTEXT_TYPE.withDraftRootNullability(true),
                 mutable = false,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
                 initializer = draftCode { text("ctx") },
             ),
-            LsiPoetProperty(
+            LsiProperty(
                 name = DRAFT_BASE_FIELD,
                 type = context.implType.withDraftRootNullability(true),
                 mutable = false,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
                 initializer = draftCode {
                     text("base as ")
                     type(context.implType.withDraftRootNullability(true))
                 },
             ),
-            LsiPoetProperty(
+            LsiProperty(
                 name = DRAFT_MODIFIED_FIELD,
                 type = context.implType.withDraftRootNullability(true),
                 mutable = true,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
                 initializer = draftCode {
                     text("if (base === null) ")
                     type(context.implType)
                     text("() else null")
                 },
             ),
-            LsiPoetProperty(
+            LsiProperty(
                 name = DRAFT_RESOLVING_FIELD,
                 type = KOTLIN_DRAFT_BOOLEAN_TYPE,
                 mutable = true,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
                 initializer = draftCode { text("false") },
             ),
-            LsiPoetProperty(
+            LsiProperty(
                 name = DRAFT_RESOLVED_FIELD,
                 type = context.modelType.withDraftRootNullability(true),
                 mutable = true,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
                 initializer = draftCode { text("null") },
             ),
         )
@@ -772,11 +774,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
     private fun delegateBooleanFunction(
         functionName: String,
         argument: DraftPropertyArgument,
-    ): LsiPoetFunction {
-        return LsiPoetFunction(
+    ): LsiFunction {
+        return LsiFunction(
             name = functionName,
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            parameters = listOf(LsiPoetParameter("prop", argument.type)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            parameters = listOf(LsiParameter("prop", argument.type)),
             returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
             body = draftCode {
                 returnValue {
@@ -789,10 +791,10 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftHashCodeFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftHashCodeFunction(): LsiFunction {
+        return LsiFunction(
             name = "hashCode",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             returnType = KOTLIN_DRAFT_INT_TYPE,
             body = draftCode {
                 returnValue {
@@ -803,11 +805,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftSpiHashCodeFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftSpiHashCodeFunction(): LsiFunction {
+        return LsiFunction(
             name = "__hashCode",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            parameters = listOf(LsiPoetParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            parameters = listOf(LsiParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE)),
             returnType = KOTLIN_DRAFT_INT_TYPE,
             body = draftCode {
                 returnValue {
@@ -818,12 +820,12 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftEqualsFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftEqualsFunction(): LsiFunction {
+        return LsiFunction(
             name = "equals",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             parameters = listOf(
-                LsiPoetParameter("other", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true))
+                LsiParameter("other", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true))
             ),
             returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
             body = draftCode {
@@ -835,13 +837,13 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftSpiEqualsFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftSpiEqualsFunction(): LsiFunction {
+        return LsiFunction(
             name = "__equals",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             parameters = listOf(
-                LsiPoetParameter("other", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true)),
-                LsiPoetParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE),
+                LsiParameter("other", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true)),
+                LsiParameter("shallow", KOTLIN_DRAFT_BOOLEAN_TYPE),
             ),
             returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
             body = draftCode {
@@ -853,19 +855,19 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftImplProperty(prop: JimmerImmutableDraftPropPlan): LsiPoetProperty {
+    private fun draftImplProperty(prop: JimmerImmutableDraftPropPlan): LsiProperty {
         val mutable = prop.writable || prop.isDiscriminator
-        return LsiPoetProperty(
+        return LsiProperty(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             type = context.propType(prop),
             mutable = mutable,
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            getter = LsiPoetAccessor(body = draftGetter(prop)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            getter = LsiAccessor(body = draftGetter(prop)),
             setter = if (mutable) {
-                LsiPoetAccessor(
+                LsiAccessor(
                     setterParameterName = prop.name,
-                    setterParameterNameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                    setterParameterNameStyle = LsiNameStyle.KOTLIN_ESCAPED,
                     body = draftSetter(prop),
                 )
             } else {
@@ -874,7 +876,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftGetter(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun draftGetter(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         val idViewBase = prop.idViewBasePropId?.let(context::prop)
         return draftCode {
             when {
@@ -919,7 +921,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun draftSetter(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun draftSetter(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         val idViewBase = prop.idViewBasePropId?.let(context::prop)
         return draftCode {
             addFrozenCheck()
@@ -983,14 +985,14 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun draftAutoCreateFunction(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction? {
+    private fun draftAutoCreateFunction(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
         if (!prop.autoCreateSupported || prop.manyToManyBasePropId != null || prop.languageFormula) {
             return null
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
+            modifiers = setOf(LsiModifier.OVERRIDE),
             returnType = context.propDraftType(prop, nullable = false),
             body = draftCode {
                 beginControlFlow {
@@ -1026,16 +1028,16 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftReferenceFunction(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction? {
+    private fun draftReferenceFunction(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
         if (!prop.referenceMutationSupported || prop.list || prop.languageFormula) {
             return null
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.name,
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
+            modifiers = setOf(LsiModifier.OVERRIDE),
             parameters = listOf(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "block",
                     type = draftReceiverFunctionType(context.propDraftType(prop, nullable = false)),
                 )
@@ -1049,11 +1051,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun unloadFunction(argument: DraftPropertyArgument): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun unloadFunction(argument: DraftPropertyArgument): LsiFunction {
+        return LsiFunction(
             name = "__unload",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
-            parameters = listOf(LsiPoetParameter("prop", argument.type)),
+            modifiers = setOf(LsiModifier.OVERRIDE),
+            parameters = listOf(LsiParameter("prop", argument.type)),
             body = draftCode {
                 addFrozenCheck()
                 addPropertyWhen(
@@ -1065,7 +1067,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun unloadExpression(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun unloadExpression(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         val basePropId = prop.idViewBasePropId ?: prop.manyToManyBasePropId
         return when {
             basePropId != null -> {
@@ -1116,13 +1118,13 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun setFunction(argument: DraftPropertyArgument): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun setFunction(argument: DraftPropertyArgument): LsiFunction {
+        return LsiFunction(
             name = "__set",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             parameters = listOf(
-                LsiPoetParameter("prop", argument.type),
-                LsiPoetParameter("value", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true)),
+                LsiParameter("prop", argument.type),
+                LsiParameter("value", KOTLIN_DRAFT_ANY_TYPE.withDraftRootNullability(true)),
             ),
             body = draftCode {
                 addPropertyWhen(
@@ -1134,7 +1136,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun setExpression(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun setExpression(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         if (!prop.writable && !prop.isDiscriminator) {
             return draftCode { text("Unit") }
         }
@@ -1151,13 +1153,13 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun showFunction(argument: DraftPropertyArgument): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun showFunction(argument: DraftPropertyArgument): LsiFunction {
+        return LsiFunction(
             name = "__show",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             parameters = listOf(
-                LsiPoetParameter("prop", argument.type),
-                LsiPoetParameter("visible", KOTLIN_DRAFT_BOOLEAN_TYPE),
+                LsiParameter("prop", argument.type),
+                LsiParameter("visible", KOTLIN_DRAFT_BOOLEAN_TYPE),
             ),
             body = draftCode {
                 addFrozenCheck()
@@ -1197,19 +1199,19 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun draftContextFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftContextFunction(): LsiFunction {
+        return LsiFunction(
             name = "__draftContext",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             returnType = DRAFT_CONTEXT_TYPE,
             body = draftCode { returnValue { text("__ctx()") } },
         )
     }
 
-    private fun resolveFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun resolveFunction(): LsiFunction {
+        return LsiFunction(
             name = "__resolve",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             returnType = KOTLIN_DRAFT_ANY_TYPE,
             body = draftCode {
                 statement { text("val __resolved = this.$DRAFT_RESOLVED_FIELD") }
@@ -1243,7 +1245,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addAssociationResolution() {
+    private fun LsiCodeBuilder.addAssociationResolution() {
         val resolvable = context.propsInDeclarationOrder.filter { prop ->
             prop.valueFieldName != null && (prop.immutableReference || prop.list)
         }
@@ -1304,19 +1306,19 @@ internal class ImmutableDraftKotlinRuntimePoet(
         endControlFlow()
     }
 
-    private fun isResolvedFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun isResolvedFunction(): LsiFunction {
+        return LsiFunction(
             name = "__isResolved",
-            modifiers = setOf(LsiPoetModifier.OVERRIDE),
+            modifiers = setOf(LsiModifier.OVERRIDE),
             returnType = KOTLIN_DRAFT_BOOLEAN_TYPE,
             body = draftCode { returnValue { text("$DRAFT_RESOLVED_FIELD != null") } },
         )
     }
 
-    private fun contextFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun contextFunction(): LsiFunction {
+        return LsiFunction(
             name = "__ctx",
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+            modifiers = setOf(LsiModifier.PRIVATE),
             returnType = DRAFT_CONTEXT_TYPE,
             body = draftCode {
                 returnValue {
@@ -1331,10 +1333,10 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun unwrapFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun unwrapFunction(): LsiFunction {
+        return LsiFunction(
             name = "__unwrap",
-            modifiers = setOf(LsiPoetModifier.INTERNAL),
+            modifiers = setOf(LsiModifier.INTERNAL),
             returnType = KOTLIN_DRAFT_ANY_TYPE,
             body = draftCode {
                 returnValue {
@@ -1346,11 +1348,11 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addPropertyWhen(
+    private fun LsiCodeBuilder.addPropertyWhen(
         argument: DraftPropertyArgument,
-        expression: (JimmerImmutableDraftPropPlan) -> LsiPoetCodeBlock,
-        idNameFallback: LsiPoetCodeBlock = draftCode { text("__get(prop.asName())") },
-        elseExpression: LsiPoetCodeBlock = context.illegalPropertyCode("prop"),
+        expression: (JimmerImmutableDraftPropPlan) -> LsiCodeBlock,
+        idNameFallback: LsiCodeBlock = draftCode { text("__get(prop.asName())") },
+        elseExpression: LsiCodeBlock = context.illegalPropertyCode("prop"),
         blankLineAfterElse: Boolean = true,
     ) {
         beginControlFlow {
@@ -1380,7 +1382,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         endControlFlow()
     }
 
-    private fun showIllegalPropertyCode(argument: DraftPropertyArgument): LsiPoetCodeBlock {
+    private fun showIllegalPropertyCode(argument: DraftPropertyArgument): LsiCodeBlock {
         return draftCode {
             text("throw IllegalArgumentException(\n")
             indent {
@@ -1402,7 +1404,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun loadedStateExpression(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun loadedStateExpression(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         return prop.loadedStateFieldName?.let { fieldName -> draftCode { name(fieldName) } }
             ?: draftCode {
                 name(requireNotNull(prop.valueFieldName))
@@ -1410,7 +1412,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
             }
     }
 
-    private fun primitiveDefault(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun primitiveDefault(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         if (!prop.primitive) {
             return draftCode { text("null") }
         }
@@ -1436,7 +1438,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
         }
     }
 
-    private fun LsiPoetCodeBuilder.addFrozenCheck() {
+    private fun LsiCodeBuilder.addFrozenCheck() {
         beginControlFlow { text("if ($DRAFT_RESOLVED_FIELD != null)") }
         statement {
             text("throw ")
@@ -1448,10 +1450,10 @@ internal class ImmutableDraftKotlinRuntimePoet(
         endControlFlow()
     }
 
-    private val unmodifiedExpression: LsiPoetCodeBlock
+    private val unmodifiedExpression: LsiCodeBlock
         get() = draftCode { text("($DRAFT_MODIFIED_FIELD ?: $DRAFT_BASE_FIELD!!)") }
 
-    private val modifiedExpression: LsiPoetCodeBlock
+    private val modifiedExpression: LsiCodeBlock
         get() = draftCode {
             text("($DRAFT_MODIFIED_FIELD ?: $DRAFT_BASE_FIELD!!.clone())\n")
             text(".also { $DRAFT_MODIFIED_FIELD = it }")

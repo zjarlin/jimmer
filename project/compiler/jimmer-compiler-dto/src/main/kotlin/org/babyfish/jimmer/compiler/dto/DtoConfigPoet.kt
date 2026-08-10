@@ -22,12 +22,12 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.LsiTypeReferenceStyle
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 把冻结的 DTO 属性配置降级为可由两端 Poet 渲染的代码块。 */
 internal fun DtoBaseProp.toConfigPoetCodeBlock(
@@ -36,7 +36,7 @@ internal fun DtoBaseProp.toConfigPoetCodeBlock(
     immutableSchema: ImmutableSchema,
     workspace: LsiWorkspace,
     configContractResolution: DtoConfigContractResolution,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     require(graph.propsById[id] == this) {
         "DTO config property does not belong to this graph: ${id.value}"
     }
@@ -59,9 +59,9 @@ internal fun DtoBaseProp.toConfigPoetCodeBlock(
 
 /** 为独立 DTO config 代码块解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoConfigPoetTypeNames(
-    codeBlock: LsiPoetCodeBlock,
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
+    codeBlock: LsiCodeBlock,
+): List<LsiTypeName> {
+    return toLsiTypeNames(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_CONFIG_RUNTIME_TYPE_NAMES,
     )
@@ -71,7 +71,7 @@ private fun DtoBaseProp.javaConfigPoetCodeBlock(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     configContractResolution: DtoConfigContractResolution,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     val config = requireNotNull(config)
     val filterType = configImplementationTypeOrNull(
         graph,
@@ -83,7 +83,7 @@ private fun DtoBaseProp.javaConfigPoetCodeBlock(
         configContractResolution,
         DtoConfigContractKind.RECURSION,
     )
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         text("cfg -> cfg")
         indent {
             if (config.predicate != null || config.orderItems.isNotEmpty()) {
@@ -117,7 +117,7 @@ private fun DtoBaseProp.kotlinConfigPoetCodeBlock(
     immutableSchema: ImmutableSchema,
     workspace: LsiWorkspace,
     configContractResolution: DtoConfigContractResolution,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     val config = requireNotNull(config)
     val filterType = configImplementationTypeOrNull(
         graph,
@@ -129,7 +129,7 @@ private fun DtoBaseProp.kotlinConfigPoetCodeBlock(
         configContractResolution,
         DtoConfigContractKind.RECURSION,
     )
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         text(" {")
         indent {
             when {
@@ -139,14 +139,14 @@ private fun DtoBaseProp.kotlinConfigPoetCodeBlock(
                 filterType != null -> {
                     line()
                     text("filter(")
-                    type(filterType, LsiPoetTypeReferenceStyle.FULLY_QUALIFIED)
+                    type(filterType, LsiTypeReferenceStyle.FULLY_QUALIFIED)
                     text("())")
                 }
             }
             recursionType?.let { typeRef ->
                 line()
                 text("recursive(")
-                type(typeRef, LsiPoetTypeReferenceStyle.FULLY_QUALIFIED)
+                type(typeRef, LsiTypeReferenceStyle.FULLY_QUALIFIED)
                 text("())")
             }
             if (config.fetchType != DtoFetchType.AUTO) {
@@ -162,7 +162,7 @@ private fun DtoBaseProp.kotlinConfigPoetCodeBlock(
     }
 }
 
-private fun LsiPoetCodeBuilder.javaInlineFilter(
+private fun LsiCodeBuilder.javaInlineFilter(
     predicate: DtoPredicate?,
     orderItems: List<DtoOrderItem>,
     immutableSchema: ImmutableSchema,
@@ -201,7 +201,7 @@ private fun LsiPoetCodeBuilder.javaInlineFilter(
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.kotlinInlineFilter(
+private fun LsiCodeBuilder.kotlinInlineFilter(
     predicate: DtoPredicate?,
     orderItems: List<DtoOrderItem>,
     immutableSchema: ImmutableSchema,
@@ -243,7 +243,7 @@ private fun LsiPoetCodeBuilder.kotlinInlineFilter(
     text("}")
 }
 
-private fun LsiPoetCodeBuilder.javaPredicate(
+private fun LsiCodeBuilder.javaPredicate(
     predicate: DtoPredicate,
     immutableSchema: ImmutableSchema,
 ) {
@@ -263,7 +263,7 @@ private fun LsiPoetCodeBuilder.javaPredicate(
     }
 }
 
-private fun LsiPoetCodeBuilder.javaPredicateGroup(
+private fun LsiCodeBuilder.javaPredicateGroup(
     memberName: String,
     predicates: List<DtoPredicate>,
     immutableSchema: ImmutableSchema,
@@ -283,7 +283,7 @@ private fun LsiPoetCodeBuilder.javaPredicateGroup(
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.kotlinPredicate(
+private fun LsiCodeBuilder.kotlinPredicate(
     predicate: DtoPredicate,
     immutableSchema: ImmutableSchema,
     workspace: LsiWorkspace,
@@ -311,7 +311,7 @@ private fun LsiPoetCodeBuilder.kotlinPredicate(
     }
 }
 
-private fun LsiPoetCodeBuilder.kotlinPredicateGroup(
+private fun LsiCodeBuilder.kotlinPredicateGroup(
     memberName: String,
     predicates: List<DtoPredicate>,
     immutableSchema: ImmutableSchema,
@@ -332,7 +332,7 @@ private fun LsiPoetCodeBuilder.kotlinPredicateGroup(
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.javaPropPath(
+private fun LsiCodeBuilder.javaPropPath(
     path: List<DtoPropPathNode>,
     immutableSchema: ImmutableSchema,
 ) {
@@ -346,7 +346,7 @@ private fun LsiPoetCodeBuilder.javaPropPath(
     }
 }
 
-private fun LsiPoetCodeBuilder.kotlinPropPath(
+private fun LsiCodeBuilder.kotlinPropPath(
     path: List<DtoPropPathNode>,
     immutableSchema: ImmutableSchema,
     workspace: LsiWorkspace,
@@ -354,7 +354,7 @@ private fun LsiPoetCodeBuilder.kotlinPropPath(
     name("table")
     path.forEach { node ->
         val prop = node.immutableProp(immutableSchema)
-        val packageName = workspace.toLsiPoetTypeNames(listOf(prop.ownerTypeId)).single().packageName
+        val packageName = workspace.toLsiTypeNames(listOf(prop.ownerTypeId)).single().packageName
         text(".")
         topLevelMember(
             packageName,
@@ -364,7 +364,7 @@ private fun LsiPoetCodeBuilder.kotlinPropPath(
     }
 }
 
-private fun LsiPoetCodeBuilder.configValue(
+private fun LsiCodeBuilder.configValue(
     value: DtoConfigValue,
     prop: ImmutableProp,
     targetLanguage: LsiLanguage,
@@ -393,7 +393,7 @@ private fun LsiPoetCodeBuilder.configValue(
     }
 }
 
-private fun LsiPoetCodeBuilder.constructorValue(
+private fun LsiCodeBuilder.constructorValue(
     typeId: LsiSymbolId,
     value: String,
     targetLanguage: LsiLanguage,
@@ -407,7 +407,7 @@ private fun LsiPoetCodeBuilder.constructorValue(
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.addLimits(
+private fun LsiCodeBuilder.addLimits(
     limit: DtoLimit?,
     batch: Int?,
     depth: Int?,

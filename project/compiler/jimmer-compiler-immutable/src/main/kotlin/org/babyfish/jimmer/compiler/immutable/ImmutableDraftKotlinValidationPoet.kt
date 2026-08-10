@@ -15,13 +15,13 @@ import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetMember
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetNameStyle
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiMember
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiNameStyle
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 
 /**
@@ -33,7 +33,7 @@ internal object ImmutableDraftKotlinValidationPoet {
         typePlan: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             prop.validationPlan.steps.forEach { step ->
                 when (step) {
@@ -64,7 +64,7 @@ internal object ImmutableDraftKotlinValidationPoet {
     fun typeValidationCode(
         typePlan: JimmerImmutableDraftTypePlan,
         valueName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             typePlan.customValidations.forEach { validation ->
                 require(validation.validatorTypeIds.isNotEmpty()) {
@@ -80,7 +80,7 @@ internal object ImmutableDraftKotlinValidationPoet {
         }
     }
 
-    fun companion(typePlan: JimmerImmutableDraftTypePlan): LsiPoetType? {
+    fun companion(typePlan: JimmerImmutableDraftTypePlan): LsiTypeDeclaration? {
         val props = typePlan.propsInKotlinDeclarationOrder()
         val email = props.any { prop ->
             prop.validationPlan.builtInSteps.any { step ->
@@ -102,10 +102,10 @@ internal object ImmutableDraftKotlinValidationPoet {
         if (!email && patterns.isEmpty() && typePlan.customValidations.isEmpty() && propValidators.isEmpty()) {
             return null
         }
-        val members = buildList<LsiPoetMember> {
+        val members = buildList<LsiMember> {
             if (email) {
                 add(
-                    LsiPoetProperty(
+                    LsiProperty(
                         name = EMAIL_PATTERN_FIELD,
                         type = PATTERN_TYPE,
                         mutable = false,
@@ -122,9 +122,9 @@ internal object ImmutableDraftKotlinValidationPoet {
             patterns.forEach { (prop, indexedPattern) ->
                 val pattern = indexedPattern.value
                 add(
-                    LsiPoetProperty(
+                    LsiProperty(
                         name = prop.kotlinPatternFieldName(indexedPattern.index),
-                        nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+                        nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
                         type = PATTERN_TYPE,
                         mutable = false,
                         modifiers = PRIVATE,
@@ -146,15 +146,15 @@ internal object ImmutableDraftKotlinValidationPoet {
                 add(propValidatorProperty(typePlan, prop, validation))
             }
         }
-        return LsiPoetType(
+        return LsiTypeDeclaration(
             name = "Companion",
             kind = LsiTypeDeclarationKind.OBJECT,
-            modifiers = setOf(LsiPoetModifier.COMPANION),
+            modifiers = setOf(LsiModifier.COMPANION),
             members = members,
         )
     }
 
-    private fun LsiPoetCodeBuilder.addBuiltInValidation(
+    private fun LsiCodeBuilder.addBuiltInValidation(
         typePlan: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
@@ -215,7 +215,7 @@ internal object ImmutableDraftKotlinValidationPoet {
     private fun numericBoundCondition(
         valueName: String,
         step: ImmutableDraftValidationStep.NumericBound,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             when (step.target) {
                 ImmutableDraftNumericTarget.PRIMITIVE -> {
@@ -251,7 +251,7 @@ internal object ImmutableDraftKotlinValidationPoet {
     private fun digitsCondition(
         valueName: String,
         step: ImmutableDraftValidationStep.Digits,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             name(valueName)
             when (step.target) {
@@ -275,7 +275,7 @@ internal object ImmutableDraftKotlinValidationPoet {
     private fun temporalCondition(
         valueName: String,
         step: ImmutableDraftValidationStep.Temporal,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         val temporalType = when (step.target) {
             ImmutableDraftTemporalTarget.LOCAL_DATE -> LOCAL_DATE_TYPE
             ImmutableDraftTemporalTarget.LOCAL_DATE_TIME -> LOCAL_DATE_TIME_TYPE
@@ -308,7 +308,7 @@ internal object ImmutableDraftKotlinValidationPoet {
         }
     }
 
-    private fun LsiPoetCodeBuilder.addFailure(
+    private fun LsiCodeBuilder.addFailure(
         typePlan: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
@@ -333,8 +333,8 @@ internal object ImmutableDraftKotlinValidationPoet {
     private fun typeValidatorProperty(
         typePlan: JimmerImmutableDraftTypePlan,
         validation: ImmutableValidation,
-    ): LsiPoetProperty {
-        return LsiPoetProperty(
+    ): LsiProperty {
+        return LsiProperty(
             name = typeValidatorFieldName(validation.annotationTypeId),
             type = draftDeclaredType(VALIDATOR_TYPE_ID, LsiDeclaredType(typePlan.typeId)),
             mutable = false,
@@ -356,10 +356,10 @@ internal object ImmutableDraftKotlinValidationPoet {
         typePlan: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         validation: ImmutableDraftValidationStep.CustomValidator,
-    ): LsiPoetProperty {
-        return LsiPoetProperty(
+    ): LsiProperty {
+        return LsiProperty(
             name = propValidatorFieldName(prop, validation.annotationTypeId),
-            nameStyle = LsiPoetNameStyle.KOTLIN_ESCAPED,
+            nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             type = draftDeclaredType(VALIDATOR_TYPE_ID, prop.type),
             mutable = false,
             modifiers = PRIVATE,
@@ -440,7 +440,7 @@ private val ImmutableDraftComparison.operator: String
         ImmutableDraftComparison.GREATER_THAN -> ">"
     }
 
-private val PRIVATE = setOf(LsiPoetModifier.PRIVATE)
+private val PRIVATE = setOf(LsiModifier.PRIVATE)
 
 private const val EMAIL_PATTERN = "^[^@]+@[^@]+$"
 private const val EMAIL_PATTERN_FIELD = "__email_pattern"

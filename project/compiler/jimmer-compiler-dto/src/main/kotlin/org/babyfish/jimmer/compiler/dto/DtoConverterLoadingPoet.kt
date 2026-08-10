@@ -10,8 +10,8 @@ import site.addzero.lsi.jimmer.generatedPropsConstantName
 import site.addzero.lsi.jimmer.generatedPropsTypeOf
 import site.addzero.lsi.jimmer.isEntityAssociation
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
 
 /** 将 DTO 属性的 converter 获取语义降低为平台中立的代码块。 */
 internal fun DtoBaseProp.toLsiConverterLoadingPoetCodeBlock(
@@ -20,7 +20,7 @@ internal fun DtoBaseProp.toLsiConverterLoadingPoetCodeBlock(
     targetLanguage: LsiLanguage,
     forList: Boolean,
     typeArguments: List<LsiTypeRef>,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO converter loading requires Java or Kotlin target language"
     }
@@ -30,7 +30,7 @@ internal fun DtoBaseProp.toLsiConverterLoadingPoetCodeBlock(
     val tailProp = tailProp(graph)
     val immutableProp = tailProp.boundImmutableProp(graph, immutableSchema)
     val entityAssociation = immutableSchema.isEntityAssociation(immutableProp)
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         type(immutableSchema.generatedPropsTypeOf(immutableProp))
         text(".")
         name(immutableProp.generatedPropsConstantName())
@@ -55,7 +55,7 @@ internal fun DtoBaseProp.toLsiConverterLoadingPoetCodeBlock(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendConverterTypeArguments(typeArguments: List<LsiTypeRef>) {
+private fun LsiCodeBuilder.appendConverterTypeArguments(typeArguments: List<LsiTypeRef>) {
     if (typeArguments.isEmpty()) {
         return
     }

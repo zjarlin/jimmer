@@ -2,20 +2,20 @@ package org.babyfish.jimmer.compiler.dto
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.dto.DtoFoldProp
-import site.addzero.lsi.poet.LsiPoetCodeBlock
+import site.addzero.lsi.model.LsiCodeBlock
 
 /** 将折叠 DTO 写回 Draft 的控制流降低为平台中立代码。 */
 internal fun DtoFoldProp.toDraftApplyPoetCodeBlock(
     targetLanguage: LsiLanguage,
     draftParameterName: String,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO fold Draft application requires Java or Kotlin: $targetLanguage"
     }
     require(draftParameterName.isNotBlank()) {
         "DTO fold Draft application requires a non-blank Draft parameter name"
     }
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         if (targetLanguage == LsiLanguage.JAVA && nullable) {
             beginControlFlow {
                 text("if (this.")

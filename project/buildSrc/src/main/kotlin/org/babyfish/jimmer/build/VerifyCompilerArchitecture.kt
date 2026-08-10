@@ -43,6 +43,9 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
     abstract val forbiddenRelativePaths: SetProperty<String>
 
     @get:Input
+    abstract val expectedRelativePaths: SetProperty<String>
+
+    @get:Input
     abstract val allowedImportPrefixes: SetProperty<String>
 
     @get:Input
@@ -75,6 +78,7 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
         allowedPoetRelativePathPrefixes.convention(emptySet())
         allowedPoetFileSuffixes.convention(emptySet())
         forbiddenRelativePaths.convention(emptySet())
+        expectedRelativePaths.convention(emptySet())
         allowedImportPrefixes.convention(emptySet())
         additionalForbiddenNamespaces.convention(emptySet())
         directDependencyIds.convention(emptySet())
@@ -166,6 +170,12 @@ abstract class VerifyCompilerArchitecture : DefaultTask() {
                 relativePath = file.relativeTo(baseDirectoryFile).invariantSeparatorsPath,
                 content = file.readText(),
             )
+        }
+        expectedRelativePaths.get().takeIf(Set<String>::isNotEmpty)?.let { expected ->
+            val actual = sources.map(CompilerArchitectureSource::relativePath).toSet()
+            check(actual == expected) {
+                "Compiler architecture source set mismatch: expected $expected, actual $actual"
+            }
         }
         val violations = findCompilerArchitectureViolations(sources, rules)
         check(violations.isEmpty()) {

@@ -10,7 +10,7 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将冻结的 DTO 属性访问器初始化表达式渲染为 KotlinPoet 代码块。 */
@@ -24,7 +24,7 @@ internal object KspDtoAccessorRenderer {
         acceptNull: Boolean,
         withConverters: Boolean,
         generatedTargetType: (DtoProp) -> LsiDeclaredType,
-        generatedTypeNames: Collection<LsiPoetTypeName>,
+        generatedTypeNames: Collection<LsiTypeName>,
     ): CodeBlock {
         val initializer = prop.toAccessorInitializerPoetCodeBlock(
             graph = graph,

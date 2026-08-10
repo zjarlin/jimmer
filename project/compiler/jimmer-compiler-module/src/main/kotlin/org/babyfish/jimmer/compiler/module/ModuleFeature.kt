@@ -124,7 +124,7 @@ class ModuleFeature : CompilerFeature<EmptyCompilerFeatureState, ModuleFeatureSt
             CompilerPlatform.KSP -> LsiKotlinPoetRenderer()
             CompilerPlatform.UNKNOWN -> return CompilerFeatureRenderResult()
         }
-        val artifacts = schema.toLsiPoetArtifacts(context.round.workspace).map(renderer::render)
+        val artifacts = schema.toLsiSourceArtifacts(context.round.workspace).map(renderer::render)
         return CompilerFeatureRenderResult(artifacts = artifacts)
     }
 

@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
@@ -27,24 +29,24 @@ import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationArgumentNameStyle
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetBodyStyle
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetMember
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetAnnotation
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.model.LsiBodyStyle
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiMember
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toSourceAnnotation
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 将冻结的 Input DTO 语义降低为平台中立的 Builder 源码结构。 */
 internal fun DtoType.toInputBuilderPoetType(
@@ -56,7 +58,7 @@ internal fun DtoType.toInputBuilderPoetType(
     generatedDtoTypes: Map<DtoTypeId, LsiDeclaredType>,
     jsonPojoBuilderAnnotationTypeId: LsiSymbolId,
     jsonNamingAnnotationTypeId: LsiSymbolId,
-): LsiPoetType {
+): LsiTypeDeclaration {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO InputBuilder requires Java or Kotlin target language"
     }
@@ -100,7 +102,7 @@ internal fun DtoType.toInputBuilderPoetType(
             ),
         )
     }
-    return LsiPoetType(
+    return LsiTypeDeclaration(
         name = "Builder",
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = inputBuilderTypeAnnotations(
@@ -111,7 +113,7 @@ internal fun DtoType.toInputBuilderPoetType(
             jsonNamingAnnotationTypeId = jsonNamingAnnotationTypeId,
         ),
         modifiers = if (targetLanguage == LsiLanguage.JAVA) {
-            setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC)
+            setOf(LsiModifier.PUBLIC, LsiModifier.STATIC)
         } else {
             emptySet()
         },
@@ -125,17 +127,17 @@ private fun DtoType.inputBuilderTypeAnnotations(
     targetLanguage: LsiLanguage,
     jsonPojoBuilderAnnotationTypeId: LsiSymbolId,
     jsonNamingAnnotationTypeId: LsiSymbolId,
-): List<LsiPoetAnnotation> = buildList {
+): List<LsiAnnotation> = buildList {
     if (targetLanguage == LsiLanguage.KOTLIN) {
-        add(LsiPoetAnnotation(GENERATED_BY_ANNOTATION_TYPE_ID))
+        add(sourceLsiAnnotation(GENERATED_BY_ANNOTATION_TYPE_ID))
     }
     add(
-        LsiPoetAnnotation(
+        sourceLsiAnnotation(
             type = jsonPojoBuilderAnnotationTypeId,
             arguments = listOf(
-                LsiPoetAnnotationArgument.Named(
+                LsiSourceAnnotationArgument.Named(
                     name = "withPrefix",
-                    value = LsiPoetAnnotationValue.StringValue(""),
+                    value = LsiAnnotationValue.StringValue(""),
                 ),
             ),
         ),
@@ -145,12 +147,12 @@ private fun DtoType.inputBuilderTypeAnnotations(
         annotationContract = annotationContract,
         jsonNamingAnnotationTypeId = jsonNamingAnnotationTypeId,
     )?.let { annotation ->
-        val poetAnnotation = annotation.toLsiPoetAnnotation()
+        val poetAnnotation = annotation.toSourceAnnotation()
         add(
             poetAnnotation.copy(
-                arguments = poetAnnotation.arguments.map { argument ->
-                    if (argument is LsiPoetAnnotationArgument.Named) {
-                        argument.copy(nameStyle = LsiPoetAnnotationArgumentNameStyle.VERBATIM)
+                sourceArguments = poetAnnotation.sourceArguments.map { argument ->
+                    if (argument is LsiSourceAnnotationArgument.Named) {
+                        argument.copy(nameStyle = LsiAnnotationArgumentNameStyle.VERBATIM)
                     } else {
                         argument
                     }
@@ -165,20 +167,20 @@ private fun DtoProp.inputBuilderStorageMember(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
     generatedDtoType: (DtoType) -> LsiDeclaredType,
-): LsiPoetMember {
+): LsiMember {
     val type = inputBuilderBackingType(graph, immutableSchema, targetLanguage, generatedDtoType)
     return if (targetLanguage == LsiLanguage.JAVA) {
-        LsiPoetField(
+        LsiField(
             name = name,
             type = type,
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+            modifiers = setOf(LsiModifier.PRIVATE),
         )
     } else {
-        LsiPoetProperty(
+        LsiProperty(
             name = name,
             type = type,
             mutable = true,
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+            modifiers = setOf(LsiModifier.PRIVATE),
             initializer = code {
                 literal(if (type.isNullableBuilderStorage()) "null" else "false")
             },
@@ -189,20 +191,20 @@ private fun DtoProp.inputBuilderStorageMember(
 private fun DtoProp.inputBuilderLoadedStateMemberOrNull(
     graph: DtoGraph,
     targetLanguage: LsiLanguage,
-): LsiPoetMember? {
+): LsiMember? {
     val stateName = inputBuilderLoadedStateNameOrNull(graph, targetLanguage) ?: return null
     return if (targetLanguage == LsiLanguage.JAVA) {
-        LsiPoetField(
+        LsiField(
             name = stateName,
             type = BOOLEAN_TYPE,
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+            modifiers = setOf(LsiModifier.PRIVATE),
         )
     } else {
-        LsiPoetProperty(
+        LsiProperty(
             name = stateName,
             type = BOOLEAN_TYPE,
             mutable = true,
-            modifiers = setOf(LsiPoetModifier.PRIVATE),
+            modifiers = setOf(LsiModifier.PRIVATE),
             initializer = code { literal("false") },
         )
     }
@@ -215,10 +217,10 @@ private fun DtoProp.inputBuilderSetter(
     targetLanguage: LsiLanguage,
     builderType: LsiDeclaredType,
     generatedDtoType: (DtoType) -> LsiDeclaredType,
-): LsiPoetFunction {
+): LsiFunction {
     val parameterType = inputBuilderParameterType(graph, immutableSchema, targetLanguage, generatedDtoType)
     val stateName = inputBuilderLoadedStateNameOrNull(graph, targetLanguage)
-    return LsiPoetFunction(
+    return LsiFunction(
         name = inputBuilderSetterName(),
         annotations = inputBuilderSetterJacksonAnnotationApplications(graph, annotationContract).map { application ->
             val dtoSourceAnnotation = if (application.origin == DtoAnnotationOrigin.DTO) {
@@ -237,11 +239,11 @@ private fun DtoProp.inputBuilderSetter(
             )
         },
         modifiers = if (targetLanguage == LsiLanguage.JAVA) {
-            setOf(LsiPoetModifier.PUBLIC)
+            setOf(LsiModifier.PUBLIC)
         } else {
             emptySet()
         },
-        parameters = listOf(LsiPoetParameter(name, parameterType)),
+        parameters = listOf(LsiParameter(name, parameterType)),
         returnType = builderType,
         body = code {
             if (targetLanguage == LsiLanguage.JAVA && !nullable) {
@@ -281,11 +283,11 @@ private fun DtoType.inputBuilderBuildFunction(
     targetLanguage: LsiLanguage,
     currentDtoType: LsiDeclaredType,
     props: List<DtoProp>,
-): LsiPoetFunction {
-    return LsiPoetFunction(
+): LsiFunction {
+    return LsiFunction(
         name = "build",
         modifiers = if (targetLanguage == LsiLanguage.JAVA) {
-            setOf(LsiPoetModifier.PUBLIC)
+            setOf(LsiModifier.PUBLIC)
         } else {
             emptySet()
         },
@@ -296,9 +298,9 @@ private fun DtoType.inputBuilderBuildFunction(
             kotlinInputBuilderBuildBody(graph, currentDtoType, props)
         },
         bodyStyle = if (targetLanguage == LsiLanguage.KOTLIN) {
-            LsiPoetBodyStyle.EXPRESSION
+            LsiBodyStyle.EXPRESSION
         } else {
-            LsiPoetBodyStyle.BLOCK
+            LsiBodyStyle.BLOCK
         },
     )
 }
@@ -307,7 +309,7 @@ private fun javaInputBuilderBuildBody(
     graph: DtoGraph,
     currentDtoType: LsiDeclaredType,
     props: List<DtoProp>,
-): LsiPoetCodeBlock = code {
+): LsiCodeBlock = code {
     statement {
         type(currentDtoType)
         text(" _input = new ")
@@ -363,7 +365,7 @@ private fun javaInputBuilderBuildBody(
     returnValue { name("_input") }
 }
 
-private fun LsiPoetCodeBuilder.kotlinInputBuilderBuildBody(
+private fun LsiCodeBuilder.kotlinInputBuilderBuildBody(
     graph: DtoGraph,
     currentDtoType: LsiDeclaredType,
     props: List<DtoProp>,
@@ -426,12 +428,12 @@ private fun kotlinInputBuilderBuildBody(
     graph: DtoGraph,
     currentDtoType: LsiDeclaredType,
     props: List<DtoProp>,
-): LsiPoetCodeBlock = code {
+): LsiCodeBlock = code {
     preserveExplicitIndentation()
     kotlinInputBuilderBuildBody(graph, currentDtoType, props)
 }
 
-private fun LsiPoetCodeBuilder.kotlinValueArgument(
+private fun LsiCodeBuilder.kotlinValueArgument(
     currentDtoType: LsiDeclaredType,
     prop: DtoProp,
 ) {
@@ -442,7 +444,7 @@ private fun LsiPoetCodeBuilder.kotlinValueArgument(
     }
 }
 
-private fun LsiPoetCodeBuilder.kotlinRequiredArgument(
+private fun LsiCodeBuilder.kotlinRequiredArgument(
     currentDtoType: LsiDeclaredType,
     propName: String,
 ) {
@@ -456,7 +458,7 @@ private fun LsiPoetCodeBuilder.kotlinRequiredArgument(
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.kotlinUnknownPropertyThrow(
+private fun LsiCodeBuilder.kotlinUnknownPropertyThrow(
     currentDtoType: LsiDeclaredType,
     propName: String,
     nullable: Boolean,
@@ -470,7 +472,7 @@ private fun LsiPoetCodeBuilder.kotlinUnknownPropertyThrow(
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.unknownPropertyThrow(
+private fun LsiCodeBuilder.unknownPropertyThrow(
     currentDtoType: LsiDeclaredType,
     propName: String,
     nullable: Boolean,
@@ -487,7 +489,7 @@ private fun LsiPoetCodeBuilder.unknownPropertyThrow(
     }
 }
 
-private fun LsiPoetCodeBuilder.inputSetterStatement(
+private fun LsiCodeBuilder.inputSetterStatement(
     setterName: String,
     propName: String,
 ) {
@@ -505,21 +507,21 @@ private fun LsiTypeRef.isNullableBuilderStorage(): Boolean {
     return nullability == LsiNullability.NULLABLE
 }
 
-private fun code(block: LsiPoetCodeBuilder.() -> Unit): LsiPoetCodeBlock = LsiPoetCodeBlock.build(block)
+private fun code(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock = LsiCodeBlock.build(block)
 
 /** 为嵌入式 InputBuilder 解析完整且精确的源码类型名称表。 */
 internal fun LsiWorkspace.inputBuilderPoetTypeNames(
-    inputBuilderType: LsiPoetType,
-    currentDtoTypeName: LsiPoetTypeName,
-    generatedDtoTypeNames: Collection<LsiPoetTypeName>,
+    inputBuilderType: LsiTypeDeclaration,
+    currentDtoTypeName: LsiTypeName,
+    generatedDtoTypeNames: Collection<LsiTypeName>,
     jacksonVersion: JacksonFamily,
-): List<LsiPoetTypeName> {
+): List<LsiTypeName> {
     val builderTypeName = JimmerDtoPoetTypeNames.create(
         currentDtoTypeName.packageName,
         currentDtoTypeName.simpleNames + "Builder",
     )
-    val additionalByTypeId = linkedMapOf<LsiSymbolId, LsiPoetTypeName>()
-    fun add(typeName: LsiPoetTypeName) {
+    val additionalByTypeId = linkedMapOf<LsiSymbolId, LsiTypeName>()
+    fun add(typeName: LsiTypeName) {
         val previous = additionalByTypeId.putIfAbsent(typeName.typeId, typeName)
         require(previous == null || previous == typeName) {
             "InputBuilder type '${typeName.typeId.value}' has conflicting exact source names"
@@ -530,7 +532,7 @@ internal fun LsiWorkspace.inputBuilderPoetTypeNames(
     add(builderTypeName)
     DTO_COMMON_POET_TYPE_NAMES.forEach(::add)
     jacksonVersion.inputBuilderJacksonPoetTypeNames().forEach(::add)
-    return toLsiPoetTypeNames(
+    return toLsiTypeNames(
         typeIds = inputBuilderType.referencedTypeIds,
         additional = additionalByTypeId.values,
     )
@@ -550,7 +552,7 @@ internal fun JacksonFamily.inputBuilderJsonNamingAnnotationTypeId(): LsiSymbolId
     }
 }
 
-private fun JacksonFamily.inputBuilderJacksonPoetTypeNames(): List<LsiPoetTypeName> {
+private fun JacksonFamily.inputBuilderJacksonPoetTypeNames(): List<LsiTypeName> {
     return when (this) {
         JacksonFamily.JACKSON_2 -> JACKSON_2_INPUT_BUILDER_POET_TYPE_NAMES
         JacksonFamily.JACKSON_3 -> JACKSON_3_INPUT_BUILDER_POET_TYPE_NAMES

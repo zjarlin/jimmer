@@ -14,20 +14,20 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.poet.LsiPoetBodyStyle
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiBodyStyle
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiTypeName
 
 /** 将冻结的 DTO 属性语义降低为平台中立的 hashCode 函数。 */
 internal fun DtoType.toDtoHashCodePoetFunction(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiPoetFunction {
+): LsiFunction {
     val language = targetLanguage.requireObjectMethodTargetLanguage()
     val props = propsInDeclarationOrder(graph)
     val loadedStateNames = props.associateWith { prop ->
@@ -37,7 +37,7 @@ internal fun DtoType.toDtoHashCodePoetFunction(
     val hashName = reservedNames.reserveObjectMethodName(
         if (language == LsiLanguage.JAVA) "hash" else "_hash",
     )
-    val body = LsiPoetCodeBlock.build {
+    val body = LsiCodeBlock.build {
         if (props.isEmpty()) {
             returnValue { text("0") }
             return@build
@@ -70,12 +70,12 @@ internal fun DtoType.toDtoHashCodePoetFunction(
         }
         returnValue { name(hashName) }
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = "hashCode",
-        modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
+        modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         returnType = INT_TYPE,
         body = body,
-        bodyStyle = LsiPoetBodyStyle.BLOCK,
+        bodyStyle = LsiBodyStyle.BLOCK,
     )
 }
 
@@ -84,8 +84,8 @@ internal fun DtoType.toDtoEqualsPoetFunction(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-    generatedTypeName: LsiPoetTypeName,
-): LsiPoetFunction {
+    generatedTypeName: LsiTypeName,
+): LsiFunction {
     val language = targetLanguage.requireObjectMethodTargetLanguage()
     val props = propsInDeclarationOrder(graph)
     val loadedStateNames = props.associateWith { prop ->
@@ -99,7 +99,7 @@ internal fun DtoType.toDtoEqualsPoetFunction(
         if (language == LsiLanguage.JAVA) "other" else "_other",
     )
     val generatedType = LsiDeclaredType(generatedTypeName.typeId)
-    val body = LsiPoetCodeBlock.build {
+    val body = LsiCodeBlock.build {
         beginControlFlow {
             text("if (")
             name(parameterName)
@@ -163,25 +163,25 @@ internal fun DtoType.toDtoEqualsPoetFunction(
         }
         returnValue { text("true") }
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = "equals",
-        modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE),
+        modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         parameters = listOf(
-            LsiPoetParameter(
+            LsiParameter(
                 name = parameterName,
                 type = language.objectMethodParameterType(),
             ),
         ),
         returnType = BOOLEAN_TYPE,
         body = body,
-        bodyStyle = LsiPoetBodyStyle.BLOCK,
+        bodyStyle = LsiBodyStyle.BLOCK,
     )
 }
 
-private fun LsiPoetCodeBuilder.declareHash(
+private fun LsiCodeBuilder.declareHash(
     targetLanguage: LsiLanguage,
     hashName: String,
-    value: LsiPoetCodeBuilder.() -> Unit,
+    value: LsiCodeBuilder.() -> Unit,
 ) {
     statement {
         if (targetLanguage == LsiLanguage.JAVA) {
@@ -195,9 +195,9 @@ private fun LsiPoetCodeBuilder.declareHash(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendHash(
+private fun LsiCodeBuilder.appendHash(
     hashName: String,
-    value: LsiPoetCodeBuilder.() -> Unit,
+    value: LsiCodeBuilder.() -> Unit,
 ) {
     statement {
         name(hashName)
@@ -208,11 +208,11 @@ private fun LsiPoetCodeBuilder.appendHash(
     }
 }
 
-private fun LsiPoetCodeBuilder.appendConditionalHash(
+private fun LsiCodeBuilder.appendConditionalHash(
     hashName: String,
     stateName: String,
     targetLanguage: LsiLanguage,
-    value: LsiPoetCodeBuilder.() -> Unit,
+    value: LsiCodeBuilder.() -> Unit,
 ) {
     appendHash(hashName) {
         text("(")
@@ -232,7 +232,7 @@ private fun LsiPoetCodeBuilder.appendConditionalHash(
     }
 }
 
-private fun LsiPoetCodeBuilder.valueHash(
+private fun LsiCodeBuilder.valueHash(
     prop: DtoProp,
     immutableSchema: ImmutableSchema,
     graph: DtoGraph,
@@ -248,14 +248,14 @@ private fun LsiPoetCodeBuilder.valueHash(
     }
 }
 
-private fun LsiPoetCodeBuilder.objectHash(value: LsiPoetCodeBuilder.() -> Unit) {
+private fun LsiCodeBuilder.objectHash(value: LsiCodeBuilder.() -> Unit) {
     type(OBJECTS_TYPE)
     text(".hashCode(")
     value()
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.valueEquals(
+private fun LsiCodeBuilder.valueEquals(
     prop: DtoProp,
     immutableSchema: ImmutableSchema,
     graph: DtoGraph,
@@ -274,12 +274,12 @@ private fun LsiPoetCodeBuilder.valueEquals(
     text(")")
 }
 
-private fun LsiPoetCodeBuilder.thisMember(name: String) {
+private fun LsiCodeBuilder.thisMember(name: String) {
     text("this.")
     name(name)
 }
 
-private fun LsiPoetCodeBuilder.otherMember(
+private fun LsiCodeBuilder.otherMember(
     otherName: String,
     memberName: String,
 ) {
@@ -313,15 +313,15 @@ private fun LsiLanguage.objectMethodParameterType(): LsiDeclaredType {
 }
 
 internal fun dtoEqualityPoetTypeNames(
-    generatedTypeName: LsiPoetTypeName? = null,
-): List<LsiPoetTypeName> {
+    generatedTypeName: LsiTypeName? = null,
+): List<LsiTypeName> {
     return buildList {
         add(OBJECT_TYPE_NAME)
         add(ANY_TYPE_NAME)
         add(OBJECTS_TYPE_NAME)
         add(ARRAYS_TYPE_NAME)
         generatedTypeName?.let(::add)
-    }.distinctBy(LsiPoetTypeName::typeId)
+    }.distinctBy(LsiTypeName::typeId)
 }
 
 private val INT_TYPE = LsiPrimitiveType(LsiPrimitiveKind.INT)
@@ -333,7 +333,7 @@ private val ARRAYS_TYPE_ID = LsiSymbolId.type("java.util.Arrays")
 private val OBJECTS_TYPE = LsiDeclaredType(OBJECTS_TYPE_ID)
 private val ARRAYS_TYPE = LsiDeclaredType(ARRAYS_TYPE_ID)
 
-private val OBJECT_TYPE_NAME = LsiPoetTypeName(OBJECT_TYPE_ID, "java.lang", listOf("Object"))
-private val ANY_TYPE_NAME = LsiPoetTypeName(ANY_TYPE_ID, "kotlin", listOf("Any"))
-private val OBJECTS_TYPE_NAME = LsiPoetTypeName(OBJECTS_TYPE_ID, "java.util", listOf("Objects"))
-private val ARRAYS_TYPE_NAME = LsiPoetTypeName(ARRAYS_TYPE_ID, "java.util", listOf("Arrays"))
+private val OBJECT_TYPE_NAME = LsiTypeName(OBJECT_TYPE_ID, "java.lang", listOf("Object"))
+private val ANY_TYPE_NAME = LsiTypeName(ANY_TYPE_ID, "kotlin", listOf("Any"))
+private val OBJECTS_TYPE_NAME = LsiTypeName(OBJECTS_TYPE_ID, "java.util", listOf("Objects"))
+private val ARRAYS_TYPE_NAME = LsiTypeName(ARRAYS_TYPE_ID, "java.util", listOf("Arrays"))

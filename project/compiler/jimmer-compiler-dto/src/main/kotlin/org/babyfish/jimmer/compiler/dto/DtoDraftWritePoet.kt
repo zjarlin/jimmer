@@ -11,11 +11,11 @@ import site.addzero.lsi.jimmer.dto.requiresEmptyAssociationListDraftFallback
 import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 把冻结的 DTO 属性写回语义降级为访问器调用。 */
 internal fun DtoBaseProp.toDraftWritePoetCodeBlock(
@@ -27,7 +27,7 @@ internal fun DtoBaseProp.toDraftWritePoetCodeBlock(
     valueName: String,
     baseValueWriterName: String,
     generatedTargetType: (DtoProp) -> LsiDeclaredType,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO draft write requires Java or Kotlin target language: $targetLanguage"
     }
@@ -37,7 +37,7 @@ internal fun DtoBaseProp.toDraftWritePoetCodeBlock(
         targetLanguage = targetLanguage,
         generatedTargetType = generatedTargetType,
     )
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         statement {
             if (direct) {
                 directDraftWrite(
@@ -61,7 +61,7 @@ internal fun DtoBaseProp.toDraftWritePoetCodeBlock(
     }
 }
 
-private fun LsiPoetCodeBuilder.directDraftWrite(
+private fun LsiCodeBuilder.directDraftWrite(
     targetLanguage: LsiLanguage,
     draftName: String,
     valueName: String,
@@ -84,7 +84,7 @@ private fun LsiPoetCodeBuilder.directDraftWrite(
     }
 }
 
-private fun LsiPoetCodeBuilder.accessorDraftWrite(
+private fun LsiCodeBuilder.accessorDraftWrite(
     prop: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
@@ -129,9 +129,9 @@ private fun LsiPoetCodeBuilder.accessorDraftWrite(
 
 /** 为 DTO Draft 写回代码解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoDraftWritePoetTypeNames(
-    codeBlock: LsiPoetCodeBlock,
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
+    codeBlock: LsiCodeBlock,
+): List<LsiTypeName> {
+    return toLsiTypeNames(
         typeIds = codeBlock.referencedTypeIds,
         additional = listOf(COLLECTIONS_POET_TYPE_NAME),
     )
@@ -139,7 +139,7 @@ internal fun LsiWorkspace.dtoDraftWritePoetTypeNames(
 
 private const val KOTLIN_COLLECTIONS_PACKAGE = "kotlin.collections"
 private val COLLECTIONS_TYPE = LsiDeclaredType(LsiSymbolId.type("java.util.Collections"))
-private val COLLECTIONS_POET_TYPE_NAME = LsiPoetTypeName(
+private val COLLECTIONS_POET_TYPE_NAME = LsiTypeName(
     typeId = COLLECTIONS_TYPE.declarationId,
     packageName = "java.util",
     simpleNames = listOf("Collections"),

@@ -45,7 +45,7 @@ import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -55,7 +55,7 @@ class TransactionalRendererTest {
     fun `java renderer matches legacy golden and compiles`() {
         val (schema, workspace) = javaFixture()
         val artifact = LsiJavaPoetRenderer().render(
-            schema.toLsiPoetArtifacts(workspace).single()
+            schema.toLsiSourceArtifacts(workspace).single()
         )
 
         assertContentEquals(golden("ServiceATx.java"), artifact.content.encodeToByteArray())
@@ -70,7 +70,7 @@ class TransactionalRendererTest {
     fun `kotlin renderer matches legacy golden and compiles`() {
         val (schema, workspace) = kotlinFixture()
         val artifact = LsiKotlinPoetRenderer().render(
-            schema.toLsiPoetArtifacts(workspace).single()
+            schema.toLsiSourceArtifacts(workspace).single()
         )
 
         assertContentEquals(golden("ServiceATx.kt"), artifact.content.encodeToByteArray())
@@ -100,7 +100,7 @@ class TransactionalRendererTest {
         val javaArtifact = LsiJavaPoetRenderer().render(
             javaSchema
                 .withAnnotatedReturnType(returnAnnotation)
-                .toLsiPoetArtifacts(resolvedJavaWorkspace)
+                .toLsiSourceArtifacts(resolvedJavaWorkspace)
                 .single()
         )
         val (kotlinSchema, kotlinWorkspace) = kotlinFixture()
@@ -108,7 +108,7 @@ class TransactionalRendererTest {
         val kotlinArtifact = LsiKotlinPoetRenderer().render(
             kotlinSchema
                 .withAnnotatedReturnType(returnAnnotation)
-                .toLsiPoetArtifacts(resolvedKotlinWorkspace)
+                .toLsiSourceArtifacts(resolvedKotlinWorkspace)
                 .single()
         )
 
@@ -136,21 +136,21 @@ class TransactionalRendererTest {
             origin = LsiOrigin(LsiOriginKind.BINARY),
         )
         val expectedTypeNames = listOf(
-            LsiPoetTypeName(outerId, "UPPER.pkg", listOf("lowercase")),
-            LsiPoetTypeName(nestedId, "UPPER.pkg", listOf("lowercase", "item")),
+            LsiTypeName(outerId, "UPPER.pkg", listOf("lowercase")),
+            LsiTypeName(nestedId, "UPPER.pkg", listOf("lowercase", "item")),
         )
 
         val (javaSchema, javaWorkspace) = javaFixture()
         val javaPoetArtifact = javaSchema
             .withMethodReturnTypes(LsiDeclaredType(outerId), LsiDeclaredType(nestedId))
-            .toLsiPoetArtifacts(
+            .toLsiSourceArtifacts(
                 javaWorkspace.withDeclaration(outerDeclaration).withDeclaration(nestedDeclaration)
             )
             .single()
         val (kotlinSchema, kotlinWorkspace) = kotlinFixture()
         val kotlinPoetArtifact = kotlinSchema
             .withMethodReturnTypes(LsiDeclaredType(outerId), LsiDeclaredType(nestedId))
-            .toLsiPoetArtifacts(
+            .toLsiSourceArtifacts(
                 kotlinWorkspace.withDeclaration(outerDeclaration).withDeclaration(nestedDeclaration)
             )
             .single()
@@ -197,10 +197,10 @@ class TransactionalRendererTest {
             declarations = workspace.declarations + getterOnlyMarker,
         )
         val parameterArtifact = LsiKotlinPoetRenderer().render(
-            annotatedSchema.toLsiPoetArtifacts(parameterWorkspace).single()
+            annotatedSchema.toLsiSourceArtifacts(parameterWorkspace).single()
         )
         val getterArtifact = LsiKotlinPoetRenderer().render(
-            annotatedSchema.toLsiPoetArtifacts(getterWorkspace).single()
+            annotatedSchema.toLsiSourceArtifacts(getterWorkspace).single()
         )
 
         assertContains(parameterArtifact.content, "@ParameterMarker")
@@ -235,7 +235,7 @@ class TransactionalRendererTest {
                         ),
                     )
                 )
-            ).toLsiPoetArtifacts(javaWorkspace).single()
+            ).toLsiSourceArtifacts(javaWorkspace).single()
         )
 
         assertContains(
@@ -277,7 +277,7 @@ class TransactionalRendererTest {
                         ) + kotlinType.methods.drop(1),
                     )
                 )
-            ).toLsiPoetArtifacts(kotlinWorkspace).single()
+            ).toLsiSourceArtifacts(kotlinWorkspace).single()
         )
 
         assertContains(kotlinArtifact.content, "protected constructor(sqlClient: KSqlClient) : super(sqlClient)")

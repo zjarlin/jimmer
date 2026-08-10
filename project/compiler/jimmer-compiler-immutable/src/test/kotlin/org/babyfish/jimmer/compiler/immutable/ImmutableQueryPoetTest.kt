@@ -38,8 +38,8 @@ import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetFileNameStyle
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiFileNameStyle
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -105,9 +105,9 @@ class ImmutableQueryPoetTest {
 
         assertEquals(
             setOf("demo.BookProps", "demo.BookTable", "demo.BookTableEx"),
-            javaArtifacts.mapTo(linkedSetOf(), LsiPoetArtifact::qualifiedFileName),
+            javaArtifacts.mapTo(linkedSetOf(), LsiSourceArtifact::qualifiedFileName),
         )
-        assertEquals(listOf("demo.BookProps"), kotlinArtifacts.map(LsiPoetArtifact::qualifiedFileName))
+        assertEquals(listOf("demo.BookProps"), kotlinArtifacts.map(LsiSourceArtifact::qualifiedFileName))
         assertTrue(artifacts.all { artifact ->
             artifact.aggregationMode == ArtifactAggregationMode.ISOLATING &&
                 artifact.emissionMode == ArtifactEmissionMode.IMMEDIATE
@@ -313,7 +313,7 @@ class ImmutableQueryPoetTest {
                 )
             )
         })
-        assertEquals(LsiPoetFileNameStyle.KOTLIN_SOURCE_STEM, kotlinArtifact.file.fileNameStyle)
+        assertEquals(LsiFileNameStyle.KOTLIN_SOURCE_STEM, kotlinArtifact.file.fileNameStyle)
         assertEquals("demo/order-item.partProps.kt", LsiKotlinPoetRenderer().render(kotlinArtifact).path)
     }
 

@@ -6,6 +6,7 @@ import org.babyfish.jimmer.compiler.dto.toDescriptionPoetAnnotationOrNull
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoType
+import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将 DTO Description 注解渲染为 KotlinPoet 结构。 */
@@ -19,7 +20,7 @@ internal object KspDtoDescriptionRenderer {
         return dtoProp.toDescriptionPoetAnnotationOrNull(graph)?.render()
     }
 
-    private fun site.addzero.lsi.poet.LsiPoetAnnotation.render(): AnnotationSpec {
+    private fun LsiAnnotation.render(): AnnotationSpec {
         return LsiKotlinPoetRenderer().renderAnnotation(
             annotation = this,
             typeNames = listOf(DTO_DESCRIPTION_POET_TYPE_NAME),

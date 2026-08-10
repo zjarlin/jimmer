@@ -7,14 +7,14 @@ import site.addzero.lsi.codegen.ArtifactAggregationMode
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 class JavaDraftNullityPoetTest {
@@ -25,30 +25,30 @@ class JavaDraftNullityPoetTest {
         val utilDateTypeId = LsiSymbolId.type("java.util.Date")
         val sqlDateTypeId = LsiSymbolId.type("java.sql.Date")
         val nonNullTypeId = LsiSymbolId.type("org.jspecify.annotations.NonNull")
-        val type = LsiPoetType(
+        val type = LsiTypeDeclaration(
             name = "DraftBuilder",
             kind = LsiTypeDeclarationKind.CLASS,
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             members = listOf(
-                LsiPoetFunction(
+                LsiFunction(
                     name = "status",
-                    modifiers = setOf(LsiPoetModifier.PUBLIC),
+                    modifiers = setOf(LsiModifier.PUBLIC),
                     parameters = listOf(
-                        LsiPoetParameter(
+                        LsiParameter(
                             name = "status",
                             type = LsiDeclaredType(statusTypeId).withJavaDraftNullity(nullable = false),
                         )
                     ),
                 ),
-                LsiPoetFunction(
+                LsiFunction(
                     name = "dates",
-                    modifiers = setOf(LsiPoetModifier.PUBLIC),
+                    modifiers = setOf(LsiModifier.PUBLIC),
                     parameters = listOf(
-                        LsiPoetParameter(
+                        LsiParameter(
                             name = "utilDate",
                             type = LsiDeclaredType(utilDateTypeId).withJavaDraftNullity(nullable = false),
                         ),
-                        LsiPoetParameter(
+                        LsiParameter(
                             name = "sqlDate",
                             type = LsiDeclaredType(sqlDateTypeId).withJavaDraftNullity(nullable = false),
                         ),
@@ -56,18 +56,18 @@ class JavaDraftNullityPoetTest {
                 ),
             ),
         )
-        val artifact = LsiPoetArtifact(
-            file = LsiPoetFile(
+        val artifact = LsiSourceArtifact(
+            file = LsiFile(
                 language = LsiLanguage.JAVA,
                 packageName = "demo.generated",
                 fileName = "DraftBuilder",
                 members = listOf(type),
             ),
             typeNames = listOf(
-                LsiPoetTypeName(statusTypeId, "demo.model", listOf("B", "Status")),
-                LsiPoetTypeName(utilDateTypeId, "java.util", listOf("Date")),
-                LsiPoetTypeName(sqlDateTypeId, "java.sql", listOf("Date")),
-                LsiPoetTypeName(nonNullTypeId, "org.jspecify.annotations", listOf("NonNull")),
+                LsiTypeName(statusTypeId, "demo.model", listOf("B", "Status")),
+                LsiTypeName(utilDateTypeId, "java.util", listOf("Date")),
+                LsiTypeName(sqlDateTypeId, "java.sql", listOf("Date")),
+                LsiTypeName(nonNullTypeId, "org.jspecify.annotations", listOf("NonNull")),
             ),
             aggregationMode = ArtifactAggregationMode.AGGREGATING,
         )

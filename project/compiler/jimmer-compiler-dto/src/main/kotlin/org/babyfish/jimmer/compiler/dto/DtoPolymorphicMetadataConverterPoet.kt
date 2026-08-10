@@ -10,18 +10,18 @@ import site.addzero.lsi.jimmer.dto.typeBranchesInDeclarationOrder
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 将冻结的多态 DTO 分支转换规则降低为可由两端 Poet 渲染的代码块。 */
 internal fun DtoType.toPolymorphicMetadataConverterPoetCodeBlock(
     targetLanguage: LsiLanguage,
     graph: DtoGraph,
-    generatedRootTypeName: LsiPoetTypeName,
-): LsiPoetCodeBlock {
+    generatedRootTypeName: LsiTypeName,
+): LsiCodeBlock {
     require(graph.typesById[id] === this) {
         "DTO polymorphic root does not belong to this graph: ${id.value}"
     }
@@ -29,7 +29,7 @@ internal fun DtoType.toPolymorphicMetadataConverterPoetCodeBlock(
         "DTO type is not a polymorphic root: ${id.value}"
     }
     return when (targetLanguage) {
-        LsiLanguage.JAVA -> LsiPoetCodeBlock.build {
+        LsiLanguage.JAVA -> LsiCodeBlock.build {
             beginControlFlow { text("base ->") }
             statement {
                 type(
@@ -62,7 +62,7 @@ internal fun DtoType.toPolymorphicMetadataConverterPoetCodeBlock(
             }
             endControlFlow()
         }
-        LsiLanguage.KOTLIN -> LsiPoetCodeBlock.build {
+        LsiLanguage.KOTLIN -> LsiCodeBlock.build {
             text("{ base ->")
             indent {
                 line()
@@ -101,22 +101,22 @@ internal fun DtoType.toPolymorphicMetadataConverterPoetCodeBlock(
 /** 为独立多态转换代码块解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoPolymorphicMetadataConverterPoetTypeNames(
     dtoType: DtoType,
-    codeBlock: LsiPoetCodeBlock,
-    generatedRootTypeName: LsiPoetTypeName,
-): List<LsiPoetTypeName> {
+    codeBlock: LsiCodeBlock,
+    generatedRootTypeName: LsiTypeName,
+): List<LsiTypeName> {
     val polymorphism = requireNotNull(dtoType.polymorphism) {
         "DTO type is not a polymorphic root: ${dtoType.id.value}"
     }
-    return toLsiPoetTypeNames(
+    return toLsiTypeNames(
         typeIds = codeBlock.referencedTypeIds,
         additional = POLYMORPHIC_CONVERTER_RUNTIME_TYPE_NAMES +
             polymorphism.branches.map { branch -> generatedBranchTypeName(branch, generatedRootTypeName) },
     )
 }
 
-private fun LsiPoetCodeBuilder.javaTypeBranch(
+private fun LsiCodeBuilder.javaTypeBranch(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiPoetTypeName,
+    generatedRootTypeName: LsiTypeName,
 ) {
     val targetType = LsiDeclaredType(requireNotNull(branch.targetBaseTypeId))
     beginControlFlow {
@@ -134,9 +134,9 @@ private fun LsiPoetCodeBuilder.javaTypeBranch(
     endControlFlow()
 }
 
-private fun LsiPoetCodeBuilder.kotlinTypeBranch(
+private fun LsiCodeBuilder.kotlinTypeBranch(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiPoetTypeName,
+    generatedRootTypeName: LsiTypeName,
 ) {
     val targetType = LsiDeclaredType(requireNotNull(branch.targetBaseTypeId))
     statement {
@@ -151,22 +151,22 @@ private fun LsiPoetCodeBuilder.kotlinTypeBranch(
 
 private fun generatedBranchType(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiPoetTypeName,
+    generatedRootTypeName: LsiTypeName,
 ): LsiDeclaredType {
     return LsiDeclaredType(generatedBranchTypeName(branch, generatedRootTypeName).typeId)
 }
 
 private fun generatedBranchTypeName(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiPoetTypeName,
-): LsiPoetTypeName {
+    generatedRootTypeName: LsiTypeName,
+): LsiTypeName {
     return JimmerDtoPoetTypeNames.create(
         packageName = generatedRootTypeName.packageName,
         simpleNames = generatedRootTypeName.simpleNames + branch.className,
     )
 }
 
-private fun missingBranchMessagePrefix(generatedRootTypeName: LsiPoetTypeName): String {
+private fun missingBranchMessagePrefix(generatedRootTypeName: LsiTypeName): String {
     return "Cannot convert entity object to polymorphic DTO \"${generatedRootTypeName.canonicalName}\" " +
         "because there is no branch for actual entity type \""
 }
@@ -176,9 +176,9 @@ private val IMMUTABLE_SPI_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.runtim
 private val JAVA_ILLEGAL_ARGUMENT_EXCEPTION_TYPE_ID = LsiSymbolId.type("java.lang.IllegalArgumentException")
 
 private val POLYMORPHIC_CONVERTER_RUNTIME_TYPE_NAMES = listOf(
-    LsiPoetTypeName(JAVA_CLASS_TYPE_ID, "java.lang", listOf("Class")),
-    LsiPoetTypeName(IMMUTABLE_SPI_TYPE_ID, "org.babyfish.jimmer.runtime", listOf("ImmutableSpi")),
-    LsiPoetTypeName(
+    LsiTypeName(JAVA_CLASS_TYPE_ID, "java.lang", listOf("Class")),
+    LsiTypeName(IMMUTABLE_SPI_TYPE_ID, "org.babyfish.jimmer.runtime", listOf("ImmutableSpi")),
+    LsiTypeName(
         JAVA_ILLEGAL_ARGUMENT_EXCEPTION_TYPE_ID,
         "java.lang",
         listOf("IllegalArgumentException"),

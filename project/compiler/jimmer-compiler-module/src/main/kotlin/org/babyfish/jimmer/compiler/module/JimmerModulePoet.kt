@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.module
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
@@ -7,24 +9,24 @@ import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetArtifact
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetProperty
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.codegen.LsiSourceArtifact
+import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
-internal fun JimmerModuleSchema.toLsiPoetArtifacts(
+internal fun JimmerModuleSchema.toLsiSourceArtifacts(
     workspace: LsiWorkspace,
-): List<LsiPoetArtifact> {
+): List<LsiSourceArtifact> {
     return when (platform) {
         CompilerPlatform.APT -> summaries.map { summary -> summary.toLsiPoet(workspace) }
         CompilerPlatform.KSP -> module?.let { source -> listOf(source.toLsiPoet(workspace)) }.orEmpty()
@@ -34,7 +36,7 @@ internal fun JimmerModuleSchema.toLsiPoetArtifacts(
     }
 }
 
-private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
+private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiSourceArtifact {
     val typeMembers = when (kind) {
         JimmerModuleSummaryKind.IMMUTABLES -> members.flatMap { member ->
             listOf(
@@ -47,23 +49,23 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtif
         JimmerModuleSummaryKind.FETCHERS -> members.map { member -> member.toSingletonField("Fetcher") }
     }
     val originatingSymbols = dependencies.originatingTypeIds.toSet()
-    val file = LsiPoetFile(
+    val file = LsiFile(
         language = LsiLanguage.JAVA,
         packageName = packageName,
         fileName = simpleName,
         members = listOf(
-            LsiPoetType(
+            LsiTypeDeclaration(
                 name = simpleName,
                 kind = LsiTypeDeclarationKind.INTERFACE,
-                annotations = listOf(LsiPoetAnnotation(GENERATED_BY_ID)),
-                modifiers = setOf(LsiPoetModifier.PUBLIC),
+                annotations = listOf(sourceLsiAnnotation(GENERATED_BY_ID)),
+                modifiers = setOf(LsiModifier.PUBLIC),
                 members = typeMembers,
             )
         ),
     )
-    return LsiPoetArtifact(
+    return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiPoetTypeNames(
+        typeNames = workspace.toLsiTypeNames(
             file.referencedTypeIds,
             additional = additionalTypeNames(),
         ),
@@ -73,13 +75,13 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtif
     )
 }
 
-private fun JimmerModuleSummary.additionalTypeNames(): List<LsiPoetTypeName> {
+private fun JimmerModuleSummary.additionalTypeNames(): List<LsiTypeName> {
     return buildList {
-        add(LsiPoetTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")))
-        add(LsiPoetTypeName(DRAFT_CONSUMER_ID, "org.babyfish.jimmer", listOf("DraftConsumer")))
+        add(LsiTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")))
+        add(LsiTypeName(DRAFT_CONSUMER_ID, "org.babyfish.jimmer", listOf("DraftConsumer")))
         members.forEach { member ->
             add(
-                LsiPoetTypeName(
+                LsiTypeName(
                     typeId = LsiSymbolId.type(member.qualifiedTypeName + "Draft"),
                     packageName = member.packageName,
                     simpleNames = listOf(member.simpleTypeName + "Draft"),
@@ -87,7 +89,7 @@ private fun JimmerModuleSummary.additionalTypeNames(): List<LsiPoetTypeName> {
             )
             listOf("Table", "TableEx", "Fetcher").forEach { suffix ->
                 add(
-                    LsiPoetTypeName(
+                    LsiTypeName(
                         typeId = LsiSymbolId.type(member.qualifiedTypeName + suffix),
                         packageName = member.packageName,
                         simpleNames = listOf(member.simpleTypeName + suffix),
@@ -98,15 +100,15 @@ private fun JimmerModuleSummary.additionalTypeNames(): List<LsiPoetTypeName> {
     }
 }
 
-private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiPoetFunction {
+private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiFunction {
     val immutableType = LsiDeclaredType(typeId)
     val draftType = LsiDeclaredType(LsiSymbolId.type(qualifiedTypeName + "Draft"))
     val parameters = buildList {
         if (withBase) {
-            add(LsiPoetParameter("base", immutableType))
+            add(LsiParameter("base", immutableType))
         }
         add(
-            LsiPoetParameter(
+            LsiParameter(
                 name = "block",
                 type = LsiDeclaredType(
                     declarationId = DRAFT_CONSUMER_ID,
@@ -115,15 +117,15 @@ private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiPoetFunct
             )
         )
     }
-    return LsiPoetFunction(
+    return LsiFunction(
         name = generatedName,
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.STATIC,
+            LsiModifier.PUBLIC,
+            LsiModifier.STATIC,
         ),
         parameters = parameters,
         returnType = immutableType,
-        body = LsiPoetCodeBlock.build {
+        body = LsiCodeBlock.build {
             statement {
                 text("return ")
                 type(draftType)
@@ -139,37 +141,37 @@ private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiPoetFunct
     )
 }
 
-private fun JimmerModuleSummaryMember.toSingletonField(suffix: String): LsiPoetField {
+private fun JimmerModuleSummaryMember.toSingletonField(suffix: String): LsiField {
     val singletonType = LsiDeclaredType(LsiSymbolId.type(qualifiedTypeName + suffix))
-    return LsiPoetField(
+    return LsiField(
         name = generatedName,
         type = singletonType,
         modifiers = setOf(
-            LsiPoetModifier.PUBLIC,
-            LsiPoetModifier.STATIC,
-            LsiPoetModifier.FINAL,
+            LsiModifier.PUBLIC,
+            LsiModifier.STATIC,
+            LsiModifier.FINAL,
         ),
-        initializer = LsiPoetCodeBlock.build {
+        initializer = LsiCodeBlock.build {
             type(singletonType)
             text(".$")
         },
     )
 }
 
-private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifact {
+private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiSourceArtifact {
     val moduleType = LsiDeclaredType(LsiSymbolId.type(qualifiedName))
     val originatingSymbols = dependencies.originatingTypeIds.toSet()
-    val file = LsiPoetFile(
+    val file = LsiFile(
         language = LsiLanguage.KOTLIN,
         packageName = packageName,
         fileName = simpleName,
         members = listOf(
-            LsiPoetType(
+            LsiTypeDeclaration(
                 name = simpleName,
                 kind = LsiTypeDeclarationKind.CLASS,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
             ),
-            LsiPoetProperty(
+            LsiProperty(
                 name = "ENTITY_MANAGER",
                 type = ENTITY_MANAGER_TYPE,
                 mutable = false,
@@ -177,17 +179,17 @@ private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifa
             ),
         ),
     )
-    return LsiPoetArtifact(
+    return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiPoetTypeNames(
+        typeNames = workspace.toLsiTypeNames(
             file.referencedTypeIds,
             additional = listOf(
-                LsiPoetTypeName(
+                LsiTypeName(
                     typeId = moduleType.declarationId,
                     packageName = packageName,
                     simpleNames = listOf(simpleName),
                 ),
-                LsiPoetTypeName(
+                LsiTypeName(
                     typeId = ENTITY_MANAGER_TYPE.declarationId,
                     packageName = "org.babyfish.jimmer.sql.runtime",
                     simpleNames = listOf("EntityManager"),
@@ -200,8 +202,8 @@ private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiPoetArtifa
     )
 }
 
-private fun JimmerModuleSource.initializer(moduleType: LsiTypeRef): LsiPoetCodeBlock {
-    return LsiPoetCodeBlock.build {
+private fun JimmerModuleSource.initializer(moduleType: LsiTypeRef): LsiCodeBlock {
+    return LsiCodeBlock.build {
         type(ENTITY_MANAGER_TYPE)
         text(".fromResources(")
         line()

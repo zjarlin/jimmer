@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableSchema
@@ -19,22 +21,20 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationArgumentLayout
-import site.addzero.lsi.poet.LsiPoetAnnotationArgumentNameStyle
-import site.addzero.lsi.poet.LsiPoetAnnotationArrayStyle
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetClassLiteralStyle
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentLayout
+import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.model.LsiAnnotationArrayStyle
+import site.addzero.lsi.model.LsiClassLiteralStyle
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 按冻结契约顺序将 DTO 类型注解降低为平台中立源码结构。 */
 internal fun DtoType.typeAnnotationPoetAnnotations(
     annotationContract: DtoAnnotationContract,
     targetLanguage: LsiLanguage,
-): List<LsiPoetAnnotation> {
+): List<LsiAnnotation> {
     return annotations.toDtoPoetAnnotations(
         applications = typeAnnotationApplications(annotationContract),
         annotationContract = annotationContract,
@@ -49,7 +49,7 @@ internal fun DtoProp.propertyAnnotationPoetAnnotations(
     annotationContract: DtoAnnotationContract,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): List<LsiPoetAnnotation> {
+): List<LsiAnnotation> {
     val applications = if (targetLanguage == LsiLanguage.KOTLIN) {
         propertySourceAnnotationApplications(annotationContract, immutableSchema)
     } else {
@@ -70,7 +70,7 @@ private fun List<DtoAnnotation>.toDtoPoetAnnotations(
     targetLanguage: LsiLanguage,
     targetDescription: String,
     includeImmutableDefaultArguments: Boolean,
-): List<LsiPoetAnnotation> {
+): List<LsiAnnotation> {
     targetLanguage.requireDtoAnnotationTargetLanguage()
     val dtoAnnotationsByTypeId = groupBy(DtoAnnotation::typeId)
     val nextDtoOccurrenceByTypeId = mutableMapOf<LsiSymbolId, Int>()
@@ -98,12 +98,12 @@ private fun List<DtoAnnotation>.toDtoPoetAnnotations(
 
 /** 为一组 DTO 注解解析完整且精确的源码类型名称。 */
 internal fun LsiWorkspace.dtoAnnotationPoetTypeNames(
-    annotations: List<LsiPoetAnnotation>,
-): List<LsiPoetTypeName> {
+    annotations: List<LsiAnnotation>,
+): List<LsiTypeName> {
     val referencedTypeIds = annotations.flatMapTo(sortedSetOf()) { annotation ->
         annotation.referencedTypeIds
     }
-    return toLsiPoetTypeNames(referencedTypeIds)
+    return toLsiTypeNames(referencedTypeIds)
 }
 
 /** 将冻结的类型注解应用降低为平台中立源码结构。 */
@@ -112,7 +112,7 @@ internal fun DtoAnnotationApplication.toDtoPoetAnnotation(
     annotationContract: DtoAnnotationContract,
     targetLanguage: LsiLanguage,
     includeImmutableDefaultArguments: Boolean = false,
-): LsiPoetAnnotation {
+): LsiAnnotation {
     return lowerDtoPoetAnnotation(
         annotation = annotation,
         origin = origin,
@@ -128,7 +128,7 @@ internal fun DtoBuilderSetterAnnotationApplication.toDtoPoetAnnotation(
     dtoSourceAnnotation: DtoAnnotation?,
     annotationContract: DtoAnnotationContract,
     targetLanguage: LsiLanguage,
-): LsiPoetAnnotation {
+): LsiAnnotation {
     return lowerDtoPoetAnnotation(
         annotation = annotation,
         origin = origin,
@@ -146,7 +146,7 @@ private fun lowerDtoPoetAnnotation(
     annotationContract: DtoAnnotationContract,
     targetLanguage: LsiLanguage,
     includeImmutableDefaultArguments: Boolean,
-): LsiPoetAnnotation {
+): LsiAnnotation {
     targetLanguage.requireDtoAnnotationTargetLanguage()
     val declaration = annotationContract.declarationsByTypeId.getValue(annotation.type)
     return when (origin) {
@@ -173,7 +173,7 @@ private fun DtoAnnotation.toDtoPoetAnnotation(
     declarationsByTypeId: Map<LsiSymbolId, DtoAnnotationDeclaration>,
     targetLanguage: LsiLanguage,
     nested: Boolean,
-): LsiPoetAnnotation {
+): LsiAnnotation {
     require(typeId == frozen.type) {
         "DTO annotation source and frozen application types differ: ${typeId.value} and ${frozen.type.value}"
     }
@@ -186,7 +186,7 @@ private fun DtoAnnotation.toDtoPoetAnnotation(
     }
     val namedArguments = arguments.map { sourceArgument ->
         val frozenArgument = requireNotNull(frozen[sourceArgument.name])
-        LsiPoetAnnotationArgument.Named(
+        LsiSourceAnnotationArgument.Named(
             name = sourceArgument.name,
             value = sourceArgument.value.toDtoPoetAnnotationValue(
                 frozen = frozenArgument.value,
@@ -204,19 +204,19 @@ private fun DtoAnnotation.toDtoPoetAnnotation(
             soleValue != null
     val renderedArguments = when {
         kotlinTopLevelValueVararg -> soleValue.value.toPositionalVarargArguments()
-        nested && soleValue != null -> listOf(LsiPoetAnnotationArgument.Positional(soleValue.value))
+        nested && soleValue != null -> listOf(LsiSourceAnnotationArgument.Positional(soleValue.value))
         else -> namedArguments
     }
-    return LsiPoetAnnotation(
+    return sourceLsiAnnotation(
         type = typeId,
         arguments = renderedArguments,
         argumentLayout = when {
             renderedArguments.isEmpty() || targetLanguage == LsiLanguage.JAVA -> {
-                LsiPoetAnnotationArgumentLayout.PLATFORM_DEFAULT
+                LsiAnnotationArgumentLayout.PLATFORM_DEFAULT
             }
-            nested && soleValue != null -> LsiPoetAnnotationArgumentLayout.SINGLE_LINE
-            kotlinTopLevelValueVararg -> LsiPoetAnnotationArgumentLayout.SINGLE_LINE
-            else -> LsiPoetAnnotationArgumentLayout.MULTI_LINE
+            nested && soleValue != null -> LsiAnnotationArgumentLayout.SINGLE_LINE
+            kotlinTopLevelValueVararg -> LsiAnnotationArgumentLayout.SINGLE_LINE
+            else -> LsiAnnotationArgumentLayout.MULTI_LINE
         },
     )
 }
@@ -225,7 +225,7 @@ private fun DtoAnnotationValue.toDtoPoetAnnotationValue(
     frozen: LsiAnnotationValue,
     declarationsByTypeId: Map<LsiSymbolId, DtoAnnotationDeclaration>,
     targetLanguage: LsiLanguage,
-): LsiPoetAnnotationValue {
+): LsiAnnotationValue {
     if (this !is DtoAnnotationValue.ArrayValue && frozen is LsiAnnotationValue.ArrayValue) {
         require(frozen.elements.size == 1) {
             "Scalar DTO annotation source must freeze to one array element"
@@ -241,7 +241,7 @@ private fun DtoAnnotationValue.toDtoPoetAnnotationValue(
             require(frozen is LsiAnnotationValue.ArrayValue && elements.size == frozen.elements.size) {
                 "DTO annotation array source does not match its frozen value"
             }
-            LsiPoetAnnotationValue.ArrayValue(
+            LsiAnnotationValue.ArrayValue(
                 elements = elements.zip(frozen.elements) { sourceElement, frozenElement ->
                     sourceElement.toDtoPoetAnnotationValue(
                         frozen = frozenElement,
@@ -249,14 +249,14 @@ private fun DtoAnnotationValue.toDtoPoetAnnotationValue(
                         targetLanguage = targetLanguage,
                     )
                 },
-                sourceStyle = LsiPoetAnnotationArrayStyle.MULTI_LINE_LITERAL,
+                sourceStyle = LsiAnnotationArrayStyle.MULTI_LINE_LITERAL,
             )
         }
         is DtoAnnotationValue.AnnotationValue -> {
             require(frozen is LsiAnnotationValue.NestedAnnotationValue) {
                 "DTO nested annotation source does not match its frozen value"
             }
-            LsiPoetAnnotationValue.NestedAnnotationValue(
+            LsiAnnotationValue.NestedAnnotationValue(
                 annotation.toDtoPoetAnnotation(
                     frozen = frozen.annotation,
                     declaration = declarationsByTypeId.getValue(annotation.typeId),
@@ -274,21 +274,21 @@ private fun DtoAnnotationValue.toDtoPoetAnnotationValue(
             ) {
                 "DTO enum annotation source does not match its frozen value"
             }
-            LsiPoetAnnotationValue.EnumValue(frozen.enumType, frozen.entryName)
+            LsiAnnotationValue.EnumValue(frozen.enumType, frozen.entryName)
         }
         is DtoAnnotationValue.TypeValue -> {
             require(frozen is LsiAnnotationValue.ClassValue) {
                 "DTO class annotation source does not match its frozen value"
             }
-            LsiPoetAnnotationValue.ClassValue(
+            LsiAnnotationValue.ClassValue(
                 type = frozen.type,
                 sourceStyle = if (
                     targetLanguage == LsiLanguage.KOTLIN &&
                     (frozen.type as? LsiPrimitiveType)?.boxed == true
                 ) {
-                    LsiPoetClassLiteralStyle.JAVA_BOXED_PRIMITIVE_QUALIFIED
+                    LsiClassLiteralStyle.JAVA_BOXED_PRIMITIVE_QUALIFIED
                 } else {
-                    LsiPoetClassLiteralStyle.PLATFORM_TYPE
+                    LsiClassLiteralStyle.PLATFORM_TYPE
                 },
             )
         }
@@ -301,7 +301,7 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
     declarationsByTypeId: Map<LsiSymbolId, DtoAnnotationDeclaration>,
     targetLanguage: LsiLanguage,
     includeDefaultArguments: Boolean,
-): LsiPoetAnnotation {
+): LsiAnnotation {
     require(type == declaration.typeId) {
         "Immutable annotation and declaration types differ: ${type.value} and ${declaration.typeId.value}"
     }
@@ -323,7 +323,7 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
         "Immutable annotation contains arguments outside its frozen declaration: ${type.value}"
     }
     val namedArguments = orderedArgumentNames.map { name ->
-        LsiPoetAnnotationArgument.Named(
+        LsiSourceAnnotationArgument.Named(
             name = name,
             value = arguments.getValue(name).value.toImmutableDtoPoetValue(
                 declarationsByTypeId = declarationsByTypeId,
@@ -334,8 +334,8 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
     }
     val soleValue = namedArguments.singleOrNull()
         ?.takeIf { argument -> argument.name == "value" }
-    val soleValueArray = soleValue?.value as? LsiPoetAnnotationValue.ArrayValue
-    val soleArgumentArray = namedArguments.singleOrNull()?.value as? LsiPoetAnnotationValue.ArrayValue
+    val soleValueArray = soleValue?.value as? LsiAnnotationValue.ArrayValue
+    val soleArgumentArray = namedArguments.singleOrNull()?.value as? LsiAnnotationValue.ArrayValue
     val renderedArguments = when {
         targetLanguage == LsiLanguage.KOTLIN &&
             declaration.kotlinValueVararg &&
@@ -348,7 +348,7 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
                 targetLanguage == LsiLanguage.KOTLIN &&
                 (!includeDefaultArguments || declaration.language == LsiLanguage.KOTLIN)
             ) {
-                listOf(LsiPoetAnnotationArgument.Positional(element))
+                listOf(LsiSourceAnnotationArgument.Positional(element))
             } else {
                 listOf(
                     soleValue.copy(
@@ -358,7 +358,7 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
                             targetLanguage == LsiLanguage.KOTLIN &&
                             declaration.language == LsiLanguage.JAVA
                         ) {
-                            LsiPoetAnnotationArgumentNameStyle.VERBATIM
+                            LsiAnnotationArgumentNameStyle.VERBATIM
                         } else {
                             soleValue.nameStyle
                         },
@@ -367,11 +367,11 @@ private fun LsiAnnotation.toImmutableDtoPoetAnnotation(
             }
         }
         targetLanguage == LsiLanguage.KOTLIN && soleArgumentArray?.elements?.size == 1 -> {
-            listOf(LsiPoetAnnotationArgument.Positional(soleArgumentArray.elements.single()))
+            listOf(LsiSourceAnnotationArgument.Positional(soleArgumentArray.elements.single()))
         }
         else -> namedArguments
     }
-    return LsiPoetAnnotation(
+    return sourceLsiAnnotation(
         type = type,
         arguments = renderedArguments,
     )
@@ -381,20 +381,20 @@ private fun LsiAnnotationValue.toImmutableDtoPoetValue(
     declarationsByTypeId: Map<LsiSymbolId, DtoAnnotationDeclaration>,
     targetLanguage: LsiLanguage,
     includeDefaultArguments: Boolean,
-): LsiPoetAnnotationValue {
+): LsiAnnotationValue {
     return when (this) {
-        is LsiAnnotationValue.BooleanValue -> LsiPoetAnnotationValue.BooleanValue(value)
-        is LsiAnnotationValue.ByteValue -> LsiPoetAnnotationValue.ByteValue(value)
-        is LsiAnnotationValue.ShortValue -> LsiPoetAnnotationValue.ShortValue(value)
-        is LsiAnnotationValue.IntValue -> LsiPoetAnnotationValue.IntValue(value)
-        is LsiAnnotationValue.LongValue -> LsiPoetAnnotationValue.LongValue(value)
-        is LsiAnnotationValue.FloatValue -> LsiPoetAnnotationValue.FloatValue(value)
-        is LsiAnnotationValue.DoubleValue -> LsiPoetAnnotationValue.DoubleValue(value)
-        is LsiAnnotationValue.CharValue -> LsiPoetAnnotationValue.CharValue(value)
-        is LsiAnnotationValue.StringValue -> LsiPoetAnnotationValue.StringValue(value)
-        is LsiAnnotationValue.EnumValue -> LsiPoetAnnotationValue.EnumValue(enumType, entryName)
-        is LsiAnnotationValue.ClassValue -> LsiPoetAnnotationValue.ClassValue(type)
-        is LsiAnnotationValue.NestedAnnotationValue -> LsiPoetAnnotationValue.NestedAnnotationValue(
+        is LsiAnnotationValue.BooleanValue -> LsiAnnotationValue.BooleanValue(value)
+        is LsiAnnotationValue.ByteValue -> LsiAnnotationValue.ByteValue(value)
+        is LsiAnnotationValue.ShortValue -> LsiAnnotationValue.ShortValue(value)
+        is LsiAnnotationValue.IntValue -> LsiAnnotationValue.IntValue(value)
+        is LsiAnnotationValue.LongValue -> LsiAnnotationValue.LongValue(value)
+        is LsiAnnotationValue.FloatValue -> LsiAnnotationValue.FloatValue(value)
+        is LsiAnnotationValue.DoubleValue -> LsiAnnotationValue.DoubleValue(value)
+        is LsiAnnotationValue.CharValue -> LsiAnnotationValue.CharValue(value)
+        is LsiAnnotationValue.StringValue -> LsiAnnotationValue.StringValue(value)
+        is LsiAnnotationValue.EnumValue -> LsiAnnotationValue.EnumValue(enumType, entryName)
+        is LsiAnnotationValue.ClassValue -> LsiAnnotationValue.ClassValue(type)
+        is LsiAnnotationValue.NestedAnnotationValue -> LsiAnnotationValue.NestedAnnotationValue(
             annotation.toImmutableDtoPoetAnnotation(
                 declaration = declarationsByTypeId.getValue(annotation.type),
                 declarationsByTypeId = declarationsByTypeId,
@@ -402,7 +402,7 @@ private fun LsiAnnotationValue.toImmutableDtoPoetValue(
                 includeDefaultArguments = includeDefaultArguments,
             ),
         )
-        is LsiAnnotationValue.ArrayValue -> LsiPoetAnnotationValue.ArrayValue(
+        is LsiAnnotationValue.ArrayValue -> LsiAnnotationValue.ArrayValue(
             elements = elements.map { element ->
                 element.toImmutableDtoPoetValue(
                     declarationsByTypeId,
@@ -411,30 +411,30 @@ private fun LsiAnnotationValue.toImmutableDtoPoetValue(
                 )
             },
             sourceStyle = if (targetLanguage == LsiLanguage.KOTLIN) {
-                LsiPoetAnnotationArrayStyle.KOTLIN_ARRAY_OF
+                LsiAnnotationArrayStyle.KOTLIN_ARRAY_OF
             } else {
-                LsiPoetAnnotationArrayStyle.LITERAL
+                LsiAnnotationArrayStyle.LITERAL
             },
         )
     }
 }
 
-private fun LsiPoetAnnotationValue.toPositionalVarargArguments(): List<LsiPoetAnnotationArgument> {
-    val values = (this as? LsiPoetAnnotationValue.ArrayValue)?.elements ?: listOf(this)
-    return values.map(LsiPoetAnnotationArgument::Positional)
+private fun LsiAnnotationValue.toPositionalVarargArguments(): List<LsiSourceAnnotationArgument> {
+    val values = (this as? LsiAnnotationValue.ArrayValue)?.elements ?: listOf(this)
+    return values.map(LsiSourceAnnotationArgument::Positional)
 }
 
-private fun LsiAnnotationValue.toDtoLiteralPoetValue(): LsiPoetAnnotationValue {
+private fun LsiAnnotationValue.toDtoLiteralPoetValue(): LsiAnnotationValue {
     return when (this) {
-        is LsiAnnotationValue.BooleanValue -> LsiPoetAnnotationValue.BooleanValue(value)
-        is LsiAnnotationValue.ByteValue -> LsiPoetAnnotationValue.ByteValue(value)
-        is LsiAnnotationValue.ShortValue -> LsiPoetAnnotationValue.ShortValue(value)
-        is LsiAnnotationValue.IntValue -> LsiPoetAnnotationValue.IntValue(value)
-        is LsiAnnotationValue.LongValue -> LsiPoetAnnotationValue.LongValue(value)
-        is LsiAnnotationValue.FloatValue -> LsiPoetAnnotationValue.FloatValue(value)
-        is LsiAnnotationValue.DoubleValue -> LsiPoetAnnotationValue.DoubleValue(value)
-        is LsiAnnotationValue.CharValue -> LsiPoetAnnotationValue.CharValue(value)
-        is LsiAnnotationValue.StringValue -> LsiPoetAnnotationValue.StringValue(value)
+        is LsiAnnotationValue.BooleanValue -> LsiAnnotationValue.BooleanValue(value)
+        is LsiAnnotationValue.ByteValue -> LsiAnnotationValue.ByteValue(value)
+        is LsiAnnotationValue.ShortValue -> LsiAnnotationValue.ShortValue(value)
+        is LsiAnnotationValue.IntValue -> LsiAnnotationValue.IntValue(value)
+        is LsiAnnotationValue.LongValue -> LsiAnnotationValue.LongValue(value)
+        is LsiAnnotationValue.FloatValue -> LsiAnnotationValue.FloatValue(value)
+        is LsiAnnotationValue.DoubleValue -> LsiAnnotationValue.DoubleValue(value)
+        is LsiAnnotationValue.CharValue -> LsiAnnotationValue.CharValue(value)
+        is LsiAnnotationValue.StringValue -> LsiAnnotationValue.StringValue(value)
         is LsiAnnotationValue.ArrayValue,
         is LsiAnnotationValue.ClassValue,
         is LsiAnnotationValue.EnumValue,

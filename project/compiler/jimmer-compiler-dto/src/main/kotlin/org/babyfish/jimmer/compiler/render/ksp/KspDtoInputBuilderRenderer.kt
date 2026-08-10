@@ -15,7 +15,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将共享 InputBuilder 模型渲染为可嵌入 KSP DTO 的 KotlinPoet 类型。 */
@@ -30,7 +30,7 @@ internal object KspDtoInputBuilderRenderer {
         jacksonVersion: JacksonFamily,
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
-        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiPoetTypeName>,
+        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
     ): TypeSpec {
         val currentDtoTypeName = JimmerDtoPoetTypeNames.create(
             generatedDtoPackageName,

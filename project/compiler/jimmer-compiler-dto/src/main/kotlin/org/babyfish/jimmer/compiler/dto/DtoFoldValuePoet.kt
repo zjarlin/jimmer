@@ -9,11 +9,11 @@ import site.addzero.lsi.jimmer.dto.nullGuardProp
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 将折叠 DTO 的基础对象构造表达式降低为平台中立代码。 */
 internal fun DtoFoldProp.toFoldValuePoetCodeBlock(
@@ -22,11 +22,11 @@ internal fun DtoFoldProp.toFoldValuePoetCodeBlock(
     generatedTargetType: (DtoProp) -> LsiDeclaredType,
     baseParameterName: String,
     nullGuardAccessorName: String,
-): LsiPoetCodeBlock {
+): LsiCodeBlock {
     val language = targetLanguage.requireDtoFoldValueTargetLanguage()
     val targetType = generatedTargetType(this)
     val guarded = nullGuardProp(graph) != null
-    return LsiPoetCodeBlock.build {
+    return LsiCodeBlock.build {
         when (language) {
             LsiLanguage.JAVA -> javaFoldValue(
                 targetType = targetType,
@@ -47,16 +47,16 @@ internal fun DtoFoldProp.toFoldValuePoetCodeBlock(
 
 /** 解析折叠属性 initializer 引用的完整类型名。 */
 internal fun LsiWorkspace.dtoFoldValuePoetTypeNames(
-    codeBlock: LsiPoetCodeBlock,
-    generatedTypeNames: Collection<LsiPoetTypeName>,
-): List<LsiPoetTypeName> {
-    return toLsiPoetTypeNames(
+    codeBlock: LsiCodeBlock,
+    generatedTypeNames: Collection<LsiTypeName>,
+): List<LsiTypeName> {
+    return toLsiTypeNames(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + generatedTypeNames,
     )
 }
 
-private fun LsiPoetCodeBuilder.javaFoldValue(
+private fun LsiCodeBuilder.javaFoldValue(
     targetType: LsiDeclaredType,
     baseParameterName: String,
     nullGuardAccessorName: String,
@@ -76,7 +76,7 @@ private fun LsiPoetCodeBuilder.javaFoldValue(
     }
 }
 
-private fun LsiPoetCodeBuilder.kotlinFoldValue(
+private fun LsiCodeBuilder.kotlinFoldValue(
     targetType: LsiDeclaredType,
     baseParameterName: String,
     nullGuardAccessorName: String,
@@ -96,7 +96,7 @@ private fun LsiPoetCodeBuilder.kotlinFoldValue(
     }
 }
 
-private fun LsiPoetCodeBuilder.targetConstructor(
+private fun LsiCodeBuilder.targetConstructor(
     targetType: LsiDeclaredType,
     baseParameterName: String,
 ) {

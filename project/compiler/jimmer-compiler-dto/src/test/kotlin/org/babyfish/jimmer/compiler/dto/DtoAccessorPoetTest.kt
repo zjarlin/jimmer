@@ -33,7 +33,7 @@ import site.addzero.lsi.model.LsiPrimitiveKind
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -572,7 +572,7 @@ class DtoAccessorPoetTest {
             "demo.dto",
             listOf("ReusableStoreInput"),
         )
-        val EXPLICIT_TYPE_NAMES: List<LsiPoetTypeName> = listOf(
+        val EXPLICIT_TYPE_NAMES: List<LsiTypeName> = listOf(
             JimmerDtoPoetTypeNames.create("demo", listOf("Book")),
             JimmerDtoPoetTypeNames.create("demo", listOf("Store")),
             JimmerDtoPoetTypeNames.create("demo", listOf("Gender")),

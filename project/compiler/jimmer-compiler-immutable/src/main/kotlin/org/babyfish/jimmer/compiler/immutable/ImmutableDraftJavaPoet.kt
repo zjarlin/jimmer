@@ -1,5 +1,7 @@
 package org.babyfish.jimmer.compiler.immutable
 
+import site.addzero.lsi.model.sourceLsiAnnotation
+
 import org.babyfish.jimmer.currentVersion
 import org.babyfish.jimmer.impl.util.StringUtil
 import site.addzero.lsi.core.LsiSymbolId
@@ -16,28 +18,26 @@ import site.addzero.lsi.model.LsiTypeParameter
 import site.addzero.lsi.model.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeRef
 import site.addzero.lsi.model.LsiUnresolvedType
-import site.addzero.lsi.poet.LsiPoetAnnotation
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetConstructor
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetFile
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetMember
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetType
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiMember
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.poet.LsiPoetTypeReferenceStyle
+import site.addzero.lsi.model.LsiTypeReferenceStyle
 
 /**
  * 把一个不可变类型的 Draft 代码生成计划降低为 Java LSI Poet 文件。
  */
 internal fun JimmerImmutableDraftCodegenSchema.toJavaDraftPoetFile(
     type: JimmerImmutableDraftTypePlan,
-): LsiPoetFile {
+): LsiFile {
     require(typesById[type.typeId] == type) {
         "Immutable draft type '${type.typeId.value}' does not belong to the supplied schema"
     }
@@ -85,8 +85,8 @@ private class JavaDraftPoetContext(
         addAll(type.propsBySlot.filterNot { prop -> prop.propId == type.idPropId })
     }
 
-    fun file(): LsiPoetFile {
-        return LsiPoetFile(
+    fun file(): LsiFile {
+        return LsiFile(
             language = site.addzero.lsi.core.LsiLanguage.JAVA,
             packageName = type.packageName,
             fileName = "${type.simpleName}Draft",
@@ -94,8 +94,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftType(): LsiPoetType {
-        return LsiPoetType(
+    private fun draftType(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = "${type.simpleName}Draft",
             kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = buildList {
@@ -105,7 +105,7 @@ private class JavaDraftPoetContext(
                 }
             },
             modifiers = if (type.visibility == site.addzero.lsi.model.LsiVisibility.PUBLIC) {
-                setOf(LsiPoetModifier.PUBLIC)
+                setOf(LsiModifier.PUBLIC)
             } else {
                 emptySet()
             },
@@ -120,7 +120,7 @@ private class JavaDraftPoetContext(
             },
             members = buildList {
                 add(
-                    LsiPoetField(
+                    LsiField(
                         name = "$",
                         type = producerType,
                         modifiers = PUBLIC_STATIC_FINAL,
@@ -128,7 +128,7 @@ private class JavaDraftPoetContext(
                             type(producerType)
                             text(".INSTANCE")
                         },
-                        typeReferenceStyle = LsiPoetTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED,
+                        typeReferenceStyle = LsiTypeReferenceStyle.SAME_PACKAGE_OUTER_QUALIFIED,
                     )
                 )
                 legacyProps.forEach { prop -> addAll(draftPropMembers(prop)) }
@@ -140,7 +140,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftPropMembers(prop: JimmerImmutableDraftPropPlan): List<LsiPoetMember> {
+    private fun draftPropMembers(prop: JimmerImmutableDraftPropPlan): List<LsiMember> {
         return buildList {
             if (prop.autoCreateSupported && prop.immutableReference && !prop.list) {
                 add(draftGetter(prop, autoCreate = false))
@@ -162,13 +162,13 @@ private class JavaDraftPoetContext(
     private fun draftGetter(
         prop: JimmerImmutableDraftPropPlan,
         autoCreate: Boolean,
-    ): LsiPoetFunction {
-        return LsiPoetFunction(
+    ): LsiFunction {
+        return LsiFunction(
             name = prop.sourceGetterName,
             annotations = if (!autoCreate && prop.nullable) listOf(NULLABLE_ANNOTATION) else emptyList(),
             modifiers = PUBLIC_ABSTRACT,
             parameters = if (autoCreate) {
-                listOf(LsiPoetParameter("autoCreate", BOOLEAN_TYPE))
+                listOf(LsiParameter("autoCreate", BOOLEAN_TYPE))
             } else {
                 emptyList()
             },
@@ -176,8 +176,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftSetter(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftSetter(prop: JimmerImmutableDraftPropPlan): LsiFunction {
+        return LsiFunction(
             name = prop.javaSetterName,
             annotations = buildList {
                 add(OLD_CHAIN_ANNOTATION)
@@ -188,7 +188,7 @@ private class JavaDraftPoetContext(
             modifiers = PUBLIC_ABSTRACT,
             documentation = prop.documentation?.takeIf(String::isNotEmpty),
             parameters = listOf(
-                LsiPoetParameter(prop.codegenName, prop.type.withoutJavaDraftTypeAnnotations())
+                LsiParameter(prop.codegenName, prop.type.withoutJavaDraftTypeAnnotations())
             ),
             returnType = parameterizedDraftType,
         )
@@ -198,26 +198,26 @@ private class JavaDraftPoetContext(
         prop: JimmerImmutableDraftPropPlan,
         withBase: Boolean,
         withImplementation: Boolean,
-    ): LsiPoetFunction {
+    ): LsiFunction {
         val functionName = if (prop.list) prop.javaAdderByName else prop.javaApplierName
-        return LsiPoetFunction(
+        return LsiFunction(
             name = functionName,
             annotations = listOf(OLD_CHAIN_ANNOTATION),
             modifiers = buildSet {
-                add(LsiPoetModifier.PUBLIC)
-                add(if (withImplementation) LsiPoetModifier.OVERRIDE else LsiPoetModifier.ABSTRACT)
+                add(LsiModifier.PUBLIC)
+                add(if (withImplementation) LsiModifier.OVERRIDE else LsiModifier.ABSTRACT)
             },
             parameters = buildList {
                 if (withBase) {
                     add(
-                        LsiPoetParameter(
+                        LsiParameter(
                             "base",
                             prop.elementType.withoutJavaDraftTypeAnnotations(),
                         )
                     )
                 }
                 add(
-                    LsiPoetParameter(
+                    LsiParameter(
                         "block",
                         draftDeclaredType(DRAFT_CONSUMER_TYPE_ID, prop.draftElementType()),
                     )
@@ -225,7 +225,7 @@ private class JavaDraftPoetContext(
             },
             returnType = parameterizedDraftType,
             body = if (!withImplementation) {
-                LsiPoetCodeBlock.EMPTY
+                LsiCodeBlock.EMPTY
             } else {
                 draftCode {
                     if (withBase) {
@@ -258,15 +258,15 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun producer(): LsiPoetType {
-        return LsiPoetType(
+    private fun producer(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = PRODUCER,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
-            modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC),
+            modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.STATIC),
             members = buildList {
                 add(
-                    LsiPoetField(
+                    LsiField(
                         name = "INSTANCE",
                         type = producerType,
                         modifiers = STATIC_FINAL,
@@ -281,7 +281,7 @@ private class JavaDraftPoetContext(
                     legacyProps.forEach { prop -> add(slotField(prop)) }
                 }
                 add(runtimeTypeField())
-                add(LsiPoetConstructor(modifiers = setOf(LsiPoetModifier.PRIVATE)))
+                add(LsiConstructor(modifiers = setOf(LsiModifier.PRIVATE)))
                 if (!type.isMappedSuperclass) {
                     add(produceFunction(withBase = false, resolveImmediately = false))
                     add(produceFunction(withBase = true, resolveImmediately = false))
@@ -295,8 +295,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun slotField(prop: JimmerImmutableDraftPropPlan): LsiPoetField {
-        return LsiPoetField(
+    private fun slotField(prop: JimmerImmutableDraftPropPlan): LsiField {
+        return LsiField(
             name = prop.slotName,
             type = INT_TYPE,
             modifiers = PUBLIC_STATIC_FINAL,
@@ -311,8 +311,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun runtimeTypeField(): LsiPoetField {
-        return LsiPoetField(
+    private fun runtimeTypeField(): LsiField {
+        return LsiField(
             name = "TYPE",
             type = RUNTIME_IMMUTABLE_TYPE,
             modifiers = PUBLIC_STATIC_FINAL,
@@ -320,7 +320,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun runtimeTypeInitializer(): LsiPoetCodeBlock {
+    private fun runtimeTypeInitializer(): LsiCodeBlock {
         return draftCode {
             type(RUNTIME_IMMUTABLE_TYPE)
             line()
@@ -359,7 +359,7 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun LsiPoetCodeBuilder.addRuntimeSuperTypes() {
+    private fun LsiCodeBuilder.addRuntimeSuperTypes() {
         when (type.directSuperTypes.size) {
             0 -> {
                 type(COLLECTIONS_TYPE)
@@ -389,7 +389,7 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun LsiPoetCodeBuilder.addRuntimeProp(prop: JimmerImmutableDraftPropPlan) {
+    private fun LsiCodeBuilder.addRuntimeProp(prop: JimmerImmutableDraftPropPlan) {
         val slot = prop.metadataSlotIndex?.let { prop.slotName } ?: "-1"
         when (prop.runtimeProp.kind) {
             ImmutableDraftRuntimePropKind.ID -> {
@@ -451,19 +451,19 @@ private class JavaDraftPoetContext(
     private fun produceFunction(
         withBase: Boolean,
         resolveImmediately: Boolean,
-    ): LsiPoetFunction {
-        return LsiPoetFunction(
+    ): LsiFunction {
+        return LsiFunction(
             name = "produce",
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             parameters = buildList {
                 if (withBase) {
-                    add(LsiPoetParameter("base", modelType))
+                    add(LsiParameter("base", modelType))
                 }
                 if (resolveImmediately) {
-                    add(LsiPoetParameter("resolveImmediately", BOOLEAN_TYPE))
+                    add(LsiParameter("resolveImmediately", BOOLEAN_TYPE))
                 }
                 add(
-                    LsiPoetParameter(
+                    LsiParameter(
                         "block",
                         draftDeclaredType(DRAFT_CONSUMER_TYPE_ID, draftRawType),
                     )
@@ -486,15 +486,15 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implementor(): LsiPoetType {
-        return LsiPoetType(
+    private fun implementor(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = IMPLEMENTOR,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(), jsonPropertyOrderAnnotation()),
             modifiers = setOf(
-                LsiPoetModifier.PUBLIC,
-                LsiPoetModifier.STATIC,
-                LsiPoetModifier.ABSTRACT,
+                LsiModifier.PUBLIC,
+                LsiModifier.STATIC,
+                LsiModifier.ABSTRACT,
             ),
             documentation = "Class, not interface, for free-marker",
             superInterfaces = listOf(modelType, IMMUTABLE_SPI_TYPE),
@@ -502,7 +502,7 @@ private class JavaDraftPoetContext(
                 legacyProps.forEach { prop ->
                     prop.javaDeeperPropIdName?.let { fieldName ->
                         add(
-                            LsiPoetField(
+                            LsiField(
                                 name = fieldName,
                                 type = PROP_ID_TYPE,
                                 modifiers = PUBLIC_STATIC_FINAL,
@@ -520,7 +520,7 @@ private class JavaDraftPoetContext(
                 add(implementorGetFunction(byId = false))
                 legacyProps.forEach { prop -> addAll(implementorGetterMembers(prop)) }
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__type",
                         modifiers = PUBLIC_FINAL_OVERRIDE,
                         returnType = RUNTIME_IMMUTABLE_TYPE,
@@ -528,7 +528,7 @@ private class JavaDraftPoetContext(
                     )
                 )
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "getDummyPropForJacksonError__",
                         modifiers = PUBLIC_FINAL,
                         returnType = INT_TYPE,
@@ -545,12 +545,12 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implementorGetFunction(byId: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implementorGetFunction(byId: Boolean): LsiFunction {
+        return LsiFunction(
             name = "__get",
             modifiers = PUBLIC_FINAL_OVERRIDE,
             parameters = listOf(
-                LsiPoetParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
+                LsiParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
             ),
             returnType = OBJECT_TYPE,
             body = draftCode {
@@ -586,12 +586,12 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implementorGetterMembers(prop: JimmerImmutableDraftPropPlan): List<LsiPoetMember> {
+    private fun implementorGetterMembers(prop: JimmerImmutableDraftPropPlan): List<LsiMember> {
         return buildList {
             prop.manyToManyBasePropId?.let { basePropId ->
                 val baseProp = type.propsById.getValue(basePropId)
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = prop.sourceGetterName,
                         modifiers = PUBLIC_FINAL_OVERRIDE,
                         returnType = prop.type.withoutJavaDraftTypeAnnotations(),
@@ -609,7 +609,7 @@ private class JavaDraftPoetContext(
             }
             if (!prop.isJavaBeanStyle) {
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = prop.javaBeanGetterName,
                         annotations = prop.annotationPlan.methodAnnotations
                             .map(LsiAnnotation::toJavaDraftPoetAnnotation),
@@ -627,29 +627,29 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun jsonPropertyOrderAnnotation(): LsiPoetAnnotation {
+    private fun jsonPropertyOrderAnnotation(): LsiAnnotation {
         val values = buildList {
             add("dummyPropForJacksonError__")
             addAll(type.propsBySlot.map(JimmerImmutableDraftPropPlan::name))
         }
-        return LsiPoetAnnotation(
+        return sourceLsiAnnotation(
             type = JSON_PROPERTY_ORDER_TYPE_ID,
             arguments = listOf(
-                LsiPoetAnnotationArgument.Positional(
-                    LsiPoetAnnotationValue.ArrayValue(
-                        values.map(LsiPoetAnnotationValue::StringValue)
+                LsiSourceAnnotationArgument.Positional(
+                    LsiAnnotationValue.ArrayValue(
+                        values.map(LsiAnnotationValue::StringValue)
                     )
                 )
             ),
         )
     }
 
-    private fun impl(): LsiPoetType {
-        return LsiPoetType(
+    private fun impl(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
-            modifiers = setOf(LsiPoetModifier.PRIVATE, LsiPoetModifier.STATIC),
+            modifiers = setOf(LsiModifier.PRIVATE, LsiModifier.STATIC),
             superClass = implementorType,
             superInterfaces = listOf(CLONEABLE_TYPE, SERIALIZABLE_TYPE),
             members = buildList {
@@ -664,10 +664,10 @@ private class JavaDraftPoetContext(
                 add(implHashCodeFunction(shallow = false))
                 add(implHashCodeFunction(shallow = true))
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__hashCode",
                         modifiers = PUBLIC_OVERRIDE,
-                        parameters = listOf(LsiPoetParameter("shallow", BOOLEAN_TYPE)),
+                        parameters = listOf(LsiParameter("shallow", BOOLEAN_TYPE)),
                         returnType = INT_TYPE,
                         body = draftCode {
                             returnValue { text("shallow ? __shallowHashCode() : hashCode()") }
@@ -677,12 +677,12 @@ private class JavaDraftPoetContext(
                 add(implEqualsFunction(shallow = false))
                 add(implEqualsFunction(shallow = true))
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__equals",
                         modifiers = PUBLIC_OVERRIDE,
                         parameters = listOf(
-                            LsiPoetParameter("obj", OBJECT_TYPE),
-                            LsiPoetParameter("shallow", BOOLEAN_TYPE),
+                            LsiParameter("obj", OBJECT_TYPE),
+                            LsiParameter("shallow", BOOLEAN_TYPE),
                         ),
                         returnType = BOOLEAN_TYPE,
                         body = draftCode {
@@ -691,7 +691,7 @@ private class JavaDraftPoetContext(
                     )
                 )
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "toString",
                         modifiers = PUBLIC_OVERRIDE,
                         returnType = STRING_TYPE,
@@ -707,13 +707,13 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implFields(): List<LsiPoetField> {
+    private fun implFields(): List<LsiField> {
         return buildList {
             add(
-                LsiPoetField(
+                LsiField(
                     name = VISIBILITY_FIELD,
                     type = VISIBILITY_TYPE,
-                    modifiers = setOf(LsiPoetModifier.PRIVATE),
+                    modifiers = setOf(LsiModifier.PRIVATE),
                 )
             )
             legacyProps.forEach { prop ->
@@ -723,11 +723,11 @@ private class JavaDraftPoetContext(
                     } else {
                         prop.type.withoutJavaDraftTypeAnnotations()
                     }
-                    add(LsiPoetField(name = fieldName, type = fieldType))
+                    add(LsiField(name = fieldName, type = fieldType))
                 }
                 prop.loadedStateFieldName?.let { fieldName ->
                     add(
-                        LsiPoetField(
+                        LsiField(
                             name = fieldName,
                             type = BOOLEAN_TYPE,
                             initializer = draftCode { text("false") },
@@ -738,11 +738,11 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun implConstructor(): LsiPoetConstructor? {
+    private fun implConstructor(): LsiConstructor? {
         if (!type.requiresVisibilityState) {
             return null
         }
-        return LsiPoetConstructor(
+        return LsiConstructor(
             body = draftCode {
                 statement {
                     name(VISIBILITY_FIELD)
@@ -760,11 +760,11 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implGetter(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction? {
+    private fun implGetter(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
         if (prop.languageFormula || prop.manyToManyBasePropId != null) {
             return null
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.sourceGetterName,
             annotations = buildList {
                 add(JAVA_OVERRIDE_ANNOTATION)
@@ -781,7 +781,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implGetterBody(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun implGetterBody(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         val basePropId = prop.idViewBasePropId
         if (basePropId != null) {
             val baseProp = type.propsById.getValue(basePropId)
@@ -834,19 +834,19 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun descriptionAnnotation(documentation: String): LsiPoetAnnotation {
-        return LsiPoetAnnotation(
+    private fun descriptionAnnotation(documentation: String): LsiAnnotation {
+        return sourceLsiAnnotation(
             type = DESCRIPTION_TYPE_ID,
             arguments = listOf(
-                LsiPoetAnnotationArgument.Positional(
-                    LsiPoetAnnotationValue.StringValue(documentation)
+                LsiSourceAnnotationArgument.Positional(
+                    LsiAnnotationValue.StringValue(documentation)
                 )
             ),
         )
     }
 
-    private fun implCloneFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implCloneFunction(): LsiFunction {
+        return LsiFunction(
             name = "clone",
             modifiers = PUBLIC_OVERRIDE,
             returnType = implType,
@@ -892,12 +892,12 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implIsLoadedFunction(byId: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implIsLoadedFunction(byId: Boolean): LsiFunction {
+        return LsiFunction(
             name = "__isLoaded",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
-                LsiPoetParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
+                LsiParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
             ),
             returnType = BOOLEAN_TYPE,
             body = draftCode {
@@ -919,7 +919,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun loadedExpression(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun loadedExpression(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         prop.idViewBasePropId?.let { basePropId ->
             val baseProp = type.propsById.getValue(basePropId)
             val targetType = requireNotNull(baseProp.targetTypeId).let(schema.typesById::getValue)
@@ -992,12 +992,12 @@ private class JavaDraftPoetContext(
         return draftCode { text("${requireNotNull(prop.valueFieldName)} != null") }
     }
 
-    private fun implIsVisibleFunction(byId: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implIsVisibleFunction(byId: Boolean): LsiFunction {
+        return LsiFunction(
             name = "__isVisible",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
-                LsiPoetParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
+                LsiParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
             ),
             returnType = BOOLEAN_TYPE,
             body = draftCode {
@@ -1022,11 +1022,11 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implHashCodeFunction(shallow: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implHashCodeFunction(shallow: Boolean): LsiFunction {
+        return LsiFunction(
             name = if (shallow) "__shallowHashCode" else "hashCode",
             modifiers = if (shallow) {
-                setOf(LsiPoetModifier.PRIVATE)
+                setOf(LsiModifier.PRIVATE)
             } else {
                 PUBLIC_OVERRIDE
             },
@@ -1043,7 +1043,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addHashCode(
+    private fun LsiCodeBuilder.addHashCode(
         prop: JimmerImmutableDraftPropPlan,
         shallow: Boolean,
     ) {
@@ -1095,15 +1095,15 @@ private class JavaDraftPoetContext(
         endControlFlow()
     }
 
-    private fun implEqualsFunction(shallow: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun implEqualsFunction(shallow: Boolean): LsiFunction {
+        return LsiFunction(
             name = if (shallow) "__shallowEquals" else "equals",
             modifiers = if (shallow) {
-                setOf(LsiPoetModifier.PRIVATE)
+                setOf(LsiModifier.PRIVATE)
             } else {
                 PUBLIC_OVERRIDE
             },
-            parameters = listOf(LsiPoetParameter("obj", OBJECT_TYPE)),
+            parameters = listOf(LsiParameter("obj", OBJECT_TYPE)),
             returnType = BOOLEAN_TYPE,
             body = draftCode {
                 beginControlFlow {
@@ -1125,7 +1125,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addEquals(
+    private fun LsiCodeBuilder.addEquals(
         prop: JimmerImmutableDraftPropPlan,
         shallow: Boolean,
     ) {
@@ -1192,12 +1192,12 @@ private class JavaDraftPoetContext(
         endControlFlow()
     }
 
-    private fun draftImpl(): LsiPoetType {
-        return LsiPoetType(
+    private fun draftImpl(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = DRAFT_IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
-            modifiers = setOf(LsiPoetModifier.PRIVATE, LsiPoetModifier.STATIC),
+            modifiers = setOf(LsiModifier.PRIVATE, LsiModifier.STATIC),
             superClass = implementorType,
             superInterfaces = listOf(DRAFT_SPI_TYPE, draftRawType),
             members = buildList {
@@ -1222,7 +1222,7 @@ private class JavaDraftPoetContext(
                 add(draftImplUnloadFunction(byId = true))
                 add(draftImplUnloadFunction(byId = false))
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__draftContext",
                         modifiers = PUBLIC_OVERRIDE,
                         returnType = DRAFT_CONTEXT_TYPE,
@@ -1231,7 +1231,7 @@ private class JavaDraftPoetContext(
                 )
                 add(draftImplResolveFunction())
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "__isResolved",
                         modifiers = PUBLIC_OVERRIDE,
                         returnType = BOOLEAN_TYPE,
@@ -1243,41 +1243,41 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplFields(): List<LsiPoetField> {
+    private fun draftImplFields(): List<LsiField> {
         return listOf(
-            LsiPoetField(
+            LsiField(
                 name = DRAFT_CONTEXT_FIELD,
                 type = DRAFT_CONTEXT_TYPE,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
             ),
-            LsiPoetField(
+            LsiField(
                 name = DRAFT_BASE_FIELD,
                 type = implType,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
             ),
-            LsiPoetField(
+            LsiField(
                 name = DRAFT_MODIFIED_FIELD,
                 type = implType,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
             ),
-            LsiPoetField(
+            LsiField(
                 name = DRAFT_RESOLVING_FIELD,
                 type = BOOLEAN_TYPE,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
             ),
-            LsiPoetField(
+            LsiField(
                 name = DRAFT_RESOLVED_FIELD,
                 type = modelType,
-                modifiers = setOf(LsiPoetModifier.PRIVATE),
+                modifiers = setOf(LsiModifier.PRIVATE),
             ),
         )
     }
 
-    private fun draftImplConstructor(): LsiPoetConstructor {
-        return LsiPoetConstructor(
+    private fun draftImplConstructor(): LsiConstructor {
+        return LsiConstructor(
             parameters = listOf(
-                LsiPoetParameter("ctx", DRAFT_CONTEXT_TYPE),
-                LsiPoetParameter("base", modelType),
+                LsiParameter("ctx", DRAFT_CONTEXT_TYPE),
+                LsiParameter("base", modelType),
             ),
             body = draftCode {
                 statement { text("$DRAFT_CONTEXT_FIELD = ctx") }
@@ -1299,13 +1299,13 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplReadonlyFunctions(): List<LsiPoetFunction> {
+    private fun draftImplReadonlyFunctions(): List<LsiFunction> {
         return listOf(
             readonlyDelegate("__isLoaded", PROP_ID_TYPE, BOOLEAN_TYPE, "prop"),
             readonlyDelegate("__isLoaded", STRING_TYPE, BOOLEAN_TYPE, "prop"),
             readonlyDelegate("__isVisible", PROP_ID_TYPE, BOOLEAN_TYPE, "prop"),
             readonlyDelegate("__isVisible", STRING_TYPE, BOOLEAN_TYPE, "prop"),
-            LsiPoetFunction(
+            LsiFunction(
                 name = "hashCode",
                 modifiers = PUBLIC_OVERRIDE,
                 returnType = INT_TYPE,
@@ -1316,10 +1316,10 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiPoetFunction(
+            LsiFunction(
                 name = "__hashCode",
                 modifiers = PUBLIC_OVERRIDE,
-                parameters = listOf(LsiPoetParameter("shallow", BOOLEAN_TYPE)),
+                parameters = listOf(LsiParameter("shallow", BOOLEAN_TYPE)),
                 returnType = INT_TYPE,
                 body = draftCode {
                     returnValue {
@@ -1328,10 +1328,10 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiPoetFunction(
+            LsiFunction(
                 name = "equals",
                 modifiers = PUBLIC_OVERRIDE,
-                parameters = listOf(LsiPoetParameter("obj", OBJECT_TYPE)),
+                parameters = listOf(LsiParameter("obj", OBJECT_TYPE)),
                 returnType = BOOLEAN_TYPE,
                 body = draftCode {
                     returnValue {
@@ -1340,12 +1340,12 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiPoetFunction(
+            LsiFunction(
                 name = "__equals",
                 modifiers = PUBLIC_OVERRIDE,
                 parameters = listOf(
-                    LsiPoetParameter("obj", OBJECT_TYPE),
-                    LsiPoetParameter("shallow", BOOLEAN_TYPE),
+                    LsiParameter("obj", OBJECT_TYPE),
+                    LsiParameter("shallow", BOOLEAN_TYPE),
                 ),
                 returnType = BOOLEAN_TYPE,
                 body = draftCode {
@@ -1355,7 +1355,7 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiPoetFunction(
+            LsiFunction(
                 name = "toString",
                 modifiers = PUBLIC_OVERRIDE,
                 returnType = STRING_TYPE,
@@ -1374,11 +1374,11 @@ private class JavaDraftPoetContext(
         parameterType: LsiTypeRef,
         returnType: LsiTypeRef,
         parameterName: String,
-    ): LsiPoetFunction {
-        return LsiPoetFunction(
+    ): LsiFunction {
+        return LsiFunction(
             name = functionName,
             modifiers = PUBLIC_OVERRIDE,
-            parameters = listOf(LsiPoetParameter(parameterName, parameterType)),
+            parameters = listOf(LsiParameter(parameterName, parameterType)),
             returnType = returnType,
             body = draftCode {
                 returnValue {
@@ -1389,11 +1389,11 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplGetter(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction? {
+    private fun draftImplGetter(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
         if (prop.manyToManyBasePropId != null) {
             return null
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.sourceGetterName,
             annotations = buildList {
                 add(JAVA_OVERRIDE_ANNOTATION)
@@ -1410,7 +1410,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplGetterBody(prop: JimmerImmutableDraftPropPlan): LsiPoetCodeBlock {
+    private fun draftImplGetterBody(prop: JimmerImmutableDraftPropPlan): LsiCodeBlock {
         prop.idViewBasePropId?.let { basePropId ->
             val baseProp = type.propsById.getValue(basePropId)
             val targetType = requireNotNull(baseProp.targetTypeId).let(schema.typesById::getValue)
@@ -1474,15 +1474,15 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun draftImplCreator(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction? {
+    private fun draftImplCreator(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
         if (!prop.autoCreateSupported) {
             return null
         }
         val realProp = prop.idViewBasePropId?.let(type.propsById::getValue) ?: prop
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.sourceGetterName,
             modifiers = PUBLIC_OVERRIDE,
-            parameters = listOf(LsiPoetParameter("autoCreate", BOOLEAN_TYPE)),
+            parameters = listOf(LsiParameter("autoCreate", BOOLEAN_TYPE)),
             returnType = prop.draftType(autoCreate = true),
             body = draftCode {
                 beginControlFlow {
@@ -1539,15 +1539,15 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplSetter(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction? {
+    private fun draftImplSetter(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
         if (!prop.writable) {
             return null
         }
-        return LsiPoetFunction(
+        return LsiFunction(
             name = prop.javaSetterName,
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
-                LsiPoetParameter(prop.codegenName, prop.type.withoutJavaDraftTypeAnnotations())
+                LsiParameter(prop.codegenName, prop.type.withoutJavaDraftTypeAnnotations())
             ),
             returnType = draftRawType,
             body = draftCode {
@@ -1579,7 +1579,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addIdViewSetter(
+    private fun LsiCodeBuilder.addIdViewSetter(
         prop: JimmerImmutableDraftPropPlan,
         baseProp: JimmerImmutableDraftPropPlan,
     ) {
@@ -1639,7 +1639,7 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun LsiPoetCodeBuilder.addFrozenCheck() {
+    private fun LsiCodeBuilder.addFrozenCheck() {
         beginControlFlow { text("if ($DRAFT_RESOLVED_FIELD != null)") }
         statement {
             text("throw new ")
@@ -1651,14 +1651,14 @@ private class JavaDraftPoetContext(
         endControlFlow()
     }
 
-    private fun draftImplSetFunction(byId: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftImplSetFunction(byId: Boolean): LsiFunction {
+        return LsiFunction(
             name = "__set",
             annotations = listOf(SUPPRESS_ALL_ANNOTATION),
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
-                LsiPoetParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE),
-                LsiPoetParameter("value", OBJECT_TYPE),
+                LsiParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE),
+                LsiParameter("value", OBJECT_TYPE),
             ),
             body = draftCode {
                 if (byId) {
@@ -1680,7 +1680,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addDynamicSetCase(prop: JimmerImmutableDraftPropPlan) {
+    private fun LsiCodeBuilder.addDynamicSetCase(prop: JimmerImmutableDraftPropPlan) {
         val castType = prop.type.boxedForJavaDraft()
         when {
             prop.isDiscriminator -> {
@@ -1726,13 +1726,13 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun draftImplShowFunction(byId: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftImplShowFunction(byId: Boolean): LsiFunction {
+        return LsiFunction(
             name = "__show",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
-                LsiPoetParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE),
-                LsiPoetParameter("visible", BOOLEAN_TYPE),
+                LsiParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE),
+                LsiParameter("visible", BOOLEAN_TYPE),
             ),
             body = draftCode {
                 addFrozenCheck()
@@ -1783,12 +1783,12 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplUnloadFunction(byId: Boolean): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftImplUnloadFunction(byId: Boolean): LsiFunction {
+        return LsiFunction(
             name = "__unload",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
-                LsiPoetParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
+                LsiParameter("prop", if (byId) PROP_ID_TYPE else STRING_TYPE)
             ),
             body = draftCode {
                 addFrozenCheck()
@@ -1817,7 +1817,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addUnloadCase(prop: JimmerImmutableDraftPropPlan) {
+    private fun LsiCodeBuilder.addUnloadCase(prop: JimmerImmutableDraftPropPlan) {
         val basePropId = prop.idViewBasePropId ?: prop.manyToManyBasePropId
         when {
             basePropId != null -> {
@@ -1845,8 +1845,8 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun draftImplResolveFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftImplResolveFunction(): LsiFunction {
+        return LsiFunction(
             name = "__resolve",
             modifiers = PUBLIC_OVERRIDE,
             returnType = OBJECT_TYPE,
@@ -1872,7 +1872,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addResolveCode() {
+    private fun LsiCodeBuilder.addResolveCode() {
         statement {
             type(implementorType)
             text(" base = $DRAFT_BASE_FIELD")
@@ -1933,8 +1933,8 @@ private class JavaDraftPoetContext(
         returnValue { text("__tmpModified") }
     }
 
-    private fun draftImplModifiedFunction(): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun draftImplModifiedFunction(): LsiFunction {
+        return LsiFunction(
             name = DRAFT_MODIFIED_FIELD,
             returnType = implType,
             body = draftCode {
@@ -1951,23 +1951,23 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun builder(): LsiPoetType {
-        return LsiPoetType(
+    private fun builder(): LsiTypeDeclaration {
+        return LsiTypeDeclaration(
             name = BUILDER,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
-            modifiers = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.STATIC),
+            modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.STATIC),
             members = buildList {
                 add(
-                    LsiPoetField(
+                    LsiField(
                         name = "__draft",
                         type = draftImplType,
-                        modifiers = setOf(LsiPoetModifier.PRIVATE, LsiPoetModifier.FINAL),
+                        modifiers = setOf(LsiModifier.PRIVATE, LsiModifier.FINAL),
                     )
                 )
                 add(
-                    LsiPoetConstructor(
-                        modifiers = setOf(LsiPoetModifier.PUBLIC),
+                    LsiConstructor(
+                        modifiers = setOf(LsiModifier.PUBLIC),
                         body = draftCode { statement { text("this(null)") } },
                     )
                 )
@@ -1976,9 +1976,9 @@ private class JavaDraftPoetContext(
                     add(builderSetter(prop))
                 }
                 add(
-                    LsiPoetFunction(
+                    LsiFunction(
                         name = "build",
-                        modifiers = setOf(LsiPoetModifier.PUBLIC),
+                        modifiers = setOf(LsiModifier.PUBLIC),
                         returnType = modelType,
                         body = draftCode {
                             returnValue {
@@ -1993,11 +1993,11 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun builderBaseConstructor(): LsiPoetConstructor {
-        return LsiPoetConstructor(
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+    private fun builderBaseConstructor(): LsiConstructor {
+        return LsiConstructor(
+            modifiers = setOf(LsiModifier.PUBLIC),
             parameters = listOf(
-                LsiPoetParameter(
+                LsiParameter(
                     name = "base",
                     type = modelType.withJavaDraftNullity(nullable = true),
                 )
@@ -2021,14 +2021,14 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun builderSetter(prop: JimmerImmutableDraftPropPlan): LsiPoetFunction {
-        return LsiPoetFunction(
+    private fun builderSetter(prop: JimmerImmutableDraftPropPlan): LsiFunction {
+        return LsiFunction(
             name = prop.codegenName,
             annotations = prop.annotationPlan.builderMethodAnnotations
                 .map(LsiAnnotation::toJavaDraftPoetAnnotation),
-            modifiers = setOf(LsiPoetModifier.PUBLIC),
+            modifiers = setOf(LsiModifier.PUBLIC),
             parameters = listOf(
-                LsiPoetParameter(
+                LsiParameter(
                     name = prop.codegenName,
                     type = prop.type
                         .boxedForJavaDraft()
@@ -2051,7 +2051,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addBuilderVisibility(prop: JimmerImmutableDraftPropPlan) {
+    private fun LsiCodeBuilder.addBuilderVisibility(prop: JimmerImmutableDraftPropPlan) {
         if (!prop.visibilityControllable) {
             return
         }
@@ -2067,7 +2067,7 @@ private class JavaDraftPoetContext(
     private fun associatedIdMembers(
         prop: JimmerImmutableDraftPropPlan,
         withImplementation: Boolean,
-    ): List<LsiPoetFunction> {
+    ): List<LsiFunction> {
         val contract = prop.associatedId ?: return emptyList()
         val targetType = requireNotNull(prop.targetTypeId).let(schema.typesById::getValue)
         val targetIdProp = targetType.propsById.getValue(contract.targetIdPropId)
@@ -2088,8 +2088,8 @@ private class JavaDraftPoetContext(
         targetIdProp: JimmerImmutableDraftPropPlan,
         idType: LsiTypeRef,
         withImplementation: Boolean,
-    ): LsiPoetFunction {
-        return LsiPoetFunction(
+    ): LsiFunction {
+        return LsiFunction(
             name = StringUtil.identifier(prop.sourceGetterName, "Id"),
             annotations = buildList {
                 add(JSON_IGNORE_ANNOTATION)
@@ -2098,12 +2098,12 @@ private class JavaDraftPoetContext(
                 }
             },
             modifiers = buildSet {
-                add(LsiPoetModifier.PUBLIC)
-                add(if (withImplementation) LsiPoetModifier.OVERRIDE else LsiPoetModifier.ABSTRACT)
+                add(LsiModifier.PUBLIC)
+                add(if (withImplementation) LsiModifier.OVERRIDE else LsiModifier.ABSTRACT)
             },
             returnType = idType,
             body = if (!withImplementation) {
-                LsiPoetCodeBlock.EMPTY
+                LsiCodeBlock.EMPTY
             } else {
                 draftCode {
                     if (prop.nullable) {
@@ -2131,16 +2131,16 @@ private class JavaDraftPoetContext(
         idType: LsiTypeRef,
         parameterName: String,
         withImplementation: Boolean,
-    ): LsiPoetFunction {
-        return LsiPoetFunction(
+    ): LsiFunction {
+        return LsiFunction(
             name = StringUtil.identifier(prop.javaSetterName, "Id"),
             annotations = listOf(OLD_CHAIN_ANNOTATION),
             modifiers = buildSet {
-                add(LsiPoetModifier.PUBLIC)
-                add(if (withImplementation) LsiPoetModifier.OVERRIDE else LsiPoetModifier.ABSTRACT)
+                add(LsiModifier.PUBLIC)
+                add(if (withImplementation) LsiModifier.OVERRIDE else LsiModifier.ABSTRACT)
             },
             parameters = listOf(
-                LsiPoetParameter(
+                LsiParameter(
                     name = parameterName,
                     type = if (idType !is LsiPrimitiveType || idType.boxed) {
                         idType.withJavaDraftNullity(prop.nullable)
@@ -2151,7 +2151,7 @@ private class JavaDraftPoetContext(
             ),
             returnType = LsiDeclaredType(prop.sourceDeclaringTypeId.draftTypeId()),
             body = if (!withImplementation) {
-                LsiPoetCodeBlock.EMPTY
+                LsiCodeBlock.EMPTY
             } else {
                 draftCode {
                     if (prop.nullable) {
@@ -2177,7 +2177,7 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun LsiPoetCodeBuilder.addCase(
+    private fun LsiCodeBuilder.addCase(
         prop: JimmerImmutableDraftPropPlan,
         byId: Boolean,
     ) {
@@ -2190,7 +2190,7 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun LsiPoetCodeBuilder.addIllegalPropertyCase(byId: Boolean?) {
+    private fun LsiCodeBuilder.addIllegalPropertyCase(byId: Boolean?) {
         statement {
             text("default: throw new IllegalArgumentException(")
             val propertyKind = when (byId) {
@@ -2211,19 +2211,19 @@ private class JavaDraftPoetContext(
             ?: error("Cannot resolve immutable draft property '${propId.value}'")
     }
 
-    private fun generatedByAnnotation(): LsiPoetAnnotation {
-        return LsiPoetAnnotation(
+    private fun generatedByAnnotation(): LsiAnnotation {
+        return sourceLsiAnnotation(
             type = GENERATED_BY_TYPE_ID,
             arguments = listOf(
-                LsiPoetAnnotationArgument.Named(
+                LsiSourceAnnotationArgument.Named(
                     name = "type",
-                    value = LsiPoetAnnotationValue.ClassValue(modelType),
+                    value = LsiAnnotationValue.ClassValue(modelType),
                 )
             ),
         )
     }
 
-    private val unmodifiedExpression: LsiPoetCodeBlock
+    private val unmodifiedExpression: LsiCodeBlock
         get() = draftCode { text("($DRAFT_MODIFIED_FIELD!= null ? $DRAFT_MODIFIED_FIELD : $DRAFT_BASE_FIELD)") }
 }
 
@@ -2328,7 +2328,7 @@ private val JimmerImmutableDraftPropPlan.isJavaBeanStyle: Boolean
 private val JimmerImmutableDraftPropPlan.forcedLoadedStateName: String
     get() = loadedStateFieldName ?: "__${codegenName}Loaded"
 
-private val JimmerImmutableDraftPropPlan.unloadedValueLiteral: LsiPoetCodeBlock
+private val JimmerImmutableDraftPropPlan.unloadedValueLiteral: LsiCodeBlock
     get() {
         val primitiveType = type as? LsiPrimitiveType ?: return draftCode { text("null") }
         if (primitiveType.boxed) {
@@ -2359,14 +2359,14 @@ private val JimmerImmutableDraftTypePlan.packageName: String
 private val JimmerImmutableDraftTypePlan.simpleName: String
     get() = qualifiedName.substringAfterLast('.')
 
-private fun LsiAnnotation.toJavaDraftPoetAnnotation(): LsiPoetAnnotation {
-    return LsiPoetAnnotation(
+private fun LsiAnnotation.toJavaDraftPoetAnnotation(): LsiAnnotation {
+    return sourceLsiAnnotation(
         type = type,
         arguments = arguments.entries.mapNotNull { (name, argument) ->
             if (!argument.isExplicit) {
                 null
             } else {
-                LsiPoetAnnotationArgument.Named(
+                LsiSourceAnnotationArgument.Named(
                     name = name,
                     value = argument.value.toJavaDraftPoetAnnotationValue(),
                 )
@@ -2375,23 +2375,23 @@ private fun LsiAnnotation.toJavaDraftPoetAnnotation(): LsiPoetAnnotation {
     )
 }
 
-private fun LsiAnnotationValue.toJavaDraftPoetAnnotationValue(): LsiPoetAnnotationValue {
+private fun LsiAnnotationValue.toJavaDraftPoetAnnotationValue(): LsiAnnotationValue {
     return when (this) {
-        is LsiAnnotationValue.BooleanValue -> LsiPoetAnnotationValue.BooleanValue(value)
-        is LsiAnnotationValue.ByteValue -> LsiPoetAnnotationValue.ByteValue(value)
-        is LsiAnnotationValue.ShortValue -> LsiPoetAnnotationValue.ShortValue(value)
-        is LsiAnnotationValue.IntValue -> LsiPoetAnnotationValue.IntValue(value)
-        is LsiAnnotationValue.LongValue -> LsiPoetAnnotationValue.LongValue(value)
-        is LsiAnnotationValue.FloatValue -> LsiPoetAnnotationValue.FloatValue(value)
-        is LsiAnnotationValue.DoubleValue -> LsiPoetAnnotationValue.DoubleValue(value)
-        is LsiAnnotationValue.CharValue -> LsiPoetAnnotationValue.CharValue(value)
-        is LsiAnnotationValue.StringValue -> LsiPoetAnnotationValue.StringValue(value)
-        is LsiAnnotationValue.EnumValue -> LsiPoetAnnotationValue.EnumValue(enumType, entryName)
-        is LsiAnnotationValue.ClassValue -> LsiPoetAnnotationValue.ClassValue(type)
-        is LsiAnnotationValue.NestedAnnotationValue -> LsiPoetAnnotationValue.NestedAnnotationValue(
+        is LsiAnnotationValue.BooleanValue -> LsiAnnotationValue.BooleanValue(value)
+        is LsiAnnotationValue.ByteValue -> LsiAnnotationValue.ByteValue(value)
+        is LsiAnnotationValue.ShortValue -> LsiAnnotationValue.ShortValue(value)
+        is LsiAnnotationValue.IntValue -> LsiAnnotationValue.IntValue(value)
+        is LsiAnnotationValue.LongValue -> LsiAnnotationValue.LongValue(value)
+        is LsiAnnotationValue.FloatValue -> LsiAnnotationValue.FloatValue(value)
+        is LsiAnnotationValue.DoubleValue -> LsiAnnotationValue.DoubleValue(value)
+        is LsiAnnotationValue.CharValue -> LsiAnnotationValue.CharValue(value)
+        is LsiAnnotationValue.StringValue -> LsiAnnotationValue.StringValue(value)
+        is LsiAnnotationValue.EnumValue -> LsiAnnotationValue.EnumValue(enumType, entryName)
+        is LsiAnnotationValue.ClassValue -> LsiAnnotationValue.ClassValue(type)
+        is LsiAnnotationValue.NestedAnnotationValue -> LsiAnnotationValue.NestedAnnotationValue(
             annotation.toJavaDraftPoetAnnotation()
         )
-        is LsiAnnotationValue.ArrayValue -> LsiPoetAnnotationValue.ArrayValue(
+        is LsiAnnotationValue.ArrayValue -> LsiAnnotationValue.ArrayValue(
             elements.map(LsiAnnotationValue::toJavaDraftPoetAnnotationValue)
         )
     }
@@ -2422,23 +2422,23 @@ private const val DRAFT_RESOLVED_FIELD = "__resolved"
 private const val FROZEN_MESSAGE = "The current draft has been resolved so it cannot be modified"
 
 private val PUBLIC_STATIC_FINAL = setOf(
-    LsiPoetModifier.PUBLIC,
-    LsiPoetModifier.STATIC,
-    LsiPoetModifier.FINAL,
+    LsiModifier.PUBLIC,
+    LsiModifier.STATIC,
+    LsiModifier.FINAL,
 )
 
-private val STATIC_FINAL = setOf(LsiPoetModifier.STATIC, LsiPoetModifier.FINAL)
+private val STATIC_FINAL = setOf(LsiModifier.STATIC, LsiModifier.FINAL)
 
-private val PUBLIC_ABSTRACT = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.ABSTRACT)
+private val PUBLIC_ABSTRACT = setOf(LsiModifier.PUBLIC, LsiModifier.ABSTRACT)
 
-private val PUBLIC_FINAL = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.FINAL)
+private val PUBLIC_FINAL = setOf(LsiModifier.PUBLIC, LsiModifier.FINAL)
 
-private val PUBLIC_OVERRIDE = setOf(LsiPoetModifier.PUBLIC, LsiPoetModifier.OVERRIDE)
+private val PUBLIC_OVERRIDE = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE)
 
 private val PUBLIC_FINAL_OVERRIDE = setOf(
-    LsiPoetModifier.PUBLIC,
-    LsiPoetModifier.FINAL,
-    LsiPoetModifier.OVERRIDE,
+    LsiModifier.PUBLIC,
+    LsiModifier.FINAL,
+    LsiModifier.OVERRIDE,
 )
 
 private val BOOLEAN_TYPE = LsiPrimitiveType(LsiPrimitiveKind.BOOLEAN)
@@ -2527,32 +2527,32 @@ private val MANY_TO_MANY_VIEW_LIST_RAW_TYPE =
 private val MUTABLE_ID_VIEW_LIST_RAW_TYPE =
     LsiDeclaredType(LsiSymbolId.type("org.babyfish.jimmer.sql.collection.MutableIdViewList"))
 
-private val NULLABLE_ANNOTATION = LsiPoetAnnotation(
+private val NULLABLE_ANNOTATION = sourceLsiAnnotation(
     type = LsiSymbolId.type("org.jspecify.annotations.Nullable")
 )
 
-private val NON_NULL_ANNOTATION = LsiPoetAnnotation(
+private val NON_NULL_ANNOTATION = sourceLsiAnnotation(
     type = LsiSymbolId.type("org.jspecify.annotations.NonNull")
 )
 
-private val OLD_CHAIN_ANNOTATION = LsiPoetAnnotation(
+private val OLD_CHAIN_ANNOTATION = sourceLsiAnnotation(
     type = LsiSymbolId.type("org.babyfish.jimmer.lang.OldChain")
 )
 
-private val JAVA_OVERRIDE_ANNOTATION = LsiPoetAnnotation(
+private val JAVA_OVERRIDE_ANNOTATION = sourceLsiAnnotation(
     type = LsiSymbolId.type("java.lang.Override")
 )
 
-private val JSON_IGNORE_ANNOTATION = LsiPoetAnnotation(
+private val JSON_IGNORE_ANNOTATION = sourceLsiAnnotation(
     type = LsiSymbolId.type("com.fasterxml.jackson.annotation.JsonIgnore")
 )
 
 private val JSON_PROPERTY_ORDER_TYPE_ID =
     LsiSymbolId.type("com.fasterxml.jackson.annotation.JsonPropertyOrder")
 
-private val SUPPRESS_ALL_ANNOTATION = LsiPoetAnnotation(
+private val SUPPRESS_ALL_ANNOTATION = sourceLsiAnnotation(
     type = LsiSymbolId.type("java.lang.SuppressWarnings"),
     arguments = listOf(
-        LsiPoetAnnotationArgument.Positional(LsiPoetAnnotationValue.StringValue("all"))
+        LsiSourceAnnotationArgument.Positional(LsiAnnotationValue.StringValue("all"))
     ),
 )

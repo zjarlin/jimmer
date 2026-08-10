@@ -14,9 +14,9 @@ import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationArgumentNameStyle
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.model.LsiAnnotationValue
 
 class DtoPolymorphicBranchPoetTest {
 
@@ -43,17 +43,17 @@ class DtoPolymorphicBranchPoetTest {
         )
 
         assertEquals(GENERATED_POLYMORPHIC_DTO_BRANCH_ANNOTATION, annotation.type)
-        assertEquals(listOf("value", "order"), annotation.arguments.map { argument ->
-            assertIs<LsiPoetAnnotationArgument.Named>(argument).name
+        assertEquals(listOf("value", "order"), annotation.sourceArguments.map { argument ->
+            assertIs<LsiSourceAnnotationArgument.Named>(argument).name
         })
-        annotation.arguments.forEach { argument ->
+        annotation.sourceArguments.forEach { argument ->
             assertEquals(
-                LsiPoetAnnotationArgumentNameStyle.VERBATIM,
-                assertIs<LsiPoetAnnotationArgument.Named>(argument).nameStyle,
+                LsiAnnotationArgumentNameStyle.VERBATIM,
+                assertIs<LsiSourceAnnotationArgument.Named>(argument).nameStyle,
             )
         }
-        val classValue = assertIs<LsiPoetAnnotationValue.ClassValue>(
-            assertIs<LsiPoetAnnotationArgument.Named>(annotation.arguments[0]).value,
+        val classValue = assertIs<LsiAnnotationValue.ClassValue>(
+            assertIs<LsiSourceAnnotationArgument.Named>(annotation.sourceArguments[0]).value,
         )
         assertEquals(
             generatedRootTypeName.typeId,
@@ -61,8 +61,8 @@ class DtoPolymorphicBranchPoetTest {
         )
         assertEquals(
             1,
-            assertIs<LsiPoetAnnotationValue.IntValue>(
-                assertIs<LsiPoetAnnotationArgument.Named>(annotation.arguments[1]).value,
+            assertIs<LsiAnnotationValue.IntValue>(
+                assertIs<LsiSourceAnnotationArgument.Named>(annotation.sourceArguments[1]).value,
             ).value,
         )
         assertEquals(

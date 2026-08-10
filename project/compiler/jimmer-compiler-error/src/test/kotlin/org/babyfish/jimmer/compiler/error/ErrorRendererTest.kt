@@ -40,7 +40,7 @@ class ErrorRendererTest {
     fun `java renderer matches frozen baseline and compiles`() {
         val (schema, workspace) = fixture(LsiLanguage.JAVA)
         val artifact = LsiJavaPoetRenderer().render(
-            schema.toLsiPoetArtifacts(workspace).single()
+            schema.toLsiSourceArtifacts(workspace).single()
         )
 
         assertEquals(ArtifactKind.JAVA_SOURCE, artifact.kind)
@@ -58,7 +58,7 @@ class ErrorRendererTest {
     fun `kotlin renderer matches frozen baseline and compiles`() {
         val (schema, workspace) = fixture(LsiLanguage.KOTLIN)
         val artifact = LsiKotlinPoetRenderer().render(
-            schema.toLsiPoetArtifacts(workspace).single()
+            schema.toLsiSourceArtifacts(workspace).single()
         )
 
         assertEquals(ArtifactKind.KOTLIN_SOURCE, artifact.kind)
@@ -98,7 +98,7 @@ class ErrorRendererTest {
             )
         )
 
-        val artifact = dependentSchema.toLsiPoetArtifacts(dependencyWorkspace).single()
+        val artifact = dependentSchema.toLsiSourceArtifacts(dependencyWorkspace).single()
 
         assertEquals(ArtifactAggregationMode.AGGREGATING, artifact.aggregationMode)
         assertTrue(dependencyId in artifact.dependencySymbols)

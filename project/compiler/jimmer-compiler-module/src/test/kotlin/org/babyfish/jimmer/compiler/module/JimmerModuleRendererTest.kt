@@ -39,7 +39,7 @@ class JimmerModuleRendererTest {
     fun `apt summaries match collision goldens and compile`() {
         val fixture = fixture(CompilerPlatform.APT)
         val renderer = LsiJavaPoetRenderer()
-        val artifacts = fixture.schema.toLsiPoetArtifacts(fixture.workspace).map(renderer::render)
+        val artifacts = fixture.schema.toLsiSourceArtifacts(fixture.workspace).map(renderer::render)
 
         assertEquals(
             listOf("Immutables.java", "Tables.java", "TableExes.java", "Fetchers.java"),
@@ -62,7 +62,7 @@ class JimmerModuleRendererTest {
     fun `ksp module matches golden and compiles`() {
         val fixture = fixture(CompilerPlatform.KSP)
         val renderer = LsiKotlinPoetRenderer()
-        val artifact = fixture.schema.toLsiPoetArtifacts(fixture.workspace).map(renderer::render).single()
+        val artifact = fixture.schema.toLsiSourceArtifacts(fixture.workspace).map(renderer::render).single()
 
         assertEquals(ArtifactKind.KOTLIN_SOURCE, artifact.kind)
         assertEquals(ArtifactAggregationMode.AGGREGATING, artifact.aggregationMode)

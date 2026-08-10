@@ -31,9 +31,8 @@ import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiArrayType
 import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.poet.LsiPoetAnnotationArgument
-import site.addzero.lsi.poet.LsiPoetAnnotationValue
-import site.addzero.lsi.poet.LsiPoetTypeName
+import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class DtoAnnotationPoetTest {
@@ -93,8 +92,8 @@ class DtoAnnotationPoetTest {
         assertEquals(
             listOf(listOf("zeta", "when", "alpha"), listOf("zeta", "when", "alpha")),
             annotations.map { annotation ->
-                annotation.arguments.map { argument ->
-                    assertIs<LsiPoetAnnotationArgument.Named>(argument).name
+                annotation.sourceArguments.map { argument ->
+                    assertIs<LsiSourceAnnotationArgument.Named>(argument).name
                 }
             },
         )
@@ -104,15 +103,15 @@ class DtoAnnotationPoetTest {
                 listOf("second-z", "second-w", "second-a"),
             ),
             annotations.map { annotation ->
-                annotation.arguments.map { argument ->
-                    assertIs<LsiPoetAnnotationValue.StringValue>(argument.value).value
+                annotation.sourceArguments.map { argument ->
+                    assertIs<LsiAnnotationValue.StringValue>(argument.value).value
                 }
             },
         )
         val renderedKotlinAnnotation = LsiKotlinPoetRenderer().renderAnnotation(
             annotation = dtoType.typeAnnotationPoetAnnotations(contract, LsiLanguage.KOTLIN).first(),
             typeNames = listOf(
-                LsiPoetTypeName(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
+                LsiTypeName(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
             ),
         )
         assertContains(renderedKotlinAnnotation.toString(), "`when` = \"first-w\"")
@@ -167,15 +166,15 @@ class DtoAnnotationPoetTest {
                 listOf("second-z", "second-w", "second-a"),
             ),
             annotations.map { annotation ->
-                annotation.arguments.map { argument ->
-                    assertIs<LsiPoetAnnotationValue.StringValue>(argument.value).value
+                annotation.sourceArguments.map { argument ->
+                    assertIs<LsiAnnotationValue.StringValue>(argument.value).value
                 }
             },
         )
         val rendered = LsiKotlinPoetRenderer().renderAnnotation(
             annotation = annotations.first(),
             typeNames = listOf(
-                LsiPoetTypeName(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
+                LsiTypeName(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
             ),
         )
         assertContains(rendered.toString(), "`when` = \"first-w\"")
@@ -226,10 +225,10 @@ class DtoAnnotationPoetTest {
             includeImmutableDefaultArguments = true,
         )
 
-        assertEquals("value", assertIs<LsiPoetAnnotationArgument.Named>(annotation.arguments.single()).name)
+        assertEquals("value", assertIs<LsiSourceAnnotationArgument.Named>(annotation.sourceArguments.single()).name)
         val rendered = LsiKotlinPoetRenderer().renderAnnotation(
             annotation,
-            listOf(LsiPoetTypeName(annotationTypeId, "demo", listOf("Alias"))),
+            listOf(LsiTypeName(annotationTypeId, "demo", listOf("Alias"))),
         )
         assertEquals("@demo.Alias(value = \"base-edition\")", rendered.toString())
     }
@@ -275,7 +274,7 @@ class DtoAnnotationPoetTest {
         )
         val rendered = LsiKotlinPoetRenderer().renderAnnotation(
             annotation,
-            listOf(LsiPoetTypeName(annotationTypeId, "demo", listOf("Rule"))),
+            listOf(LsiTypeName(annotationTypeId, "demo", listOf("Rule"))),
         )
 
         assertEquals("@demo.Rule(`when` = \"default\")", rendered.toString())

@@ -11,22 +11,22 @@ import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiNullability
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.poet.LsiPoetBodyStyle
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetFunction
-import site.addzero.lsi.poet.LsiPoetModifier
-import site.addzero.lsi.poet.LsiPoetParameter
-import site.addzero.lsi.poet.LsiPoetTypeName
-import site.addzero.lsi.poet.referencedTypeIds
-import site.addzero.lsi.poet.toLsiPoetTypeNames
+import site.addzero.lsi.model.LsiBodyStyle
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.model.LsiModifier
+import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.model.referencedTypeIds
+import site.addzero.lsi.model.toLsiTypeNames
 
 /** 将冻结的 DTO 属性访问语义降低为 Hibernate Validator 增强函数。 */
 internal fun DtoType.toDtoHibernateValidatorPoetFunctions(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): List<LsiPoetFunction> {
+): List<LsiFunction> {
     val language = targetLanguage.requireHibernateValidatorTargetLanguage()
     val props = propsInDeclarationOrder(graph)
     return DtoHibernateValidatorLookup.entries.map { lookup ->
@@ -47,13 +47,13 @@ internal fun dtoHibernateValidatorEnhancedBeanType(): LsiDeclaredType {
 
 /** 解析 Hibernate Validator lowering 引用的精确源码类型名称。 */
 internal fun LsiWorkspace.dtoHibernateValidatorPoetTypeNames(
-    functions: Collection<LsiPoetFunction>,
-): List<LsiPoetTypeName> {
+    functions: Collection<LsiFunction>,
+): List<LsiTypeName> {
     val typeIds = buildSet {
         functions.forEach { function -> addAll(function.referencedTypeIds) }
         add(HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID)
     }
-    return toLsiPoetTypeNames(
+    return toLsiTypeNames(
         typeIds = typeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_NAME,
     )
@@ -65,17 +65,17 @@ private fun hibernateValidatorPoetFunction(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
     lookup: DtoHibernateValidatorLookup,
-): LsiPoetFunction {
-    return LsiPoetFunction(
+): LsiFunction {
+    return LsiFunction(
         name = "\$\$_hibernateValidator_get${lookup.methodPart}Value",
         modifiers = buildSet {
             if (targetLanguage == LsiLanguage.JAVA) {
-                add(LsiPoetModifier.PUBLIC)
+                add(LsiModifier.PUBLIC)
             }
-            add(LsiPoetModifier.OVERRIDE)
+            add(LsiModifier.OVERRIDE)
         },
         parameters = listOf(
-            LsiPoetParameter(
+            LsiParameter(
                 name = LOOKUP_PARAMETER_NAME,
                 type = targetLanguage.stringType(),
             ),
@@ -87,9 +87,9 @@ private fun hibernateValidatorPoetFunction(
             LsiLanguage.UNKNOWN -> error("DTO Hibernate Validator target language is unresolved")
         },
         bodyStyle = if (targetLanguage == LsiLanguage.JAVA) {
-            LsiPoetBodyStyle.BLOCK
+            LsiBodyStyle.BLOCK
         } else {
-            LsiPoetBodyStyle.EXPRESSION
+            LsiBodyStyle.EXPRESSION
         },
     )
 }
@@ -99,7 +99,7 @@ private fun javaLookupBody(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     lookup: DtoHibernateValidatorLookup,
-): LsiPoetCodeBlock = LsiPoetCodeBlock.build {
+): LsiCodeBlock = LsiCodeBlock.build {
     beginControlFlow {
         text("switch (")
         name(LOOKUP_PARAMETER_NAME)
@@ -130,7 +130,7 @@ private fun kotlinLookupBody(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     lookup: DtoHibernateValidatorLookup,
-): LsiPoetCodeBlock = LsiPoetCodeBlock.build {
+): LsiCodeBlock = LsiCodeBlock.build {
     beginControlFlow {
         text("when(")
         name(LOOKUP_PARAMETER_NAME)
@@ -151,7 +151,7 @@ private fun kotlinLookupBody(
     endControlFlow()
 }
 
-private fun LsiPoetCodeBuilder.thisMember(memberName: String) {
+private fun LsiCodeBuilder.thisMember(memberName: String) {
     text("this.")
     name(memberName)
 }
@@ -218,7 +218,7 @@ private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID =
     LsiSymbolId.type("org.hibernate.validator.engine.HibernateValidatorEnhancedBean")
 private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE =
     LsiDeclaredType(HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID)
-private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_NAME = LsiPoetTypeName(
+private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_NAME = LsiTypeName(
     typeId = HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID,
     packageName = "org.hibernate.validator.engine",
     simpleNames = listOf("HibernateValidatorEnhancedBean"),

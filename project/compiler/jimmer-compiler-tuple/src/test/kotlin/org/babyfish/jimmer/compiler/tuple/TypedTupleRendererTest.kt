@@ -48,7 +48,7 @@ class TypedTupleRendererTest {
     fun `java renderer matches legacy golden and compiles`() {
         val fixture = fixture(LsiLanguage.JAVA)
         val artifacts = fixture.schema
-            .toLsiPoetArtifacts(fixture.workspace)
+            .toLsiSourceArtifacts(fixture.workspace)
             .map(LsiJavaPoetRenderer()::render)
             .associateBy { artifact -> artifact.path }
         val mapperArtifact = artifacts.getValue("demo/BookSummaryMapper.java")
@@ -71,7 +71,7 @@ class TypedTupleRendererTest {
     fun `kotlin renderer matches legacy golden and compiles`() {
         val fixture = fixture(LsiLanguage.KOTLIN)
         val artifact = fixture.schema
-            .toLsiPoetArtifacts(fixture.workspace)
+            .toLsiSourceArtifacts(fixture.workspace)
             .map(LsiKotlinPoetRenderer()::render)
             .single()
 

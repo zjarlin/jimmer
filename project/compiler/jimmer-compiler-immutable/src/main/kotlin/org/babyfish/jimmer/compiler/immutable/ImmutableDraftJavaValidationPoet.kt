@@ -16,18 +16,18 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiDeclaredType
 import site.addzero.lsi.model.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.poet.LsiPoetCodeBlock
-import site.addzero.lsi.poet.LsiPoetCodeBuilder
-import site.addzero.lsi.poet.LsiPoetField
-import site.addzero.lsi.poet.LsiPoetMember
-import site.addzero.lsi.poet.LsiPoetModifier
+import site.addzero.lsi.model.LsiCodeBlock
+import site.addzero.lsi.model.LsiCodeBuilder
+import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.model.LsiMember
+import site.addzero.lsi.model.LsiModifier
 
 /**
  * 把已经冻结的校验计划降低为 Java Draft 使用的 LSI Poet 成员和语句。
  */
 internal object ImmutableDraftJavaValidationPoet {
 
-    fun staticMembers(type: JimmerImmutableDraftTypePlan): List<LsiPoetMember> {
+    fun staticMembers(type: JimmerImmutableDraftTypePlan): List<LsiMember> {
         return buildList {
             type.propsBySlot.forEach { prop ->
                 prop.validationPlan.builtInSteps
@@ -37,7 +37,7 @@ internal object ImmutableDraftJavaValidationPoet {
                     .forEach { indexedPattern ->
                         val pattern = indexedPattern.value
                         add(
-                            LsiPoetField(
+                            LsiField(
                                 name = prop.javaPatternFieldName(indexedPattern.index),
                                 type = PATTERN_TYPE,
                                 modifiers = PRIVATE_STATIC_FINAL,
@@ -53,7 +53,7 @@ internal object ImmutableDraftJavaValidationPoet {
             }
             if (type.requiresJavaEmailPattern()) {
                 add(
-                    LsiPoetField(
+                    LsiField(
                         name = EMAIL_PATTERN_FIELD,
                         type = PATTERN_TYPE,
                         modifiers = PRIVATE_STATIC_FINAL,
@@ -83,7 +83,7 @@ internal object ImmutableDraftJavaValidationPoet {
         type: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             prop.validationPlan.requiredNullCheck?.let { required ->
                 beginControlFlow {
@@ -214,7 +214,7 @@ internal object ImmutableDraftJavaValidationPoet {
     fun typeValidationCode(
         type: JimmerImmutableDraftTypePlan,
         valueName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             type.customValidations.forEach { validation ->
                 statement {
@@ -227,11 +227,11 @@ internal object ImmutableDraftJavaValidationPoet {
         }
     }
 
-    private fun LsiPoetCodeBuilder.addFailure(
+    private fun LsiCodeBuilder.addFailure(
         type: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         valueName: String,
-        condition: LsiPoetCodeBlock,
+        condition: LsiCodeBlock,
         failure: ImmutableDraftValidationFailure,
     ) {
         beginControlFlow {
@@ -262,9 +262,9 @@ internal object ImmutableDraftJavaValidationPoet {
     private fun typeValidatorField(
         type: JimmerImmutableDraftTypePlan,
         validation: ImmutableValidation,
-    ): LsiPoetField {
+    ): LsiField {
         val originalType = LsiDeclaredType(type.typeId)
-        return LsiPoetField(
+        return LsiField(
             name = typeValidatorFieldName(validation.annotationTypeId),
             type = draftDeclaredType(VALIDATOR_TYPE_ID, originalType),
             modifiers = PRIVATE_STATIC_FINAL,
@@ -286,10 +286,10 @@ internal object ImmutableDraftJavaValidationPoet {
         type: JimmerImmutableDraftTypePlan,
         prop: JimmerImmutableDraftPropPlan,
         validation: ImmutableDraftValidationStep.CustomValidator,
-    ): LsiPoetField {
+    ): LsiField {
         val originalType = LsiDeclaredType(type.typeId)
         val validatorType = draftDeclaredType(VALIDATOR_TYPE_ID, prop.type.boxedForJavaDraft())
-        return LsiPoetField(
+        return LsiField(
             name = propValidatorFieldName(prop, validation.annotationTypeId),
             type = validatorType,
             modifiers = PRIVATE_STATIC_FINAL,
@@ -312,7 +312,7 @@ internal object ImmutableDraftJavaValidationPoet {
     private fun numericCondition(
         step: ImmutableDraftValidationStep.NumericBound,
         valueName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             name(valueName)
             when (step.target) {
@@ -336,7 +336,7 @@ internal object ImmutableDraftJavaValidationPoet {
     private fun digitsCondition(
         step: ImmutableDraftValidationStep.Digits,
         valueName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         return draftCode {
             when (step.target) {
                 ImmutableDraftDigitsTarget.BIG_DECIMAL -> {
@@ -371,7 +371,7 @@ internal object ImmutableDraftJavaValidationPoet {
     private fun temporalCondition(
         step: ImmutableDraftValidationStep.Temporal,
         valueName: String,
-    ): LsiPoetCodeBlock {
+    ): LsiCodeBlock {
         val temporalType = when (step.target) {
             ImmutableDraftTemporalTarget.LOCAL_DATE -> LOCAL_DATE_TYPE
             ImmutableDraftTemporalTarget.LOCAL_DATE_TIME -> LOCAL_DATE_TIME_TYPE
@@ -419,7 +419,7 @@ internal object ImmutableDraftJavaValidationPoet {
         }
     }
 
-    private fun bigIntegerLiteral(bound: String): LsiPoetCodeBlock {
+    private fun bigIntegerLiteral(bound: String): LsiCodeBlock {
         return draftCode {
             when (bound) {
                 "-1" -> {
@@ -449,7 +449,7 @@ internal object ImmutableDraftJavaValidationPoet {
         }
     }
 
-    private fun bigDecimalLiteral(bound: String): LsiPoetCodeBlock {
+    private fun bigDecimalLiteral(bound: String): LsiCodeBlock {
         return draftCode {
             when (bound) {
                 "0" -> {
@@ -512,9 +512,9 @@ internal object ImmutableDraftJavaValidationPoet {
 }
 
 private val PRIVATE_STATIC_FINAL = setOf(
-    LsiPoetModifier.PRIVATE,
-    LsiPoetModifier.STATIC,
-    LsiPoetModifier.FINAL,
+    LsiModifier.PRIVATE,
+    LsiModifier.STATIC,
+    LsiModifier.FINAL,
 )
 
 private val PATTERN_TYPE = LsiDeclaredType(LsiSymbolId.type("java.util.regex.Pattern"))
