@@ -23,7 +23,7 @@ import site.addzero.lsi.jimmer.client.ClientService
 import site.addzero.lsi.jimmer.client.fingerprint
 import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
-import site.addzero.lsi.model.LsiEnumEntry
+import site.addzero.lsi.clazz.LsiEnumEntry
 import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType

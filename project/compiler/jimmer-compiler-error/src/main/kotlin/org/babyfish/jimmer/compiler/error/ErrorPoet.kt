@@ -28,7 +28,7 @@ import site.addzero.lsi.anno.LsiSourceAnnotationArgument
 import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.method.LsiConstructor
 import site.addzero.lsi.model.LsiDelegationCall
 import site.addzero.lsi.model.LsiDelegationTarget
 import site.addzero.lsi.field.LsiField

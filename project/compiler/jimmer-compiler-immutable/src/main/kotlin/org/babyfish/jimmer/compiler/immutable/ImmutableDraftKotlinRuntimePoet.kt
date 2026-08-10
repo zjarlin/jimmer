@@ -15,7 +15,7 @@ import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiConstructor
+import site.addzero.lsi.method.LsiConstructor
 import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
