@@ -22,7 +22,7 @@ import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiConstructor
-import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiMember

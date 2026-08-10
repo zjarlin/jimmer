@@ -44,13 +44,13 @@ import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDelegationCall
 import site.addzero.lsi.model.LsiDelegationTarget
-import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
 import site.addzero.lsi.model.LsiFileNameStyle
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.clazz.toLsiClasses

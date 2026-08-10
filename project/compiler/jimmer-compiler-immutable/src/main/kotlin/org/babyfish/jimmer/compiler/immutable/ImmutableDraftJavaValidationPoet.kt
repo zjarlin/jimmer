@@ -18,7 +18,7 @@ import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
 

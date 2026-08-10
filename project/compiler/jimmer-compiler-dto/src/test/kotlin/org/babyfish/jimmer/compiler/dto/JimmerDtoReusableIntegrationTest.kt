@@ -429,7 +429,7 @@ class JimmerDtoReusableIntegrationTest {
         )
         val properties = IMMUTABLE_SCHEMA.types.flatMap { type ->
             type.props.map { prop ->
-                site.addzero.lsi.model.LsiProperty(
+                site.addzero.lsi.field.LsiProperty(
                     id = prop.declarationId,
                     name = prop.name,
                     ownerId = type.id,

@@ -36,12 +36,12 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.toSourceAnnotation

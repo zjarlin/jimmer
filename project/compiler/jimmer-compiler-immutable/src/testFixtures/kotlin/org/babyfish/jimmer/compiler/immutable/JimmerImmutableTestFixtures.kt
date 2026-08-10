@@ -10,7 +10,7 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.clazz.copy
 import site.addzero.lsi.model.LsiWorkspace

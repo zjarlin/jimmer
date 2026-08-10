@@ -17,7 +17,7 @@ import site.addzero.lsi.jimmer.exportdoc.ExportDocSchema
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiPackageAnnotationScope
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace

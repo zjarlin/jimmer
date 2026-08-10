@@ -12,9 +12,9 @@ import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiCodeBlock
-import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 
 /** 将基于实体构造 DTO 时的加载状态初始化表达式降低为平台中立代码。 */

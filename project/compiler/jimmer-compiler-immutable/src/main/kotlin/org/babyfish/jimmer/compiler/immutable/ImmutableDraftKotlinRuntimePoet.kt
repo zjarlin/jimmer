@@ -21,7 +21,7 @@ import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 

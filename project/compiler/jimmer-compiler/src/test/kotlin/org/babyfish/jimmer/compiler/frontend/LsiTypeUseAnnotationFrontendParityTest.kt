@@ -45,11 +45,11 @@ import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
-import site.addzero.lsi.model.LsiField
+import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.type.LsiPrimitiveType
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType

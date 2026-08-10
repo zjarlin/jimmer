@@ -50,7 +50,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiNullability
-import site.addzero.lsi.model.LsiProperty
+import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.stableSignature
