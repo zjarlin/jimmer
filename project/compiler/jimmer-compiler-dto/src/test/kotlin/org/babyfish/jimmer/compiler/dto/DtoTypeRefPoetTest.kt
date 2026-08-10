@@ -17,7 +17,7 @@ import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoTypeArgument
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
-import site.addzero.lsi.model.LsiVariance
+import site.addzero.lsi.type.LsiVariance
 import site.addzero.lsi.jimmer.dto.toLsiType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind

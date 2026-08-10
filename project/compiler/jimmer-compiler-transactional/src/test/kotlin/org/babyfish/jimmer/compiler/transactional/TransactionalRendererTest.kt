@@ -34,15 +34,15 @@ import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiTypeName
@@ -422,7 +422,7 @@ class TransactionalRendererTest {
         name: String,
         sourceKind: TransactionalMethodSourceKind = TransactionalMethodSourceKind.FUNCTION,
         visibility: LsiVisibility,
-        returnType: LsiTypeRef,
+        returnType: LsiType,
         propagation: String,
         classLevel: Boolean,
     ): TransactionalMethod {
@@ -539,7 +539,7 @@ class TransactionalRendererTest {
     }
 
     private fun TransactionalSchema.withMethodReturnTypes(
-        vararg returnTypes: LsiTypeRef,
+        vararg returnTypes: LsiType,
     ): TransactionalSchema {
         return copy(
             types = types.map { type ->

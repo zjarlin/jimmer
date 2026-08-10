@@ -12,8 +12,8 @@ import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
 import site.addzero.lsi.jimmer.tuple.TypedTupleSetterAssignment
 import site.addzero.lsi.jimmer.tuple.TypedTupleType
 import site.addzero.lsi.jimmer.tuple.TypedTupleValidationException
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 
 class TypedTupleCodegenNamesTest {
 

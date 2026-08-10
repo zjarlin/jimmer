@@ -24,11 +24,11 @@ import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeArgument
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -315,7 +315,7 @@ class DtoConverterLoadingPoetTest {
         ownerTypeId: LsiSymbolId,
         declaringTypeId: LsiSymbolId,
         name: String,
-        type: LsiTypeRef,
+        type: LsiType,
         primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
         targetTypeId: LsiSymbolId? = null,
         list: Boolean = false,

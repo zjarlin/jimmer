@@ -17,15 +17,15 @@ import site.addzero.lsi.jimmer.isEntityAssociation
 import site.addzero.lsi.jimmer.isImmutableReference
 import site.addzero.lsi.jimmer.lineageRootId
 import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiFunctionType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiTypeSystem
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
 internal fun ImmutableSchema.generatedFetcherTypes(

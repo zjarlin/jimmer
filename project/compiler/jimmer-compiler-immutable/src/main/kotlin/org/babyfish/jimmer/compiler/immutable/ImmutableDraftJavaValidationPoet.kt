@@ -13,9 +13,9 @@ import site.addzero.lsi.jimmer.ImmutableDraftValidationFailure
 import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiField

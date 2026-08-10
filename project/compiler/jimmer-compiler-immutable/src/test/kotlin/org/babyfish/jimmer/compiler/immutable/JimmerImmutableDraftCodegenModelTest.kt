@@ -23,16 +23,16 @@ import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiTypeArgument
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableDraftCodegenModelTest {
@@ -496,7 +496,7 @@ class JimmerImmutableDraftCodegenModelTest {
     private fun property(
         id: LsiSymbolId,
         ownerId: LsiSymbolId,
-        type: site.addzero.lsi.model.LsiTypeRef,
+        type: site.addzero.lsi.type.LsiType,
         getterName: String,
         annotations: List<LsiAnnotation> = emptyList(),
         origin: LsiOrigin = ORIGIN,

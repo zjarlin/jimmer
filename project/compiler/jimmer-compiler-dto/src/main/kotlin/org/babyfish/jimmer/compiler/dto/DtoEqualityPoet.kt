@@ -10,10 +10,10 @@ import site.addzero.lsi.jimmer.dto.DtoValueEqualityKind
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
 import site.addzero.lsi.jimmer.dto.propsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.valueEqualityKind
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder

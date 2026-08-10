@@ -9,7 +9,7 @@ import site.addzero.lsi.jimmer.dto.tailProp
 import site.addzero.lsi.jimmer.generatedPropsConstantName
 import site.addzero.lsi.jimmer.generatedPropsTypeOf
 import site.addzero.lsi.jimmer.isEntityAssociation
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 
@@ -19,7 +19,7 @@ internal fun DtoBaseProp.toLsiConverterLoadingPoetCodeBlock(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
     forList: Boolean,
-    typeArguments: List<LsiTypeRef>,
+    typeArguments: List<LsiType>,
 ): LsiCodeBlock {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO converter loading requires Java or Kotlin target language"
@@ -55,7 +55,7 @@ internal fun DtoBaseProp.toLsiConverterLoadingPoetCodeBlock(
     }
 }
 
-private fun LsiCodeBuilder.appendConverterTypeArguments(typeArguments: List<LsiTypeRef>) {
+private fun LsiCodeBuilder.appendConverterTypeArguments(typeArguments: List<LsiType>) {
     if (typeArguments.isEmpty()) {
         return
     }

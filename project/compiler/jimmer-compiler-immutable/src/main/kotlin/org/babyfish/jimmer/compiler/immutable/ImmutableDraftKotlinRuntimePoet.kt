@@ -3,10 +3,10 @@ package org.babyfish.jimmer.compiler.immutable
 import site.addzero.lsi.model.sourceLsiAnnotation
 
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiAccessor
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
@@ -1463,7 +1463,7 @@ internal class ImmutableDraftKotlinRuntimePoet(
 /**
  * Draft 列表的类型令牌必须与 Kotlin 属性元素类型一致，不能保留 JVM 装箱类型。
  */
-private fun LsiTypeRef.toKotlinDraftListClassTokenType(): LsiTypeRef {
+private fun LsiType.toKotlinDraftListClassTokenType(): LsiType {
     val type = withDraftRootNullability(nullable = false)
     return if (type is LsiPrimitiveType) {
         type.copy(boxed = false)
@@ -1473,7 +1473,7 @@ private fun LsiTypeRef.toKotlinDraftListClassTokenType(): LsiTypeRef {
 }
 
 private enum class DraftPropertyArgument(
-    val type: LsiTypeRef,
+    val type: LsiType,
 ) {
     ID(KOTLIN_DRAFT_PROP_ID_TYPE),
     NAME(KOTLIN_DRAFT_STRING_TYPE),

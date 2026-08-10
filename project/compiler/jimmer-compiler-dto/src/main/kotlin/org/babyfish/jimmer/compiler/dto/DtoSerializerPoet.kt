@@ -10,8 +10,8 @@ import site.addzero.lsi.jimmer.dto.requiresDynamicInputSerialization
 import site.addzero.lsi.jimmer.dto.serializerLoadedAccessorNameOrNull
 import site.addzero.lsi.jimmer.dto.serializerPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.dtoValueAccessorName
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiFunction

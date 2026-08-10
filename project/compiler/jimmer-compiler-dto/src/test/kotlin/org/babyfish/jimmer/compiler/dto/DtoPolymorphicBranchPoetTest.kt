@@ -13,7 +13,7 @@ import org.babyfish.jimmer.dto.compiler.DtoPolymorphicBranchKind
 import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
 import site.addzero.lsi.model.LsiAnnotationValue

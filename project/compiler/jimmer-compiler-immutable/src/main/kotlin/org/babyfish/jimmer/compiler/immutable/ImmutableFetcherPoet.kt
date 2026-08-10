@@ -29,18 +29,18 @@ import site.addzero.lsi.jimmer.targetTypeOf
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiFunctionType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeArgument
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiTypeName
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.codegen.LsiSourceArtifact
@@ -1088,7 +1088,7 @@ private class FetcherPoetContext(
         }
     }
 
-    private fun ImmutableProp.targetTypeRef(): LsiTypeRef {
+    private fun ImmutableProp.targetTypeRef(): LsiType {
         return elementTypeOrSelf()
             .withKotlinExpressionRoot()
             .withoutTypeAnnotations()
@@ -1236,7 +1236,7 @@ private fun MutableSet<LsiSymbolId>.addImmutablePropClosure(
     }
 }
 
-private fun MutableSet<LsiSymbolId>.addTypeDependencies(type: LsiTypeRef) {
+private fun MutableSet<LsiSymbolId>.addTypeDependencies(type: LsiType) {
     type.annotations.forEach(::addAnnotationDependencies)
     when (type) {
         is LsiArrayType -> addTypeDependencies(type.elementType)
@@ -1281,7 +1281,7 @@ private fun MutableSet<LsiSymbolId>.addAnnotationValueDependencies(value: LsiAnn
 }
 
 private fun generatedByAnnotation(
-    type: LsiTypeRef,
+    type: LsiType,
     fileTarget: Boolean = false,
 ): LsiAnnotation {
     return sourceLsiAnnotation(
@@ -1302,7 +1302,7 @@ private fun generatedByAnnotation(
 
 private fun declaredType(
     id: LsiSymbolId,
-    vararg arguments: LsiTypeRef,
+    vararg arguments: LsiType,
 ): LsiDeclaredType {
     return LsiDeclaredType(
         declarationId = id,
@@ -1321,7 +1321,7 @@ private fun declaredType(
 }
 
 private fun receiverFunctionType(
-    receiverType: LsiTypeRef,
+    receiverType: LsiType,
     nullable: Boolean = false,
 ): LsiFunctionType {
     return LsiFunctionType(
@@ -1331,7 +1331,7 @@ private fun receiverFunctionType(
     )
 }
 
-private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
+private fun LsiType.withRootNullability(nullable: Boolean): LsiType {
     val nullability = if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
     return when (this) {
         is LsiArrayType -> copy(nullability = nullability)
@@ -1343,7 +1343,7 @@ private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
     }
 }
 
-private fun LsiTypeRef.withKotlinExpressionRoot(): LsiTypeRef {
+private fun LsiType.withKotlinExpressionRoot(): LsiType {
     return when (this) {
         is LsiPrimitiveType -> copy(
             nullability = LsiNullability.NON_NULL,
@@ -1353,7 +1353,7 @@ private fun LsiTypeRef.withKotlinExpressionRoot(): LsiTypeRef {
     }
 }
 
-private fun LsiTypeRef.withoutTypeAnnotations(): LsiTypeRef {
+private fun LsiType.withoutTypeAnnotations(): LsiType {
     return when (this) {
         is LsiArrayType -> copy(
             elementType = elementType.withoutTypeAnnotations(),
@@ -1368,7 +1368,7 @@ private fun LsiTypeRef.withoutTypeAnnotations(): LsiTypeRef {
         is LsiFunctionType -> copy(
             returnType = returnType.withoutTypeAnnotations(),
             receiverType = receiverType?.withoutTypeAnnotations(),
-            parameterTypes = parameterTypes.map(LsiTypeRef::withoutTypeAnnotations),
+            parameterTypes = parameterTypes.map(LsiType::withoutTypeAnnotations),
             annotations = emptyList(),
         )
         is LsiPrimitiveType -> copy(annotations = emptyList())

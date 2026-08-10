@@ -9,15 +9,15 @@ import site.addzero.lsi.jimmer.ImmutableDraftRuntimePropKind
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiFunctionType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
@@ -1371,8 +1371,8 @@ private class JavaDraftPoetContext(
 
     private fun readonlyDelegate(
         functionName: String,
-        parameterType: LsiTypeRef,
-        returnType: LsiTypeRef,
+        parameterType: LsiType,
+        returnType: LsiType,
         parameterName: String,
     ): LsiFunction {
         return LsiFunction(
@@ -2086,7 +2086,7 @@ private class JavaDraftPoetContext(
         prop: JimmerImmutableDraftPropPlan,
         targetType: JimmerImmutableDraftTypePlan,
         targetIdProp: JimmerImmutableDraftPropPlan,
-        idType: LsiTypeRef,
+        idType: LsiType,
         withImplementation: Boolean,
     ): LsiFunction {
         return LsiFunction(
@@ -2128,7 +2128,7 @@ private class JavaDraftPoetContext(
     private fun associatedIdSetter(
         prop: JimmerImmutableDraftPropPlan,
         targetIdProp: JimmerImmutableDraftPropPlan,
-        idType: LsiTypeRef,
+        idType: LsiType,
         parameterName: String,
         withImplementation: Boolean,
     ): LsiFunction {
@@ -2241,7 +2241,7 @@ private fun LsiSymbolId.producerType(): LsiDeclaredType {
     return LsiDeclaredType(LsiSymbolId.type("${requireTypeQualifiedName()}Draft.$PRODUCER"))
 }
 
-private fun JimmerImmutableDraftPropPlan.draftElementType(): LsiTypeRef {
+private fun JimmerImmutableDraftPropPlan.draftElementType(): LsiType {
     return if (immutableReference && !genericTarget && targetTypeId != null) {
         LsiDeclaredType(targetTypeId.draftTypeId())
     } else {
@@ -2249,7 +2249,7 @@ private fun JimmerImmutableDraftPropPlan.draftElementType(): LsiTypeRef {
     }
 }
 
-private fun JimmerImmutableDraftPropPlan.draftType(autoCreate: Boolean): LsiTypeRef {
+private fun JimmerImmutableDraftPropPlan.draftType(autoCreate: Boolean): LsiType {
     if (list && !autoCreate) {
         return type.withoutJavaDraftTypeAnnotations()
     }
@@ -2265,7 +2265,7 @@ private fun JimmerImmutableDraftPropPlan.draftType(autoCreate: Boolean): LsiType
  * Java Draft 的旧生成契约不会把语义类型上的注解复制到声明类型位置。
  * 这里递归剥离注解，同时保留可空性、泛型投影和函数类型结构。
  */
-internal fun LsiTypeRef.withoutJavaDraftTypeAnnotations(): LsiTypeRef {
+internal fun LsiType.withoutJavaDraftTypeAnnotations(): LsiType {
     return when (this) {
         is LsiDeclaredType -> copy(
             arguments = arguments.map { argument ->
@@ -2282,14 +2282,14 @@ internal fun LsiTypeRef.withoutJavaDraftTypeAnnotations(): LsiTypeRef {
         is LsiFunctionType -> copy(
             returnType = returnType.withoutJavaDraftTypeAnnotations(),
             receiverType = receiverType?.withoutJavaDraftTypeAnnotations(),
-            parameterTypes = parameterTypes.map(LsiTypeRef::withoutJavaDraftTypeAnnotations),
+            parameterTypes = parameterTypes.map(LsiType::withoutJavaDraftTypeAnnotations),
             annotations = emptyList(),
         )
         is LsiUnresolvedType -> copy(annotations = emptyList())
     }
 }
 
-internal fun LsiTypeRef.boxedForJavaDraft(): LsiTypeRef {
+internal fun LsiType.boxedForJavaDraft(): LsiType {
     val sourceType = withoutJavaDraftTypeAnnotations()
     return if (sourceType is LsiPrimitiveType) {
         sourceType.copy(boxed = true)
@@ -2301,7 +2301,7 @@ internal fun LsiTypeRef.boxedForJavaDraft(): LsiTypeRef {
 /**
  * JSpecify 空值标记属于类型使用注解，不能挂到 Java 参数声明上。
  */
-internal fun LsiTypeRef.withJavaDraftNullity(nullable: Boolean): LsiTypeRef {
+internal fun LsiType.withJavaDraftNullity(nullable: Boolean): LsiType {
     val annotation = LsiAnnotation(
         type = if (nullable) NULLABLE_ANNOTATION.type else NON_NULL_ANNOTATION.type,
     )
@@ -2317,7 +2317,7 @@ internal fun LsiTypeRef.withJavaDraftNullity(nullable: Boolean): LsiTypeRef {
 
 private fun LsiTypeParameter.withoutJavaDraftTypeAnnotations(): LsiTypeParameter {
     return copy(
-        upperBounds = upperBounds.map(LsiTypeRef::withoutJavaDraftTypeAnnotations),
+        upperBounds = upperBounds.map(LsiType::withoutJavaDraftTypeAnnotations),
     )
 }
 

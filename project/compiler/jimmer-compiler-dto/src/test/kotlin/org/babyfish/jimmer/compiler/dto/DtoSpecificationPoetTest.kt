@@ -34,10 +34,10 @@ import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.model.LsiTypeDeclaration
@@ -772,7 +772,7 @@ class DtoSpecificationPoetTest {
         ownerTypeId: LsiSymbolId,
         name: String,
         primaryMapping: PrimaryMapping,
-        type: LsiTypeRef = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+        type: LsiType = LsiPrimitiveType(LsiPrimitiveKind.LONG),
         targetTypeId: LsiSymbolId? = null,
         list: Boolean = false,
         embedded: Boolean = false,

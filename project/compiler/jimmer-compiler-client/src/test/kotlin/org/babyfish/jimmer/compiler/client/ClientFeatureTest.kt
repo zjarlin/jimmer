@@ -22,16 +22,16 @@ import site.addzero.lsi.jimmer.client.ClientExceptionMetadata
 import site.addzero.lsi.jimmer.client.ClientService
 import site.addzero.lsi.jimmer.client.fingerprint
 import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiEnumEntry
 import site.addzero.lsi.model.LsiFunction
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
 class ClientFeatureTest {
@@ -443,9 +443,9 @@ class ClientFeatureTest {
     private fun apiWorkspace(
         serviceName: String,
         operationName: String,
-        returnType: LsiTypeRef,
+        returnType: LsiType,
         source: LsiSource,
-        thrownTypes: List<LsiTypeRef> = emptyList(),
+        thrownTypes: List<LsiType> = emptyList(),
     ): LsiWorkspace {
         val origin = LsiOrigin(LsiOriginKind.SOURCE, source)
         val serviceId = LsiSymbolId.type(serviceName)
@@ -554,10 +554,10 @@ class ClientFeatureTest {
     private fun operation(
         ownerId: LsiSymbolId,
         name: String,
-        returnType: LsiTypeRef,
+        returnType: LsiType,
         annotations: List<LsiAnnotation>,
         origin: LsiOrigin,
-        thrownTypes: List<LsiTypeRef> = emptyList(),
+        thrownTypes: List<LsiType> = emptyList(),
     ): LsiFunction {
         return LsiFunction(
             id = LsiSymbolId.function(ownerId, name),

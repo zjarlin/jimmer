@@ -39,9 +39,9 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
@@ -506,7 +506,7 @@ class DtoInputBuilderPoetTest {
     private fun annotationDeclaration(
         typeId: LsiSymbolId,
         language: LsiLanguage = LsiLanguage.JAVA,
-        argumentTypes: Map<String, LsiTypeRef>,
+        argumentTypes: Map<String, LsiType>,
         kotlinValueVararg: Boolean = false,
         argumentNamesInDeclarationOrder: List<String> = argumentTypes.keys.toList(),
     ): DtoAnnotationDeclaration {

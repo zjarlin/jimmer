@@ -14,16 +14,16 @@ import site.addzero.lsi.jimmer.tuple.TypedTupleProperty
 import site.addzero.lsi.jimmer.tuple.TypedTupleScalarCategory
 import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
 import site.addzero.lsi.jimmer.tuple.TypedTupleType
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiFunctionType
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiTypeArgument
+import site.addzero.lsi.type.LsiType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiAccessor
 import site.addzero.lsi.model.toJvmReferenceType
@@ -446,7 +446,7 @@ private fun TypedTupleType.kotlinGetSelectionLayoutFunction(): LsiFunction {
 }
 
 private fun TypedTupleType.kotlinWeakJoinFunctions(
-    sourceType: LsiTypeRef,
+    sourceType: LsiType,
 ): List<LsiFunction> {
     return listOf(
         kotlinWeakJoinFunction(sourceType, byType = false, outer = false),
@@ -457,7 +457,7 @@ private fun TypedTupleType.kotlinWeakJoinFunctions(
 }
 
 private fun TypedTupleType.kotlinWeakJoinFunction(
-    sourceType: LsiTypeRef,
+    sourceType: LsiType,
     byType: Boolean,
     outer: Boolean,
 ): LsiFunction {
@@ -526,7 +526,7 @@ private fun TypedTupleType.kotlinWeakJoinFunction(
 private fun javaBaseTableSelectionType(
     property: TypedTupleProperty,
     selection: TypedTupleBaseTableSelection,
-): LsiTypeRef {
+): LsiType {
     selection.entityTableTypeId?.let(::LsiDeclaredType)?.let { return it }
     val valueType = property.type.toJvmReferenceType().asNonNullType()
     return when (requireNotNull(selection.scalarCategory)) {
@@ -543,7 +543,7 @@ private fun kotlinBaseTableSelectionType(
     property: TypedTupleProperty,
     selection: TypedTupleBaseTableSelection,
     outerNullable: Boolean,
-): LsiTypeRef {
+): LsiType {
     val valueType = property.type.asNonNullType()
     val nullable = outerNullable || selection.kind.nullable
     val typeId = when {
@@ -599,7 +599,7 @@ private fun TypedTupleType.javaGetSelectionsFunction(): LsiFunction {
     )
 }
 
-private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiTypeRef): LsiFunction {
+private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiType): LsiFunction {
     return LsiFunction(
         name = "createTuple",
         modifiers = setOf(
@@ -612,7 +612,7 @@ private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiTypeRef): LsiFu
     )
 }
 
-private fun TypedTupleType.javaCreateTupleBody(tupleType: LsiTypeRef): LsiCodeBlock {
+private fun TypedTupleType.javaCreateTupleBody(tupleType: LsiType): LsiCodeBlock {
     return when (val plan = construction) {
         is TypedTupleJavaConstructorConstruction -> javaPositionalTupleBody(plan, tupleType)
         is TypedTupleJavaSetterConstruction -> javaSetterTupleBody(plan, tupleType)
@@ -622,7 +622,7 @@ private fun TypedTupleType.javaCreateTupleBody(tupleType: LsiTypeRef): LsiCodeBl
 
 private fun TypedTupleType.javaPositionalTupleBody(
     plan: TypedTupleJavaConstructorConstruction,
-    tupleType: LsiTypeRef,
+    tupleType: LsiType,
 ): LsiCodeBlock {
     return code {
         returnValue {
@@ -654,7 +654,7 @@ private fun TypedTupleType.javaPositionalTupleBody(
 
 private fun TypedTupleType.javaSetterTupleBody(
     plan: TypedTupleJavaSetterConstruction,
-    tupleType: LsiTypeRef,
+    tupleType: LsiType,
 ): LsiCodeBlock {
     return code {
         statement {
@@ -684,7 +684,7 @@ private fun TypedTupleType.javaSetterTupleBody(
     }
 }
 
-private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiTypeRef): LsiFunction {
+private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiType): LsiFunction {
     val property = properties.first()
     val returnType = stepType(property, mapperType)
     return LsiFunction(
@@ -718,7 +718,7 @@ private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiTypeRef): Ls
 
 private fun TypedTupleType.javaBuilderType(
     property: TypedTupleProperty,
-    mapperType: LsiTypeRef,
+    mapperType: LsiType,
 ): LsiTypeDeclaration {
     val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
@@ -771,7 +771,7 @@ private fun TypedTupleType.kotlinGetSelectionsFunction(): LsiFunction {
     )
 }
 
-private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiTypeRef): LsiFunction {
+private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiType): LsiFunction {
     return LsiFunction(
         name = "createTuple",
         modifiers = setOf(LsiModifier.OVERRIDE),
@@ -781,7 +781,7 @@ private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiTypeRef): Lsi
     )
 }
 
-private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiTypeRef): LsiCodeBlock {
+private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiType): LsiCodeBlock {
     val plan = construction as? TypedTupleKotlinConstructorConstruction
         ?: error("Kotlin typed tuple '${id.value}' has unsupported construction plan '$construction'")
     return code {
@@ -813,7 +813,7 @@ private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiTypeRef): LsiCode
 
 private fun TypedTupleType.kotlinBuilderType(
     property: TypedTupleProperty,
-    mapperType: LsiTypeRef,
+    mapperType: LsiType,
 ): LsiTypeDeclaration {
     val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
@@ -850,7 +850,7 @@ private fun TypedTupleType.kotlinBuilderType(
     )
 }
 
-private fun TypedTupleType.kotlinCompanionType(mapperType: LsiTypeRef): LsiTypeDeclaration {
+private fun TypedTupleType.kotlinCompanionType(mapperType: LsiType): LsiTypeDeclaration {
     val property = properties.first()
     val returnType = stepType(property, mapperType)
     return LsiTypeDeclaration(
@@ -885,8 +885,8 @@ private fun TypedTupleType.kotlinCompanionType(mapperType: LsiTypeRef): LsiTypeD
 
 private fun TypedTupleType.stepType(
     property: TypedTupleProperty,
-    mapperType: LsiTypeRef,
-): LsiTypeRef {
+    mapperType: LsiType,
+): LsiType {
     val nextStepTypeName = nextStepTypeName(property)
     return if (nextStepTypeName == mapperSimpleName) {
         mapperType
@@ -895,29 +895,29 @@ private fun TypedTupleType.stepType(
     }
 }
 
-private fun javaSelectionType(property: TypedTupleProperty): LsiTypeRef {
+private fun javaSelectionType(property: TypedTupleProperty): LsiType {
     return selectionType(property.type.toJvmReferenceType())
 }
 
-private fun kotlinSelectionType(property: TypedTupleProperty): LsiTypeRef {
+private fun kotlinSelectionType(property: TypedTupleProperty): LsiType {
     return selectionType(property.type)
 }
 
-private fun selectionType(valueType: LsiTypeRef): LsiDeclaredType {
+private fun selectionType(valueType: LsiType): LsiDeclaredType {
     return LsiDeclaredType(
         declarationId = SELECTION_ID,
         arguments = listOf(LsiTypeArgument.invariant(valueType)),
     )
 }
 
-private fun tupleMapperType(tupleType: LsiTypeRef): LsiDeclaredType {
+private fun tupleMapperType(tupleType: LsiType): LsiDeclaredType {
     return LsiDeclaredType(
         declarationId = TUPLE_MAPPER_ID,
         arguments = listOf(LsiTypeArgument.invariant(tupleType)),
     )
 }
 
-private fun listType(elementType: LsiTypeRef): LsiDeclaredType {
+private fun listType(elementType: LsiType): LsiDeclaredType {
     return LsiDeclaredType(
         declarationId = LIST_ID,
         arguments = listOf(LsiTypeArgument.invariant(elementType)),
@@ -946,7 +946,7 @@ private fun declaredType(qualifiedName: String): LsiDeclaredType {
 
 private fun declaredType(
     typeId: LsiSymbolId,
-    vararg argumentTypes: LsiTypeRef?,
+    vararg argumentTypes: LsiType?,
 ): LsiDeclaredType {
     return LsiDeclaredType(
         declarationId = typeId,
@@ -956,7 +956,7 @@ private fun declaredType(
     )
 }
 
-private fun LsiTypeRef.asNonNullType(): LsiTypeRef {
+private fun LsiType.asNonNullType(): LsiType {
     return when (this) {
         is LsiDeclaredType -> copy(nullability = LsiNullability.NON_NULL)
         is LsiTypeParameterRef -> copy(nullability = LsiNullability.NON_NULL)

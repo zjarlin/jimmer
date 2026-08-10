@@ -26,19 +26,19 @@ import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
 import site.addzero.lsi.jimmer.targetIdPropOf
 import site.addzero.lsi.jimmer.targetTypeOf
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiFunctionType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiTypeSystem
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiAccessor
 import site.addzero.lsi.model.LsiAnnotation
@@ -242,7 +242,7 @@ private class KotlinQueryPoetContext(
         nonNullTable: Boolean,
         outerJoin: Boolean,
         tableEx: Boolean,
-    ): LsiTypeRef {
+    ): LsiType {
         val entityAssociation = schema.isEntityAssociation(prop)
         val rawReturnTypeId = when {
             prop.remote -> if (outerJoin) K_NULLABLE_REMOTE_REF_ID else K_NON_NULL_REMOTE_REF_ID
@@ -585,7 +585,7 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun propTargetType(prop: ImmutableProp): LsiTypeRef {
+    private fun propTargetType(prop: ImmutableProp): LsiType {
         val typeRef = if (prop.list) prop.elementTypeOrSelf() else prop.type
         return typeRef.toQueryKotlinType().withRootNullability(nullable = false)
     }
@@ -919,7 +919,7 @@ private class JavaQueryPoetContext(
 
     private fun propertyImplementation(
         prop: ImmutableProp,
-        returnType: LsiTypeRef,
+        returnType: LsiType,
         withJoinType: Boolean,
     ): LsiCodeBlock {
         val runtimeOwner = schema.primaryLineageOwner(type, prop)
@@ -973,7 +973,7 @@ private class JavaQueryPoetContext(
         }
     }
 
-    private fun propertyReturnType(prop: ImmutableProp, tableEx: Boolean): LsiTypeRef {
+    private fun propertyReturnType(prop: ImmutableProp, tableEx: Boolean): LsiType {
         val targetType = schema.targetTypeOf(prop)
         if (schema.isEntityAssociation(prop)) {
             val target = requireNotNull(targetType) {
@@ -1085,7 +1085,7 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun disableJoinFunction(selfType: LsiTypeRef): LsiFunction {
+    private fun disableJoinFunction(selfType: LsiType): LsiFunction {
         return LsiFunction(
             name = "__disableJoin",
             modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
@@ -1101,7 +1101,7 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun baseTableOwnerFunction(selfType: LsiTypeRef): LsiFunction {
+    private fun baseTableOwnerFunction(selfType: LsiType): LsiFunction {
         return LsiFunction(
             name = "__baseTableOwner",
             modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
@@ -1546,7 +1546,7 @@ private data class QueryArtifactDependencies(
 )
 
 private fun generatedByAnnotation(
-    type: LsiTypeRef,
+    type: LsiType,
     fileTarget: Boolean = false,
 ): LsiAnnotation {
     return sourceLsiAnnotation(
@@ -1563,7 +1563,7 @@ private fun generatedByAnnotation(
 
 private fun declaredType(
     id: LsiSymbolId,
-    vararg arguments: LsiTypeRef,
+    vararg arguments: LsiType,
 ): LsiDeclaredType = LsiDeclaredType(
     declarationId = id,
     arguments = arguments.map(LsiTypeArgument::invariant),
@@ -1577,7 +1577,7 @@ private fun declaredType(
     arguments = arguments.toList(),
 )
 
-private fun LsiTypeRef.toQueryKotlinType(): LsiTypeRef {
+private fun LsiType.toQueryKotlinType(): LsiType {
     return when (this) {
         is LsiArrayType -> copy(
             elementType = elementType.toQueryKotlinType(),
@@ -1592,7 +1592,7 @@ private fun LsiTypeRef.toQueryKotlinType(): LsiTypeRef {
         is LsiFunctionType -> copy(
             returnType = returnType.toQueryKotlinType(),
             receiverType = receiverType?.toQueryKotlinType(),
-            parameterTypes = parameterTypes.map(LsiTypeRef::toQueryKotlinType),
+            parameterTypes = parameterTypes.map(LsiType::toQueryKotlinType),
             annotations = emptyList(),
         )
         is LsiPrimitiveType -> copy(annotations = emptyList())
@@ -1601,7 +1601,7 @@ private fun LsiTypeRef.toQueryKotlinType(): LsiTypeRef {
     }
 }
 
-private fun LsiTypeRef.toQueryJavaType(): LsiTypeRef {
+private fun LsiType.toQueryJavaType(): LsiType {
     return when (this) {
         is LsiArrayType -> copy(
             // Java 数组分量保留原始类型，只有泛型实参需要装箱。
@@ -1617,7 +1617,7 @@ private fun LsiTypeRef.toQueryJavaType(): LsiTypeRef {
         is LsiFunctionType -> copy(
             returnType = returnType.toQueryJavaType(),
             receiverType = receiverType?.toQueryJavaType(),
-            parameterTypes = parameterTypes.map(LsiTypeRef::toQueryJavaType),
+            parameterTypes = parameterTypes.map(LsiType::toQueryJavaType),
             annotations = emptyList(),
         )
         is LsiPrimitiveType -> copy(boxed = true, annotations = emptyList())
@@ -1626,7 +1626,7 @@ private fun LsiTypeRef.toQueryJavaType(): LsiTypeRef {
     }
 }
 
-private fun LsiTypeRef.toQueryJavaArrayElementType(): LsiTypeRef {
+private fun LsiType.toQueryJavaArrayElementType(): LsiType {
     return when (this) {
         is LsiArrayType -> copy(
             elementType = elementType.toQueryJavaArrayElementType(),
@@ -1637,7 +1637,7 @@ private fun LsiTypeRef.toQueryJavaArrayElementType(): LsiTypeRef {
     }
 }
 
-private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
+private fun LsiType.withRootNullability(nullable: Boolean): LsiType {
     val nullability = if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
     return when (this) {
         is LsiArrayType -> copy(nullability = nullability)
@@ -1974,7 +1974,7 @@ private val JAVA_QUERY_RUNTIME_DEPENDENCIES = setOf(
     UNSUPPORTED_OPERATION_EXCEPTION_ID,
 )
 
-private fun ImmutableProp.javaExpressionType(typeSystem: LsiTypeSystem): LsiTypeRef {
+private fun ImmutableProp.javaExpressionType(typeSystem: LsiTypeSystem): LsiType {
     val boxedType = type.toQueryJavaType()
     return when (expressionKind(typeSystem)) {
         JimmerImmutablePropExpressionKind.GENERIC -> declaredType(PROP_EXPRESSION_ID, boxedType)

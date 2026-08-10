@@ -38,7 +38,7 @@ import site.addzero.lsi.jimmer.client.normalizedSnapshot
 import site.addzero.lsi.jimmer.client.toClientSchema
 import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.model.LsiFunction
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.toSemanticSnapshot
 

@@ -24,8 +24,8 @@ import site.addzero.lsi.jimmer.client.ClientService
 import site.addzero.lsi.jimmer.client.ClientTypeArgument
 import site.addzero.lsi.jimmer.client.ClientTypeDefinition
 import site.addzero.lsi.jimmer.client.ClientTypeName
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiVariance
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiVariance
 
 class ClientResourceRendererTest {
 

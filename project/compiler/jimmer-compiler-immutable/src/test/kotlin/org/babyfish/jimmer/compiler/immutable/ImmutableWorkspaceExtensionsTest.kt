@@ -39,21 +39,21 @@ import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModality
-import site.addzero.lsi.model.LsiNullability
+import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.model.LsiOverride
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 
 class ImmutableWorkspaceExtensionsTest {
@@ -331,7 +331,7 @@ class ImmutableWorkspaceExtensionsTest {
             typeName: String,
             marker: LsiSymbolId = MAPPED_SUPERCLASS,
             annotations: List<LsiAnnotation>,
-            propType: LsiTypeRef = LsiDeclaredType(STRING_TYPE),
+            propType: LsiType = LsiDeclaredType(STRING_TYPE),
         ): ImmutablePrecompileException {
             val ownerId = LsiSymbolId.type("demo.$typeName")
             val prop = property(ownerId, "value", propType, annotations)
@@ -1504,7 +1504,7 @@ class ImmutableWorkspaceExtensionsTest {
             enumSchema.types.single().props.single { prop -> prop.name == "kind" }.primaryMapping,
         )
 
-        val invalidTypes = listOf<LsiTypeRef>(
+        val invalidTypes = listOf<LsiType>(
             LsiPrimitiveType(LsiPrimitiveKind.INT),
             listType(STRING_TYPE),
         )
@@ -1995,7 +1995,7 @@ class ImmutableWorkspaceExtensionsTest {
     fun `validates version and logical-deleted identity types`() {
         fun failure(
             name: String,
-            type: LsiTypeRef,
+            type: LsiType,
             annotationType: LsiSymbolId,
             extraDeclarations: List<LsiTypeDeclaration> = emptyList(),
         ): ImmutablePrecompileException {
@@ -2143,7 +2143,7 @@ class ImmutableWorkspaceExtensionsTest {
         val targetId = LsiSymbolId.type("demo.CategoryTarget")
 
         fun failure(
-            propertyType: LsiTypeRef,
+            propertyType: LsiType,
             propertyAnnotations: List<LsiAnnotation>,
             targetMarker: LsiSymbolId? = null,
             ownerMarker: LsiSymbolId = ENTITY,
@@ -2551,9 +2551,9 @@ class ImmutableWorkspaceExtensionsTest {
             viewName: String = "storeId",
             annotationValue: String? = "store",
             includeBase: Boolean = true,
-            baseType: LsiTypeRef = LsiDeclaredType(storeId),
+            baseType: LsiType = LsiDeclaredType(storeId),
             baseAnnotations: List<LsiAnnotation> = listOf(annotation(MANY_TO_ONE)),
-            viewType: LsiTypeRef = LsiPrimitiveType(LsiPrimitiveKind.LONG),
+            viewType: LsiType = LsiPrimitiveType(LsiPrimitiveKind.LONG),
         ): String {
             val storeIdProp = property(
                 storeId,
@@ -2790,7 +2790,7 @@ class ImmutableWorkspaceExtensionsTest {
         val otherId = LsiSymbolId.type("demo.Other")
 
         fun failure(
-            viewType: LsiTypeRef = listType(authorId),
+            viewType: LsiType = listType(authorId),
             basePropName: String = "links",
             baseAnnotation: LsiSymbolId = ONE_TO_MANY,
             deeperPropName: String = "",
@@ -3053,8 +3053,8 @@ class ImmutableWorkspaceExtensionsTest {
         val propertyId = LsiSymbolId.property(modelId, "value")
 
         fun compile(
-            propertyType: LsiTypeRef,
-            converterSourceType: LsiTypeRef,
+            propertyType: LsiType,
+            converterSourceType: LsiType,
         ): ImmutableSchema {
             val valueProp = property(
                 ownerId = modelId,
@@ -3735,7 +3735,7 @@ class ImmutableWorkspaceExtensionsTest {
         val listTypeId = LsiSymbolId.type("java.util.List")
 
         fun compile(
-            propertyType: LsiTypeRef,
+            propertyType: LsiType,
             annotations: List<LsiAnnotation> = emptyList(),
         ): ImmutableSchema {
             val valuesProp = property(entityId, "values", propertyType, annotations)
@@ -3957,7 +3957,7 @@ class ImmutableWorkspaceExtensionsTest {
         val resolverTypeId = LsiSymbolId.type("demo.TransientResolver")
 
         fun transient(
-            value: LsiTypeRef? = null,
+            value: LsiType? = null,
             ref: String? = null,
         ): LsiAnnotation {
             return annotation(
@@ -4235,8 +4235,8 @@ class ImmutableWorkspaceExtensionsTest {
     }
 
     private fun assertOverrideRejected(
-        baseType: LsiTypeRef,
-        childType: LsiTypeRef,
+        baseType: LsiType,
+        childType: LsiType,
         baseAnnotations: List<LsiAnnotation> = emptyList(),
         childAnnotations: List<LsiAnnotation> = emptyList(),
         baseModality: LsiModality = LsiModality.ABSTRACT,
@@ -4673,7 +4673,7 @@ class ImmutableWorkspaceExtensionsTest {
     }
 
     private fun discriminatorWorkspace(
-        discriminatorType: LsiTypeRef,
+        discriminatorType: LsiType,
         extraDeclarations: List<LsiTypeDeclaration> = emptyList(),
         additionalAnnotations: List<LsiAnnotation> = emptyList(),
     ): LsiWorkspace {
@@ -4773,8 +4773,8 @@ class ImmutableWorkspaceExtensionsTest {
     private fun overrideCategoryWorkspace(
         baseMarker: LsiSymbolId,
         childMarker: LsiSymbolId,
-        baseType: LsiTypeRef = LsiDeclaredType(STRING_TYPE),
-        childType: LsiTypeRef = baseType,
+        baseType: LsiType = LsiDeclaredType(STRING_TYPE),
+        childType: LsiType = baseType,
         baseAnnotations: List<LsiAnnotation> = emptyList(),
         childAnnotations: List<LsiAnnotation> = emptyList(),
         baseModality: LsiModality = LsiModality.ABSTRACT,
@@ -4824,7 +4824,7 @@ class ImmutableWorkspaceExtensionsTest {
         marker: LsiSymbolId,
         memberIds: List<LsiSymbolId>,
         typeParameters: List<LsiTypeParameter> = emptyList(),
-        superTypes: List<LsiTypeRef> = emptyList(),
+        superTypes: List<LsiType> = emptyList(),
         documentation: String? = null,
         markerArguments: Map<String, LsiAnnotationValue> = emptyMap(),
         typeAnnotations: List<LsiAnnotation> = emptyList(),
@@ -4849,7 +4849,7 @@ class ImmutableWorkspaceExtensionsTest {
         annotations: List<LsiAnnotation> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
         typeParameters: List<LsiTypeParameter> = emptyList(),
-        superTypes: List<LsiTypeRef> = emptyList(),
+        superTypes: List<LsiType> = emptyList(),
         origin: LsiOrigin = SYNTHETIC_ORIGIN,
     ): LsiTypeDeclaration {
         return LsiTypeDeclaration(
@@ -4869,7 +4869,7 @@ class ImmutableWorkspaceExtensionsTest {
     private fun property(
         ownerId: LsiSymbolId,
         name: String,
-        type: LsiTypeRef,
+        type: LsiType,
         annotations: List<LsiAnnotation> = emptyList(),
         overrides: List<LsiOverride> = emptyList(),
         modality: LsiModality = LsiModality.ABSTRACT,

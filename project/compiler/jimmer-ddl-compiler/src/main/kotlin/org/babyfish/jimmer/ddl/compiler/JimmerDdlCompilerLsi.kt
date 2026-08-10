@@ -11,14 +11,14 @@ import org.babyfish.jimmer.ddl.generator.model.AutoDdlTable
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiResolvedProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -539,7 +539,7 @@ private fun LsiAnnotationValue.asText(): String? {
     }
 }
 
-private fun LsiTypeRef?.declaredTypeId(): LsiSymbolId? {
+private fun LsiType?.declaredTypeId(): LsiSymbolId? {
     return (this as? LsiDeclaredType)?.declarationId
 }
 

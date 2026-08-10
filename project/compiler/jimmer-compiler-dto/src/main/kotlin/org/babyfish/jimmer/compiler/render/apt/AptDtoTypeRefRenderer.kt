@@ -6,8 +6,8 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.toLsiType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -21,7 +21,7 @@ internal object AptDtoTypeRefRenderer {
     }
 
     @JvmStatic
-    fun render(type: LsiTypeRef, workspace: LsiWorkspace): TypeName {
+    fun render(type: LsiType, workspace: LsiWorkspace): TypeName {
         return render(type, workspace, emptyList())
     }
 
@@ -42,7 +42,7 @@ internal object AptDtoTypeRefRenderer {
 
     @JvmStatic
     fun render(
-        type: LsiTypeRef,
+        type: LsiType,
         workspace: LsiWorkspace,
         generatedTypeNames: Collection<LsiTypeName>,
     ): TypeName {

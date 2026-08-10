@@ -17,7 +17,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeArgument
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoUserProp
-import site.addzero.lsi.model.LsiVariance
+import site.addzero.lsi.type.LsiVariance
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 

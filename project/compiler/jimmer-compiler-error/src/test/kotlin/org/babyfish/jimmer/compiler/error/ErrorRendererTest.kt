@@ -26,10 +26,10 @@ import site.addzero.lsi.jimmer.error.ErrorCode
 import site.addzero.lsi.jimmer.error.ErrorFamily
 import site.addzero.lsi.jimmer.error.ErrorField
 import site.addzero.lsi.jimmer.error.ErrorSchema
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer

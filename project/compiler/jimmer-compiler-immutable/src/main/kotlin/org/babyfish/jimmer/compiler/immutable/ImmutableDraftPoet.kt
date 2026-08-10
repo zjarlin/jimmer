@@ -11,9 +11,9 @@ import site.addzero.lsi.jimmer.collectImmutableValidationDependencies
 import site.addzero.lsi.jimmer.semanticDependencySymbols
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.codegen.LsiSourceArtifact
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiTypeArgument
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
@@ -125,7 +125,7 @@ private fun LsiWorkspace.nonBinarySources(symbolIds: Collection<LsiSymbolId>): S
 
 internal fun draftDeclaredType(
     id: LsiSymbolId,
-    vararg arguments: LsiTypeRef,
+    vararg arguments: LsiType,
 ): LsiDeclaredType {
     return LsiDeclaredType(
         declarationId = id,

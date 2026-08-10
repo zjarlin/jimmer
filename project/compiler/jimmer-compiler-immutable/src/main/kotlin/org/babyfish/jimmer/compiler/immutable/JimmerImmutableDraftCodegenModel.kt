@@ -9,9 +9,9 @@ import site.addzero.lsi.jimmer.ImmutableDraftValidationPlan
 import site.addzero.lsi.jimmer.ImmutablePropValueCategory
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.ImmutableValidation
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeParameter
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiTypeParameter
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiVisibility
 
 data class JimmerImmutableDraftCodegenSchema(
@@ -118,8 +118,8 @@ data class JimmerImmutableDraftPropPlan(
     val loadedStateFieldName: String?,
     val javaDeeperPropIdName: String?,
     val kotlinDeeperPropIdName: String?,
-    val type: LsiTypeRef,
-    val elementType: LsiTypeRef,
+    val type: LsiType,
+    val elementType: LsiType,
     val runtimeProp: ImmutableDraftRuntimeProp,
     val targetTypeId: LsiSymbolId?,
     val targetIdPropId: LsiSymbolId?,
@@ -162,7 +162,7 @@ data class JimmerImmutableDraftPropPlan(
         require(valueState.hasValue || !valueState.hasLoadedState) {
             "Immutable draft loaded state requires value storage: ${propId.value}"
         }
-        require(primitive == (type is site.addzero.lsi.model.LsiPrimitiveType && !type.boxed)) {
+        require(primitive == (type is site.addzero.lsi.type.LsiPrimitiveType && !type.boxed)) {
             "Immutable draft primitive flag must match its LSI type: ${propId.value}"
         }
         require(runtimeProp.valueCategory == when {

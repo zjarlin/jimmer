@@ -9,7 +9,7 @@ import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.hasEntityAssociationListDraftTarget
 import site.addzero.lsi.jimmer.dto.requiresEmptyAssociationListDraftFallback
 import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder

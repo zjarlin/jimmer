@@ -22,12 +22,12 @@ import site.addzero.lsi.jimmer.dto.inputBuilderParameterType
 import site.addzero.lsi.jimmer.dto.inputBuilderPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.inputBuilderSetterJacksonAnnotationApplications
 import site.addzero.lsi.jimmer.dto.inputBuilderSetterName
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
@@ -503,7 +503,7 @@ private fun LsiCodeBuilder.inputSetterStatement(
     }
 }
 
-private fun LsiTypeRef.isNullableBuilderStorage(): Boolean {
+private fun LsiType.isNullableBuilderStorage(): Boolean {
     return nullability == LsiNullability.NULLABLE
 }
 

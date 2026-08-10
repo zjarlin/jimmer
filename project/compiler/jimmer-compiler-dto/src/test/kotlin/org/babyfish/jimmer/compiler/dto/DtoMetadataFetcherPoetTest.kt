@@ -36,13 +36,13 @@ import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeFragment
 import site.addzero.lsi.model.LsiImport
@@ -470,7 +470,7 @@ class DtoMetadataFetcherPoetTest {
     ): ImmutableProp {
         val id = LsiSymbolId.property(ownerTypeId, name)
         val association = targetTypeId != null
-        val type: LsiTypeRef = when {
+        val type: LsiType = when {
             targetTypeId != null -> LsiDeclaredType(targetTypeId)
             primaryMapping == PrimaryMapping.ID -> LsiPrimitiveType(LsiPrimitiveKind.LONG)
             else -> LsiDeclaredType(STRING_TYPE_ID)

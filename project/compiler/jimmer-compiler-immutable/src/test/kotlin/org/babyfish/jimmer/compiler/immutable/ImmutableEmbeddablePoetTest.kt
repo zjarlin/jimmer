@@ -23,12 +23,12 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiNullability
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -376,7 +376,7 @@ class ImmutableEmbeddablePoetTest {
         id: LsiSymbolId,
         source: LsiSource,
         memberIds: List<LsiSymbolId> = emptyList(),
-        superTypes: List<LsiTypeRef> = emptyList(),
+        superTypes: List<LsiType> = emptyList(),
         kind: LsiTypeDeclarationKind = LsiTypeDeclarationKind.INTERFACE,
         originKind: LsiOriginKind = LsiOriginKind.SOURCE,
     ): LsiTypeDeclaration {
@@ -396,7 +396,7 @@ class ImmutableEmbeddablePoetTest {
         id: LsiSymbolId,
         ownerId: LsiSymbolId,
         name: String,
-        type: LsiTypeRef,
+        type: LsiType,
         source: LsiSource,
     ): LsiProperty {
         return LsiProperty(
@@ -440,7 +440,7 @@ class ImmutableEmbeddablePoetTest {
         ownerTypeId: LsiSymbolId,
         id: LsiSymbolId,
         name: String,
-        type: LsiTypeRef,
+        type: LsiType,
         declarationId: LsiSymbolId = id,
         declaringTypeId: LsiSymbolId = ownerTypeId,
         inherited: Boolean = false,

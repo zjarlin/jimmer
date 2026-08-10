@@ -11,15 +11,15 @@ import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiFunctionType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiAccessor
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArrayStyle
@@ -153,18 +153,18 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    internal fun propType(prop: JimmerImmutableDraftPropPlan): LsiTypeRef {
+    internal fun propType(prop: JimmerImmutableDraftPropPlan): LsiType {
         return prop.type
     }
 
-    internal fun propElementType(prop: JimmerImmutableDraftPropPlan): LsiTypeRef {
+    internal fun propElementType(prop: JimmerImmutableDraftPropPlan): LsiType {
         return prop.elementType
     }
 
     internal fun propDraftType(
         prop: JimmerImmutableDraftPropPlan,
         nullable: Boolean = prop.nullable,
-    ): LsiTypeRef {
+    ): LsiType {
         val draftPropType = when {
             prop.list -> draftDeclaredType(
                 KOTLIN_DRAFT_MUTABLE_LIST_TYPE_ID,
@@ -190,7 +190,7 @@ internal class ImmutableDraftKotlinPoetContext(
         }
     }
 
-    internal fun associatedIdType(prop: JimmerImmutableDraftPropPlan): LsiTypeRef {
+    internal fun associatedIdType(prop: JimmerImmutableDraftPropPlan): LsiType {
         return associatedIdProp(prop).type.withDraftRootNullability(prop.nullable)
     }
 
@@ -968,7 +968,7 @@ private fun LsiAnnotationValue.toKotlinDraftPoetAnnotationValue(
 }
 
 private fun replaceRawType(
-    sourceType: LsiTypeRef,
+    sourceType: LsiType,
     rawTypeId: LsiSymbolId,
 ): LsiDeclaredType {
     val declaredType = sourceType as? LsiDeclaredType
@@ -980,7 +980,7 @@ private fun replaceRawType(
     )
 }
 
-internal fun LsiTypeRef.withDraftRootNullability(nullable: Boolean): LsiTypeRef {
+internal fun LsiType.withDraftRootNullability(nullable: Boolean): LsiType {
     val nullability = if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
     return when (this) {
         is LsiArrayType -> copy(nullability = nullability)
@@ -992,7 +992,7 @@ internal fun LsiTypeRef.withDraftRootNullability(nullable: Boolean): LsiTypeRef 
     }
 }
 
-internal fun draftReceiverFunctionType(receiverType: LsiTypeRef): LsiFunctionType {
+internal fun draftReceiverFunctionType(receiverType: LsiType): LsiFunctionType {
     return LsiFunctionType(
         receiverType = receiverType,
         returnType = KOTLIN_DRAFT_UNIT_TYPE,

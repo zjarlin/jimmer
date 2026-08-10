@@ -57,7 +57,7 @@ import site.addzero.lsi.jimmer.dto.selectedPolymorphicInputDiscriminatorPropOrNu
 import site.addzero.lsi.jimmer.dto.typeBranchesInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.userPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiImport
 import site.addzero.lsi.model.LsiTypeName

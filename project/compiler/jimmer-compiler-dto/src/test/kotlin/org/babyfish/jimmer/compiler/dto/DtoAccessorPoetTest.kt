@@ -28,10 +28,10 @@ import org.babyfish.jimmer.dto.compiler.DtoTypeKind
 import site.addzero.lsi.jimmer.dto.DtoReusableTypeReference
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -452,7 +452,7 @@ class DtoAccessorPoetTest {
     private fun immutableProp(
         ownerTypeId: LsiSymbolId,
         name: String,
-        type: LsiTypeRef,
+        type: LsiType,
         primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
         targetTypeId: LsiSymbolId? = null,
         associationKind: AssociationKind = AssociationKind.NONE,

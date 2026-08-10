@@ -41,14 +41,14 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import org.babyfish.jimmer.dto.compiler.DtoModifier
@@ -495,7 +495,7 @@ class JimmerDtoReusableIntegrationTest {
         kind: LsiTypeDeclarationKind,
         origin: LsiOrigin,
         annotations: List<LsiAnnotation> = emptyList(),
-        superTypes: List<LsiTypeRef> = emptyList(),
+        superTypes: List<LsiType> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
     ): LsiTypeDeclaration {
         val qualifiedName = id.requireTypeQualifiedName()
@@ -544,8 +544,8 @@ class JimmerDtoReusableIntegrationTest {
         val K_SPECIFICATION_TYPE_ID =
             LsiSymbolId.type("org.babyfish.jimmer.sql.kt.ast.query.specification.KSpecification")
         val STORE_TABLE_TYPE_ID = LsiSymbolId.type("demo.StoreTable")
-        val LONG_TYPE: LsiTypeRef = LsiPrimitiveType(LsiPrimitiveKind.LONG)
-        val STRING_TYPE: LsiTypeRef = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val LONG_TYPE: LsiType = LsiPrimitiveType(LsiPrimitiveKind.LONG)
+        val STRING_TYPE: LsiType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
         val BINARY_ORIGIN = LsiOrigin(LsiOriginKind.BINARY)
         val REFERENCE_FREEZER = CompilerInputDocumentReferenceFreezer()
 
@@ -626,7 +626,7 @@ class JimmerDtoReusableIntegrationTest {
         fun prop(
             ownerTypeId: LsiSymbolId,
             name: String,
-            type: LsiTypeRef,
+            type: LsiType,
             primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
             associationKind: AssociationKind = AssociationKind.NONE,
         ): ImmutableProp {

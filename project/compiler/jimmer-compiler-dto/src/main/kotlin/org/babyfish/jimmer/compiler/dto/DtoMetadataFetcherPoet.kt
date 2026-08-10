@@ -24,7 +24,7 @@ import site.addzero.lsi.jimmer.dto.hiddenFlatPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.mergedType
 import site.addzero.lsi.jimmer.dto.toLsiType
 import site.addzero.lsi.jimmer.dto.typeBranchesInDeclarationOrder
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder

@@ -41,7 +41,7 @@ import org.jspecify.annotations.Nullable
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.*
 import site.addzero.lsi.jimmer.dto.*
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiTypeName

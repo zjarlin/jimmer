@@ -18,15 +18,15 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerDdlCompilerTest {
@@ -423,7 +423,7 @@ class JimmerDdlCompilerTest {
     private fun type(
         qualifiedName: String,
         annotations: List<LsiAnnotation> = emptyList(),
-        superTypes: List<LsiTypeRef> = emptyList(),
+        superTypes: List<LsiType> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
     ): LsiTypeDeclaration {
         return LsiTypeDeclaration(
@@ -441,7 +441,7 @@ class JimmerDdlCompilerTest {
     private fun property(
         ownerId: LsiSymbolId,
         name: String,
-        type: LsiTypeRef,
+        type: LsiType,
         annotations: List<LsiAnnotation> = emptyList(),
     ): LsiProperty {
         return LsiProperty(

@@ -45,13 +45,13 @@ import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiDeclaredType
+import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
@@ -93,7 +93,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeArgument
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.jimmer.dto.DtoUserProp
-import site.addzero.lsi.model.LsiVariance
+import site.addzero.lsi.type.LsiVariance
 import site.addzero.lsi.jimmer.dto.fingerprint
 import site.addzero.lsi.jimmer.dto.normalizedSnapshot
 
@@ -780,7 +780,7 @@ class DtoGraphTest {
     private fun immutableProp(
         ownerTypeId: LsiSymbolId,
         name: String,
-        type: LsiTypeRef,
+        type: LsiType,
         primaryMapping: PrimaryMapping = PrimaryMapping.SCALAR,
         association: Boolean = false,
         targetTypeId: LsiSymbolId? = (type as? LsiDeclaredType)?.declarationId,
@@ -1187,8 +1187,8 @@ class DtoGraphTest {
         val NESTED_ANNOTATION_ID = LsiSymbolId.type("demo.Nested")
         val MODE_ENUM_ID = LsiSymbolId.type("demo.Mode")
         val ENTITY_ANNOTATION_ID = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
-        val LONG_TYPE: LsiTypeRef = LsiPrimitiveType(LsiPrimitiveKind.LONG)
-        val STRING_TYPE: LsiTypeRef = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
+        val LONG_TYPE: LsiType = LsiPrimitiveType(LsiPrimitiveKind.LONG)
+        val STRING_TYPE: LsiType = LsiDeclaredType(LsiSymbolId.type("java.lang.String"))
 
         val FORBIDDEN_RENDER_STATE_TYPE_NAMES = setOf(
             "org.babyfish.jimmer.dto.compiler.DtoType",

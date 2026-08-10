@@ -9,7 +9,7 @@ import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.jimmer.jimmerTypeSignature
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiTypeParameter
+import site.addzero.lsi.type.LsiTypeParameter
 import site.addzero.lsi.model.stableSignature
 
 internal fun JimmerImmutableDraftCodegenSchema.normalizedSnapshot(): String {
@@ -136,7 +136,7 @@ private fun LsiTypeParameter.snapshotText(): String {
     }
 }
 
-private fun site.addzero.lsi.model.LsiTypeRef.typeText(includePlatformSurface: Boolean): String {
+private fun site.addzero.lsi.type.LsiType.typeText(includePlatformSurface: Boolean): String {
     return if (includePlatformSurface) stableSignature() else jimmerTypeSignature()
 }
 

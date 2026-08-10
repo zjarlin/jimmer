@@ -4,8 +4,8 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.generatedTableType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.collectTypeRefDependencies
 import site.addzero.lsi.model.LsiTypeName
@@ -14,7 +14,7 @@ import site.addzero.lsi.model.toLsiTypeNames
 
 /** 为冻结的 DTO 类型引用解析完整且精确的源码名称表。 */
 internal fun LsiWorkspace.dtoTypeRefPoetTypeNames(
-    type: LsiTypeRef,
+    type: LsiType,
     generatedTypeNames: Collection<LsiTypeName> = emptyList(),
 ): List<LsiTypeName> {
     val typeIds = sortedSetOf<LsiSymbolId>().apply {

@@ -26,14 +26,14 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 
 class JimmerImmutableDraftCodegenPrecompiler {
@@ -358,7 +358,7 @@ private fun ImmutableProp.genericSourceTarget(
         .any { property -> property.type.targetType(list) is LsiTypeParameterRef }
 }
 
-private fun LsiTypeRef.targetType(list: Boolean): LsiTypeRef {
+private fun LsiType.targetType(list: Boolean): LsiType {
     if (!list) {
         return this
     }

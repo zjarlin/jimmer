@@ -17,8 +17,8 @@ import site.addzero.lsi.jimmer.dto.accessorConversionKind
 import site.addzero.lsi.jimmer.dto.accessorPath
 import site.addzero.lsi.jimmer.dto.generatedElementValueType
 import site.addzero.lsi.jimmer.dto.tailProp
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeRef
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
@@ -343,8 +343,8 @@ private fun LsiCodeBuilder.objectConverters(
 
 private fun LsiCodeBuilder.objectAccessorCall(
     methodName: String,
-    immutableTargetType: LsiTypeRef,
-    dtoElementType: LsiTypeRef,
+    immutableTargetType: LsiType,
+    dtoElementType: LsiType,
     targetLanguage: LsiLanguage,
     explicitTypeArguments: Boolean,
 ) {

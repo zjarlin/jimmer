@@ -10,17 +10,17 @@ import site.addzero.lsi.jimmer.error.ErrorSchema
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiArrayType
-import site.addzero.lsi.model.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunctionType
-import site.addzero.lsi.model.LsiNullability
-import site.addzero.lsi.model.LsiPrimitiveKind
-import site.addzero.lsi.model.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeArgument
+import site.addzero.lsi.type.LsiArrayType
+import site.addzero.lsi.type.LsiDeclaredType
+import site.addzero.lsi.type.LsiFunctionType
+import site.addzero.lsi.type.LsiNullability
+import site.addzero.lsi.type.LsiPrimitiveKind
+import site.addzero.lsi.type.LsiPrimitiveType
+import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclaration
-import site.addzero.lsi.model.LsiTypeParameterRef
-import site.addzero.lsi.model.LsiTypeRef
-import site.addzero.lsi.model.LsiUnresolvedType
+import site.addzero.lsi.type.LsiTypeParameterRef
+import site.addzero.lsi.type.LsiType
+import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.toJvmReferenceType
 import site.addzero.lsi.model.LsiAccessor
@@ -203,7 +203,7 @@ private fun ErrorFamily.javaConstructor(
     )
 }
 
-private fun ErrorFamily.javaEnumFunction(enumType: LsiTypeRef): LsiFunction {
+private fun ErrorFamily.javaEnumFunction(enumType: LsiType): LsiFunction {
     return LsiFunction(
         name = "get${qualifiedName.substringAfterLast('.')}",
         annotations = listOf(JSON_IGNORE_ANNOTATION),
@@ -289,7 +289,7 @@ private fun ErrorCode.javaCreatorFunction(
 
 private fun ErrorCode.toJavaPoetType(
     family: ErrorFamily,
-    enumType: LsiTypeRef,
+    enumType: LsiType,
 ): LsiTypeDeclaration {
     val allFields = family.declaredFields + declaredFields
     return LsiTypeDeclaration(
@@ -310,7 +310,7 @@ private fun ErrorCode.toJavaPoetType(
     )
 }
 
-private fun ErrorCode.javaEnumFunction(enumType: LsiTypeRef): LsiFunction {
+private fun ErrorCode.javaEnumFunction(enumType: LsiType): LsiFunction {
     return LsiFunction(
         name = "get${enumType.declarationSimpleName()}",
         annotations = listOf(
@@ -413,7 +413,7 @@ private fun ErrorField.toJavaGetter(): LsiFunction {
     )
 }
 
-private fun ErrorField.javaType(): LsiTypeRef {
+private fun ErrorField.javaType(): LsiType {
     return if (list) {
         LsiDeclaredType(
             declarationId = LIST_ID,
@@ -469,7 +469,7 @@ private fun ErrorField.toKotlinProperty(): LsiProperty {
     )
 }
 
-private fun ErrorField.kotlinType(): LsiTypeRef {
+private fun ErrorField.kotlinType(): LsiType {
     val baseType = if (list) {
         LsiDeclaredType(
             declarationId = LIST_ID,
@@ -482,7 +482,7 @@ private fun ErrorField.kotlinType(): LsiTypeRef {
 }
 
 private fun ErrorFamily.kotlinEnumProperty(
-    enumType: LsiTypeRef,
+    enumType: LsiType,
     code: ErrorCode?,
 ): LsiProperty {
     return LsiProperty(
@@ -601,7 +601,7 @@ private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiFuncti
 
 private fun ErrorCode.toKotlinPoetType(
     family: ErrorFamily,
-    enumType: LsiTypeRef,
+    enumType: LsiType,
 ): LsiTypeDeclaration {
     val allFields = family.declaredFields + declaredFields
     return LsiTypeDeclaration(
@@ -625,7 +625,7 @@ private fun ErrorCode.toKotlinPoetType(
     )
 }
 
-private fun ErrorFamily.generatedByAnnotation(enumType: LsiTypeRef): LsiAnnotation {
+private fun ErrorFamily.generatedByAnnotation(enumType: LsiType): LsiAnnotation {
     return sourceLsiAnnotation(
         type = GENERATED_BY_ID,
         arguments = listOf(
@@ -746,7 +746,7 @@ private fun MutableSet<LsiSymbolId>.copiedFieldDependencies(fields: List<ErrorFi
     }
 }
 
-private fun MutableSet<LsiSymbolId>.addType(type: LsiTypeRef) {
+private fun MutableSet<LsiSymbolId>.addType(type: LsiType) {
     when (type) {
         is LsiArrayType -> addType(type.elementType)
         is LsiDeclaredType -> {
@@ -780,7 +780,7 @@ private fun MutableSet<LsiSymbolId>.addAnnotationValue(value: LsiAnnotationValue
     }
 }
 
-private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
+private fun LsiType.withRootNullability(nullable: Boolean): LsiType {
     val nullability = if (nullable) LsiNullability.NULLABLE else LsiNullability.NON_NULL
     return when (this) {
         is LsiArrayType -> copy(nullability = nullability)
@@ -792,7 +792,7 @@ private fun LsiTypeRef.withRootNullability(nullable: Boolean): LsiTypeRef {
     }
 }
 
-private fun LsiTypeRef.declarationSimpleName(): String {
+private fun LsiType.declarationSimpleName(): String {
     return (this as LsiDeclaredType).declarationId.requireTypeQualifiedName().substringAfterLast('.')
 }
 
