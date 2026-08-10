@@ -36,7 +36,6 @@ import site.addzero.lsi.model.LsiOverride
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -135,17 +134,9 @@ class ImmutableFeatureTest {
                     id = propId,
                     name = "value",
                     ownerId = BROKEN_ID,
-                    type = LsiDeclaredType(GENERATED_VALUE_ID),
+                    type = LsiUnresolvedType(GENERATED_VALUE_ID.requireTypeQualifiedName()),
                     origin = KOTLIN_ORIGIN,
                 ),
-            ),
-            typeHierarchy = listOf(
-                LsiTypeHierarchyEntry(
-                    id = GENERATED_VALUE_ID,
-                    qualifiedName = GENERATED_VALUE_ID.requireTypeQualifiedName(),
-                    kind = LsiTypeDeclarationKind.CLASS,
-                    source = KOTLIN_SOURCE,
-                )
             ),
         )
 
@@ -174,17 +165,9 @@ class ImmutableFeatureTest {
                     id = propId,
                     name = "value",
                     ownerId = BROKEN_ID,
-                    type = LsiDeclaredType(GENERATED_VALUE_ID),
+                    type = LsiUnresolvedType(GENERATED_VALUE_ID.requireTypeQualifiedName()),
                     origin = KOTLIN_ORIGIN,
                 ),
-            ),
-            typeHierarchy = listOf(
-                LsiTypeHierarchyEntry(
-                    id = GENERATED_VALUE_ID,
-                    qualifiedName = GENERATED_VALUE_ID.requireTypeQualifiedName(),
-                    kind = LsiTypeDeclarationKind.CLASS,
-                    source = KOTLIN_SOURCE,
-                )
             ),
         ).completeEntityIdentities()
         val result = CompilerSession("immutable-partial-ksp-test", listOf(FEATURE)).execute(

@@ -126,7 +126,6 @@ fun LsiWorkspace.completeEntityIdentities(): LsiWorkspace {
     return LsiWorkspace(
         sources = sources,
         declarations = completedDeclarations,
-        typeHierarchy = typeHierarchy,
         annotationScopes = annotationScopes,
     )
 }

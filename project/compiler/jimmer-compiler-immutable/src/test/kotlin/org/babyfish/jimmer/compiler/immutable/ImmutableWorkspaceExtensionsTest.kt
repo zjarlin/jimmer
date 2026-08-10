@@ -1287,7 +1287,6 @@ class ImmutableWorkspaceExtensionsTest {
             LsiWorkspace(
                 sources = workspace.sources,
                 declarations = declarations,
-                typeHierarchy = workspace.typeHierarchy,
                 annotationScopes = workspace.annotationScopes,
             )
         )

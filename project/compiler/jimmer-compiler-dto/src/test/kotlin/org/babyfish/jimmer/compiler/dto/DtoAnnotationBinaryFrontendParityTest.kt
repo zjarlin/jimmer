@@ -46,6 +46,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.clazz.classDeclaration
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
@@ -123,8 +124,8 @@ class DtoAnnotationBinaryFrontendParityTest {
         val aptWorkspace = compileAptJavaAnnotationConsumer(library)
         val kspWorkspace = compileKspJavaAnnotationConsumer(library)
         val declaration = assertIs<LsiClass>(kspWorkspace[JAVA_ANNOTATION_ID])
-        assertTrue(aptWorkspace.typeHierarchyEntry(JAVA_INTEGER_ID) == null)
-        assertTrue(kspWorkspace.typeHierarchyEntry(JAVA_INTEGER_ID) == null)
+        assertTrue(aptWorkspace.classDeclaration(JAVA_INTEGER_ID) == null)
+        assertTrue(kspWorkspace.classDeclaration(JAVA_INTEGER_ID) == null)
         val aptContract = freezeContract(aptWorkspace, JAVA_JAVA_USE_ID)
         val kspContract = freezeContract(kspWorkspace, KOTLIN_JAVA_USE_ID)
         val aptDeclaration = aptContract.declarationsByTypeId.getValue(JAVA_ANNOTATION_ID)

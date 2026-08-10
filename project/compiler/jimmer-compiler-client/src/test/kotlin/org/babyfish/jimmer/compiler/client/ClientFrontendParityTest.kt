@@ -235,7 +235,6 @@ class ClientFrontendParityTest {
                     declaration.id == typeId || declaration.id.value.startsWith("${typeId.value}/")
                 }
             },
-            typeHierarchy = typeHierarchy.filter { entry -> entry.id in typeIds },
             annotationScopes = annotationScopes,
         ).toSemanticSnapshot()
     }

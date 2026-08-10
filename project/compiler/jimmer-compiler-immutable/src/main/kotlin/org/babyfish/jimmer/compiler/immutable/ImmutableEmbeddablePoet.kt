@@ -1,6 +1,8 @@
 package org.babyfish.jimmer.compiler.immutable
 
 import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.clazz.classDeclaration
+import site.addzero.lsi.clazz.directSuperTypes
 
 import org.babyfish.jimmer.client.meta.Doc
 import site.addzero.lsi.codegen.classifyArtifactAggregationMode
@@ -155,15 +157,15 @@ private fun MutableSet<LsiSymbolId>.addHierarchyDependencies(
         if (!visited.add(typeId)) {
             continue
         }
-        val hierarchyEntry = workspace.typeHierarchyEntry(typeId) ?: continue
-        hierarchyEntry.source?.let(sources::add)
-        hierarchyEntry.typeParameters.forEach { parameter ->
+        val declaration = workspace.classDeclaration(typeId) ?: continue
+        declaration.origin.source?.let(sources::add)
+        declaration.typeParameters.forEach { parameter ->
             parameter.upperBounds.forEach { bound ->
                 addTypeDependencies(bound)
                 bound.collectDeclaredTypeIds(pending)
             }
         }
-        hierarchyEntry.directSuperTypes.forEach { superType ->
+        declaration.directSuperTypes.forEach { superType ->
             addTypeDependencies(superType)
             superType.collectDeclaredTypeIds(pending)
         }

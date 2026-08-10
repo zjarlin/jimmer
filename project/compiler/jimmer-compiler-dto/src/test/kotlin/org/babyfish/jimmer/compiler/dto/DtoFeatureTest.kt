@@ -56,7 +56,6 @@ import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVisibility
@@ -1815,19 +1814,20 @@ class DtoFeatureTest {
         )
         return LsiWorkspace(
             sources = listOf(source),
-            declarations = declarations,
-            typeHierarchy = if (resolved) {
+            declarations = declarations + if (resolved) {
                 listOf(
-                    LsiTypeHierarchyEntry(
+                    LsiClass(
                         id = AUTHOR_TABLE_ID,
+                        name = "AuthorTable",
                         qualifiedName = "demo.AuthorTable",
                         kind = LsiTypeDeclarationKind.INTERFACE,
-                        directSuperTypes = listOf(
+                        superTypes = listOf(
                             LsiDeclaredType(
                                 declarationId = TABLE_ID,
                                 arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(AUTHOR_ID))),
                             ),
                         ),
+                        origin = origin,
                     ),
                 )
             } else {

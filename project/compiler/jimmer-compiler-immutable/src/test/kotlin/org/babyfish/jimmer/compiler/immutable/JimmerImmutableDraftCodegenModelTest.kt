@@ -193,7 +193,6 @@ class JimmerImmutableDraftCodegenModelTest {
                     LsiWorkspace(
                         sources = workspace.sources,
                         declarations = workspace.declarations.reversed(),
-                        typeHierarchy = workspace.typeHierarchy,
                         annotationScopes = workspace.annotationScopes,
                     ),
                     JimmerImmutableDraftCodegenOptions.DEFAULT,
