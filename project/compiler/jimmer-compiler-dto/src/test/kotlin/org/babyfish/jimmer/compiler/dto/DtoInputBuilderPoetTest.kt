@@ -43,7 +43,7 @@ import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.field.LsiField
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentLayout
 import site.addzero.lsi.field.LsiProperty
@@ -99,7 +99,7 @@ class DtoInputBuilderPoetTest {
             javaType.members.map { member ->
                 when (member) {
                     is LsiField -> member.name
-                    is LsiFunction -> member.name
+                    is LsiMethod -> member.name
                     else -> error("Unexpected Java InputBuilder member: $member")
                 }
             },
@@ -121,7 +121,7 @@ class DtoInputBuilderPoetTest {
             kotlinType.members.map { member ->
                 when (member) {
                     is LsiProperty -> member.name
-                    is LsiFunction -> member.name
+                    is LsiMethod -> member.name
                     else -> error("Unexpected Kotlin InputBuilder member: $member")
                 }
             },
@@ -544,7 +544,7 @@ class DtoInputBuilderPoetTest {
         graph: DtoGraph,
         contract: DtoAnnotationContract,
         language: LsiLanguage,
-    ): LsiFunction {
+    ): LsiMethod {
         val type = graph.types.single().toInputBuilderPoetType(
             graph = graph,
             immutableSchema = immutableSchema(),
@@ -555,12 +555,12 @@ class DtoInputBuilderPoetTest {
             jsonPojoBuilderAnnotationTypeId = JSON_POJO_BUILDER_TYPE_ID,
             jsonNamingAnnotationTypeId = JSON_NAMING_TYPE_ID,
         )
-        return type.members.filterIsInstance<LsiFunction>().single { function ->
+        return type.members.filterIsInstance<LsiMethod>().single { function ->
             function.name == "dynamicName"
         }
     }
 
-    private fun LsiFunction.nestedAnnotation(): LsiAnnotation {
+    private fun LsiMethod.nestedAnnotation(): LsiAnnotation {
         val wrapper = annotations.single { annotation -> annotation.type == WRAPPER_ANNOTATION_TYPE_ID }
         val wrapperArgument = assertIs<LsiSourceAnnotationArgument.Named>(wrapper.sourceArguments.single())
         return assertIs<LsiAnnotationValue.NestedAnnotationValue>(wrapperArgument.value).annotation

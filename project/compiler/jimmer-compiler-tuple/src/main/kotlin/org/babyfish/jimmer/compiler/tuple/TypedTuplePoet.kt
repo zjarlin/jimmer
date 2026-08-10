@@ -36,9 +36,9 @@ import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
@@ -258,7 +258,7 @@ private fun TypedTupleType.javaBaseTableType(): LsiClass {
             projection.selections.forEach { selection ->
                 val property = properties[selection.propertyIndex]
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = property.javaGetterName,
                         modifiers = setOf(LsiModifier.PUBLIC),
                         returnType = javaBaseTableSelectionType(property, selection),
@@ -402,8 +402,8 @@ private fun TypedTupleType.kotlinBaseTableCompanionType(
     )
 }
 
-private fun TypedTupleType.javaGetBaseTableFactoryFunction(): LsiFunction {
-    return LsiFunction(
+private fun TypedTupleType.javaGetBaseTableFactoryFunction(): LsiMethod {
+    return LsiMethod(
         name = "getBaseTableFactory",
         modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         returnType = declaredType(BASE_TABLE_FACTORY_ID, tableType, tableType),
@@ -416,8 +416,8 @@ private fun TypedTupleType.javaGetBaseTableFactoryFunction(): LsiFunction {
     )
 }
 
-private fun TypedTupleType.kotlinGetBaseTableFactoryFunction(): LsiFunction {
-    return LsiFunction(
+private fun TypedTupleType.kotlinGetBaseTableFactoryFunction(): LsiMethod {
+    return LsiMethod(
         name = "getBaseTableFactory",
         modifiers = setOf(LsiModifier.OVERRIDE),
         returnType = declaredType(BASE_TABLE_FACTORY_ID, tableType, nullableTableType),
@@ -430,8 +430,8 @@ private fun TypedTupleType.kotlinGetBaseTableFactoryFunction(): LsiFunction {
     )
 }
 
-private fun TypedTupleType.kotlinGetSelectionLayoutFunction(): LsiFunction {
-    return LsiFunction(
+private fun TypedTupleType.kotlinGetSelectionLayoutFunction(): LsiMethod {
+    return LsiMethod(
         name = "getSelectionLayout",
         modifiers = setOf(LsiModifier.OVERRIDE),
         returnType = BASE_TABLE_SELECTION_LAYOUT_TYPE,
@@ -446,7 +446,7 @@ private fun TypedTupleType.kotlinGetSelectionLayoutFunction(): LsiFunction {
 
 private fun TypedTupleType.kotlinWeakJoinFunctions(
     sourceType: LsiType,
-): List<LsiFunction> {
+): List<LsiMethod> {
     return listOf(
         kotlinWeakJoinFunction(sourceType, byType = false, outer = false),
         kotlinWeakJoinFunction(sourceType, byType = true, outer = false),
@@ -459,7 +459,7 @@ private fun TypedTupleType.kotlinWeakJoinFunction(
     sourceType: LsiType,
     byType: Boolean,
     outer: Boolean,
-): LsiFunction {
+): LsiMethod {
     val functionOwnerId = LsiSymbolId.function(
         LsiSymbolId.type(tableQualifiedName),
         "${if (outer) "weakOuterJoin" else "weakJoin"}:${if (byType) "type" else "lambda"}",
@@ -473,7 +473,7 @@ private fun TypedTupleType.kotlinWeakJoinFunction(
         if (outer) nullableTargetType else null,
     )
     val weakJoinType = declaredType(K_PROPS_WEAK_JOIN_ID, sourceType, targetType)
-    return LsiFunction(
+    return LsiMethod(
         name = if (outer) "weakOuterJoin" else "weakJoin",
         typeParameters = buildList {
             if (outer) {
@@ -577,8 +577,8 @@ private fun TypedTupleType.javaSelectionsConstructor(): LsiConstructor {
     )
 }
 
-private fun TypedTupleType.javaGetSelectionsFunction(): LsiFunction {
-    return LsiFunction(
+private fun TypedTupleType.javaGetSelectionsFunction(): LsiMethod {
+    return LsiMethod(
         name = "getSelections",
         modifiers = setOf(
             LsiModifier.PUBLIC,
@@ -598,8 +598,8 @@ private fun TypedTupleType.javaGetSelectionsFunction(): LsiFunction {
     )
 }
 
-private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiType): LsiFunction {
-    return LsiFunction(
+private fun TypedTupleType.javaCreateTupleFunction(tupleType: LsiType): LsiMethod {
+    return LsiMethod(
         name = "createTuple",
         modifiers = setOf(
             LsiModifier.PUBLIC,
@@ -683,10 +683,10 @@ private fun TypedTupleType.javaSetterTupleBody(
     }
 }
 
-private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiType): LsiFunction {
+private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiType): LsiMethod {
     val property = properties.first()
     val returnType = stepType(property, mapperType)
-    return LsiFunction(
+    return LsiMethod(
         name = property.name,
         modifiers = setOf(
             LsiModifier.PUBLIC,
@@ -731,7 +731,7 @@ private fun TypedTupleType.javaBuilderType(
         members = listOf(
             javaSelectionsField(),
             javaSelectionsConstructor(),
-            LsiFunction(
+            LsiMethod(
                 name = property.name,
                 modifiers = setOf(LsiModifier.PUBLIC),
                 parameters = listOf(
@@ -751,8 +751,8 @@ private fun TypedTupleType.javaBuilderType(
     )
 }
 
-private fun TypedTupleType.kotlinGetSelectionsFunction(): LsiFunction {
-    return LsiFunction(
+private fun TypedTupleType.kotlinGetSelectionsFunction(): LsiMethod {
+    return LsiMethod(
         name = "getSelections",
         annotations = listOf(UNCHECKED_CAST_SUPPRESSION),
         modifiers = setOf(LsiModifier.OVERRIDE),
@@ -770,8 +770,8 @@ private fun TypedTupleType.kotlinGetSelectionsFunction(): LsiFunction {
     )
 }
 
-private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiType): LsiFunction {
-    return LsiFunction(
+private fun TypedTupleType.kotlinCreateTupleFunction(tupleType: LsiType): LsiMethod {
+    return LsiMethod(
         name = "createTuple",
         modifiers = setOf(LsiModifier.OVERRIDE),
         parameters = listOf(LsiParameter("args", KOTLIN_ARGUMENT_ARRAY_TYPE)),
@@ -831,7 +831,7 @@ private fun TypedTupleType.kotlinBuilderType(
                 modifiers = setOf(LsiModifier.PRIVATE),
                 initializer = code { name("selections") },
             ),
-            LsiFunction(
+            LsiMethod(
                 name = property.name,
                 parameters = listOf(
                     LsiParameter("selection", kotlinSelectionType(property)),
@@ -857,7 +857,7 @@ private fun TypedTupleType.kotlinCompanionType(mapperType: LsiType): LsiClass {
         kind = LsiTypeDeclarationKind.OBJECT,
         modifiers = setOf(LsiModifier.COMPANION),
         members = listOf(
-            LsiFunction(
+            LsiMethod(
                 name = property.name,
                 parameters = listOf(
                     LsiParameter("selection", kotlinSelectionType(property)),

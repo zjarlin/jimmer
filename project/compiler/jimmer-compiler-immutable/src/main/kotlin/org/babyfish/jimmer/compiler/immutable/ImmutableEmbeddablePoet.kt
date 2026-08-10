@@ -47,9 +47,9 @@ import site.addzero.lsi.model.LsiDelegationTarget
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
 import site.addzero.lsi.model.LsiFileNameStyle
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedTypeIds
@@ -362,10 +362,10 @@ private fun ImmutableType.javaPropFunction(
     schema: ImmutableSchema,
     prop: ImmutableProp,
     typeSystem: LsiTypeSystem,
-): LsiFunction {
+): LsiMethod {
     val targetType = schema.targetTypeOf(prop)
     val returnType = targetType?.propExpressionType ?: prop.javaExpressionType(typeSystem)
-    return LsiFunction(
+    return LsiMethod(
         name = prop.name,
         modifiers = setOf(LsiModifier.PUBLIC),
         documentation = prop.documentation?.let(Doc::parse)?.value,
@@ -390,8 +390,8 @@ private fun ImmutableType.javaPropFunction(
     )
 }
 
-private fun ImmutableType.javaBaseTableOwnerFunction(): LsiFunction {
-    return LsiFunction(
+private fun ImmutableType.javaBaseTableOwnerFunction(): LsiMethod {
+    return LsiMethod(
         name = "__baseTableOwner",
         modifiers = setOf(
             LsiModifier.PUBLIC,
@@ -510,13 +510,13 @@ private fun ImmutableType.kotlinEmbeddedProp(
     )
 }
 
-private fun ImmutableType.kotlinFetchByFunction(nullable: Boolean): LsiFunction {
+private fun ImmutableType.kotlinFetchByFunction(nullable: Boolean): LsiMethod {
     val receiverTypeId = if (nullable) {
         K_NULLABLE_EMBEDDED_PROP_EXPRESSION_ID
     } else {
         K_NON_NULL_EMBEDDED_PROP_EXPRESSION_ID
     }
-    return LsiFunction(
+    return LsiMethod(
         name = "fetchBy",
         annotations = listOf(generatedByAnnotation(modelType)),
         receiverType = declaredType(receiverTypeId, modelType),

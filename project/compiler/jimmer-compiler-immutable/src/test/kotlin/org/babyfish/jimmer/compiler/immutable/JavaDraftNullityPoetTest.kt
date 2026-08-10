@@ -9,9 +9,9 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.model.LsiFile
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -29,7 +29,7 @@ class JavaDraftNullityPoetTest {
             kind = LsiTypeDeclarationKind.CLASS,
             modifiers = setOf(LsiModifier.PUBLIC),
             members = listOf(
-                LsiFunction(
+                LsiMethod(
                     name = "status",
                     modifiers = setOf(LsiModifier.PUBLIC),
                     parameters = listOf(
@@ -39,7 +39,7 @@ class JavaDraftNullityPoetTest {
                         )
                     ),
                 ),
-                LsiFunction(
+                LsiMethod(
                     name = "dates",
                     modifiers = setOf(LsiModifier.PUBLIC),
                     parameters = listOf(

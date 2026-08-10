@@ -46,7 +46,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.field.LsiField
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.field.LsiProperty
@@ -312,14 +312,14 @@ class LsiTypeUseAnnotationFrontendParityTest {
         return provider.workspaces.single { workspace -> workspace.declarations.isNotEmpty() }
     }
 
-    private fun LsiWorkspace.findBooksFunction(): LsiFunction {
-        return declarationsOfType<LsiFunction>().single { function ->
+    private fun LsiWorkspace.findBooksFunction(): LsiMethod {
+        return declarationsOfType<LsiMethod>().single { function ->
             function.ownerId == BOOK_SERVICE && function.name == "findBooks"
         }
     }
 
-    private fun LsiWorkspace.findProjectedFoosFunction(): LsiFunction {
-        return declarationsOfType<LsiFunction>().single { function ->
+    private fun LsiWorkspace.findProjectedFoosFunction(): LsiMethod {
+        return declarationsOfType<LsiMethod>().single { function ->
             function.ownerId == PROJECTION_SERVICE && function.name == "findProjectedFoos"
         }
     }
@@ -349,11 +349,11 @@ class LsiTypeUseAnnotationFrontendParityTest {
     }
 
     private fun assertJavaProjectionRules(workspace: LsiWorkspace) {
-        assertIs<LsiFunction>(workspace[CALCULATE_FUNCTION])
+        assertIs<LsiMethod>(workspace[CALCULATE_FUNCTION])
         assertEquals(null, workspace[CALCULATE_PROPERTY])
         assertIs<LsiProperty>(workspace[NAME_PROPERTY])
         assertIs<LsiProperty>(workspace[CONTRACT_VALUE_PROPERTY])
-        assertIs<LsiFunction>(workspace[CONTRACT_HELPER_FUNCTION])
+        assertIs<LsiMethod>(workspace[CONTRACT_HELPER_FUNCTION])
         assertEquals(null, workspace[CONTRACT_HELPER_PROPERTY])
         assertIs<LsiProperty>(workspace[RECORD_VALUE_PROPERTY])
     }
@@ -389,7 +389,7 @@ class LsiTypeUseAnnotationFrontendParityTest {
         assertEquals(ANNOTATION_TYPE, elementType.declarationId)
         assertEquals("getDeclaredAnnotations", property.getterName)
 
-        val helper = assertIs<LsiFunction>(workspace[DECLARED_ANNOTATIONS_HELPER])
+        val helper = assertIs<LsiMethod>(workspace[DECLARED_ANNOTATIONS_HELPER])
         val helperType = assertIs<LsiDeclaredType>(helper.returnType)
         assertEquals(MAP_TYPE, helperType.declarationId)
 
@@ -405,7 +405,7 @@ class LsiTypeUseAnnotationFrontendParityTest {
         )
     }
 
-    private fun LsiFunction.returnElementType(): LsiDeclaredType {
+    private fun LsiMethod.returnElementType(): LsiDeclaredType {
         val listType = assertIs<LsiDeclaredType>(returnType)
         assertEquals(LIST_TYPE, listType.declarationId)
         return assertIs<LsiDeclaredType>(requireNotNull(listType.arguments.single().type))

@@ -30,10 +30,10 @@ import site.addzero.lsi.model.LsiDelegationCall
 import site.addzero.lsi.model.LsiDelegationTarget
 import site.addzero.lsi.model.LsiFile
 import site.addzero.lsi.model.LsiFileNameStyle
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
@@ -387,11 +387,11 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    private fun draftAutoCreateFunction(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
+    private fun draftAutoCreateFunction(prop: JimmerImmutableDraftPropPlan): LsiMethod? {
         if (!prop.autoCreateSupported) {
             return null
         }
-        return LsiFunction(
+        return LsiMethod(
             name = prop.name,
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             modifiers = setOf(LsiModifier.ABSTRACT),
@@ -399,11 +399,11 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    private fun draftReferenceFunction(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
+    private fun draftReferenceFunction(prop: JimmerImmutableDraftPropPlan): LsiMethod? {
         if (!prop.referenceMutationSupported || prop.list) {
             return null
         }
-        return LsiFunction(
+        return LsiMethod(
             name = prop.name,
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             modifiers = setOf(LsiModifier.ABSTRACT),
@@ -597,8 +597,8 @@ internal class ImmutableDraftKotlinPoetContext(
         }
     }
 
-    private fun produceFunction(withBlock: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun produceFunction(withBlock: Boolean): LsiMethod {
+        return LsiMethod(
             name = "produce",
             parameters = buildList {
                 add(
@@ -662,7 +662,7 @@ internal class ImmutableDraftKotlinPoetContext(
                     add(builderSetter(prop))
                 }
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "build",
                         returnType = modelRawType,
                         body = draftCode {
@@ -705,8 +705,8 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    private fun builderSetter(prop: JimmerImmutableDraftPropPlan): LsiFunction {
-        return LsiFunction(
+    private fun builderSetter(prop: JimmerImmutableDraftPropPlan): LsiMethod {
+        return LsiMethod(
             name = prop.name,
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             annotations = prop.annotationPlan.builderMethodAnnotations.map(
@@ -755,7 +755,7 @@ internal class ImmutableDraftKotlinPoetContext(
         }
     }
 
-    private fun creatorFunctions(): List<LsiFunction> {
+    private fun creatorFunctions(): List<LsiMethod> {
         return listOf(
             newByFunction(withCreator = true, withBase = false, withBlock = true),
             newByFunction(withCreator = true, withBase = true, withBlock = false),
@@ -773,8 +773,8 @@ internal class ImmutableDraftKotlinPoetContext(
         withCreator: Boolean,
         withBase: Boolean,
         withBlock: Boolean,
-    ): LsiFunction {
-        return LsiFunction(
+    ): LsiMethod {
+        return LsiMethod(
             name = if (withCreator) "by" else simpleName,
             nameStyle = if (withCreator) {
                 LsiNameStyle.IDENTIFIER
@@ -803,9 +803,9 @@ internal class ImmutableDraftKotlinPoetContext(
     private fun addByFunction(
         withBase: Boolean,
         withBlock: Boolean,
-    ): LsiFunction {
+    ): LsiMethod {
         val receiverType = draftDeclaredType(KOTLIN_DRAFT_MUTABLE_LIST_TYPE_ID, draftType)
-        return LsiFunction(
+        return LsiMethod(
             name = "addBy",
             annotations = listOf(generatedByAnnotation()),
             receiverType = receiverType,
@@ -826,8 +826,8 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    private fun copyFunction(): LsiFunction {
-        return LsiFunction(
+    private fun copyFunction(): LsiMethod {
+        return LsiMethod(
             name = "copy",
             annotations = listOf(generatedByAnnotation()),
             receiverType = modelRawType,

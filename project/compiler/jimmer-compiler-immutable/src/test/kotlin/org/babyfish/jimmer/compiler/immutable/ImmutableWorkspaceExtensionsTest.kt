@@ -41,7 +41,7 @@ import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.model.LsiOverride
@@ -68,7 +68,7 @@ class ImmutableWorkspaceExtensionsTest {
         val schema = LsiWorkspace(
             declarations = listOf(
                 type("demo.HelperBase", MAPPED_SUPERCLASS, listOf(functionId, typedFunctionId)),
-                LsiFunction(
+                LsiMethod(
                     id = functionId,
                     name = "normalize",
                     ownerId = typeId,
@@ -76,7 +76,7 @@ class ImmutableWorkspaceExtensionsTest {
                     modality = LsiModality.OPEN,
                     origin = SYNTHETIC_ORIGIN,
                 ),
-                LsiFunction(
+                LsiMethod(
                     id = typedFunctionId,
                     name = "typed",
                     ownerId = typeId,
@@ -108,7 +108,7 @@ class ImmutableWorkspaceExtensionsTest {
                 LsiWorkspace(
                     declarations = listOf(
                         type("demo.$typeName", MAPPED_SUPERCLASS, listOf(functionId)),
-                        LsiFunction(
+                        LsiMethod(
                             id = functionId,
                             name = "normalize",
                             ownerId = typeId,

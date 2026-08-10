@@ -13,7 +13,7 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.clazz.LsiClass
 
@@ -22,7 +22,7 @@ internal fun DtoType.toDtoToStringPoetFunction(
     graph: DtoGraph,
     targetLanguage: LsiLanguage,
     generatedSimpleNamePath: String,
-): LsiFunction {
+): LsiMethod {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO toString requires Java or Kotlin target language"
     }
@@ -49,7 +49,7 @@ internal fun DtoType.toDtoToStringPoetFunction(
         generatedSimpleNamePath = generatedSimpleNamePath,
         hasConditionalProps = hasConditionalProps,
     )
-    return LsiFunction(
+    return LsiMethod(
         name = "toString",
         modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         returnType = STRING_TYPE,

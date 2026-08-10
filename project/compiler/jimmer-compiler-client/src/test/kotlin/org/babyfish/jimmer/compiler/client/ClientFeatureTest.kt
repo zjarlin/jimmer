@@ -24,7 +24,7 @@ import site.addzero.lsi.jimmer.client.fingerprint
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiEnumEntry
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.field.LsiProperty
@@ -558,8 +558,8 @@ class ClientFeatureTest {
         annotations: List<LsiAnnotation>,
         origin: LsiOrigin,
         thrownTypes: List<LsiType> = emptyList(),
-    ): LsiFunction {
-        return LsiFunction(
+    ): LsiMethod {
+        return LsiMethod(
             id = LsiSymbolId.function(ownerId, name),
             name = name,
             ownerId = ownerId,

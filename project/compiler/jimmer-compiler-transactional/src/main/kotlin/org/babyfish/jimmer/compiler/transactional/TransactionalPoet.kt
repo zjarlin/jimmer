@@ -32,9 +32,9 @@ import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDelegationCall
 import site.addzero.lsi.model.LsiDelegationTarget
 import site.addzero.lsi.model.LsiFile
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.sourceLsiAnnotation
@@ -204,8 +204,8 @@ private fun TransactionalConstructor.toKotlinPoetConstructor(
     )
 }
 
-private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): LsiFunction {
-    return LsiFunction(
+private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): LsiMethod {
+    return LsiMethod(
         name = name,
         annotations = buildList {
             // JavaPoet 必须先写 @Override，保持它位于复制的方法注解之前。
@@ -236,8 +236,8 @@ private fun TransactionalMethod.toJavaPoetFunction(type: TransactionalType): Lsi
 
 private fun TransactionalMethod.toKotlinPoetFunction(
     type: TransactionalType,
-): LsiFunction {
-    return LsiFunction(
+): LsiMethod {
+    return LsiMethod(
         name = name,
         annotations = copiedAnnotations
             .filter { annotation ->

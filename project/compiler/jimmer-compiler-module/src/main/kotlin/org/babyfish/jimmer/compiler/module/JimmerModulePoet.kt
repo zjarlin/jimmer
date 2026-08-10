@@ -14,9 +14,9 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
@@ -99,7 +99,7 @@ private fun JimmerModuleSummary.additionalTypeNames(): List<LsiClass> {
     }
 }
 
-private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiFunction {
+private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiMethod {
     val immutableType = LsiDeclaredType(typeId)
     val draftType = LsiDeclaredType(LsiSymbolId.type(qualifiedTypeName + "Draft"))
     val parameters = buildList {
@@ -116,7 +116,7 @@ private fun JimmerModuleSummaryMember.toCreator(withBase: Boolean): LsiFunction 
             )
         )
     }
-    return LsiFunction(
+    return LsiMethod(
         name = generatedName,
         modifiers = setOf(
             LsiModifier.PUBLIC,

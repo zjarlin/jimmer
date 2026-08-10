@@ -14,9 +14,9 @@ import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.clazz.toLsiClasses
@@ -26,7 +26,7 @@ internal fun DtoType.toDtoHibernateValidatorPoetFunctions(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): List<LsiFunction> {
+): List<LsiMethod> {
     val language = targetLanguage.requireHibernateValidatorTargetLanguage()
     val props = propsInDeclarationOrder(graph)
     return DtoHibernateValidatorLookup.entries.map { lookup ->
@@ -47,7 +47,7 @@ internal fun dtoHibernateValidatorEnhancedBeanType(): LsiDeclaredType {
 
 /** 解析 Hibernate Validator lowering 引用的精确源码类型名称。 */
 internal fun LsiWorkspace.dtoHibernateValidatorPoetTypeNames(
-    functions: Collection<LsiFunction>,
+    functions: Collection<LsiMethod>,
 ): List<LsiClass> {
     val typeIds = buildSet {
         functions.forEach { function -> addAll(function.referencedTypeIds) }
@@ -65,8 +65,8 @@ private fun hibernateValidatorPoetFunction(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
     lookup: DtoHibernateValidatorLookup,
-): LsiFunction {
-    return LsiFunction(
+): LsiMethod {
+    return LsiMethod(
         name = "\$\$_hibernateValidator_get${lookup.methodPart}Value",
         modifiers = buildSet {
             if (targetLanguage == LsiLanguage.JAVA) {

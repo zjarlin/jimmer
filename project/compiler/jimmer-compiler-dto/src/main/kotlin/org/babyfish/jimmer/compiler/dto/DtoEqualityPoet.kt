@@ -17,9 +17,9 @@ import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 
 /** 将冻结的 DTO 属性语义降低为平台中立的 hashCode 函数。 */
@@ -27,7 +27,7 @@ internal fun DtoType.toDtoHashCodePoetFunction(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiFunction {
+): LsiMethod {
     val language = targetLanguage.requireObjectMethodTargetLanguage()
     val props = propsInDeclarationOrder(graph)
     val loadedStateNames = props.associateWith { prop ->
@@ -70,7 +70,7 @@ internal fun DtoType.toDtoHashCodePoetFunction(
         }
         returnValue { name(hashName) }
     }
-    return LsiFunction(
+    return LsiMethod(
         name = "hashCode",
         modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         returnType = INT_TYPE,
@@ -85,7 +85,7 @@ internal fun DtoType.toDtoEqualsPoetFunction(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
     generatedTypeName: LsiClass,
-): LsiFunction {
+): LsiMethod {
     val language = targetLanguage.requireObjectMethodTargetLanguage()
     val props = propsInDeclarationOrder(graph)
     val loadedStateNames = props.associateWith { prop ->
@@ -163,7 +163,7 @@ internal fun DtoType.toDtoEqualsPoetFunction(
         }
         returnValue { text("true") }
     }
-    return LsiFunction(
+    return LsiMethod(
         name = "equals",
         modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
         parameters = listOf(

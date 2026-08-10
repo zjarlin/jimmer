@@ -24,10 +24,10 @@ import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeReferenceStyle
@@ -162,8 +162,8 @@ private class JavaDraftPoetContext(
     private fun draftGetter(
         prop: JimmerImmutableDraftPropPlan,
         autoCreate: Boolean,
-    ): LsiFunction {
-        return LsiFunction(
+    ): LsiMethod {
+        return LsiMethod(
             name = prop.sourceGetterName,
             annotations = if (!autoCreate && prop.nullable) listOf(NULLABLE_ANNOTATION) else emptyList(),
             modifiers = PUBLIC_ABSTRACT,
@@ -176,8 +176,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftSetter(prop: JimmerImmutableDraftPropPlan): LsiFunction {
-        return LsiFunction(
+    private fun draftSetter(prop: JimmerImmutableDraftPropPlan): LsiMethod {
+        return LsiMethod(
             name = prop.javaSetterName,
             annotations = buildList {
                 add(OLD_CHAIN_ANNOTATION)
@@ -198,9 +198,9 @@ private class JavaDraftPoetContext(
         prop: JimmerImmutableDraftPropPlan,
         withBase: Boolean,
         withImplementation: Boolean,
-    ): LsiFunction {
+    ): LsiMethod {
         val functionName = if (prop.list) prop.javaAdderByName else prop.javaApplierName
-        return LsiFunction(
+        return LsiMethod(
             name = functionName,
             annotations = listOf(OLD_CHAIN_ANNOTATION),
             modifiers = buildSet {
@@ -451,8 +451,8 @@ private class JavaDraftPoetContext(
     private fun produceFunction(
         withBase: Boolean,
         resolveImmediately: Boolean,
-    ): LsiFunction {
-        return LsiFunction(
+    ): LsiMethod {
+        return LsiMethod(
             name = "produce",
             modifiers = setOf(LsiModifier.PUBLIC),
             parameters = buildList {
@@ -520,7 +520,7 @@ private class JavaDraftPoetContext(
                 add(implementorGetFunction(byId = false))
                 legacyProps.forEach { prop -> addAll(implementorGetterMembers(prop)) }
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "__type",
                         modifiers = PUBLIC_FINAL_OVERRIDE,
                         returnType = RUNTIME_IMMUTABLE_TYPE,
@@ -528,7 +528,7 @@ private class JavaDraftPoetContext(
                     )
                 )
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "getDummyPropForJacksonError__",
                         modifiers = PUBLIC_FINAL,
                         returnType = INT_TYPE,
@@ -545,8 +545,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implementorGetFunction(byId: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun implementorGetFunction(byId: Boolean): LsiMethod {
+        return LsiMethod(
             name = "__get",
             modifiers = PUBLIC_FINAL_OVERRIDE,
             parameters = listOf(
@@ -591,7 +591,7 @@ private class JavaDraftPoetContext(
             prop.manyToManyBasePropId?.let { basePropId ->
                 val baseProp = type.propsById.getValue(basePropId)
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = prop.sourceGetterName,
                         modifiers = PUBLIC_FINAL_OVERRIDE,
                         returnType = prop.type.withoutJavaDraftTypeAnnotations(),
@@ -609,7 +609,7 @@ private class JavaDraftPoetContext(
             }
             if (!prop.isJavaBeanStyle) {
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = prop.javaBeanGetterName,
                         annotations = prop.annotationPlan.methodAnnotations
                             .map(LsiAnnotation::toJavaDraftPoetAnnotation),
@@ -664,7 +664,7 @@ private class JavaDraftPoetContext(
                 add(implHashCodeFunction(shallow = false))
                 add(implHashCodeFunction(shallow = true))
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "__hashCode",
                         modifiers = PUBLIC_OVERRIDE,
                         parameters = listOf(LsiParameter("shallow", BOOLEAN_TYPE)),
@@ -677,7 +677,7 @@ private class JavaDraftPoetContext(
                 add(implEqualsFunction(shallow = false))
                 add(implEqualsFunction(shallow = true))
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "__equals",
                         modifiers = PUBLIC_OVERRIDE,
                         parameters = listOf(
@@ -691,7 +691,7 @@ private class JavaDraftPoetContext(
                     )
                 )
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "toString",
                         modifiers = PUBLIC_OVERRIDE,
                         returnType = STRING_TYPE,
@@ -760,11 +760,11 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implGetter(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
+    private fun implGetter(prop: JimmerImmutableDraftPropPlan): LsiMethod? {
         if (prop.languageFormula || prop.manyToManyBasePropId != null) {
             return null
         }
-        return LsiFunction(
+        return LsiMethod(
             name = prop.sourceGetterName,
             annotations = buildList {
                 add(JAVA_OVERRIDE_ANNOTATION)
@@ -845,8 +845,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implCloneFunction(): LsiFunction {
-        return LsiFunction(
+    private fun implCloneFunction(): LsiMethod {
+        return LsiMethod(
             name = "clone",
             modifiers = PUBLIC_OVERRIDE,
             returnType = implType,
@@ -892,8 +892,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implIsLoadedFunction(byId: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun implIsLoadedFunction(byId: Boolean): LsiMethod {
+        return LsiMethod(
             name = "__isLoaded",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
@@ -992,8 +992,8 @@ private class JavaDraftPoetContext(
         return draftCode { text("${requireNotNull(prop.valueFieldName)} != null") }
     }
 
-    private fun implIsVisibleFunction(byId: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun implIsVisibleFunction(byId: Boolean): LsiMethod {
+        return LsiMethod(
             name = "__isVisible",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
@@ -1022,8 +1022,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implHashCodeFunction(shallow: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun implHashCodeFunction(shallow: Boolean): LsiMethod {
+        return LsiMethod(
             name = if (shallow) "__shallowHashCode" else "hashCode",
             modifiers = if (shallow) {
                 setOf(LsiModifier.PRIVATE)
@@ -1095,8 +1095,8 @@ private class JavaDraftPoetContext(
         endControlFlow()
     }
 
-    private fun implEqualsFunction(shallow: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun implEqualsFunction(shallow: Boolean): LsiMethod {
+        return LsiMethod(
             name = if (shallow) "__shallowEquals" else "equals",
             modifiers = if (shallow) {
                 setOf(LsiModifier.PRIVATE)
@@ -1222,7 +1222,7 @@ private class JavaDraftPoetContext(
                 add(draftImplUnloadFunction(byId = true))
                 add(draftImplUnloadFunction(byId = false))
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "__draftContext",
                         modifiers = PUBLIC_OVERRIDE,
                         returnType = DRAFT_CONTEXT_TYPE,
@@ -1231,7 +1231,7 @@ private class JavaDraftPoetContext(
                 )
                 add(draftImplResolveFunction())
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "__isResolved",
                         modifiers = PUBLIC_OVERRIDE,
                         returnType = BOOLEAN_TYPE,
@@ -1299,13 +1299,13 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplReadonlyFunctions(): List<LsiFunction> {
+    private fun draftImplReadonlyFunctions(): List<LsiMethod> {
         return listOf(
             readonlyDelegate("__isLoaded", PROP_ID_TYPE, BOOLEAN_TYPE, "prop"),
             readonlyDelegate("__isLoaded", STRING_TYPE, BOOLEAN_TYPE, "prop"),
             readonlyDelegate("__isVisible", PROP_ID_TYPE, BOOLEAN_TYPE, "prop"),
             readonlyDelegate("__isVisible", STRING_TYPE, BOOLEAN_TYPE, "prop"),
-            LsiFunction(
+            LsiMethod(
                 name = "hashCode",
                 modifiers = PUBLIC_OVERRIDE,
                 returnType = INT_TYPE,
@@ -1316,7 +1316,7 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiFunction(
+            LsiMethod(
                 name = "__hashCode",
                 modifiers = PUBLIC_OVERRIDE,
                 parameters = listOf(LsiParameter("shallow", BOOLEAN_TYPE)),
@@ -1328,7 +1328,7 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiFunction(
+            LsiMethod(
                 name = "equals",
                 modifiers = PUBLIC_OVERRIDE,
                 parameters = listOf(LsiParameter("obj", OBJECT_TYPE)),
@@ -1340,7 +1340,7 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiFunction(
+            LsiMethod(
                 name = "__equals",
                 modifiers = PUBLIC_OVERRIDE,
                 parameters = listOf(
@@ -1355,7 +1355,7 @@ private class JavaDraftPoetContext(
                     }
                 },
             ),
-            LsiFunction(
+            LsiMethod(
                 name = "toString",
                 modifiers = PUBLIC_OVERRIDE,
                 returnType = STRING_TYPE,
@@ -1374,8 +1374,8 @@ private class JavaDraftPoetContext(
         parameterType: LsiType,
         returnType: LsiType,
         parameterName: String,
-    ): LsiFunction {
-        return LsiFunction(
+    ): LsiMethod {
+        return LsiMethod(
             name = functionName,
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(LsiParameter(parameterName, parameterType)),
@@ -1389,11 +1389,11 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplGetter(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
+    private fun draftImplGetter(prop: JimmerImmutableDraftPropPlan): LsiMethod? {
         if (prop.manyToManyBasePropId != null) {
             return null
         }
-        return LsiFunction(
+        return LsiMethod(
             name = prop.sourceGetterName,
             annotations = buildList {
                 add(JAVA_OVERRIDE_ANNOTATION)
@@ -1474,12 +1474,12 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun draftImplCreator(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
+    private fun draftImplCreator(prop: JimmerImmutableDraftPropPlan): LsiMethod? {
         if (!prop.autoCreateSupported) {
             return null
         }
         val realProp = prop.idViewBasePropId?.let(type.propsById::getValue) ?: prop
-        return LsiFunction(
+        return LsiMethod(
             name = prop.sourceGetterName,
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(LsiParameter("autoCreate", BOOLEAN_TYPE)),
@@ -1539,11 +1539,11 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplSetter(prop: JimmerImmutableDraftPropPlan): LsiFunction? {
+    private fun draftImplSetter(prop: JimmerImmutableDraftPropPlan): LsiMethod? {
         if (!prop.writable) {
             return null
         }
-        return LsiFunction(
+        return LsiMethod(
             name = prop.javaSetterName,
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
@@ -1651,8 +1651,8 @@ private class JavaDraftPoetContext(
         endControlFlow()
     }
 
-    private fun draftImplSetFunction(byId: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun draftImplSetFunction(byId: Boolean): LsiMethod {
+        return LsiMethod(
             name = "__set",
             annotations = listOf(SUPPRESS_ALL_ANNOTATION),
             modifiers = PUBLIC_OVERRIDE,
@@ -1726,8 +1726,8 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun draftImplShowFunction(byId: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun draftImplShowFunction(byId: Boolean): LsiMethod {
+        return LsiMethod(
             name = "__show",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
@@ -1783,8 +1783,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftImplUnloadFunction(byId: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun draftImplUnloadFunction(byId: Boolean): LsiMethod {
+        return LsiMethod(
             name = "__unload",
             modifiers = PUBLIC_OVERRIDE,
             parameters = listOf(
@@ -1845,8 +1845,8 @@ private class JavaDraftPoetContext(
         }
     }
 
-    private fun draftImplResolveFunction(): LsiFunction {
-        return LsiFunction(
+    private fun draftImplResolveFunction(): LsiMethod {
+        return LsiMethod(
             name = "__resolve",
             modifiers = PUBLIC_OVERRIDE,
             returnType = OBJECT_TYPE,
@@ -1933,8 +1933,8 @@ private class JavaDraftPoetContext(
         returnValue { text("__tmpModified") }
     }
 
-    private fun draftImplModifiedFunction(): LsiFunction {
-        return LsiFunction(
+    private fun draftImplModifiedFunction(): LsiMethod {
+        return LsiMethod(
             name = DRAFT_MODIFIED_FIELD,
             returnType = implType,
             body = draftCode {
@@ -1976,7 +1976,7 @@ private class JavaDraftPoetContext(
                     add(builderSetter(prop))
                 }
                 add(
-                    LsiFunction(
+                    LsiMethod(
                         name = "build",
                         modifiers = setOf(LsiModifier.PUBLIC),
                         returnType = modelType,
@@ -2021,8 +2021,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun builderSetter(prop: JimmerImmutableDraftPropPlan): LsiFunction {
-        return LsiFunction(
+    private fun builderSetter(prop: JimmerImmutableDraftPropPlan): LsiMethod {
+        return LsiMethod(
             name = prop.codegenName,
             annotations = prop.annotationPlan.builderMethodAnnotations
                 .map(LsiAnnotation::toJavaDraftPoetAnnotation),
@@ -2067,7 +2067,7 @@ private class JavaDraftPoetContext(
     private fun associatedIdMembers(
         prop: JimmerImmutableDraftPropPlan,
         withImplementation: Boolean,
-    ): List<LsiFunction> {
+    ): List<LsiMethod> {
         val contract = prop.associatedId ?: return emptyList()
         val targetType = requireNotNull(prop.targetTypeId).let(schema.typesById::getValue)
         val targetIdProp = targetType.propsById.getValue(contract.targetIdPropId)
@@ -2088,8 +2088,8 @@ private class JavaDraftPoetContext(
         targetIdProp: JimmerImmutableDraftPropPlan,
         idType: LsiType,
         withImplementation: Boolean,
-    ): LsiFunction {
-        return LsiFunction(
+    ): LsiMethod {
+        return LsiMethod(
             name = StringUtil.identifier(prop.sourceGetterName, "Id"),
             annotations = buildList {
                 add(JSON_IGNORE_ANNOTATION)
@@ -2131,8 +2131,8 @@ private class JavaDraftPoetContext(
         idType: LsiType,
         parameterName: String,
         withImplementation: Boolean,
-    ): LsiFunction {
-        return LsiFunction(
+    ): LsiMethod {
+        return LsiMethod(
             name = StringUtil.identifier(prop.javaSetterName, "Id"),
             annotations = listOf(OLD_CHAIN_ANNOTATION),
             modifiers = buildSet {

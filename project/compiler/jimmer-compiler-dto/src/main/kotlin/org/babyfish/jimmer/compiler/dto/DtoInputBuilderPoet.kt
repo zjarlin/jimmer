@@ -37,10 +37,10 @@ import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.field.LsiField
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
@@ -216,10 +216,10 @@ private fun DtoProp.inputBuilderSetter(
     targetLanguage: LsiLanguage,
     builderType: LsiDeclaredType,
     generatedDtoType: (DtoType) -> LsiDeclaredType,
-): LsiFunction {
+): LsiMethod {
     val parameterType = inputBuilderParameterType(graph, immutableSchema, targetLanguage, generatedDtoType)
     val stateName = inputBuilderLoadedStateNameOrNull(graph, targetLanguage)
-    return LsiFunction(
+    return LsiMethod(
         name = inputBuilderSetterName(),
         annotations = inputBuilderSetterJacksonAnnotationApplications(graph, annotationContract).map { application ->
             val dtoSourceAnnotation = if (application.origin == DtoAnnotationOrigin.DTO) {
@@ -282,8 +282,8 @@ private fun DtoType.inputBuilderBuildFunction(
     targetLanguage: LsiLanguage,
     currentDtoType: LsiDeclaredType,
     props: List<DtoProp>,
-): LsiFunction {
-    return LsiFunction(
+): LsiMethod {
+    return LsiMethod(
         name = "build",
         modifiers = if (targetLanguage == LsiLanguage.JAVA) {
             setOf(LsiModifier.PUBLIC)

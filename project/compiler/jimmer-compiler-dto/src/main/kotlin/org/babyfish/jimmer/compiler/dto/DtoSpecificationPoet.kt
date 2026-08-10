@@ -45,9 +45,9 @@ import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.clazz.toLsiClasses
@@ -56,7 +56,7 @@ import site.addzero.lsi.clazz.toLsiClasses
 internal fun DtoType.toLsiSpecificationEntityTypePoetFunction(
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiFunction {
+): LsiMethod {
     val language = targetLanguage.requireSpecificationTargetLanguage()
     val baseType = LsiDeclaredType(specificationBaseType(immutableSchema).id)
     val modifiers = buildSet {
@@ -67,7 +67,7 @@ internal fun DtoType.toLsiSpecificationEntityTypePoetFunction(
             add(LsiModifier.OVERRIDE)
         }
     }
-    return LsiFunction(
+    return LsiMethod(
         name = "entityType",
         modifiers = modifiers,
         returnType = LsiDeclaredType(
@@ -89,7 +89,7 @@ internal fun DtoType.toLsiSpecificationApplyToPoetFunction(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiFunction {
+): LsiMethod {
     val language = targetLanguage.requireSpecificationTargetLanguage()
     require(DtoModifier.SPECIFICATION in modifiers) {
         "DTO applyTo lowering requires a specification type: ${id.value}"
@@ -153,7 +153,7 @@ internal fun DtoType.toLsiSpecificationApplyToPoetFunction(
             add(LsiModifier.OVERRIDE)
         }
     }
-    return LsiFunction(
+    return LsiMethod(
         name = "applyTo",
         modifiers = modifiers,
         parameters = listOf(
@@ -172,7 +172,7 @@ internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-): LsiFunction? {
+): LsiMethod? {
     val language = targetLanguage.requireSpecificationTargetLanguage()
     if (!requiresSpecificationConverter(graph, immutableSchema)) {
         return null
@@ -222,7 +222,7 @@ internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
             }
         }
     }
-    return LsiFunction(
+    return LsiMethod(
         name = specificationConverterName(language, graph),
         modifiers = setOf(
             if (language == LsiLanguage.JAVA) {
@@ -245,7 +245,7 @@ internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
 
 /** 解析 Specification lowering 引用的精确源码类型名称。 */
 internal fun LsiWorkspace.dtoSpecificationPoetTypeNames(
-    function: LsiFunction,
+    function: LsiMethod,
     immutableSchema: ImmutableSchema,
 ): List<LsiClass> {
     return toLsiClasses(

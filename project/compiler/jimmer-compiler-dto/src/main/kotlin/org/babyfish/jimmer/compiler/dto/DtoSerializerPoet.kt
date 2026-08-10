@@ -14,9 +14,9 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiCodeBlock
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 
 internal fun DtoType.toSerializerPoetType(
@@ -45,7 +45,7 @@ internal fun DtoType.toSerializerPoetType(
             arguments = listOf(LsiTypeArgument.invariant(dtoType)),
         ),
         members = listOf(
-            LsiFunction(
+            LsiMethod(
                 name = "serialize",
                 modifiers = if (targetLanguage == LsiLanguage.JAVA) {
                     setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE)

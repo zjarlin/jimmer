@@ -53,11 +53,11 @@ import site.addzero.lsi.model.LsiDelegationTarget
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
 import site.addzero.lsi.model.LsiFileNameStyle
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeReferenceStyle
@@ -268,9 +268,9 @@ private class KotlinQueryPoetContext(
         return declaredType(rawReturnTypeId, targetType)
     }
 
-    private fun existsFunction(prop: ImmutableProp): LsiFunction {
+    private fun existsFunction(prop: ImmutableProp): LsiMethod {
         val targetType = schema.targetTypeOf(prop)?.let { target -> LsiDeclaredType(target.id) } ?: KOTLIN_ANY_TYPE
-        return LsiFunction(
+        return LsiMethod(
             name = prop.name,
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             receiverType = declaredType(K_PROPS_ID, modelType),
@@ -391,8 +391,8 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun fetchByFunction(nullable: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun fetchByFunction(nullable: Boolean): LsiMethod {
+        return LsiMethod(
             name = "fetchBy",
             annotations = listOf(generatedByAnnotation(modelType)),
             receiverType = declaredType(
@@ -423,7 +423,7 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun polymorphicFunctions(): List<LsiFunction> {
+    private fun polymorphicFunctions(): List<LsiMethod> {
         if (schema.strictPrimarySubtypesOf(type).isEmpty()) return emptyList()
         return listOf(
             treatAsFunction(receiverNullable = false, optional = false),
@@ -441,12 +441,12 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun treatAsFunction(receiverNullable: Boolean, optional: Boolean): LsiFunction {
+    private fun treatAsFunction(receiverNullable: Boolean, optional: Boolean): LsiMethod {
         val parameterId = LsiSymbolId.typeParameter(type.generatedQueryTypeId("query:$receiverNullable:$optional"), "S")
         val parameter = LsiTypeParameter(parameterId, "S", upperBounds = listOf(modelType))
         val parameterType = LsiTypeParameterRef(parameterId)
         val functionName = if (optional) "tryTreatAs" else "treatAs"
-        return LsiFunction(
+        return LsiMethod(
             name = functionName,
             annotations = listOf(generatedByAnnotation(modelType)),
             typeParameters = listOf(parameter),
@@ -470,12 +470,12 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun reifiedTreatAsFunction(receiverNullable: Boolean, optional: Boolean): LsiFunction {
+    private fun reifiedTreatAsFunction(receiverNullable: Boolean, optional: Boolean): LsiMethod {
         val parameterId = LsiSymbolId.typeParameter(type.generatedQueryTypeId("reified-query:$receiverNullable:$optional"), "S")
         val parameter = LsiTypeParameter(parameterId, "S", upperBounds = listOf(modelType))
         val parameterType = LsiTypeParameterRef(parameterId)
         val functionName = if (optional) "tryTreatAs" else "treatAs"
-        return LsiFunction(
+        return LsiMethod(
             name = functionName,
             annotations = listOf(generatedByAnnotation(modelType)),
             modifiers = setOf(LsiModifier.INLINE),
@@ -498,12 +498,12 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun instanceOfFunction(): LsiFunction = polymorphicPredicateFunction("instanceOf")
+    private fun instanceOfFunction(): LsiMethod = polymorphicPredicateFunction("instanceOf")
 
-    private fun exactTypeFunction(): LsiFunction = polymorphicPredicateFunction("exactType")
+    private fun exactTypeFunction(): LsiMethod = polymorphicPredicateFunction("exactType")
 
-    private fun polymorphicPredicateFunction(name: String): LsiFunction {
-        return LsiFunction(
+    private fun polymorphicPredicateFunction(name: String): LsiMethod {
+        return LsiMethod(
             name = name,
             annotations = listOf(generatedByAnnotation(modelType)),
             receiverType = declaredType(K_TABLE_EX_ID, modelType),
@@ -525,14 +525,14 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun reifiedInstanceOfFunction(): LsiFunction = reifiedPolymorphicPredicateFunction("instanceOf")
+    private fun reifiedInstanceOfFunction(): LsiMethod = reifiedPolymorphicPredicateFunction("instanceOf")
 
-    private fun reifiedExactTypeFunction(): LsiFunction = reifiedPolymorphicPredicateFunction("exactType")
+    private fun reifiedExactTypeFunction(): LsiMethod = reifiedPolymorphicPredicateFunction("exactType")
 
-    private fun reifiedPolymorphicPredicateFunction(name: String): LsiFunction {
+    private fun reifiedPolymorphicPredicateFunction(name: String): LsiMethod {
         val parameterId = LsiSymbolId.typeParameter(type.generatedQueryTypeId("reified-predicate:$name"), "S")
         val parameter = LsiTypeParameter(parameterId, "S", upperBounds = listOf(modelType))
-        return LsiFunction(
+        return LsiMethod(
             name = name,
             annotations = listOf(generatedByAnnotation(modelType)),
             modifiers = setOf(LsiModifier.INLINE),
@@ -897,10 +897,10 @@ private class JavaQueryPoetContext(
         tableEx: Boolean,
         withJoinType: Boolean,
         withImplementation: Boolean,
-    ): LsiFunction? {
+    ): LsiMethod? {
         if (withJoinType && !schema.isEntityAssociation(prop)) return null
         val returnType = propertyReturnType(prop, tableEx)
-        return LsiFunction(
+        return LsiMethod(
             name = prop.name,
             documentation = prop.documentation?.let(Doc::parse)?.value,
             modifiers = buildSet {
@@ -989,7 +989,7 @@ private class JavaQueryPoetContext(
         return prop.javaExpressionType(typeSystem)
     }
 
-    private fun existsFunction(prop: ImmutableProp, withImplementation: Boolean): LsiFunction? {
+    private fun existsFunction(prop: ImmutableProp, withImplementation: Boolean): LsiMethod? {
         if (!schema.isEntityAssociation(prop) || !prop.list) return null
         val targetType = requireNotNull(schema.targetTypeOf(prop)) {
             "List association '${prop.id.value}' must have a concrete target"
@@ -997,7 +997,7 @@ private class JavaQueryPoetContext(
         val runtimePropsType = schema.primaryLineageOwner(type, prop).let { owner ->
             owner.generatedQueryType("${owner.simpleName}Props")
         }
-        return LsiFunction(
+        return LsiMethod(
             name = prop.name,
             modifiers = buildSet {
                 add(LsiModifier.PUBLIC)
@@ -1030,7 +1030,7 @@ private class JavaQueryPoetContext(
         prop: ImmutableProp,
         tableEx: Boolean,
         withImplementation: Boolean,
-    ): LsiFunction? {
+    ): LsiMethod? {
         val functionName = schema.associatedIdPropName(type, prop) ?: return null
         if (
             prop.primaryMapping == PrimaryMapping.TRANSIENT ||
@@ -1043,7 +1043,7 @@ private class JavaQueryPoetContext(
         val runtimePropsType = schema.primaryLineageOwner(type, prop).let { owner ->
             owner.generatedQueryType("${owner.simpleName}Props")
         }
-        return LsiFunction(
+        return LsiMethod(
             name = functionName,
             modifiers = buildSet {
                 add(LsiModifier.PUBLIC)
@@ -1066,8 +1066,8 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun asTableExFunction(tableEx: Boolean): LsiFunction {
-        return LsiFunction(
+    private fun asTableExFunction(tableEx: Boolean): LsiMethod {
+        return LsiMethod(
             name = "asTableEx",
             modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
             returnType = tableExType,
@@ -1085,8 +1085,8 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun disableJoinFunction(selfType: LsiType): LsiFunction {
-        return LsiFunction(
+    private fun disableJoinFunction(selfType: LsiType): LsiMethod {
+        return LsiMethod(
             name = "__disableJoin",
             modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
             parameters = listOf(LsiParameter("reason", STRING_TYPE)),
@@ -1101,8 +1101,8 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun baseTableOwnerFunction(selfType: LsiType): LsiFunction {
-        return LsiFunction(
+    private fun baseTableOwnerFunction(selfType: LsiType): LsiMethod {
+        return LsiMethod(
             name = "__baseTableOwner",
             modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
             parameters = listOf(LsiParameter("baseTableOwner", BASE_TABLE_OWNER_TYPE)),
@@ -1117,7 +1117,7 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun treatAsFunction(optional: Boolean): LsiFunction {
+    private fun treatAsFunction(optional: Boolean): LsiMethod {
         val parameterId = LsiSymbolId.typeParameter(type.generatedQueryTypeId("java-treat:$optional"), "TT")
         val parameter = LsiTypeParameter(
             id = parameterId,
@@ -1125,7 +1125,7 @@ private class JavaQueryPoetContext(
             upperBounds = listOf(declaredType(TABLE_ID, LsiTypeArgument.STAR)),
         )
         val parameterType = LsiTypeParameterRef(parameterId)
-        return LsiFunction(
+        return LsiMethod(
             name = if (optional) "tryTreatAs" else "treatAs",
             annotations = listOf(JAVA_OVERRIDE_ANNOTATION, SUPPRESS_ALL_ANNOTATION),
             modifiers = setOf(LsiModifier.PUBLIC),
@@ -1160,12 +1160,12 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun instanceOfFunction(): LsiFunction = javaPolymorphicPredicateFunction("instanceOf")
+    private fun instanceOfFunction(): LsiMethod = javaPolymorphicPredicateFunction("instanceOf")
 
-    private fun exactTypeFunction(): LsiFunction = javaPolymorphicPredicateFunction("exactType")
+    private fun exactTypeFunction(): LsiMethod = javaPolymorphicPredicateFunction("exactType")
 
-    private fun javaPolymorphicPredicateFunction(name: String): LsiFunction {
-        return LsiFunction(
+    private fun javaPolymorphicPredicateFunction(name: String): LsiMethod {
+        return LsiMethod(
             name = name,
             modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
             parameters = listOf(
@@ -1186,13 +1186,13 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun weakJoinFunction(withJoinType: Boolean): LsiFunction {
+    private fun weakJoinFunction(withJoinType: Boolean): LsiMethod {
         val ownerId = type.generatedQueryTypeId("java-weak-join:$withJoinType")
         val tableParameterId = LsiSymbolId.typeParameter(ownerId, "TT")
         val weakJoinParameterId = LsiSymbolId.typeParameter(ownerId, "WJ")
         val tableParameterType = LsiTypeParameterRef(tableParameterId)
         val weakJoinParameterType = LsiTypeParameterRef(weakJoinParameterId)
-        return LsiFunction(
+        return LsiMethod(
             name = "weakJoin",
             annotations = if (withJoinType) listOf(SUPPRESS_ALL_ANNOTATION) else emptyList(),
             modifiers = setOf(LsiModifier.PUBLIC),
@@ -1239,11 +1239,11 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun lambdaWeakJoinFunction(withJoinType: Boolean): LsiFunction {
+    private fun lambdaWeakJoinFunction(withJoinType: Boolean): LsiMethod {
         val ownerId = type.generatedQueryTypeId("java-lambda-weak-join:$withJoinType")
         val tableParameterId = LsiSymbolId.typeParameter(ownerId, "TT")
         val tableParameterType = LsiTypeParameterRef(tableParameterId)
-        return LsiFunction(
+        return LsiMethod(
             name = "weakJoin",
             annotations = if (withJoinType) listOf(SUPPRESS_ALL_ANNOTATION) else emptyList(),
             modifiers = setOf(LsiModifier.PUBLIC),
@@ -1291,11 +1291,11 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun baseTableWeakJoinFunction(withJoinType: Boolean): LsiFunction {
+    private fun baseTableWeakJoinFunction(withJoinType: Boolean): LsiMethod {
         val ownerId = type.generatedQueryTypeId("java-base-table-weak-join:$withJoinType")
         val tableParameterId = LsiSymbolId.typeParameter(ownerId, "TT")
         val tableParameterType = LsiTypeParameterRef(tableParameterId)
-        return LsiFunction(
+        return LsiMethod(
             name = "weakJoin",
             modifiers = setOf(LsiModifier.PUBLIC),
             typeParameters = listOf(
@@ -1415,21 +1415,21 @@ private class JavaQueryPoetContext(
                     ),
                 ),
                 remoteIdFunction(idProp),
-                LsiFunction(
+                LsiMethod(
                     name = "asTableEx",
                     annotations = listOf(JAVA_OVERRIDE_ANNOTATION, DEPRECATED_ANNOTATION),
                     modifiers = setOf(LsiModifier.PUBLIC),
                     returnType = declaredType(TABLE_EX_ID, modelType),
                     body = code { statement { text("throw new UnsupportedOperationException()") } },
                 ),
-                LsiFunction(
+                LsiMethod(
                     name = "__disableJoin",
                     modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
                     parameters = listOf(LsiParameter("reason", STRING_TYPE)),
                     returnType = remoteType,
                     body = code { returnValue { text("this") } },
                 ),
-                LsiFunction(
+                LsiMethod(
                     name = "__baseTableOwner",
                     modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.OVERRIDE),
                     parameters = listOf(LsiParameter("baseTableOwner", BASE_TABLE_OWNER_TYPE)),
@@ -1440,10 +1440,10 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun remoteIdFunction(idProp: ImmutableProp): LsiFunction {
+    private fun remoteIdFunction(idProp: ImmutableProp): LsiMethod {
         val returnType = propertyReturnType(idProp, tableEx = false)
         val idType = idProp.type.toQueryJavaType()
-        return LsiFunction(
+        return LsiMethod(
             name = idProp.name,
             modifiers = setOf(LsiModifier.PUBLIC),
             returnType = returnType,

@@ -37,7 +37,7 @@ import site.addzero.lsi.jimmer.client.ClientSchemaDependencies
 import site.addzero.lsi.jimmer.client.normalizedSnapshot
 import site.addzero.lsi.jimmer.client.toClientSchema
 import site.addzero.lsi.jimmer.error.ErrorSchema
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.toSemanticSnapshot
@@ -87,19 +87,19 @@ class ClientFrontendParityTest {
         val kspSchema = kspWorkspace.toClientSchema(emptyClientDependencies())
 
         val serviceId = LsiSymbolId.type("demo.ErrorService")
-        val aptCallableIds = aptWorkspace.declarationsOfType<LsiFunction>()
+        val aptCallableIds = aptWorkspace.declarationsOfType<LsiMethod>()
             .filter { function -> function.ownerId == serviceId }
-            .mapTo(linkedSetOf(), LsiFunction::id)
-        val kspCallableIds = kspWorkspace.declarationsOfType<LsiFunction>()
+            .mapTo(linkedSetOf(), LsiMethod::id)
+        val kspCallableIds = kspWorkspace.declarationsOfType<LsiMethod>()
             .filter { function -> function.ownerId == serviceId }
-            .mapTo(linkedSetOf(), LsiFunction::id)
+            .mapTo(linkedSetOf(), LsiMethod::id)
         assertEquals(aptCallableIds, kspCallableIds)
         assertEquals(aptSchema.normalizedSnapshot(), kspSchema.normalizedSnapshot())
 
         val identityOwnerId = LsiSymbolId.type("demo.CallableIdentity")
-        val aptIdentityFunctions = aptWorkspace.declarationsOfType<LsiFunction>()
+        val aptIdentityFunctions = aptWorkspace.declarationsOfType<LsiMethod>()
             .filter { function -> function.ownerId == identityOwnerId }
-        val kspIdentityFunctions = kspWorkspace.declarationsOfType<LsiFunction>()
+        val kspIdentityFunctions = kspWorkspace.declarationsOfType<LsiMethod>()
             .filter { function -> function.ownerId == identityOwnerId }
         val expectedIdentityIds = setOf(
             LsiSymbolId.function(identityOwnerId, "unit", listOf("type:kotlin.Unit")),
@@ -141,8 +141,8 @@ class ClientFrontendParityTest {
                 listOf("parameter:method:ordered:0:type:java.io.Serializable"),
             ),
         )
-        assertEquals(expectedIdentityIds, aptIdentityFunctions.mapTo(linkedSetOf(), LsiFunction::id))
-        assertEquals(expectedIdentityIds, kspIdentityFunctions.mapTo(linkedSetOf(), LsiFunction::id))
+        assertEquals(expectedIdentityIds, aptIdentityFunctions.mapTo(linkedSetOf(), LsiMethod::id))
+        assertEquals(expectedIdentityIds, kspIdentityFunctions.mapTo(linkedSetOf(), LsiMethod::id))
         assertEquals(
             aptWorkspace.identitySemanticSnapshot(),
             kspWorkspace.identitySemanticSnapshot(),

@@ -33,10 +33,10 @@ import site.addzero.lsi.model.LsiDelegationCall
 import site.addzero.lsi.model.LsiDelegationTarget
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiFile
-import site.addzero.lsi.model.LsiFunction
+import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiParameter
+import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.referencedTypeIds
@@ -202,8 +202,8 @@ private fun ErrorFamily.javaConstructor(
     )
 }
 
-private fun ErrorFamily.javaEnumFunction(enumType: LsiType): LsiFunction {
-    return LsiFunction(
+private fun ErrorFamily.javaEnumFunction(enumType: LsiType): LsiMethod {
+    return LsiMethod(
         name = "get${qualifiedName.substringAfterLast('.')}",
         annotations = listOf(JSON_IGNORE_ANNOTATION),
         modifiers = setOf(
@@ -214,7 +214,7 @@ private fun ErrorFamily.javaEnumFunction(enumType: LsiType): LsiFunction {
     )
 }
 
-private fun ErrorCode.javaCreatorFunctions(fields: List<ErrorField>): List<LsiFunction> {
+private fun ErrorCode.javaCreatorFunctions(fields: List<ErrorField>): List<LsiMethod> {
     return listOf(
         javaCreatorFunction(fields, withMessage = false, withCause = false),
         javaCreatorFunction(fields, withMessage = true, withCause = false),
@@ -226,9 +226,9 @@ private fun ErrorCode.javaCreatorFunction(
     fields: List<ErrorField>,
     withMessage: Boolean,
     withCause: Boolean,
-): LsiFunction {
+): LsiMethod {
     val nestedType = LsiDeclaredType(exceptionTypeId)
-    return LsiFunction(
+    return LsiMethod(
         name = creatorName,
         modifiers = setOf(
             LsiModifier.PUBLIC,
@@ -309,8 +309,8 @@ private fun ErrorCode.toJavaPoetType(
     )
 }
 
-private fun ErrorCode.javaEnumFunction(enumType: LsiType): LsiFunction {
-    return LsiFunction(
+private fun ErrorCode.javaEnumFunction(enumType: LsiType): LsiMethod {
+    return LsiMethod(
         name = "get${enumType.declarationSimpleName()}",
         annotations = listOf(
             JSON_IGNORE_ANNOTATION,
@@ -331,8 +331,8 @@ private fun ErrorCode.javaEnumFunction(enumType: LsiType): LsiFunction {
     )
 }
 
-private fun ErrorCode.javaFieldsFunction(fields: List<ErrorField>): LsiFunction {
-    return LsiFunction(
+private fun ErrorCode.javaFieldsFunction(fields: List<ErrorField>): LsiMethod {
+    return LsiMethod(
         name = "getFields",
         annotations = listOf(JAVA_OVERRIDE_ANNOTATION),
         modifiers = setOf(
@@ -395,14 +395,14 @@ private fun ErrorField.toJavaParameter(): LsiParameter {
     )
 }
 
-private fun ErrorField.toJavaGetter(): LsiFunction {
+private fun ErrorField.toJavaGetter(): LsiMethod {
     val fieldType = type
     val prefix = if (fieldType is LsiPrimitiveType && fieldType.kind == LsiPrimitiveKind.BOOLEAN && !list) {
         "is"
     } else {
         "get"
     }
-    return LsiFunction(
+    return LsiMethod(
         name = prefix + name.replaceFirstChar(Char::uppercaseChar),
         annotations = listOf(nullabilityAnnotation()),
         modifiers = setOf(LsiModifier.PUBLIC),
@@ -552,9 +552,9 @@ private fun ErrorFamily.kotlinCompanionType(): LsiClass {
     )
 }
 
-private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiFunction {
+private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiMethod {
     val nestedType = LsiDeclaredType(exceptionTypeId)
-    return LsiFunction(
+    return LsiMethod(
         name = creatorName,
         annotations = listOf(JVM_STATIC_ANNOTATION),
         modifiers = setOf(LsiModifier.PUBLIC),
