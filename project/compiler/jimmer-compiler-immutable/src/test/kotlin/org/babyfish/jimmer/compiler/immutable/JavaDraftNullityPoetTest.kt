@@ -8,7 +8,7 @@ import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.codegen.LsiSourceArtifact
-import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.file.LsiFile
 import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.method.LsiParameter

@@ -17,7 +17,7 @@ import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.file.LsiFile
 import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedSymbolIds
 import site.addzero.lsi.model.referencedTypeIds

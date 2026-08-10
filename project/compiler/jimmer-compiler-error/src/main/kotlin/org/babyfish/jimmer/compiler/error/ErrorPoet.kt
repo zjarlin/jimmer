@@ -32,7 +32,7 @@ import site.addzero.lsi.model.LsiConstructor
 import site.addzero.lsi.model.LsiDelegationCall
 import site.addzero.lsi.model.LsiDelegationTarget
 import site.addzero.lsi.field.LsiField
-import site.addzero.lsi.model.LsiFile
+import site.addzero.lsi.file.LsiFile
 import site.addzero.lsi.method.LsiMethod
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier

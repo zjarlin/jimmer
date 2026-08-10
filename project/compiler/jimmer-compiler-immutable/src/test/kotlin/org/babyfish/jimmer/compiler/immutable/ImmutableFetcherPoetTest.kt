@@ -41,7 +41,7 @@ import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiFileNameStyle
+import site.addzero.lsi.file.LsiFileNameStyle
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class ImmutableFetcherPoetTest {

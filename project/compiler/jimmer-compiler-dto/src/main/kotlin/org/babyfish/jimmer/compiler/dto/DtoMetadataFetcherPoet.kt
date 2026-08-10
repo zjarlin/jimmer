@@ -29,7 +29,7 @@ import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiCodeFragment
-import site.addzero.lsi.model.LsiImport
+import site.addzero.lsi.file.LsiImport
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedTypeIds

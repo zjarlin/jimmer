@@ -59,7 +59,7 @@ import site.addzero.lsi.jimmer.dto.userPropsInDeclarationOrder
 import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiImport
+import site.addzero.lsi.file.LsiImport
 import site.addzero.lsi.clazz.LsiClass
 import java.util.*
 
