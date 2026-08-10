@@ -6,7 +6,7 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.ImmutableType
 import site.addzero.lsi.jimmer.ImmutableTypeKind
 import site.addzero.lsi.jimmer.strictPrimarySubtypesOf
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiWorkspace
 
 internal fun JimmerImmutableDraftCodegenSchema.generatedDraftTypes(
@@ -47,7 +47,7 @@ internal fun ImmutableSchema.inheritanceArtifactOriginatingSymbols(type: Immutab
 }
 
 internal fun LsiWorkspace.immutableSourceBaseName(type: ImmutableType): String {
-    val declaration = this[type.id] as? LsiTypeDeclaration
+    val declaration = this[type.id] as? LsiClass
         ?: error("Cannot resolve immutable source declaration '${type.id.value}'")
     val source = declaration.origin.source
         ?: error("Immutable generation target '${type.id.value}' has no source")

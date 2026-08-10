@@ -20,7 +20,7 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.type.LsiType
@@ -395,7 +395,7 @@ class ImmutableDraftPoetTest {
         val workspace = LsiWorkspace(
             sources = listOf(source),
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = accountId,
                     name = "Account",
                     qualifiedName = "demo.Account",
@@ -469,9 +469,9 @@ class ImmutableDraftPoetTest {
         superTypeIds: List<LsiSymbolId> = emptyList(),
         origin: LsiOrigin,
         documentation: String? = null,
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val qualifiedName = id.requireTypeQualifiedName()
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = id,
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,
@@ -487,9 +487,9 @@ class ImmutableDraftPoetTest {
     private fun plainType(
         id: LsiSymbolId,
         origin: LsiOrigin,
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val qualifiedName = id.requireTypeQualifiedName()
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = id,
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,

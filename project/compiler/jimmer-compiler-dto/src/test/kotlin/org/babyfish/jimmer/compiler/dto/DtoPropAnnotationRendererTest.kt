@@ -34,7 +34,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -166,7 +166,7 @@ class DtoPropAnnotationRendererTest {
     private fun workspace(): LsiWorkspace {
         return LsiWorkspace(
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = ANNOTATION_ID,
                     name = "PropMarker",
                     qualifiedName = "demo.PropMarker",

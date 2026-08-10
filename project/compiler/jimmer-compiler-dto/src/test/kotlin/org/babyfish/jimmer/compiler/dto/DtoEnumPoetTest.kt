@@ -28,7 +28,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.scalarType
 import site.addzero.lsi.type.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
@@ -333,7 +333,7 @@ class DtoEnumPoetTest {
         val WORKSPACE = LsiWorkspace(
             sources = listOf(SOURCE),
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = ENUM_TYPE_ID,
                     name = "Gender",
                     qualifiedName = "demo.Gender",

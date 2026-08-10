@@ -40,7 +40,7 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -883,14 +883,14 @@ class DtoSpecificationPoetTest {
     private fun workspace(typeIds: List<LsiSymbolId>): LsiWorkspace {
         return LsiWorkspace(
             declarations = typeIds.map { typeId ->
-                LsiTypeDeclaration(
+                LsiClass(
                     id = typeId,
                     name = typeId.requireTypeQualifiedName().substringAfterLast('.'),
                     qualifiedName = typeId.requireTypeQualifiedName(),
                     kind = LsiTypeDeclarationKind.INTERFACE,
                     origin = LsiOrigin(LsiOriginKind.SYNTHETIC),
                 )
-            }.sortedBy(LsiTypeDeclaration::id),
+            }.sortedBy(LsiClass::id),
         )
     }
 

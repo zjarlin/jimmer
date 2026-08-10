@@ -39,7 +39,7 @@ import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiPackageAnnotationScope
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiTypeSeedMode
 import site.addzero.lsi.type.LsiUnresolvedType
@@ -116,10 +116,10 @@ class AptLsiCompilerDriverTest {
         val firstRound = feature.rounds.first()
         assertTrue(!firstRound.isFinal)
         assertTrue(
-            assertIs<LsiTypeDeclaration>(firstRound.workspace[CHAR_SEQUENCE_ID]).memberIds.isNotEmpty(),
+            assertIs<LsiClass>(firstRound.workspace[CHAR_SEQUENCE_ID]).memberIds.isNotEmpty(),
         )
         assertTrue(
-            assertIs<LsiTypeDeclaration>(firstRound.workspace[RUNNABLE_ID]).memberIds.isNotEmpty(),
+            assertIs<LsiClass>(firstRound.workspace[RUNNABLE_ID]).memberIds.isNotEmpty(),
         )
     }
 
@@ -283,18 +283,18 @@ class AptLsiCompilerDriverTest {
         assertTrue(workspace.contains(LsiSymbolId.type("java.lang.Runnable")))
         assertTrue(workspace.contains(LsiSymbolId.type("java.lang.CharSequence")))
         assertTrue(
-            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+            assertIs<site.addzero.lsi.clazz.LsiClass>(
                 workspace[LsiSymbolId.type("java.lang.Runnable")],
             ).memberIds.isNotEmpty(),
         )
         assertTrue(
-            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+            assertIs<site.addzero.lsi.clazz.LsiClass>(
                 workspace[LsiSymbolId.type("java.lang.CharSequence")],
             ).memberIds.isEmpty(),
         )
         assertEquals(
             listOf("SOURCE", "CLASS", "RUNTIME"),
-            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+            assertIs<site.addzero.lsi.clazz.LsiClass>(
                 workspace[LsiSymbolId.type("java.lang.annotation.RetentionPolicy")],
             ).enumEntries.map { entry -> entry.name },
         )
@@ -363,7 +363,7 @@ class AptLsiCompilerDriverTest {
         override fun requestTypeSeeds(
             context: CompilerTypeSeedContext,
         ): Collection<LsiTypeSeed> {
-            val charSequence = context.round.workspace[CHAR_SEQUENCE_ID] as? LsiTypeDeclaration
+            val charSequence = context.round.workspace[CHAR_SEQUENCE_ID] as? LsiClass
             return if (charSequence?.memberIds.isNullOrEmpty()) {
                 listOf(LsiTypeSeed(CHAR_SEQUENCE_ID, LsiTypeSeedMode.FULL_DECLARATION))
             } else {

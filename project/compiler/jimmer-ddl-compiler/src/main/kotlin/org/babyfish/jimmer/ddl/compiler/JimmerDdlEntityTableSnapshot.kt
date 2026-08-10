@@ -8,7 +8,7 @@ import org.babyfish.jimmer.ddl.generator.model.AutoDdlJunction
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlLogicalType
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlSchema
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlTable
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
@@ -43,7 +43,7 @@ data class JimmerDdlSchemaChangePlan(
 
 object JimmerDdlEntityTableSnapshot {
     fun planSchemaChanges(
-        entities: List<LsiTypeDeclaration>,
+        entities: List<LsiClass>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ): JimmerDdlSchemaChangePlan {
@@ -73,7 +73,7 @@ object JimmerDdlEntityTableSnapshot {
     }
 
     fun planRenameTables(
-        entities: List<LsiTypeDeclaration>,
+        entities: List<LsiClass>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ): List<RenameTable> {
@@ -120,7 +120,7 @@ object JimmerDdlEntityTableSnapshot {
     }
 
     fun writeSnapshot(
-        entities: List<LsiTypeDeclaration>,
+        entities: List<LsiClass>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ) {
@@ -133,7 +133,7 @@ object JimmerDdlEntityTableSnapshot {
     }
 
     fun writeGeneratedSnapshot(
-        entities: List<LsiTypeDeclaration>,
+        entities: List<LsiClass>,
         schema: AutoDdlSchema,
         settings: JimmerDdlCompilerSettings,
     ) {
@@ -148,7 +148,7 @@ object JimmerDdlEntityTableSnapshot {
 
     private fun writeSnapshot(
         snapshotDirectory: File,
-        entities: List<LsiTypeDeclaration>,
+        entities: List<LsiClass>,
         schema: AutoDdlSchema,
     ) {
         val entityNamesByTable = entities.toSnapshot()
@@ -205,7 +205,7 @@ object JimmerDdlEntityTableSnapshot {
         fingerprintFile.writeTextIfChanged(content)
     }
 
-    private fun List<LsiTypeDeclaration>.toSnapshot(): Map<String, String> {
+    private fun List<LsiClass>.toSnapshot(): Map<String, String> {
         return associate { entity ->
             entity.qualifiedName to entity.jimmerTableName()
         }

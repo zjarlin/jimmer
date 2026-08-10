@@ -36,7 +36,7 @@ import site.addzero.lsi.jimmer.tuple.TypedTupleType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -91,14 +91,14 @@ class TypedTupleRendererTest {
         val tupleSource = LsiSource.of("demo/BookSummary.$extension", language)
         val unrelatedSource = LsiSource.of("demo/Unrelated.$extension", language)
         val origin = LsiOrigin(LsiOriginKind.SOURCE, tupleSource)
-        val tupleDeclaration = LsiTypeDeclaration(
+        val tupleDeclaration = LsiClass(
             id = TUPLE_ID,
             name = "BookSummary",
             qualifiedName = "demo.BookSummary",
             kind = LsiTypeDeclarationKind.CLASS,
             origin = origin,
         )
-        val bookViewDeclaration = LsiTypeDeclaration(
+        val bookViewDeclaration = LsiClass(
             id = BOOK_VIEW_ID,
             name = "BookView",
             qualifiedName = "demo.BookView",

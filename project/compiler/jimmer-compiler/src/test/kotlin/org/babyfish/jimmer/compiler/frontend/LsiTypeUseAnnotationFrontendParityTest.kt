@@ -50,7 +50,7 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiTypeSeed
@@ -374,7 +374,7 @@ class LsiTypeUseAnnotationFrontendParityTest {
     }
 
     private fun executableProjection(workspace: LsiWorkspace): ExecutableProjection {
-        val executable = assertIs<LsiTypeDeclaration>(workspace[EXECUTABLE_TYPE])
+        val executable = assertIs<LsiClass>(workspace[EXECUTABLE_TYPE])
         assertEquals(executable.memberIds.distinct(), executable.memberIds)
         assertEquals(1, executable.memberIds.count { memberId -> memberId == DECLARED_ANNOTATIONS_FIELD })
         assertEquals(1, executable.memberIds.count { memberId -> memberId == DECLARED_ANNOTATIONS_PROPERTY })
@@ -416,7 +416,7 @@ class LsiTypeUseAnnotationFrontendParityTest {
         val propertyId = LsiSymbolId.property(ownerId, "value")
         val workspace = LsiWorkspace(
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = ownerId,
                     name = "Owner",
                     qualifiedName = "snapshot.Owner",

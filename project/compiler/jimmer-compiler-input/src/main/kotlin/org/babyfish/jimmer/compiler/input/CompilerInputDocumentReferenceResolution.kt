@@ -6,7 +6,7 @@ import site.addzero.lsi.compiler.CompilerInputDocumentReference
 import site.addzero.lsi.compiler.CompilerInputDocumentTypeSelection
 import site.addzero.lsi.jimmer.isJimmerImmutableType
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiWorkspace
 
 fun CompilerInputDocumentReference.selectType(
@@ -21,13 +21,13 @@ fun CompilerInputDocumentReference.selectType(
             -> workspace.isImmutableType(typeId)
 
             DTO_REUSABLE_TYPE_REFERENCE_KIND ->
-                typeId in sourceDtoTypeIds || workspace[typeId] is LsiTypeDeclaration
+                typeId in sourceDtoTypeIds || workspace[typeId] is LsiClass
 
             DTO_ANNOTATION_TYPE_REFERENCE_KIND,
             DTO_SUPER_TYPE_REFERENCE_KIND,
             DTO_TYPE_USAGE_REFERENCE_KIND,
             DTO_CONFIG_IMPLEMENTATION_REFERENCE_KIND,
-            -> workspace[typeId] is LsiTypeDeclaration
+            -> workspace[typeId] is LsiClass
 
             else -> error("Unsupported Jimmer compiler input reference kind: '${kind.id}'")
         }
@@ -41,5 +41,5 @@ fun CompilerInputDocumentReference.selectOwnerTarget(
 }
 
 private fun LsiWorkspace.isImmutableType(typeId: LsiSymbolId): Boolean {
-    return (this[typeId] as? LsiTypeDeclaration)?.isJimmerImmutableType() == true
+    return (this[typeId] as? LsiClass)?.isJimmerImmutableType() == true
 }

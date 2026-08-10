@@ -18,7 +18,7 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
@@ -54,7 +54,7 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiSourceArt
         packageName = packageName,
         fileName = simpleName,
         members = listOf(
-            LsiTypeDeclaration(
+            LsiClass(
                 name = simpleName,
                 kind = LsiTypeDeclarationKind.INTERFACE,
                 annotations = listOf(sourceLsiAnnotation(GENERATED_BY_ID)),
@@ -166,7 +166,7 @@ private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiSourceArti
         packageName = packageName,
         fileName = simpleName,
         members = listOf(
-            LsiTypeDeclaration(
+            LsiClass(
                 name = simpleName,
                 kind = LsiTypeDeclarationKind.CLASS,
                 modifiers = setOf(LsiModifier.PRIVATE),

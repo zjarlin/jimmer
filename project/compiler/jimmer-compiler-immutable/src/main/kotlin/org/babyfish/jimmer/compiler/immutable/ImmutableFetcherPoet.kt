@@ -58,7 +58,7 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.generatedTopLevelTypeName
 import site.addzero.lsi.model.referencedTypeIds
@@ -161,8 +161,8 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun javaFetcherType(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun javaFetcherType(): LsiClass {
+        return LsiClass(
             name = "${type.simpleName}$FETCHER_SUFFIX",
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(modelType)),
@@ -647,8 +647,8 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun kotlinFetcherDslType(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun kotlinFetcherDslType(): LsiClass {
+        return LsiClass(
             name = "${type.simpleName}$FETCHER_DSL_SUFFIX",
             kind = LsiTypeDeclarationKind.CLASS,
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,

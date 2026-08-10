@@ -6,7 +6,7 @@ import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -16,7 +16,7 @@ class JimmerImmutableDraftCodegenOptionsTest {
     fun `detects jackson family and freezes excluded annotation prefixes`() {
         val workspace = LsiWorkspace(
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = JACKSON_3_OBJECT_MAPPER,
                     name = "ObjectMapper",
                     qualifiedName = "tools.jackson.databind.ObjectMapper",

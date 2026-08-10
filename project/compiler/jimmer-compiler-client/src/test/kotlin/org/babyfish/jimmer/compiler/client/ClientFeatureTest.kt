@@ -28,7 +28,7 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.type.LsiUnresolvedType
@@ -388,8 +388,8 @@ class ClientFeatureTest {
         workspace: LsiWorkspace,
         currentWorkspace: LsiWorkspace,
         currentRootTypeIds: Set<LsiSymbolId> = currentWorkspace.declarations
-            .filterIsInstance<LsiTypeDeclaration>()
-            .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
+            .filterIsInstance<LsiClass>()
+            .mapTo(sortedSetOf(), LsiClass::id),
         platform: CompilerPlatform = CompilerPlatform.APT,
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
@@ -519,7 +519,7 @@ class ClientFeatureTest {
                 origin = SECOND_ORIGIN,
             )
         }
-        val family = LsiTypeDeclaration(
+        val family = LsiClass(
             id = familyId,
             name = "BookErrorCode",
             qualifiedName = "demo.BookErrorCode",
@@ -539,8 +539,8 @@ class ClientFeatureTest {
         memberIds: List<LsiSymbolId> = emptyList(),
         annotations: List<LsiAnnotation> = emptyList(),
         origin: LsiOrigin,
-    ): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    ): LsiClass {
+        return LsiClass(
             id = LsiSymbolId.type(qualifiedName),
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,

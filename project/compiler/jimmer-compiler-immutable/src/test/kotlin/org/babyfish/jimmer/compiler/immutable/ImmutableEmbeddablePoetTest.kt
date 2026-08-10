@@ -26,7 +26,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
@@ -379,9 +379,9 @@ class ImmutableEmbeddablePoetTest {
         superTypes: List<LsiType> = emptyList(),
         kind: LsiTypeDeclarationKind = LsiTypeDeclarationKind.INTERFACE,
         originKind: LsiOriginKind = LsiOriginKind.SOURCE,
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val qualifiedName = id.requireTypeQualifiedName()
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = id,
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,

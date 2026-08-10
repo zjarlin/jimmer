@@ -19,7 +19,7 @@ import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.jimmer.dto.DtoTypeRef
 import site.addzero.lsi.type.LsiVariance
 import site.addzero.lsi.jimmer.dto.toLsiType
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiTypeName
@@ -173,7 +173,7 @@ class DtoTypeRefPoetTest {
         id: LsiSymbolId,
         name: String,
         enclosingTypeId: LsiSymbolId? = null,
-    ): LsiTypeDeclaration = LsiTypeDeclaration(
+    ): LsiClass = LsiClass(
         id = id,
         name = name,
         qualifiedName = id.requireTypeQualifiedName(),

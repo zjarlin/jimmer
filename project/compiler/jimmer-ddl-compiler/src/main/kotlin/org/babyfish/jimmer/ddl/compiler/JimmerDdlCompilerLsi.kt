@@ -17,21 +17,21 @@ import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiResolvedProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.model.LsiWorkspace
 
-internal fun LsiWorkspace.jimmerEntityTypes(): List<LsiTypeDeclaration> {
-    return declarationsOfType<LsiTypeDeclaration>()
-        .filter(LsiTypeDeclaration::isJimmerEntity)
-        .distinctBy(LsiTypeDeclaration::id)
-        .sortedBy(LsiTypeDeclaration::qualifiedName)
+internal fun LsiWorkspace.jimmerEntityTypes(): List<LsiClass> {
+    return declarationsOfType<LsiClass>()
+        .filter(LsiClass::isJimmerEntity)
+        .distinctBy(LsiClass::id)
+        .sortedBy(LsiClass::qualifiedName)
 }
 
 internal fun buildJimmerDdlSchema(
     workspace: LsiWorkspace,
-    entities: List<LsiTypeDeclaration>,
+    entities: List<LsiClass>,
     relationTargetWorkspace: LsiWorkspace,
     settings: JimmerDdlCompilerSettings,
 ): AutoDdlSchema {
@@ -41,7 +41,7 @@ internal fun buildJimmerDdlSchema(
     ).build(entities, settings)
 }
 
-internal fun LsiTypeDeclaration.jimmerTableName(): String {
+internal fun LsiClass.jimmerTableName(): String {
     return annotations.annotation("Table")
         ?.stringValue("name")
         ?.takeIf(String::isNotBlank)
@@ -62,7 +62,7 @@ private class JimmerDdlSchemaBuilder(
     private val effectiveProperties = mutableMapOf<LsiSymbolId, List<LsiResolvedProperty>>()
 
     fun build(
-        entities: List<LsiTypeDeclaration>,
+        entities: List<LsiClass>,
         settings: JimmerDdlCompilerSettings,
     ): AutoDdlSchema {
         val tables = entities.map { entity ->
@@ -85,7 +85,7 @@ private class JimmerDdlSchemaBuilder(
         )
     }
 
-    private fun LsiTypeDeclaration.toAutoDdlTable(): AutoDdlTable {
+    private fun LsiClass.toAutoDdlTable(): AutoDdlTable {
         val joinedRoot = joinedInheritanceRoot()
             ?.takeUnless { root -> root.id == id }
         val rootIdProperty = joinedRoot?.allProperties()?.firstOrNull { property -> property.isIdProperty() }
@@ -152,7 +152,7 @@ private class JimmerDdlSchemaBuilder(
     }
 
     private fun buildIndexes(
-        entity: LsiTypeDeclaration,
+        entity: LsiClass,
         columns: List<AutoDdlColumn>,
         properties: List<LsiResolvedProperty>,
     ): List<AutoDdlIndex> {
@@ -200,10 +200,10 @@ private class JimmerDdlSchemaBuilder(
     }
 
     private fun scanManyToManyTables(
-        entities: List<LsiTypeDeclaration>,
+        entities: List<LsiClass>,
     ): List<AutoDdlTable> {
         val relationTargetEntities = workspace.jimmerEntityTypes()
-        val relationTargetById = relationTargetEntities.associateBy(LsiTypeDeclaration::id)
+        val relationTargetById = relationTargetEntities.associateBy(LsiClass::id)
         return entities.flatMap { entity ->
             val ownerIdProperty = entity.allProperties().firstOrNull { property -> property.isIdProperty() }
                 ?: return@flatMap emptyList()
@@ -237,14 +237,14 @@ private class JimmerDdlSchemaBuilder(
         }
     }
 
-    private fun LsiTypeDeclaration.allProperties(): List<LsiResolvedProperty> {
+    private fun LsiClass.allProperties(): List<LsiResolvedProperty> {
         return effectiveProperties.getOrPut(id) {
             typeSystem.effectiveProperties(id)
         }
     }
 
-    private fun LsiTypeDeclaration.tablePropertiesForPhysicalTable(
-        joinedRoot: LsiTypeDeclaration?,
+    private fun LsiClass.tablePropertiesForPhysicalTable(
+        joinedRoot: LsiClass?,
         rootIdProperty: LsiResolvedProperty?,
     ): List<LsiResolvedProperty> {
         if (joinedRoot == null) {
@@ -257,9 +257,9 @@ private class JimmerDdlSchemaBuilder(
             .distinctBy { property -> property.declaration.name }
     }
 
-    private fun LsiTypeDeclaration.joinedInheritanceRoot(
+    private fun LsiClass.joinedInheritanceRoot(
         visited: MutableSet<LsiSymbolId> = linkedSetOf(),
-    ): LsiTypeDeclaration? {
+    ): LsiClass? {
         if (!visited.add(id)) {
             return null
         }
@@ -269,13 +269,13 @@ private class JimmerDdlSchemaBuilder(
         return superTypes
             .filterIsInstance<LsiDeclaredType>()
             .firstNotNullOfOrNull { superType ->
-                val declaration = workspace[superType.declarationId] as? LsiTypeDeclaration
+                val declaration = workspace[superType.declarationId] as? LsiClass
                     ?: return@firstNotNullOfOrNull null
                 declaration.joinedInheritanceRoot(visited)
             }
     }
 
-    private fun LsiTypeDeclaration.isJoinedInheritanceRoot(): Boolean {
+    private fun LsiClass.isJoinedInheritanceRoot(): Boolean {
         return annotations.annotation("Inheritance")
             ?.stringValue("strategy")
             ?.equals("JOINED", ignoreCase = true) == true
@@ -330,10 +330,10 @@ private class JimmerDdlSchemaBuilder(
             annotationValue("OneToOne", "mappedBy").isNullOrBlank()
     }
 
-    private fun LsiResolvedProperty.resolveAssociationTarget(): LsiTypeDeclaration? {
+    private fun LsiResolvedProperty.resolveAssociationTarget(): LsiClass? {
         val targetId = associationTargetDeclarationId() ?: return null
-        return (workspace[targetId] as? LsiTypeDeclaration)
-            ?.takeIf(LsiTypeDeclaration::isJimmerEntity)
+        return (workspace[targetId] as? LsiClass)
+            ?.takeIf(LsiClass::isJimmerEntity)
     }
 
     private fun LsiResolvedProperty.associationTargetDeclarationId(): LsiSymbolId? {
@@ -502,7 +502,7 @@ private fun mergeWorkspaces(
     )
 }
 
-private fun LsiTypeDeclaration.isJimmerEntity(): Boolean {
+private fun LsiClass.isJimmerEntity(): Boolean {
     return annotations.any { annotation ->
         annotation.type.typeQualifiedName() == JIMMER_ENTITY_ANNOTATION
     }

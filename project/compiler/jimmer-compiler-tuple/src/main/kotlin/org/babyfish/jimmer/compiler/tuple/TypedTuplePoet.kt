@@ -40,7 +40,7 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
@@ -152,7 +152,7 @@ private fun TypedTupleType.generatedTypeNames(): List<LsiTypeName> {
     }
 }
 
-private fun TypedTupleType.mapperType(): LsiTypeDeclaration {
+private fun TypedTupleType.mapperType(): LsiClass {
     return when (sourceLanguage) {
         LsiLanguage.JAVA -> javaMapperType()
         LsiLanguage.KOTLIN -> kotlinMapperType()
@@ -160,10 +160,10 @@ private fun TypedTupleType.mapperType(): LsiTypeDeclaration {
     }
 }
 
-private fun TypedTupleType.javaMapperType(): LsiTypeDeclaration {
+private fun TypedTupleType.javaMapperType(): LsiClass {
     val tupleType = declaredType(qualifiedName)
     val mapperType = declaredType(mapperQualifiedName)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = mapperSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         modifiers = setOf(LsiModifier.PUBLIC),
@@ -189,10 +189,10 @@ private fun TypedTupleType.javaMapperType(): LsiTypeDeclaration {
     )
 }
 
-private fun TypedTupleType.kotlinMapperType(): LsiTypeDeclaration {
+private fun TypedTupleType.kotlinMapperType(): LsiClass {
     val tupleType = declaredType(qualifiedName)
     val mapperType = declaredType(mapperQualifiedName)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = mapperSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         primaryConstructor = LsiConstructor(
@@ -229,9 +229,9 @@ private fun TypedTupleType.kotlinMapperType(): LsiTypeDeclaration {
     )
 }
 
-private fun TypedTupleType.javaBaseTableType(): LsiTypeDeclaration {
+private fun TypedTupleType.javaBaseTableType(): LsiClass {
     val projection = requireNotNull(baseTableProjection)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = tableSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         modifiers = setOf(LsiModifier.PUBLIC, LsiModifier.FINAL),
@@ -277,9 +277,9 @@ private fun TypedTupleType.javaBaseTableType(): LsiTypeDeclaration {
     )
 }
 
-private fun TypedTupleType.kotlinBaseTableType(): LsiTypeDeclaration {
+private fun TypedTupleType.kotlinBaseTableType(): LsiClass {
     val projection = requireNotNull(baseTableProjection)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = tableSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         superClass = ABSTRACT_K_BASE_TABLE_TYPE,
@@ -302,8 +302,8 @@ private fun TypedTupleType.kotlinBaseTableType(): LsiTypeDeclaration {
 
 private fun TypedTupleType.kotlinNullableBaseTableType(
     selections: List<TypedTupleBaseTableSelection>,
-): LsiTypeDeclaration {
-    return LsiTypeDeclaration(
+): LsiClass {
+    return LsiClass(
         name = "Nullable",
         kind = LsiTypeDeclarationKind.CLASS,
         superClass = ABSTRACT_K_BASE_TABLE_TYPE,
@@ -347,8 +347,8 @@ private fun TypedTupleType.kotlinBaseTableProperty(
 
 private fun TypedTupleType.kotlinBaseTableCompanionType(
     selections: List<TypedTupleBaseTableSelection>,
-): LsiTypeDeclaration {
-    return LsiTypeDeclaration(
+): LsiClass {
+    return LsiClass(
         name = "Companion",
         kind = LsiTypeDeclarationKind.OBJECT,
         modifiers = setOf(LsiModifier.COMPANION),
@@ -719,10 +719,10 @@ private fun TypedTupleType.javaFirstPropertyFunction(mapperType: LsiType): LsiFu
 private fun TypedTupleType.javaBuilderType(
     property: TypedTupleProperty,
     mapperType: LsiType,
-): LsiTypeDeclaration {
+): LsiClass {
     val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = builderSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         modifiers = setOf(
@@ -814,10 +814,10 @@ private fun TypedTupleType.kotlinCreateTupleBody(tupleType: LsiType): LsiCodeBlo
 private fun TypedTupleType.kotlinBuilderType(
     property: TypedTupleProperty,
     mapperType: LsiType,
-): LsiTypeDeclaration {
+): LsiClass {
     val builderSimpleName = property.builderSimpleName
     val returnType = stepType(property, mapperType)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = builderSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         primaryConstructor = LsiConstructor(
@@ -850,10 +850,10 @@ private fun TypedTupleType.kotlinBuilderType(
     )
 }
 
-private fun TypedTupleType.kotlinCompanionType(mapperType: LsiType): LsiTypeDeclaration {
+private fun TypedTupleType.kotlinCompanionType(mapperType: LsiType): LsiClass {
     val property = properties.first()
     val returnType = stepType(property, mapperType)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = "Companion",
         kind = LsiTypeDeclarationKind.OBJECT,
         modifiers = setOf(LsiModifier.COMPANION),

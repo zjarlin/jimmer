@@ -79,7 +79,7 @@ class ErrorRendererTest {
         val dependencySource = LsiSource.of("demo/Timestamp.java", LsiLanguage.JAVA)
         val dependencyWorkspace = LsiWorkspace(
             sources = workspace.sources + dependencySource,
-            declarations = workspace.declarations + site.addzero.lsi.model.LsiTypeDeclaration(
+            declarations = workspace.declarations + site.addzero.lsi.clazz.LsiClass(
                 id = dependencyId,
                 name = "Timestamp",
                 qualifiedName = "demo.Timestamp",
@@ -113,7 +113,7 @@ class ErrorRendererTest {
         val workspace = LsiWorkspace(
             sources = listOf(source),
             declarations = listOf(
-                site.addzero.lsi.model.LsiTypeDeclaration(
+                site.addzero.lsi.clazz.LsiClass(
                     id = FAMILY_ID,
                     name = "BookErrorCode",
                     qualifiedName = "demo.BookErrorCode",

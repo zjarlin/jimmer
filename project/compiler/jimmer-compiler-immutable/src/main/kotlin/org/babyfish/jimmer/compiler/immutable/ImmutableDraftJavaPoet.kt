@@ -28,7 +28,7 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeReferenceStyle
 
@@ -94,8 +94,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun draftType(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun draftType(): LsiClass {
+        return LsiClass(
             name = "${type.simpleName}Draft",
             kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = buildList {
@@ -258,8 +258,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun producer(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun producer(): LsiClass {
+        return LsiClass(
             name = PRODUCER,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
@@ -486,8 +486,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun implementor(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun implementor(): LsiClass {
+        return LsiClass(
             name = IMPLEMENTOR,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(), jsonPropertyOrderAnnotation()),
@@ -644,8 +644,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun impl(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun impl(): LsiClass {
+        return LsiClass(
             name = IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
@@ -1192,8 +1192,8 @@ private class JavaDraftPoetContext(
         endControlFlow()
     }
 
-    private fun draftImpl(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun draftImpl(): LsiClass {
+        return LsiClass(
             name = DRAFT_IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),
@@ -1951,8 +1951,8 @@ private class JavaDraftPoetContext(
         )
     }
 
-    private fun builder(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun builder(): LsiClass {
+        return LsiClass(
             name = BUILDER,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),

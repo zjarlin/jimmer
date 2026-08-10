@@ -31,7 +31,7 @@ import site.addzero.lsi.jimmer.fingerprint
 import site.addzero.lsi.jimmer.isJimmerImmutableType
 import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -196,7 +196,7 @@ class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFea
             return
         }
         val typesBySource = currentTypeIds
-            .mapNotNull { typeId -> round.workspace[typeId] as? LsiTypeDeclaration }
+            .mapNotNull { typeId -> round.workspace[typeId] as? LsiClass }
             .mapNotNull { type -> type.origin.source?.let { source -> source to type } }
             .groupBy(
                 keySelector = { (source, _) -> source },
@@ -205,7 +205,7 @@ class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFea
         val conflict = typesBySource.entries
             .firstOrNull { (_, types) -> types.size > 1 }
             ?: return
-        val conflictingTypes = conflict.value.sortedBy(LsiTypeDeclaration::qualifiedName)
+        val conflictingTypes = conflict.value.sortedBy(LsiClass::qualifiedName)
         throw ImmutablePrecompileException(
             declarationId = conflictingTypes.first().id,
             message = "Source '${conflict.key.path}' declares several Jimmer immutable types: " +
@@ -428,13 +428,13 @@ private fun LsiWorkspace.immutableTargetTypeIds(
     platform: CompilerPlatform,
     sourceFilter: JimmerCompilerSourceFilter,
 ): Set<LsiSymbolId> {
-    return declarationsOfType<LsiTypeDeclaration>()
+    return declarationsOfType<LsiClass>()
         .asSequence()
-        .filter(LsiTypeDeclaration::isJimmerImmutableType)
+        .filter(LsiClass::isJimmerImmutableType)
         .filter { type -> type.origin.kind in COMPILATION_ORIGIN_KINDS }
         .filter { type -> sourceFilter.accepts(type.qualifiedName) }
         .filter { type -> type.isCompilerTargetVisible(platform) }
-        .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
+        .mapTo(sortedSetOf(), LsiClass::id)
 }
 
 private fun CompilerRound.dtoSemanticRootTypeIds(
@@ -454,7 +454,7 @@ private fun CompilerRound.dtoSemanticRootTypeIds(
             }
             val semanticTypeIds = buildSet {
                 activeTargetTypeIds.forEach { typeId ->
-                    val declaration = workspace[typeId] as? LsiTypeDeclaration
+                    val declaration = workspace[typeId] as? LsiClass
                     if (declaration == null || declaration.isJimmerImmutableType()) {
                         add(typeId)
                     }
@@ -471,7 +471,7 @@ private fun CompilerRound.dtoSemanticRootTypeIds(
                     .mapNotNullTo(this) { reference -> reference.selectType(workspace).selectedTypeId }
             }
             semanticTypeIds.forEach referenceLoop@{ typeId ->
-                val type = workspace[typeId] as? LsiTypeDeclaration ?: return@referenceLoop
+                val type = workspace[typeId] as? LsiClass ?: return@referenceLoop
                 if (type.isJimmerImmutableType()) {
                     add(type.id)
                 }
@@ -489,11 +489,11 @@ private fun LsiWorkspace.isCompilerTargetVisible(
     typeId: LsiSymbolId,
     platform: CompilerPlatform,
 ): Boolean {
-    val type = this[typeId] as? LsiTypeDeclaration ?: return true
+    val type = this[typeId] as? LsiClass ?: return true
     return type.isCompilerTargetVisible(platform)
 }
 
-private fun LsiTypeDeclaration.isCompilerTargetVisible(
+private fun LsiClass.isCompilerTargetVisible(
     platform: CompilerPlatform,
 ): Boolean {
     return when (platform) {

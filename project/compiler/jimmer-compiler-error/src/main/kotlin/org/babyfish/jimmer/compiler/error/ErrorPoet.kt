@@ -17,7 +17,7 @@ import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.type.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.type.LsiUnresolvedType
@@ -104,9 +104,9 @@ private fun ErrorFamily.generatedTypeNames(): List<LsiTypeName> {
     }
 }
 
-private fun ErrorFamily.toJavaPoetType(): LsiTypeDeclaration {
+private fun ErrorFamily.toJavaPoetType(): LsiClass {
     val enumType = LsiDeclaredType(id)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(
@@ -130,9 +130,9 @@ private fun ErrorFamily.toJavaPoetType(): LsiTypeDeclaration {
     )
 }
 
-private fun ErrorFamily.toKotlinPoetType(): LsiTypeDeclaration {
+private fun ErrorFamily.toKotlinPoetType(): LsiClass {
     val enumType = LsiDeclaredType(id)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(
@@ -290,9 +290,9 @@ private fun ErrorCode.javaCreatorFunction(
 private fun ErrorCode.toJavaPoetType(
     family: ErrorFamily,
     enumType: LsiType,
-): LsiTypeDeclaration {
+): LsiClass {
     val allFields = family.declaredFields + declaredFields
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(clientExceptionAnnotation(family.family)),
@@ -542,8 +542,8 @@ private fun ErrorFamily.kotlinFieldsProperty(fields: List<ErrorField>): LsiPrope
     )
 }
 
-private fun ErrorFamily.kotlinCompanionType(): LsiTypeDeclaration {
-    return LsiTypeDeclaration(
+private fun ErrorFamily.kotlinCompanionType(): LsiClass {
+    return LsiClass(
         name = "Companion",
         kind = LsiTypeDeclarationKind.OBJECT,
         modifiers = setOf(LsiModifier.COMPANION),
@@ -602,9 +602,9 @@ private fun ErrorCode.kotlinFactoryFunction(fields: List<ErrorField>): LsiFuncti
 private fun ErrorCode.toKotlinPoetType(
     family: ErrorFamily,
     enumType: LsiType,
-): LsiTypeDeclaration {
+): LsiClass {
     val allFields = family.declaredFields + declaredFields
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = exceptionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(clientExceptionAnnotation(family.family)),
@@ -688,7 +688,7 @@ private fun ErrorFamily.codeBasedExceptionType(): LsiDeclaredType {
 }
 
 private fun ErrorFamily.sourceLanguage(workspace: LsiWorkspace): LsiLanguage {
-    val declarationLanguage = (workspace[id] as? LsiTypeDeclaration)?.origin?.language
+    val declarationLanguage = (workspace[id] as? LsiClass)?.origin?.language
     if (declarationLanguage == LsiLanguage.JAVA || declarationLanguage == LsiLanguage.KOTLIN) {
         return declarationLanguage
     }

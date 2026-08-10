@@ -31,7 +31,7 @@ import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.type.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
@@ -53,7 +53,7 @@ class JimmerImmutableDraftCodegenPrecompiler {
                     recoverable = true,
                     message = "Cannot resolve immutable draft type '${typeId.value}'",
                 )
-            val declaration = workspace[typeId] as? LsiTypeDeclaration
+            val declaration = workspace[typeId] as? LsiClass
                 ?: throw ImmutablePrecompileException(
                     declarationId = typeId,
                     recoverable = true,
@@ -424,14 +424,14 @@ private fun LsiProperty.javaBeanGetterName(
 
 private fun List<LsiAnnotation>.constraintAnnotations(workspace: LsiWorkspace): List<LsiAnnotation> {
     return filter { annotation ->
-        val annotationType = workspace[annotation.type] as? LsiTypeDeclaration ?: return@filter false
+        val annotationType = workspace[annotation.type] as? LsiClass ?: return@filter false
         annotationType.annotations.any { metaAnnotation -> metaAnnotation.type in CONSTRAINT_ANNOTATIONS }
     }
 }
 
 private fun List<LsiAnnotation>.customValidations(workspace: LsiWorkspace): List<ImmutableValidation> {
     return mapNotNull { annotation ->
-        val annotationType = workspace[annotation.type] as? LsiTypeDeclaration ?: return@mapNotNull null
+        val annotationType = workspace[annotation.type] as? LsiClass ?: return@mapNotNull null
         val constraint = annotationType.annotations.firstOrNull { metaAnnotation ->
             metaAnnotation.type in CONSTRAINT_ANNOTATIONS
         } ?: return@mapNotNull null

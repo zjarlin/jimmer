@@ -24,7 +24,7 @@ import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.type.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
@@ -357,7 +357,7 @@ class JimmerDdlCompilerTest {
     ): JimmerDdlCompilerResult {
         return JimmerDdlCompiler.compile(
             workspace = workspace,
-            entityTypeIds = workspace.jimmerEntityTypes().map(LsiTypeDeclaration::id),
+            entityTypeIds = workspace.jimmerEntityTypes().map(LsiClass::id),
             settings = settings,
             relationTargetWorkspace = relationTargetWorkspace,
         )
@@ -425,8 +425,8 @@ class JimmerDdlCompilerTest {
         annotations: List<LsiAnnotation> = emptyList(),
         superTypes: List<LsiType> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
-    ): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    ): LsiClass {
+        return LsiClass(
             id = LsiSymbolId.type(qualifiedName),
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,
@@ -454,7 +454,7 @@ class JimmerDdlCompilerTest {
         )
     }
 
-    private fun LsiWorkspace.singleEntity(): LsiTypeDeclaration {
+    private fun LsiWorkspace.singleEntity(): LsiClass {
         return jimmerEntityTypes().single()
     }
 

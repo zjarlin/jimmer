@@ -18,7 +18,7 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiPackageAnnotationScope
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -109,8 +109,8 @@ class ExportDocResourceRendererTest {
         )
     }
 
-    private fun type(qualifiedName: String): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun type(qualifiedName: String): LsiClass {
+        return LsiClass(
             id = LsiSymbolId.type(qualifiedName),
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,

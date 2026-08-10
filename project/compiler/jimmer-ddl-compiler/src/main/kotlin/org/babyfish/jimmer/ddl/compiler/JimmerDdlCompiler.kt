@@ -15,7 +15,7 @@ import org.babyfish.jimmer.ddl.generator.model.AutoDdlSchema
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlTable
 import org.babyfish.jimmer.ddl.generator.options.AutoDdlDiffOptions
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiWorkspace
 
 object JimmerDdlCompiler {
@@ -29,7 +29,7 @@ object JimmerDdlCompiler {
             return JimmerDdlCompilerResult.empty(settings)
         }
 
-        val entityById = workspace.jimmerEntityTypes().associateBy(LsiTypeDeclaration::id)
+        val entityById = workspace.jimmerEntityTypes().associateBy(LsiClass::id)
         val requestedEntityIds = entityTypeIds.toSortedSet()
         val missingEntityIds = requestedEntityIds - entityById.keys
         require(missingEntityIds.isEmpty()) {
@@ -441,7 +441,7 @@ private data class JimmerDdlColumnKey(
 
 data class JimmerDdlCompilerResult(
     val settings: JimmerDdlCompilerSettings,
-    val entities: List<LsiTypeDeclaration>,
+    val entities: List<LsiClass>,
     val schema: AutoDdlSchema,
     val snapshotSchema: AutoDdlSchema,
     val statements: List<String>,
@@ -454,7 +454,7 @@ data class JimmerDdlCompilerResult(
     companion object {
         fun empty(
             settings: JimmerDdlCompilerSettings,
-            entities: List<LsiTypeDeclaration> = emptyList(),
+            entities: List<LsiClass> = emptyList(),
             schema: AutoDdlSchema = AutoDdlSchema(emptyList(), emptyList()),
         ): JimmerDdlCompilerResult {
             return JimmerDdlCompilerResult(

@@ -59,7 +59,7 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeReferenceStyle
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.toLsiTypeNames
@@ -549,8 +549,8 @@ private class KotlinQueryPoetContext(
         )
     }
 
-    private fun propsObject(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun propsObject(): LsiClass {
+        return LsiClass(
             name = "${type.simpleName}$PROPS_SUFFIX",
             kind = LsiTypeDeclarationKind.OBJECT,
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
@@ -634,7 +634,7 @@ private class JavaQueryPoetContext(
         }
     }
 
-    private fun javaFile(generatedType: LsiDeclaredType, declaration: LsiTypeDeclaration): LsiFile {
+    private fun javaFile(generatedType: LsiDeclaredType, declaration: LsiClass): LsiFile {
         return LsiFile(
             language = LsiLanguage.JAVA,
             packageName = type.packageName,
@@ -643,7 +643,7 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun propsDeclaration(): LsiTypeDeclaration {
+    private fun propsDeclaration(): LsiClass {
         val superInterfaces = buildList {
             val superTypes = schema.propsSuperTypes(type)
             if (superTypes.isEmpty()) {
@@ -653,7 +653,7 @@ private class JavaQueryPoetContext(
             }
             if (type.kind == ImmutableTypeKind.ENTITY) add(declaredType(SELECTION_ID, modelType))
         }
-        return LsiTypeDeclaration(
+        return LsiClass(
             name = "${type.simpleName}Props",
             kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = buildList {
@@ -735,9 +735,9 @@ private class JavaQueryPoetContext(
         )
     }
 
-    private fun tableDeclaration(tableEx: Boolean): LsiTypeDeclaration {
+    private fun tableDeclaration(tableEx: Boolean): LsiClass {
         val selfType = if (tableEx) tableExType else tableType
-        return LsiTypeDeclaration(
+        return LsiClass(
             name = selfType.declarationId.value.substringAfterLast('.'),
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(modelType)),
@@ -1368,11 +1368,11 @@ private class JavaQueryPoetContext(
         }
     }
 
-    private fun remoteDeclaration(): LsiTypeDeclaration {
+    private fun remoteDeclaration(): LsiClass {
         val remoteType = type.generatedQueryType("${type.simpleName}Table.Remote")
         val idProp = type.idPropId?.let(schema.propsById::get)
             ?: error("Entity immutable type '${type.id.value}' must declare an id property")
-        return LsiTypeDeclaration(
+        return LsiClass(
             name = "Remote",
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation(modelType)),

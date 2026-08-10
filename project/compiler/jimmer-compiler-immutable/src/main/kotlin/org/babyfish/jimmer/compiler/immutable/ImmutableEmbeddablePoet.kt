@@ -49,7 +49,7 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.generatedTopLevelTypeName
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.toLsiTypeNames
@@ -264,8 +264,8 @@ private fun ImmutableType.toJavaPoetArtifacts(
     )
 }
 
-private fun ImmutableType.javaPropsType(schema: ImmutableSchema): LsiTypeDeclaration {
-    return LsiTypeDeclaration(
+private fun ImmutableType.javaPropsType(schema: ImmutableSchema): LsiClass {
+    return LsiClass(
         name = propsSimpleName,
         kind = LsiTypeDeclarationKind.INTERFACE,
         annotations = listOf(generatedByAnnotation(modelType)),
@@ -312,8 +312,8 @@ private fun ImmutableType.javaTypedPropField(
 private fun ImmutableType.javaPropExpressionType(
     schema: ImmutableSchema,
     typeSystem: LsiTypeSystem,
-): LsiTypeDeclaration {
-    return LsiTypeDeclaration(
+): LsiClass {
+    return LsiClass(
         name = propExpressionSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = listOf(generatedByAnnotation(modelType)),
@@ -548,8 +548,8 @@ private fun ImmutableType.kotlinFetchByFunction(nullable: Boolean): LsiFunction 
     )
 }
 
-private fun ImmutableType.kotlinPropsObject(schema: ImmutableSchema): LsiTypeDeclaration {
-    return LsiTypeDeclaration(
+private fun ImmutableType.kotlinPropsObject(schema: ImmutableSchema): LsiClass {
+    return LsiClass(
         name = propsSimpleName,
         kind = LsiTypeDeclarationKind.OBJECT,
         annotations = listOf(generatedByAnnotation(modelType)),

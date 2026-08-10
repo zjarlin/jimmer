@@ -12,7 +12,7 @@ import site.addzero.lsi.model.LsiFile
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -25,7 +25,7 @@ class JavaDraftNullityPoetTest {
         val utilDateTypeId = LsiSymbolId.type("java.util.Date")
         val sqlDateTypeId = LsiSymbolId.type("java.sql.Date")
         val nonNullTypeId = LsiSymbolId.type("org.jspecify.annotations.NonNull")
-        val type = LsiTypeDeclaration(
+        val type = LsiClass(
             name = "DraftBuilder",
             kind = LsiTypeDeclarationKind.CLASS,
             modifiers = setOf(LsiModifier.PUBLIC),

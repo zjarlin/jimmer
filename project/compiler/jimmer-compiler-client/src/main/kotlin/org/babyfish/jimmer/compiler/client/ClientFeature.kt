@@ -52,7 +52,7 @@ import site.addzero.lsi.jimmer.error.ErrorValidationException
 import site.addzero.lsi.jimmer.error.toErrorSchema
 import site.addzero.lsi.jimmer.toImmutableSchema
 import site.addzero.lsi.jimmer.unresolvedJimmerImmutableTypeIds
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeSeed
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -366,11 +366,11 @@ private fun CompilerPrecompileContext<EmptyCompilerFeatureState, ClientFeatureSt
 }
 
 private fun CompilerRound.previewClientDependencies(): ClientSchemaDependencies {
-    val immutableTypeIds = workspace.declarationsOfType<LsiTypeDeclaration>()
+    val immutableTypeIds = workspace.declarationsOfType<LsiClass>()
         .filter { type ->
             type.annotations.any { annotation -> annotation.type in IMMUTABLE_TYPE_ANNOTATIONS }
         }
-        .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
+        .mapTo(sortedSetOf(), LsiClass::id)
     val resolvedImmutableTypeIds = immutableTypeIds - workspace.unresolvedJimmerImmutableTypeIds(immutableTypeIds)
     val immutableSchema = try {
         workspace.toImmutableSchema(resolvedImmutableTypeIds)
@@ -500,7 +500,7 @@ private fun ClientTargets.compilationTargets(
 ): ClientTargets {
     fun Set<LsiSymbolId>.accepted(): Set<LsiSymbolId> {
         return filterTo(sortedSetOf()) { typeId ->
-            val type = workspace[typeId] as? LsiTypeDeclaration ?: return@filterTo false
+            val type = workspace[typeId] as? LsiClass ?: return@filterTo false
             type.isCompilationTarget(platform, sourceFilter)
         }
     }
@@ -519,13 +519,13 @@ private fun LsiWorkspace.hasImplicitApiMarker(
     platform: CompilerPlatform,
     sourceFilter: JimmerCompilerSourceFilter,
 ): Boolean {
-    return declarationsOfType<LsiTypeDeclaration>().any { type ->
+    return declarationsOfType<LsiClass>().any { type ->
         type.isCompilationTarget(platform, sourceFilter) &&
             type.annotations.any { annotation -> annotation.type == ENABLE_IMPLICIT_API_ANNOTATION }
     }
 }
 
-private fun LsiTypeDeclaration.isCompilationTarget(
+private fun LsiClass.isCompilationTarget(
     platform: CompilerPlatform,
     sourceFilter: JimmerCompilerSourceFilter,
 ): Boolean {

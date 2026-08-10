@@ -22,7 +22,7 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 
 /**
@@ -34,8 +34,8 @@ internal class ImmutableDraftKotlinRuntimePoet(
 
     private val type = context.type
 
-    fun implementor(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    fun implementor(): LsiClass {
+        return LsiClass(
             name = KOTLIN_DRAFT_IMPLEMENTOR,
             kind = LsiTypeDeclarationKind.INTERFACE,
             annotations = listOf(context.generatedByAnnotation(), propertyOrderAnnotation()),
@@ -63,8 +63,8 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    fun impl(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    fun impl(): LsiClass {
+        return LsiClass(
             name = KOTLIN_DRAFT_IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(context.generatedByAnnotation()),
@@ -122,8 +122,8 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    fun draftImpl(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    fun draftImpl(): LsiClass {
+        return LsiClass(
             name = KOTLIN_DRAFT_DRAFT_IMPL,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(context.generatedByAnnotation()),
@@ -216,14 +216,14 @@ internal class ImmutableDraftKotlinRuntimePoet(
         )
     }
 
-    private fun implementorCompanion(): LsiTypeDeclaration? {
+    private fun implementorCompanion(): LsiClass? {
         val deeperProps = context.propsInDeclarationOrder.filter { prop ->
             prop.kotlinDeeperPropIdName != null
         }
         if (deeperProps.isEmpty()) {
             return null
         }
-        return LsiTypeDeclaration(
+        return LsiClass(
             name = "Companion",
             kind = LsiTypeDeclarationKind.OBJECT,
             modifiers = setOf(LsiModifier.COMPANION),

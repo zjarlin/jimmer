@@ -17,7 +17,7 @@ import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeName
 
 internal fun DtoType.toSerializerPoetType(
@@ -26,14 +26,14 @@ internal fun DtoType.toSerializerPoetType(
     targetLanguage: LsiLanguage,
     jacksonVersion: JacksonFamily,
     dtoType: LsiDeclaredType,
-): LsiTypeDeclaration {
+): LsiClass {
     require(requiresDynamicInputSerialization(graph)) {
         "DTO type does not require dynamic input serialization: ${id.value}"
     }
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO Serializer requires Java or Kotlin target language"
     }
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = "Serializer",
         kind = LsiTypeDeclarationKind.CLASS,
         modifiers = if (targetLanguage == LsiLanguage.JAVA) {

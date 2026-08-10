@@ -25,7 +25,7 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiModality
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -204,8 +204,8 @@ class JimmerDtoSelectorStagingTest {
                 workspace = workspace,
                 currentWorkspace = workspace,
                 currentRootTypeIds = workspace.declarations
-                    .filterIsInstance<LsiTypeDeclaration>()
-                    .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
+                    .filterIsInstance<LsiClass>()
+                    .mapTo(sortedSetOf(), LsiClass::id),
                 platform = CompilerPlatform.KSP,
                 inputDocumentSnapshots = listOf(FREEZER.freeze(input)),
             ),
@@ -300,9 +300,9 @@ class JimmerDtoSelectorStagingTest {
             )
         }
 
-        fun declaration(): LsiTypeDeclaration {
+        fun declaration(): LsiClass {
             val source = source()
-            return LsiTypeDeclaration(
+            return LsiClass(
                 id = typeId(qualifiedName),
                 name = qualifiedName.substringAfterLast('.'),
                 qualifiedName = qualifiedName,

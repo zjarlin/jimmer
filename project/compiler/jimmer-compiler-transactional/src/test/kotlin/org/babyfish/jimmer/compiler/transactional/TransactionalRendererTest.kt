@@ -38,7 +38,7 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiTypeParameter
 import site.addzero.lsi.type.LsiTypeParameterRef
@@ -120,14 +120,14 @@ class TransactionalRendererTest {
     fun `renderers preserve exact uppercase package and lowercase type boundaries`() {
         val outerId = LsiSymbolId.type("UPPER.pkg.lowercase")
         val nestedId = LsiSymbolId.type("UPPER.pkg.lowercase.item")
-        val outerDeclaration = LsiTypeDeclaration(
+        val outerDeclaration = LsiClass(
             id = outerId,
             name = "lowercase",
             qualifiedName = "UPPER.pkg.lowercase",
             kind = LsiTypeDeclarationKind.CLASS,
             origin = LsiOrigin(LsiOriginKind.BINARY),
         )
-        val nestedDeclaration = LsiTypeDeclaration(
+        val nestedDeclaration = LsiClass(
             id = nestedId,
             name = "item",
             qualifiedName = "UPPER.pkg.lowercase.item",
@@ -464,7 +464,7 @@ class TransactionalRendererTest {
         return LsiWorkspace(
             sources = listOf(source),
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = serviceId,
                     name = "ServiceA",
                     qualifiedName = source.path.removeSuffix(".${source.path.substringAfterLast('.')}").replace('/', '.'),
@@ -472,7 +472,7 @@ class TransactionalRendererTest {
                     modality = LsiModality.OPEN,
                     origin = LsiOrigin(LsiOriginKind.SOURCE, source),
                 ),
-                LsiTypeDeclaration(
+                LsiClass(
                     id = LsiSymbolId.type("$packageName.Component"),
                     name = "Component",
                     qualifiedName = "$packageName.Component",
@@ -486,9 +486,9 @@ class TransactionalRendererTest {
     private fun annotationDeclaration(
         simpleName: String,
         target: String,
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val source = LsiSource.of("demo/$simpleName.kt", LsiLanguage.KOTLIN)
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = LsiSymbolId.type("demo.$simpleName"),
             name = simpleName,
             qualifiedName = "demo.$simpleName",
@@ -510,7 +510,7 @@ class TransactionalRendererTest {
         )
     }
 
-    private fun LsiWorkspace.withDeclaration(declaration: LsiTypeDeclaration): LsiWorkspace {
+    private fun LsiWorkspace.withDeclaration(declaration: LsiClass): LsiWorkspace {
         return LsiWorkspace(
             sources = sources + listOfNotNull(declaration.origin.source),
             declarations = declarations + declaration,

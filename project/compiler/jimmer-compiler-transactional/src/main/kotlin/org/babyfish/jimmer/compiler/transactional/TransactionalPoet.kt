@@ -35,7 +35,7 @@ import site.addzero.lsi.model.LsiFile
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.sourceLsiAnnotation
@@ -79,7 +79,7 @@ private fun TransactionalType.toLsiSourceArtifact(workspace: LsiWorkspace): LsiS
     )
 }
 
-private fun TransactionalType.toLsiTypeDeclaration(): LsiTypeDeclaration {
+private fun TransactionalType.toLsiTypeDeclaration(): LsiClass {
     return when (sqlClient.language) {
         LsiLanguage.JAVA -> toJavaPoetType()
         LsiLanguage.KOTLIN -> toKotlinPoetType()
@@ -87,8 +87,8 @@ private fun TransactionalType.toLsiTypeDeclaration(): LsiTypeDeclaration {
     }
 }
 
-private fun TransactionalType.toJavaPoetType(): LsiTypeDeclaration {
-    return LsiTypeDeclaration(
+private fun TransactionalType.toJavaPoetType(): LsiClass {
+    return LsiClass(
         name = generatedSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = typeAnnotations(),
@@ -108,9 +108,9 @@ private fun TransactionalType.toJavaPoetType(): LsiTypeDeclaration {
     )
 }
 
-private fun TransactionalType.toKotlinPoetType(): LsiTypeDeclaration {
+private fun TransactionalType.toKotlinPoetType(): LsiClass {
     val primaryConstructor = constructors.singleOrNull(TransactionalConstructor::primary)
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = generatedSimpleName,
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = typeAnnotations(),

@@ -39,7 +39,7 @@ import site.addzero.lsi.jimmer.dto.DtoInterfaceContractResolution
 import site.addzero.lsi.jimmer.dto.resolveDtoTypeInfo
 import site.addzero.lsi.jimmer.dto.toLsiDtoCompiler
 import site.addzero.lsi.jimmer.dto.toLsiDtoGraph
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiWorkspace
 
 internal class JimmerDtoPrecompiler {
@@ -118,7 +118,7 @@ internal class JimmerDtoPrecompiler {
                 return@forEach
             }
             val invalidTargetTypeIds = entry.targetTypeIds.filter { targetTypeId ->
-                val workspaceType = workspace[targetTypeId] as? LsiTypeDeclaration
+                val workspaceType = workspace[targetTypeId] as? LsiClass
                 workspaceType != null && !workspaceType.isJimmerImmutableType()
             }
             invalidTargetTypeIds.forEach { targetTypeId ->
@@ -138,7 +138,7 @@ internal class JimmerDtoPrecompiler {
             }
             val unresolvedTypeIds = buildSet {
                 entry.targetTypeIds.filterTo(this) { targetTypeId ->
-                    val workspaceType = workspace[targetTypeId] as? LsiTypeDeclaration
+                    val workspaceType = workspace[targetTypeId] as? LsiClass
                     workspaceType == null ||
                         workspaceType.isJimmerImmutableType() && targetTypeId !in immutableSchema.typesById
                 }
@@ -155,7 +155,7 @@ internal class JimmerDtoPrecompiler {
                     }
                     .filter { reference ->
                         val typeId = entry.referenceResolution.typeIds.getValue(reference)
-                        val declaration = workspace[typeId] as? LsiTypeDeclaration
+                        val declaration = workspace[typeId] as? LsiClass
                         when (reference.kind) {
                             DTO_MODEL_TYPE_REFERENCE_KIND ->
                                 declaration == null ||
@@ -193,7 +193,7 @@ internal class JimmerDtoPrecompiler {
                 if (!sourceFilter.accepts(qualifiedName)) {
                     false
                 } else {
-                    val targetType = workspace[targetTypeId] as? LsiTypeDeclaration
+                    val targetType = workspace[targetTypeId] as? LsiClass
                     targetType == null || !targetType.isJimmerImmutableType() ||
                         targetTypeId in immutableSemanticRootTypeIds
                 }
@@ -242,7 +242,7 @@ internal class JimmerDtoPrecompiler {
                         return@referenceLoop
                     }
                     val typeId = requireNotNull(selection.selectedTypeId)
-                    if (typeId !in sourceDtoTypeIds && workspace[typeId] !is LsiTypeDeclaration) {
+                    if (typeId !in sourceDtoTypeIds && workspace[typeId] !is LsiClass) {
                         unresolvedReusableDtoTypeIds += typeId
                     }
                 }
@@ -477,7 +477,7 @@ private fun CompilerInputDocumentSnapshot.resolveStaticReferences(
         .distinct()
         .filter { typeId -> sourceFilter.accepts(typeId.requireTypeQualifiedName()) }
         .filter { typeId ->
-            val declaration = workspace[typeId] as? LsiTypeDeclaration
+            val declaration = workspace[typeId] as? LsiClass
             declaration == null || !declaration.isJimmerImmutableType() ||
                 typeId in immutableSemanticRootTypeIds
         }

@@ -29,7 +29,7 @@ import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiModality
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -195,7 +195,7 @@ class DtoConfigPoetTest {
         val WORKSPACE = LsiWorkspace(
             sources = listOf(SOURCE),
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = RECURSION_TYPE_ID,
                     name = "NodeRecursion",
                     qualifiedName = "demo.NodeRecursion",

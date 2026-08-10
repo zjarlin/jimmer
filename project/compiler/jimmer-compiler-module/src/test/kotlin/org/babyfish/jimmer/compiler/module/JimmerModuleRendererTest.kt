@@ -27,7 +27,7 @@ import site.addzero.lsi.core.LsiOrigin
 import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
@@ -115,7 +115,7 @@ class JimmerModuleRendererTest {
             LsiSource.of(qualifiedName.replace('.', '/') + ".$extension", language)
         }
         val declarations = ENTITY_NAMES.mapIndexed { index, qualifiedName ->
-            LsiTypeDeclaration(
+            LsiClass(
                 id = ENTITY_IDS[index],
                 name = qualifiedName.substringAfterLast('.'),
                 qualifiedName = qualifiedName,

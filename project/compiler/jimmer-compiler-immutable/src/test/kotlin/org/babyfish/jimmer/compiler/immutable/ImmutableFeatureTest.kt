@@ -34,7 +34,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiOverride
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.type.LsiUnresolvedType
@@ -327,8 +327,8 @@ class ImmutableFeatureTest {
         workspace: LsiWorkspace,
         currentWorkspace: LsiWorkspace = workspace,
         currentRootTypeIds: Set<LsiSymbolId> = currentWorkspace.declarations
-            .filterIsInstance<LsiTypeDeclaration>()
-            .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
+            .filterIsInstance<LsiClass>()
+            .mapTo(sortedSetOf(), LsiClass::id),
         platform: CompilerPlatform = CompilerPlatform.APT,
         isFinal: Boolean = false,
         frontendDeferred: Boolean = false,
@@ -380,9 +380,9 @@ class ImmutableFeatureTest {
         superTypes: List<LsiDeclaredType> = emptyList(),
         annotations: List<LsiAnnotation> = emptyList(),
         origin: LsiOrigin = ORIGIN,
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val qualifiedName = id.requireTypeQualifiedName()
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = id,
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,

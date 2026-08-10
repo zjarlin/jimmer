@@ -11,7 +11,8 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.clazz.copy
 import site.addzero.lsi.model.LsiWorkspace
 
 fun completeEntityProps(
@@ -61,8 +62,8 @@ fun completeEntityProps(
 }
 
 fun LsiWorkspace.completeEntityIdentities(): LsiWorkspace {
-    val types = declarationsOfType<LsiTypeDeclaration>()
-    val typesById = types.associateBy(LsiTypeDeclaration::id)
+    val types = declarationsOfType<LsiClass>()
+    val typesById = types.associateBy(LsiClass::id)
     val propertiesById = declarationsOfType<LsiProperty>().associateBy(LsiProperty::id)
     val identityCache = mutableMapOf<LsiSymbolId, Boolean>()
     val visiting = mutableSetOf<LsiSymbolId>()
@@ -118,7 +119,7 @@ fun LsiWorkspace.completeEntityIdentities(): LsiWorkspace {
         return this
     }
     val completedDeclarations = declarations.map { declaration ->
-        val type = declaration as? LsiTypeDeclaration ?: return@map declaration
+        val type = declaration as? LsiClass ?: return@map declaration
         val syntheticProp = syntheticPropsByTypeId[type.id] ?: return@map declaration
         type.copy(memberIds = type.memberIds + syntheticProp.id)
     } + syntheticPropsByTypeId.values

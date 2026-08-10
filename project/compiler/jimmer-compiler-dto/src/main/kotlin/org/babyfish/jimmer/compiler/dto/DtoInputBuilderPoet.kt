@@ -42,7 +42,7 @@ import site.addzero.lsi.model.LsiMember
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.toSourceAnnotation
@@ -58,7 +58,7 @@ internal fun DtoType.toInputBuilderPoetType(
     generatedDtoTypes: Map<DtoTypeId, LsiDeclaredType>,
     jsonPojoBuilderAnnotationTypeId: LsiSymbolId,
     jsonNamingAnnotationTypeId: LsiSymbolId,
-): LsiTypeDeclaration {
+): LsiClass {
     require(targetLanguage == LsiLanguage.JAVA || targetLanguage == LsiLanguage.KOTLIN) {
         "DTO InputBuilder requires Java or Kotlin target language"
     }
@@ -102,7 +102,7 @@ internal fun DtoType.toInputBuilderPoetType(
             ),
         )
     }
-    return LsiTypeDeclaration(
+    return LsiClass(
         name = "Builder",
         kind = LsiTypeDeclarationKind.CLASS,
         annotations = inputBuilderTypeAnnotations(
@@ -511,7 +511,7 @@ private fun code(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock = LsiCodeBlock.
 
 /** 为嵌入式 InputBuilder 解析完整且精确的源码类型名称表。 */
 internal fun LsiWorkspace.inputBuilderPoetTypeNames(
-    inputBuilderType: LsiTypeDeclaration,
+    inputBuilderType: LsiClass,
     currentDtoTypeName: LsiTypeName,
     generatedDtoTypeNames: Collection<LsiTypeName>,
     jacksonVersion: JacksonFamily,

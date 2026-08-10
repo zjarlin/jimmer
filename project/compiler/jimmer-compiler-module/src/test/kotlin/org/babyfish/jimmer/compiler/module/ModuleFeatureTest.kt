@@ -39,7 +39,7 @@ import site.addzero.lsi.model.LsiDeclaration
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -337,8 +337,8 @@ class ModuleFeatureTest {
         currentWorkspace: LsiWorkspace,
         platform: CompilerPlatform,
         currentRootTypeIds: Set<LsiSymbolId> = currentWorkspace.declarations
-            .filterIsInstance<LsiTypeDeclaration>()
-            .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
+            .filterIsInstance<LsiClass>()
+            .mapTo(sortedSetOf(), LsiClass::id),
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
         inputResources: Map<String, String> = emptyMap(),
@@ -466,7 +466,7 @@ class ModuleFeatureTest {
             val typeId = LsiSymbolId.type(qualifiedName)
             val idPropId = LsiSymbolId.property(typeId, "id")
             val origin = LsiOrigin(LsiOriginKind.SOURCE, source)
-            declarations += LsiTypeDeclaration(
+            declarations += LsiClass(
                 id = typeId,
                 name = qualifiedName.substringAfterLast('.'),
                 qualifiedName = qualifiedName,

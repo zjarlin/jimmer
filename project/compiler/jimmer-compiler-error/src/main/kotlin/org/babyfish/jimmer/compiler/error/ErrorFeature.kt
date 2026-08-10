@@ -21,7 +21,7 @@ import site.addzero.lsi.jimmer.error.ErrorSchemaOptions
 import site.addzero.lsi.jimmer.error.ErrorValidationException
 import site.addzero.lsi.jimmer.error.fingerprint
 import site.addzero.lsi.jimmer.error.toErrorSchema
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.LsiPoetRenderer
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
@@ -41,7 +41,7 @@ class ErrorFeature : CompilerFeature<EmptyCompilerFeatureState, ErrorFeatureStat
         return try {
             val sourceFilter = JimmerCompilerSourceFilter.from(context.round.options)
             val targetTypeIds = context.round.workspace
-                .declarationsOfType<LsiTypeDeclaration>()
+                .declarationsOfType<LsiClass>()
                 .asSequence()
                 .filter { type -> type.origin.kind in COMPILATION_ORIGIN_KINDS }
                 .filter { type -> sourceFilter.accepts(type.qualifiedName) }
@@ -49,7 +49,7 @@ class ErrorFeature : CompilerFeature<EmptyCompilerFeatureState, ErrorFeatureStat
                 .filter { type ->
                     type.annotations.any { annotation -> annotation.type == ERROR_FAMILY_ANNOTATION }
                 }
-                .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
+                .mapTo(sortedSetOf(), LsiClass::id)
             val schema = context.round.workspace.toErrorSchema(
                 options = ErrorSchemaOptions(
                     checkedException = context.round.options["jimmer.client.checkedException"] == "true"
@@ -114,7 +114,7 @@ private val COMPILATION_ORIGIN_KINDS = setOf(
 
 private val ERROR_FAMILY_ANNOTATION = LsiSymbolId.type("org.babyfish.jimmer.error.ErrorFamily")
 
-private fun LsiTypeDeclaration.isVisibleOn(platform: CompilerPlatform): Boolean {
+private fun LsiClass.isVisibleOn(platform: CompilerPlatform): Boolean {
     return when (platform) {
         CompilerPlatform.APT -> annotations.none { annotation ->
             annotation.type == LsiSymbolId.type("kotlin.Metadata")

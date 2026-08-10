@@ -46,7 +46,7 @@ import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.type.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
@@ -405,7 +405,7 @@ class JimmerDtoReusableIntegrationTest {
     }
 
     private fun workspace(
-        externalDeclarations: List<LsiTypeDeclaration> = emptyList(),
+        externalDeclarations: List<LsiClass> = emptyList(),
     ): LsiWorkspace {
         val modelSource = LsiSource.of("demo/Models.kt", LsiLanguage.KOTLIN)
         val modelOrigin = LsiOrigin(LsiOriginKind.SOURCE, modelSource)
@@ -447,7 +447,7 @@ class JimmerDtoReusableIntegrationTest {
     private fun externalDto(
         qualifiedName: String,
         entityTypeId: LsiSymbolId,
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         return typeDeclaration(
             id = LsiSymbolId.type(qualifiedName),
             kind = LsiTypeDeclarationKind.INTERFACE,
@@ -465,7 +465,7 @@ class JimmerDtoReusableIntegrationTest {
         qualifiedName: String,
         entityTypeId: LsiSymbolId,
         platform: CompilerPlatform,
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val markerTypeId = when (platform) {
             CompilerPlatform.APT -> J_SPECIFICATION_TYPE_ID
             CompilerPlatform.KSP -> K_SPECIFICATION_TYPE_ID
@@ -497,9 +497,9 @@ class JimmerDtoReusableIntegrationTest {
         annotations: List<LsiAnnotation> = emptyList(),
         superTypes: List<LsiType> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val qualifiedName = id.requireTypeQualifiedName()
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = id,
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,

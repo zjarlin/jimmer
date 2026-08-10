@@ -35,7 +35,7 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 
 /**
@@ -327,8 +327,8 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    private fun draftDeclaration(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun draftDeclaration(): LsiClass {
+        return LsiClass(
             name = "$simpleName$KOTLIN_DRAFT_SUFFIX",
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             kind = LsiTypeDeclarationKind.INTERFACE,
@@ -416,9 +416,9 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    private fun producerDeclaration(): LsiTypeDeclaration {
+    private fun producerDeclaration(): LsiClass {
         val runtimePoet = ImmutableDraftKotlinRuntimePoet(this)
-        return LsiTypeDeclaration(
+        return LsiClass(
             name = KOTLIN_DRAFT_PRODUCER,
             nameStyle = LsiNameStyle.KOTLIN_ESCAPED,
             kind = LsiTypeDeclarationKind.OBJECT,
@@ -635,8 +635,8 @@ internal class ImmutableDraftKotlinPoetContext(
         )
     }
 
-    private fun builderDeclaration(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun builderDeclaration(): LsiClass {
+        return LsiClass(
             name = KOTLIN_DRAFT_BUILDER,
             kind = LsiTypeDeclarationKind.CLASS,
             annotations = listOf(generatedByAnnotation()),

@@ -54,7 +54,7 @@ import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.type.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.type.LsiType
@@ -510,14 +510,14 @@ class DtoFeatureTest {
         val workspace = LsiWorkspace(
             sources = baseWorkspace.sources + annotationSource,
             declarations = baseWorkspace.declarations + listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = noTargetTypeId,
                     name = "NoTarget",
                     qualifiedName = "demo.NoTarget",
                     kind = LsiTypeDeclarationKind.ANNOTATION,
                     origin = annotationOrigin,
                 ),
-                LsiTypeDeclaration(
+                LsiClass(
                     id = notNullTypeId,
                     name = "NotNull",
                     qualifiedName = "jakarta.validation.constraints.NotNull",
@@ -1701,8 +1701,8 @@ class DtoFeatureTest {
         platform: CompilerPlatform,
         inputDocuments: List<CompilerInputDocument>,
         currentRootTypeIds: Set<LsiSymbolId> = currentWorkspace.declarations
-            .filterIsInstance<LsiTypeDeclaration>()
-            .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
+            .filterIsInstance<LsiClass>()
+            .mapTo(sortedSetOf(), LsiClass::id),
         isFinal: Boolean = false,
         options: Map<String, String> = emptyMap(),
         inputDocumentDiscoveryComplete: Boolean = true,
@@ -1743,7 +1743,7 @@ class DtoFeatureTest {
             LsiUnresolvedType("demo.AuthorTable")
         }
         val declarations = listOf(
-            LsiTypeDeclaration(
+            LsiClass(
                 id = BOOK_ID,
                 name = "Book",
                 qualifiedName = "demo.Book",
@@ -1774,7 +1774,7 @@ class DtoFeatureTest {
                 annotations = listOf(LsiAnnotation(MANY_TO_MANY_ANNOTATION)),
                 origin = origin,
             ),
-            LsiTypeDeclaration(
+            LsiClass(
                 id = AUTHOR_ID,
                 name = "Author",
                 qualifiedName = "demo.Author",
@@ -1793,7 +1793,7 @@ class DtoFeatureTest {
                 annotations = listOf(LsiAnnotation(ID_ANNOTATION)),
                 origin = origin,
             ),
-            LsiTypeDeclaration(
+            LsiClass(
                 id = FILTER_ID,
                 name = "AuthorFilter",
                 qualifiedName = "demo.AuthorFilter",
@@ -1850,7 +1850,7 @@ class DtoFeatureTest {
             sources = (base.sources + source).distinct().sorted(),
             declarations = base.declarations + classTypeIds.sorted().map { typeId ->
                 val qualifiedName = typeId.requireTypeQualifiedName()
-                LsiTypeDeclaration(
+                LsiClass(
                     id = typeId,
                     name = qualifiedName.substringAfterLast('.'),
                     qualifiedName = qualifiedName,
@@ -1890,7 +1890,7 @@ class DtoFeatureTest {
             sources = listOf(source),
             declarations = typeIds.sorted().map { typeId ->
                 val qualifiedName = typeId.requireTypeQualifiedName()
-                LsiTypeDeclaration(
+                LsiClass(
                     id = typeId,
                     name = qualifiedName.substringAfterLast('.'),
                     qualifiedName = qualifiedName,
@@ -1934,7 +1934,7 @@ class DtoFeatureTest {
         return LsiWorkspace(
             sources = workspace.sources + authorSource,
             declarations = workspace.declarations + listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = AUTHOR_ID,
                     name = "Author",
                     qualifiedName = "demo.Author",
@@ -1983,7 +1983,7 @@ class DtoFeatureTest {
         return LsiWorkspace(
             sources = listOf(source),
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = BOOK_ID,
                     name = "Book",
                     qualifiedName = "demo.Book",

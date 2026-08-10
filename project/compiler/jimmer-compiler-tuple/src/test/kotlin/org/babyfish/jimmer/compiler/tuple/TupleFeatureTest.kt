@@ -29,7 +29,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiField
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiVisibility
@@ -53,7 +53,7 @@ class TupleFeatureTest {
         val multipleTupleWorkspace = LsiWorkspace(
             sources = workspace.sources,
             declarations = workspace.declarations + listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = secondTypeId,
                     name = "SecondTuple",
                     qualifiedName = "demo.SecondTuple",
@@ -141,7 +141,7 @@ class TupleFeatureTest {
         val workspace = LsiWorkspace(
             sources = listOf(source),
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = TYPE_ID,
                     name = "Tuple",
                     qualifiedName = "demo.Tuple",

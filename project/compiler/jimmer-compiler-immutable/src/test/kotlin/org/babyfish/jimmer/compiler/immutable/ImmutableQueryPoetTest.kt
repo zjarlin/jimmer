@@ -32,7 +32,7 @@ import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.type.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiTypeParameter
 import site.addzero.lsi.type.LsiTypeParameterRef
@@ -434,7 +434,7 @@ class ImmutableQueryPoetTest {
     ): LsiWorkspace {
         val propsByOwner = props.groupBy { (prop, _) -> prop.ownerTypeId }
         val typeDeclarations = types.map { (type, source) ->
-            LsiTypeDeclaration(
+            LsiClass(
                 id = type.id,
                 name = type.qualifiedName.substringAfterLast('.'),
                 qualifiedName = type.qualifiedName,
@@ -459,7 +459,7 @@ class ImmutableQueryPoetTest {
         }
         val additionalTypeDeclarations = additionalTypeSources.map { (id, source) ->
             val qualifiedName = id.requireTypeQualifiedName()
-            LsiTypeDeclaration(
+            LsiClass(
                 id = id,
                 name = qualifiedName.substringAfterLast('.'),
                 qualifiedName = qualifiedName,

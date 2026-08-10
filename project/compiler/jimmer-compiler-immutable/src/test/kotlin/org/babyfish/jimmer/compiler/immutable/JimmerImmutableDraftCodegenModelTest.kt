@@ -28,7 +28,7 @@ import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.type.LsiTypeParameter
@@ -478,9 +478,9 @@ class JimmerImmutableDraftCodegenModelTest {
         origin: LsiOrigin = ORIGIN,
         superTypes: List<LsiDeclaredType> = emptyList(),
         typeParameters: List<LsiTypeParameter> = emptyList(),
-    ): LsiTypeDeclaration {
+    ): LsiClass {
         val qualifiedName = id.requireTypeQualifiedName()
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = id,
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,
@@ -516,8 +516,8 @@ class JimmerImmutableDraftCodegenModelTest {
         )
     }
 
-    private fun annotationType(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun annotationType(): LsiClass {
+        return LsiClass(
             id = VALID_BOOK,
             name = "ValidBook",
             qualifiedName = "demo.ValidBook",
@@ -541,8 +541,8 @@ class JimmerImmutableDraftCodegenModelTest {
         )
     }
 
-    private fun validatorType(): LsiTypeDeclaration {
-        return LsiTypeDeclaration(
+    private fun validatorType(): LsiClass {
+        return LsiClass(
             id = VALIDATOR,
             name = "ValidBookValidator",
             qualifiedName = "demo.ValidBookValidator",
@@ -551,9 +551,9 @@ class JimmerImmutableDraftCodegenModelTest {
         )
     }
 
-    private fun builtInAnnotationType(name: String): LsiTypeDeclaration {
+    private fun builtInAnnotationType(name: String): LsiClass {
         val typeId = LsiSymbolId.type("jakarta.validation.constraints.$name")
-        return LsiTypeDeclaration(
+        return LsiClass(
             id = typeId,
             name = name,
             qualifiedName = typeId.requireTypeQualifiedName(),

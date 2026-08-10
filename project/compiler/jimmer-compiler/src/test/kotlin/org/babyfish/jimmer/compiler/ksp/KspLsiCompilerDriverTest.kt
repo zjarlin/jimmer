@@ -340,7 +340,7 @@ class KspLsiCompilerDriverTest {
         assertTrue(specialModelDeclarationsRead)
         assertEquals(
             listOf("ACTIVE", "INACTIVE"),
-            assertIs<site.addzero.lsi.model.LsiTypeDeclaration>(
+            assertIs<site.addzero.lsi.clazz.LsiClass>(
                 workspace[LsiSymbolId.type("demo.Mode")],
             ).enumEntries.map { entry -> entry.name },
         )

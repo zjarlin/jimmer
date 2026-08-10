@@ -37,7 +37,7 @@ import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.type.LsiTypeArgument
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
@@ -437,7 +437,7 @@ class ImmutableFetcherPoetTest {
         val propsByOwner = props.groupBy { (prop, _) -> prop.ownerTypeId }
         val typeDeclarations = typeSources.map { (id, source) ->
             val qualifiedName = id.requireTypeQualifiedName()
-            LsiTypeDeclaration(
+            LsiClass(
                 id = id,
                 name = qualifiedName.substringAfterLast('.'),
                 qualifiedName = qualifiedName,

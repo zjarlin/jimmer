@@ -27,7 +27,7 @@ import site.addzero.lsi.jimmer.dto.DtoPropId
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.type.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -122,7 +122,7 @@ class DtoBaseValuePoetTest {
         val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
         val WORKSPACE = LsiWorkspace(
             declarations = listOf(
-                LsiTypeDeclaration(
+                LsiClass(
                     id = IMMUTABLE_TYPE_ID,
                     name = "Book",
                     qualifiedName = "demo.Book",

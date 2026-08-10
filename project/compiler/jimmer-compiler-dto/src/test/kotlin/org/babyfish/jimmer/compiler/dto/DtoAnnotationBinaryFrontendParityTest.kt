@@ -45,7 +45,7 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.jimmer.dto.DtoAnnotation
 import site.addzero.lsi.jimmer.dto.DtoAnnotationArgument
@@ -64,8 +64,8 @@ class DtoAnnotationBinaryFrontendParityTest {
         val library = compileKotlinAnnotation()
         val aptWorkspace = compileAptConsumer(library)
         val kspWorkspace = compileKspConsumer(library)
-        val aptDeclaration = assertIs<LsiTypeDeclaration>(aptWorkspace[TAGS_ID])
-        val kspDeclaration = assertIs<LsiTypeDeclaration>(kspWorkspace[TAGS_ID])
+        val aptDeclaration = assertIs<LsiClass>(aptWorkspace[TAGS_ID])
+        val kspDeclaration = assertIs<LsiClass>(kspWorkspace[TAGS_ID])
 
         assertEquals(LsiOriginKind.BINARY, aptDeclaration.origin.kind)
         assertEquals(LsiLanguage.JAVA, aptDeclaration.origin.language)
@@ -122,7 +122,7 @@ class DtoAnnotationBinaryFrontendParityTest {
         val library = compileJavaAnnotation()
         val aptWorkspace = compileAptJavaAnnotationConsumer(library)
         val kspWorkspace = compileKspJavaAnnotationConsumer(library)
-        val declaration = assertIs<LsiTypeDeclaration>(kspWorkspace[JAVA_ANNOTATION_ID])
+        val declaration = assertIs<LsiClass>(kspWorkspace[JAVA_ANNOTATION_ID])
         assertTrue(aptWorkspace.typeHierarchyEntry(JAVA_INTEGER_ID) == null)
         assertTrue(kspWorkspace.typeHierarchyEntry(JAVA_INTEGER_ID) == null)
         val aptContract = freezeContract(aptWorkspace, JAVA_JAVA_USE_ID)
@@ -398,7 +398,7 @@ class DtoAnnotationBinaryFrontendParityTest {
         baseTypeId: LsiSymbolId,
         dtoAnnotations: List<DtoAnnotation> = emptyList(),
     ): DtoAnnotationContract {
-        val baseType = assertIs<LsiTypeDeclaration>(workspace[baseTypeId])
+        val baseType = assertIs<LsiClass>(workspace[baseTypeId])
         val props = completeEntityProps(baseTypeId)
         val immutableSchema = ImmutableSchema(
             listOf(

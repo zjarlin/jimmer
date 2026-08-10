@@ -18,7 +18,7 @@ import org.babyfish.jimmer.ddl.compiler.JimmerDdlEntityTableSnapshot
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
-import site.addzero.lsi.model.LsiTypeDeclaration
+import site.addzero.lsi.clazz.LsiClass
 
 /**
  * 在共享编译会话中收集实体，并在最终轮消费冻结后的 LSI 工作区。
@@ -61,17 +61,17 @@ class DdlFeature : CompilerFeature<DdlCollectionState, DdlFeatureState> {
         context: CompilerCollectContext,
     ): CompilerFeatureCollection<DdlCollectionState> {
         val currentSourcePaths = context.round.currentRootTypeIds.mapNotNullTo(sortedSetOf()) { typeId ->
-            (context.round.currentWorkspace[typeId] as? LsiTypeDeclaration)?.origin?.source?.path
+            (context.round.currentWorkspace[typeId] as? LsiClass)?.origin?.source?.path
         }
         val entityTypeIds = context.round.currentWorkspace
-            .declarationsOfType<LsiTypeDeclaration>()
+            .declarationsOfType<LsiClass>()
             .filter { declaration ->
                 declaration.isEntity() && (
                     declaration.id in context.round.currentRootTypeIds ||
                         declaration.origin.source?.path?.let(currentSourcePaths::contains) == true
                     )
             }
-            .mapTo(sortedSetOf(), LsiTypeDeclaration::id)
+            .mapTo(sortedSetOf(), LsiClass::id)
         return CompilerFeatureCollection(
             state = DdlCollectionState(entityTypeIds),
         )
@@ -259,7 +259,7 @@ private fun JimmerDdlCompilerResult.warningDiagnostics(): List<LsiDiagnostic> {
     }
 }
 
-private fun LsiTypeDeclaration.isEntity(): Boolean {
+private fun LsiClass.isEntity(): Boolean {
     return annotations.any { annotation -> annotation.type == ENTITY_ANNOTATION_ID }
 }
 
