@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.get
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
@@ -17,15 +18,15 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.propertyAnnotationApplications
 import site.addzero.lsi.jimmer.dto.propertySourceAnnotationApplications
 import site.addzero.lsi.jimmer.dto.typeAnnotationApplications
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArgumentLayout
-import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
-import site.addzero.lsi.model.LsiAnnotationArrayStyle
-import site.addzero.lsi.model.LsiClassLiteralStyle
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArgumentLayout
+import site.addzero.lsi.anno.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.anno.LsiAnnotationArrayStyle
+import site.addzero.lsi.anno.LsiClassLiteralStyle
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.clazz.toLsiClasses

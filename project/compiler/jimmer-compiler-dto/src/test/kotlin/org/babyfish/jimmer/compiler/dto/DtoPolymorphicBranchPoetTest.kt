@@ -14,9 +14,9 @@ import site.addzero.lsi.jimmer.dto.DtoPolymorphism
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.type.LsiDeclaredType
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.anno.LsiAnnotationValue
 
 class DtoPolymorphicBranchPoetTest {
 

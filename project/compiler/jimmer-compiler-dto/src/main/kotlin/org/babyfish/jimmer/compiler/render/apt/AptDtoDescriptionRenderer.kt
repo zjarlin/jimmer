@@ -6,7 +6,7 @@ import org.babyfish.jimmer.compiler.dto.toDescriptionPoetAnnotationOrNull
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoType
-import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将 DTO Description 注解渲染为 JavaPoet 结构。 */

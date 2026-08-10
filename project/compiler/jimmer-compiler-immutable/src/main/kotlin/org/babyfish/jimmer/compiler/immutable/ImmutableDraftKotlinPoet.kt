@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.immutable
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationArgument
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import org.babyfish.jimmer.currentVersion
 import site.addzero.lsi.core.LsiLanguage
@@ -8,9 +9,9 @@ import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.ImmutableDraftRuntimePropKind
 import site.addzero.lsi.jimmer.ImmutablePropValueCategory
 import site.addzero.lsi.jimmer.ImmutableTypeKind
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiFunctionType
@@ -21,8 +22,8 @@ import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiAccessor
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArrayStyle
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArrayStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiConstructor
@@ -900,11 +901,11 @@ private fun LsiAnnotation.toKotlinDraftPoetAnnotationWithDefaults(): LsiAnnotati
         else -> listOf("message", "groups", "payload")
     }
     val orderedArguments = arguments.entries.sortedWith(
-        compareBy<Map.Entry<String, site.addzero.lsi.model.LsiAnnotationArgument>> { entry ->
+        compareBy<Map.Entry<String, site.addzero.lsi.anno.LsiAnnotationArgument>> { entry ->
             preferredOrder.indexOf(entry.key).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE
         }
             .thenBy { entry -> if (entry.value.isExplicit) 0 else 1 }
-            .thenBy(Map.Entry<String, site.addzero.lsi.model.LsiAnnotationArgument>::key)
+            .thenBy(Map.Entry<String, site.addzero.lsi.anno.LsiAnnotationArgument>::key)
     )
     return sourceLsiAnnotation(
         type = type,

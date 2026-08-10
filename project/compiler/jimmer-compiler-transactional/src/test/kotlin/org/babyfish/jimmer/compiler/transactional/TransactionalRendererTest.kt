@@ -29,11 +29,11 @@ import site.addzero.lsi.jimmer.transactional.TransactionalParameter
 import site.addzero.lsi.jimmer.transactional.TransactionalSchema
 import site.addzero.lsi.jimmer.transactional.TransactionalSqlClient
 import site.addzero.lsi.jimmer.transactional.TransactionalType
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArgumentOrigin
-import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArgumentOrigin
+import site.addzero.lsi.anno.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.type.LsiPrimitiveKind

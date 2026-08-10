@@ -12,7 +12,7 @@ import site.addzero.lsi.jimmer.ImmutableDraftTemporalTarget
 import site.addzero.lsi.jimmer.ImmutableDraftValidationFailure
 import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutableValidation
-import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.anno.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiCodeBlock

@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.render.ksp
 
+import site.addzero.lsi.anno.copy
 import com.squareup.kotlinpoet.AnnotationSpec
 import org.babyfish.jimmer.compiler.dto.dtoAnnotationPoetTypeNames
 import org.babyfish.jimmer.compiler.dto.propertyAnnotationPoetAnnotations
@@ -12,7 +13,7 @@ import site.addzero.lsi.jimmer.dto.DtoKotlinPropertyShape
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.kotlinPropertyPlacement
 import site.addzero.lsi.jimmer.dto.propertyAnnotationApplications
-import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.anno.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 

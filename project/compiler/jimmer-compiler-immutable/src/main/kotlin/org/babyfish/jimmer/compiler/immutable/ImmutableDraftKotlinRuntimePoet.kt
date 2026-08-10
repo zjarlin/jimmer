@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.immutable
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.type.LsiDeclaredType
@@ -8,10 +8,10 @@ import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiAccessor
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArgumentLayout
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArgumentLayout
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder

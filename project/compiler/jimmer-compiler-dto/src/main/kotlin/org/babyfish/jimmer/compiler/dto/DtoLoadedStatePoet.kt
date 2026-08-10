@@ -1,16 +1,16 @@
 package org.babyfish.jimmer.compiler.dto
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.jimmer.dto.DtoBaseProp
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.dtoLoadedStateStorageNameOrNull
-import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.anno.LsiAnnotationUseSiteTarget
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
-import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.model.LsiModifier

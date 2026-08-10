@@ -1,5 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
+import site.addzero.lsi.anno.copy
 import site.addzero.lsi.jimmer.input.*
 
 import java.lang.reflect.GenericArrayType
@@ -44,7 +45,7 @@ import site.addzero.lsi.core.LsiOriginKind
 import site.addzero.lsi.core.LsiPosition
 import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiModality
 import site.addzero.lsi.type.LsiPrimitiveKind

@@ -1,6 +1,7 @@
 package org.babyfish.jimmer.compiler.dto
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.copy
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import org.babyfish.jimmer.compiler.JacksonFamily
 import site.addzero.lsi.core.LsiLanguage
@@ -29,10 +30,10 @@ import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.model.LsiBodyStyle
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
@@ -44,7 +45,7 @@ import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toSourceAnnotation
+import site.addzero.lsi.anno.toSourceAnnotation
 import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将冻结的 Input DTO 语义降低为平台中立的 Builder 源码结构。 */

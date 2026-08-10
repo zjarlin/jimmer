@@ -7,9 +7,9 @@ import site.addzero.lsi.jimmer.error.ErrorCode
 import site.addzero.lsi.jimmer.error.ErrorFamily
 import site.addzero.lsi.jimmer.error.ErrorField
 import site.addzero.lsi.jimmer.error.ErrorSchema
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiFunctionType
@@ -24,7 +24,7 @@ import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.toJvmReferenceType
 import site.addzero.lsi.model.LsiAccessor
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
 import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
@@ -40,7 +40,7 @@ import site.addzero.lsi.method.LsiParameter
 import site.addzero.lsi.field.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.sourceLsiAnnotation
 import site.addzero.lsi.clazz.toLsiClasses
 
 internal fun ErrorSchema.toLsiSourceArtifacts(

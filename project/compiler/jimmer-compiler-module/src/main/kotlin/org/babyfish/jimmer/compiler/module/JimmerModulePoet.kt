@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.module
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.core.LsiLanguage
@@ -10,7 +10,7 @@ import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.codegen.LsiSourceArtifact
-import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.field.LsiField
 import site.addzero.lsi.file.LsiFile

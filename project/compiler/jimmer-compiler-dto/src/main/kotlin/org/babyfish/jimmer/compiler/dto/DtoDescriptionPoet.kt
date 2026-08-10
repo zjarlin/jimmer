@@ -1,16 +1,16 @@
 package org.babyfish.jimmer.compiler.dto
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.descriptionAnnotationValueOrNull
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.clazz.LsiClass
 
 private val DESCRIPTION_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.client.Description")

@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.dto
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.sourceLsiAnnotation
 
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
@@ -11,11 +11,11 @@ import site.addzero.lsi.jimmer.dto.DtoPolymorphicBranch
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.generatedJacksonPolymorphicRootAnnotations
 import site.addzero.lsi.jimmer.dto.generatedJacksonPolymorphicTypeNameAnnotationOrNull
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
-import site.addzero.lsi.model.LsiAnnotationArrayStyle
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiAnnotationArgumentNameStyle
+import site.addzero.lsi.anno.LsiAnnotationArrayStyle
 import site.addzero.lsi.clazz.LsiClass
 
 /** 将完整的多态输入根 LSI 注解转换为平台中立的源码注解。 */

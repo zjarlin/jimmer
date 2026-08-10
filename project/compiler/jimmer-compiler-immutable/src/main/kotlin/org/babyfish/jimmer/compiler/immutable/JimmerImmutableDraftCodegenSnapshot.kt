@@ -7,8 +7,8 @@ import site.addzero.lsi.jimmer.ImmutableDraftValidationPlan
 import site.addzero.lsi.jimmer.ImmutableDraftValidationStep
 import site.addzero.lsi.jimmer.ImmutableValidation
 import site.addzero.lsi.jimmer.jimmerTypeSignature
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.type.LsiTypeParameter
 import site.addzero.lsi.model.stableSignature
 

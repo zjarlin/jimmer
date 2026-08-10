@@ -42,7 +42,7 @@ import site.addzero.lsi.jimmer.client.ClientOperation
 import site.addzero.lsi.jimmer.client.ClientSchemaDependencies
 import site.addzero.lsi.jimmer.client.toClientSchema
 import site.addzero.lsi.jimmer.error.ErrorSchema
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.field.LsiField

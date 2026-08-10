@@ -1,6 +1,6 @@
 package org.babyfish.jimmer.compiler.immutable
 
-import site.addzero.lsi.model.sourceLsiAnnotation
+import site.addzero.lsi.anno.sourceLsiAnnotation
 import site.addzero.lsi.clazz.classDeclaration
 import site.addzero.lsi.clazz.directSuperTypes
 
@@ -19,9 +19,9 @@ import site.addzero.lsi.jimmer.elementTypeOrSelf
 import site.addzero.lsi.jimmer.packageName
 import site.addzero.lsi.jimmer.simpleName
 import site.addzero.lsi.jimmer.targetTypeOf
-import site.addzero.lsi.model.LsiAnnotation
-import site.addzero.lsi.model.LsiAnnotationUseSiteTarget
-import site.addzero.lsi.model.LsiAnnotationValue
+import site.addzero.lsi.anno.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotationUseSiteTarget
+import site.addzero.lsi.anno.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiFunctionType
@@ -37,7 +37,7 @@ import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiAccessor
-import site.addzero.lsi.model.LsiSourceAnnotationArgument
+import site.addzero.lsi.anno.LsiSourceAnnotationArgument
 import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder

@@ -14,7 +14,7 @@ import site.addzero.lsi.core.LsiSource
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.exportdoc.ExportDocEntry
 import site.addzero.lsi.jimmer.exportdoc.ExportDocSchema
-import site.addzero.lsi.model.LsiAnnotation
+import site.addzero.lsi.anno.LsiAnnotation
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiPackageAnnotationScope
 import site.addzero.lsi.field.LsiProperty
