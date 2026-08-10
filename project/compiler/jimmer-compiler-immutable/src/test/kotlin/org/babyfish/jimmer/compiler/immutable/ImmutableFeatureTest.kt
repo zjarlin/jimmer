@@ -13,6 +13,7 @@ import site.addzero.lsi.compiler.CompilerInputDocumentSnapshot
 import site.addzero.lsi.compiler.CompilerPlatform
 import site.addzero.lsi.compiler.CompilerResolutionStatus
 import site.addzero.lsi.compiler.CompilerRound
+import site.addzero.lsi.compiler.CompilerSession
 import site.addzero.lsi.compiler.CompilerSessionSnapshot
 import site.addzero.lsi.compiler.CompilerSourceSet
 import site.addzero.lsi.compiler.CompilerFeatureCollection
@@ -35,6 +36,7 @@ import site.addzero.lsi.model.LsiOverride
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclaration
 import site.addzero.lsi.model.LsiTypeDeclarationKind
+import site.addzero.lsi.model.LsiTypeHierarchyEntry
 import site.addzero.lsi.model.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 
@@ -120,6 +122,86 @@ class ImmutableFeatureTest {
             CompilerResolutionStatus.INVALID,
             result.state.status,
         )
+    }
+
+    @Test
+    fun `ksp defers immutable root while referenced source declaration is invalid`() {
+        val propId = LsiSymbolId.property(BROKEN_ID, "value")
+        val workspace = LsiWorkspace(
+            sources = listOf(KOTLIN_SOURCE),
+            declarations = listOf(
+                immutableType(BROKEN_ID, ENTITY, listOf(propId), origin = KOTLIN_ORIGIN),
+                LsiProperty(
+                    id = propId,
+                    name = "value",
+                    ownerId = BROKEN_ID,
+                    type = LsiDeclaredType(GENERATED_VALUE_ID),
+                    origin = KOTLIN_ORIGIN,
+                ),
+            ),
+            typeHierarchy = listOf(
+                LsiTypeHierarchyEntry(
+                    id = GENERATED_VALUE_ID,
+                    qualifiedName = GENERATED_VALUE_ID.requireTypeQualifiedName(),
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    source = KOTLIN_SOURCE,
+                )
+            ),
+        )
+
+        val result = FEATURE.precompile(
+            context(
+                workspace = workspace,
+                platform = CompilerPlatform.KSP,
+                frontendDeferred = true,
+            )
+        )
+
+        assertEquals(CompilerResolutionStatus.DEFERRED, result.state.status)
+        assertEquals(setOf(BROKEN_ID), result.unresolvedSymbols)
+        assertTrue(result.diagnostics.isEmpty())
+    }
+
+    @Test
+    fun `ksp renders resolved roots while another root waits for its source dependency`() {
+        val propId = LsiSymbolId.property(BROKEN_ID, "value")
+        val workspace = LsiWorkspace(
+            sources = listOf(KOTLIN_SOURCE, READY_SOURCE),
+            declarations = listOf(
+                immutableType(READY_ID, ENTITY, origin = READY_ORIGIN),
+                immutableType(BROKEN_ID, ENTITY, listOf(propId), origin = KOTLIN_ORIGIN),
+                LsiProperty(
+                    id = propId,
+                    name = "value",
+                    ownerId = BROKEN_ID,
+                    type = LsiDeclaredType(GENERATED_VALUE_ID),
+                    origin = KOTLIN_ORIGIN,
+                ),
+            ),
+            typeHierarchy = listOf(
+                LsiTypeHierarchyEntry(
+                    id = GENERATED_VALUE_ID,
+                    qualifiedName = GENERATED_VALUE_ID.requireTypeQualifiedName(),
+                    kind = LsiTypeDeclarationKind.CLASS,
+                    source = KOTLIN_SOURCE,
+                )
+            ),
+        ).completeEntityIdentities()
+        val result = CompilerSession("immutable-partial-ksp-test", listOf(FEATURE)).execute(
+            CompilerRound(
+                number = 0,
+                workspace = workspace,
+                currentWorkspace = workspace,
+                currentRootTypeIds = setOf(READY_ID, BROKEN_ID),
+                platform = CompilerPlatform.KSP,
+                frontendDeferred = true,
+                inputDocumentSnapshots = emptyList(),
+            )
+        )
+
+        assertEquals(setOf(BROKEN_ID), result.unresolvedSymbols)
+        assertTrue(result.newArtifacts.any { artifact -> READY_ID in artifact.originatingSymbols })
+        assertTrue(result.newArtifacts.none { artifact -> BROKEN_ID in artifact.originatingSymbols })
     }
 
     @Test
@@ -249,6 +331,7 @@ class ImmutableFeatureTest {
             .mapTo(sortedSetOf(), LsiTypeDeclaration::id),
         platform: CompilerPlatform = CompilerPlatform.APT,
         isFinal: Boolean = false,
+        frontendDeferred: Boolean = false,
         options: Map<String, String> = emptyMap(),
         inputDocumentSnapshots: List<CompilerInputDocumentSnapshot> = emptyList(),
     ): CompilerPrecompileContext<EmptyCompilerFeatureState, ImmutableFeatureState> {
@@ -263,6 +346,7 @@ class ImmutableFeatureTest {
                 currentRootTypeIds = currentRootTypeIds,
                 platform = platform,
                 isFinal = isFinal,
+                frontendDeferred = frontendDeferred,
                 options = options,
                 inputDocumentSnapshots = inputDocumentSnapshots,
             ),
@@ -350,12 +434,16 @@ class ImmutableFeatureTest {
     private companion object {
         val SOURCE = LsiSource.of("src/main/java/demo/Model.java", LsiLanguage.JAVA)
         val KOTLIN_SOURCE = LsiSource.of("src/main/kotlin/demo/Model.kt", LsiLanguage.KOTLIN)
+        val READY_SOURCE = LsiSource.of("src/main/kotlin/demo/Ready.kt", LsiLanguage.KOTLIN)
         val SECOND_SOURCE = LsiSource.of("build/generated/ksp/demo/Second.kt", LsiLanguage.KOTLIN)
         val ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, SOURCE)
         val KOTLIN_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, KOTLIN_SOURCE)
+        val READY_ORIGIN = LsiOrigin(LsiOriginKind.SOURCE, READY_SOURCE)
         val SECOND_ORIGIN = LsiOrigin(LsiOriginKind.GENERATED, SECOND_SOURCE)
         val FEATURE = ImmutableFeature()
         val BROKEN_ID = LsiSymbolId.type("demo.Broken")
+        val READY_ID = LsiSymbolId.type("demo.Ready")
+        val GENERATED_VALUE_ID = LsiSymbolId.type("demo.GeneratedValue")
         val STRING = LsiSymbolId.type("java.lang.String")
         val ENTITY = LsiSymbolId.type("org.babyfish.jimmer.sql.Entity")
         val MAPPED_SUPERCLASS = LsiSymbolId.type("org.babyfish.jimmer.sql.MappedSuperclass")

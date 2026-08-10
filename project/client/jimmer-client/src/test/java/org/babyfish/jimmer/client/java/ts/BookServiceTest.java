@@ -197,7 +197,7 @@ public class BookServiceTest {
                                 "    }\n" +
                                 "    \n" +
                                 "    readonly findTuples: (options: BookServiceOptions['findTuples']) => Promise<\n" +
-                                "        Page<Tuple2<BookDto['BookService/COMPLEX_FETCHER'], AuthorDto['BookService/AUTHOR_FETCHER']>>\n" +
+                                "        Page<Tuple2<BookDto['BookService/COMPLEX_FETCHER'], AuthorDto['BookService/AUTHOR_FETCHER'] | undefined>>\n" +
                                 "    > = async(options) => {\n" +
                                 "        let _uri = '/tuples';\n" +
                                 "        let _separator = _uri.indexOf('?') === -1 ? '?' : '&';\n" +
@@ -223,7 +223,7 @@ public class BookServiceTest {
                                 "            _uri += encodeURIComponent(_value);\n" +
                                 "            _separator = '&';\n" +
                                 "        }\n" +
-                                "        return (await this.executor({uri: _uri, method: 'GET'})) as Promise<Page<Tuple2<BookDto['BookService/COMPLEX_FETCHER'], AuthorDto['BookService/AUTHOR_FETCHER']>>>;\n" +
+                                "        return (await this.executor({uri: _uri, method: 'GET'})) as Promise<Page<Tuple2<BookDto['BookService/COMPLEX_FETCHER'], AuthorDto['BookService/AUTHOR_FETCHER'] | undefined>>>;\n" +
                                 "    }\n" +
                                 "    \n" +
                                 "    readonly patchBook: (options: BookServiceOptions['patchBook']) => Promise<\n" +

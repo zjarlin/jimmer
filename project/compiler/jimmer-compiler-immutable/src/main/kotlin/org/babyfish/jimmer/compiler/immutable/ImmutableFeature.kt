@@ -129,16 +129,19 @@ class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFea
             return CompilerFeatureRenderResult()
         }
         val state = context.state
-        if (state.status != CompilerResolutionStatus.RESOLVED) {
+        if (state.status == CompilerResolutionStatus.INVALID) {
             return CompilerFeatureRenderResult()
         }
-        val fetcherTypes = state.schema.generatedFetcherTypes(state.targetTypeIds)
-        val draftTypes = state.draftCodegenSchema.generatedDraftTypes(state.currentTypeIds)
-        val embeddableTypes = state.schema.generatedEmbeddableTypes(state.currentTypeIds)
+        val resolvedTypeIds = state.schema.typesById.keys
+        val resolvedTargetTypeIds = state.targetTypeIds.intersect(resolvedTypeIds)
+        val resolvedCurrentTypeIds = state.currentTypeIds.intersect(resolvedTypeIds)
+        val fetcherTypes = state.schema.generatedFetcherTypes(resolvedTargetTypeIds)
+        val draftTypes = state.draftCodegenSchema.generatedDraftTypes(resolvedCurrentTypeIds)
+        val embeddableTypes = state.schema.generatedEmbeddableTypes(resolvedCurrentTypeIds)
         val artifacts = when (context.round.platform) {
             CompilerPlatform.APT -> {
                 val sharedRenderer: LsiPoetRenderer = LsiJavaPoetRenderer()
-                val queryTypes = state.schema.generatedPropsTypes(state.targetTypeIds)
+                val queryTypes = state.schema.generatedPropsTypes(resolvedTargetTypeIds)
                 state.schema.toDraftPoetArtifacts(
                     draftSchema = state.draftCodegenSchema,
                     types = draftTypes,
@@ -160,7 +163,7 @@ class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFea
             }
             CompilerPlatform.KSP -> {
                 val sharedRenderer: LsiPoetRenderer = LsiKotlinPoetRenderer()
-                val queryTypes = state.schema.generatedQueryTypes(state.targetTypeIds)
+                val queryTypes = state.schema.generatedQueryTypes(resolvedTargetTypeIds)
                 state.schema.toDraftPoetArtifacts(
                     draftSchema = state.draftCodegenSchema,
                     types = draftTypes,
@@ -217,7 +220,7 @@ class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFea
         currentTypeIds: Set<LsiSymbolId>,
         unresolvedTypeIds: Set<LsiSymbolId>,
     ): CompilerFeaturePrecompileResult<ImmutableFeatureState> {
-        val deferred = context.round.platform == CompilerPlatform.APT && !context.round.isFinal
+        val deferred = context.round.canDeferUnresolvedTypes()
         val resolvedTypeIds = semanticRootTypeIds - unresolvedTypeIds
         val (schema, draftCodegenSchema) = try {
             val schema = context.round.workspace.toImmutableSchema(resolvedTypeIds)
@@ -285,8 +288,7 @@ class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFea
             ?: exception.declarationId
         if (
             exception.recoverable &&
-            context.round.platform == CompilerPlatform.APT &&
-            !context.round.isFinal
+            context.round.canDeferUnresolvedTypes()
         ) {
             val unresolvedTypeIds = knownUnresolvedTypeIds + affectedTypeId
             if (unresolvedTypeIds == knownUnresolvedTypeIds) {
@@ -366,6 +368,14 @@ class ImmutableFeature : CompilerFeature<EmptyCompilerFeatureState, ImmutableFea
         >(EmptyCompilerFeatureState)
     }
 
+}
+
+private fun CompilerRound.canDeferUnresolvedTypes(): Boolean {
+    if (isFinal) {
+        return false
+    }
+    return platform == CompilerPlatform.APT ||
+        platform == CompilerPlatform.KSP && frontendDeferred
 }
 
 data class ImmutableFeatureState(

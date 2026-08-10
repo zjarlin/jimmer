@@ -591,6 +591,41 @@ class KspLsiCompilerDriverTest {
     }
 
     @Test
+    fun `retries unresolved valid root in the next real round`() {
+        lateinit var sourceFile: KSFile
+        val validRoot = classDeclaration(
+            qualifiedName = VALID_ID.requireTypeQualifiedName(),
+            file = { sourceFile },
+            valid = true,
+        )
+        sourceFile = file(listOf(validRoot))
+        val provider = DriverFeature()
+        val driver = KspLsiCompilerDriver(
+            environment = SymbolProcessorEnvironment(
+                emptyMap(),
+                KotlinVersion.CURRENT,
+                CapturingCodeGenerator(),
+                CapturingLogger(),
+            ),
+            features = listOf(provider),
+            wiring = JimmerCompilerWiring,
+            sessionId = "ksp-pending-root-test",
+        )
+
+        driver.process(resolver(sourceFile))
+        driver.process(
+            resolver(
+                allFiles = listOf(sourceFile),
+                newFiles = emptyList(),
+            )
+        )
+
+        assertEquals(2, provider.rounds.size)
+        assertEquals(setOf(VALID_ID), provider.rounds.last().round.currentRootTypeIds)
+        assertTrue(provider.rounds.last().round.currentWorkspace.contains(VALID_ID))
+    }
+
+    @Test
     fun `does not defer invalid java roots owned by apt`() {
         lateinit var kotlinFile: KSFile
         lateinit var javaFile: KSFile

@@ -952,6 +952,7 @@ public class OpenApiGeneratorTest {
                         "        _1:\n" +
                         "          $ref: '#/components/schemas/Book_BookService_COMPLEX_FETCHER'\n" +
                         "        _2:\n" +
+                        "          nullable: true\n" +
                         "          $ref: '#/components/schemas/Author_BookService_AUTHOR_FETCHER'\n" +
                         "    FullName:\n" +
                         "      type: object\n" +
