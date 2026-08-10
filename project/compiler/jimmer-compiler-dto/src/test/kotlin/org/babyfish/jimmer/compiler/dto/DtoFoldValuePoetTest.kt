@@ -20,7 +20,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 class DtoFoldValuePoetTest {
 
@@ -69,7 +69,7 @@ class DtoFoldValuePoetTest {
                 workspace = LsiWorkspace.EMPTY,
                 baseParameterName = "base",
                 nullGuardAccessorName = "SUMMARY_NULL_GUARD_ACCESSOR",
-                generatedTargetType = { LsiDeclaredType(TARGET_TYPE_NAME.typeId) },
+                generatedTargetType = { LsiDeclaredType(TARGET_TYPE_NAME.id) },
                 generatedTypeNames = listOf(TARGET_TYPE_NAME),
             ).toString()
         }
@@ -81,7 +81,7 @@ class DtoFoldValuePoetTest {
                 workspace = LsiWorkspace.EMPTY,
                 baseParameterName = "base",
                 nullGuardAccessorName = "SUMMARY_NULL_GUARD_ACCESSOR",
-                generatedTargetType = { LsiDeclaredType(TARGET_TYPE_NAME.typeId) },
+                generatedTargetType = { LsiDeclaredType(TARGET_TYPE_NAME.id) },
                 generatedTypeNames = listOf(TARGET_TYPE_NAME),
             )
         }
@@ -95,7 +95,7 @@ class DtoFoldValuePoetTest {
         val FOLD_PROP_ID = DtoPropId("demo.dto.BookView#prop:summary")
         val GUARD_PROP_ID = DtoPropId("demo.dto.BookView#prop:summaryGuard")
         val IMMUTABLE_PROP_ID = LsiSymbolId.property(LsiSymbolId.type("demo.Book"), "summary")
-        val TARGET_TYPE_NAME = LsiTypeName(
+        val TARGET_TYPE_NAME = LsiClass(
             typeId = LsiSymbolId.type("demo.dto.BookView.TargetOf_summary"),
             packageName = "demo.dto",
             simpleNames = listOf("BookView", "TargetOf_summary"),

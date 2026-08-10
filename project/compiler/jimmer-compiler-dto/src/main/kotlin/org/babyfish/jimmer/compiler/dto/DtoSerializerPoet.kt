@@ -18,7 +18,6 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
-import site.addzero.lsi.model.LsiTypeName
 
 internal fun DtoType.toSerializerPoetType(
     graph: DtoGraph,
@@ -169,8 +168,8 @@ private val JACKSON_3_PROVIDER_TYPE_ID =
 private val JAVA_IO_EXCEPTION_TYPE_ID = LsiSymbolId.type("java.io.IOException")
 
 internal fun JacksonFamily.serializerPoetTypeNames(
-    dtoTypeName: LsiTypeName,
-): List<LsiTypeName> {
+    dtoTypeName: LsiClass,
+): List<LsiClass> {
     val jacksonTypeNames = when (this) {
         JacksonFamily.JACKSON_2 -> JACKSON_2_POET_TYPE_NAMES
         JacksonFamily.JACKSON_3 -> JACKSON_3_POET_TYPE_NAMES
@@ -179,40 +178,40 @@ internal fun JacksonFamily.serializerPoetTypeNames(
 }
 
 private val JACKSON_2_POET_TYPE_NAMES = listOf(
-    LsiTypeName(
+    LsiClass(
         JACKSON_2_SERIALIZER_TYPE_ID,
         "com.fasterxml.jackson.databind",
         listOf("JsonSerializer"),
     ),
-    LsiTypeName(
+    LsiClass(
         JACKSON_2_GENERATOR_TYPE_ID,
         "com.fasterxml.jackson.core",
         listOf("JsonGenerator"),
     ),
-    LsiTypeName(
+    LsiClass(
         JACKSON_2_PROVIDER_TYPE_ID,
         "com.fasterxml.jackson.databind",
         listOf("SerializerProvider"),
     ),
 )
 private val JACKSON_3_POET_TYPE_NAMES = listOf(
-    LsiTypeName(
+    LsiClass(
         JACKSON_3_SERIALIZER_TYPE_ID,
         "tools.jackson.databind",
         listOf("ValueSerializer"),
     ),
-    LsiTypeName(
+    LsiClass(
         JACKSON_3_GENERATOR_TYPE_ID,
         "tools.jackson.core",
         listOf("JsonGenerator"),
     ),
-    LsiTypeName(
+    LsiClass(
         JACKSON_3_PROVIDER_TYPE_ID,
         "tools.jackson.databind",
         listOf("SerializationContext"),
     ),
 )
-private val JAVA_IO_EXCEPTION_POET_TYPE_NAME = LsiTypeName(
+private val JAVA_IO_EXCEPTION_POET_TYPE_NAME = LsiClass(
     JAVA_IO_EXCEPTION_TYPE_ID,
     "java.io",
     listOf("IOException"),

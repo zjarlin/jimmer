@@ -14,14 +14,14 @@ import site.addzero.lsi.codegen.LsiSourceArtifact
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.type.LsiType
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiFile
-import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedSymbolIds
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /**
  * 将 Draft 预编译语义降低为统一的 LSI Poet 产物。
@@ -80,7 +80,7 @@ private fun ImmutableSchema.draftArtifact(
     val dependencySources = workspace.nonBinarySources(semanticDependencySymbols)
     return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiTypeNames(
+        typeNames = workspace.toLsiClasses(
             file.referencedTypeIds,
             additional = draftSchema.generatedPoetTypeNames() + DRAFT_RUNTIME_TYPE_NAMES,
         ),
@@ -97,13 +97,13 @@ private fun ImmutableSchema.draftArtifact(
     )
 }
 
-private fun JimmerImmutableDraftCodegenSchema.generatedPoetTypeNames(): List<LsiTypeName> {
+private fun JimmerImmutableDraftCodegenSchema.generatedPoetTypeNames(): List<LsiClass> {
     return types.flatMap { type ->
         val packageName = type.qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
         val simpleName = type.qualifiedName.substringAfterLast('.')
         val draftSimpleName = "$simpleName$DRAFT_TYPE_SUFFIX"
         listOf(
-            generatedTopLevelTypeName(packageName, draftSimpleName),
+            generatedTopLevelClass(packageName, draftSimpleName),
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "Producer")),
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "Producer", "Implementor")),
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "Producer", "Impl")),
@@ -115,7 +115,7 @@ private fun JimmerImmutableDraftCodegenSchema.generatedPoetTypeNames(): List<Lsi
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "$", "DraftImpl")),
             generatedNestedPoetTypeName(packageName, listOf(draftSimpleName, "$", "Builder")),
         )
-    }.distinctBy { typeName -> typeName.typeId }
+    }.distinctBy { typeName -> typeName.id }
 }
 
 private fun LsiWorkspace.nonBinarySources(symbolIds: Collection<LsiSymbolId>): Set<LsiSource> {

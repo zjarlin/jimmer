@@ -20,9 +20,8 @@ import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 internal fun JimmerModuleSchema.toLsiSourceArtifacts(
     workspace: LsiWorkspace,
@@ -65,7 +64,7 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiSourceArt
     )
     return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiTypeNames(
+        typeNames = workspace.toLsiClasses(
             file.referencedTypeIds,
             additional = additionalTypeNames(),
         ),
@@ -75,13 +74,13 @@ private fun JimmerModuleSummary.toLsiPoet(workspace: LsiWorkspace): LsiSourceArt
     )
 }
 
-private fun JimmerModuleSummary.additionalTypeNames(): List<LsiTypeName> {
+private fun JimmerModuleSummary.additionalTypeNames(): List<LsiClass> {
     return buildList {
-        add(LsiTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")))
-        add(LsiTypeName(DRAFT_CONSUMER_ID, "org.babyfish.jimmer", listOf("DraftConsumer")))
+        add(LsiClass(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")))
+        add(LsiClass(DRAFT_CONSUMER_ID, "org.babyfish.jimmer", listOf("DraftConsumer")))
         members.forEach { member ->
             add(
-                LsiTypeName(
+                LsiClass(
                     typeId = LsiSymbolId.type(member.qualifiedTypeName + "Draft"),
                     packageName = member.packageName,
                     simpleNames = listOf(member.simpleTypeName + "Draft"),
@@ -89,7 +88,7 @@ private fun JimmerModuleSummary.additionalTypeNames(): List<LsiTypeName> {
             )
             listOf("Table", "TableEx", "Fetcher").forEach { suffix ->
                 add(
-                    LsiTypeName(
+                    LsiClass(
                         typeId = LsiSymbolId.type(member.qualifiedTypeName + suffix),
                         packageName = member.packageName,
                         simpleNames = listOf(member.simpleTypeName + suffix),
@@ -181,15 +180,15 @@ private fun JimmerModuleSource.toLsiPoet(workspace: LsiWorkspace): LsiSourceArti
     )
     return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiTypeNames(
+        typeNames = workspace.toLsiClasses(
             file.referencedTypeIds,
             additional = listOf(
-                LsiTypeName(
+                LsiClass(
                     typeId = moduleType.declarationId,
                     packageName = packageName,
                     simpleNames = listOf(simpleName),
                 ),
-                LsiTypeName(
+                LsiClass(
                     typeId = ENTITY_MANAGER_TYPE.declarationId,
                     packageName = "org.babyfish.jimmer.sql.runtime",
                     simpleNames = listOf("EntityManager"),

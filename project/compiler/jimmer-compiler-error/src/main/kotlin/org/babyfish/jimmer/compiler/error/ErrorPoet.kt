@@ -39,10 +39,9 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.sourceLsiAnnotation
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 internal fun ErrorSchema.toLsiSourceArtifacts(
     workspace: LsiWorkspace,
@@ -72,7 +71,7 @@ private fun ErrorFamily.toLsiSourceArtifact(workspace: LsiWorkspace): LsiSourceA
     )
     return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiTypeNames(
+        typeNames = workspace.toLsiClasses(
             file.referencedTypeIds,
             additional = generatedTypeNames(),
         ),
@@ -88,13 +87,13 @@ private fun ErrorFamily.toLsiSourceArtifact(workspace: LsiWorkspace): LsiSourceA
     )
 }
 
-private fun ErrorFamily.generatedTypeNames(): List<LsiTypeName> {
+private fun ErrorFamily.generatedTypeNames(): List<LsiClass> {
     return buildList {
         addAll(BUILT_IN_TYPE_NAMES)
-        add(LsiTypeName(exceptionTypeId, packageName, listOf(exceptionSimpleName)))
+        add(LsiClass(exceptionTypeId, packageName, listOf(exceptionSimpleName)))
         codes.forEach { code ->
             add(
-                LsiTypeName(
+                LsiClass(
                     typeId = code.exceptionTypeId,
                     packageName = packageName,
                     simpleNames = listOf(exceptionSimpleName, code.exceptionSimpleName),
@@ -832,30 +831,30 @@ private val MAP_ID = LsiSymbolId.type("java.util.Map")
 private val COLLECTIONS_ID = LsiSymbolId.type("java.util.Collections")
 private val LINKED_HASH_MAP_ID = LsiSymbolId.type("java.util.LinkedHashMap")
 private val BUILT_IN_TYPE_NAMES = listOf(
-    LsiTypeName(CLIENT_EXCEPTION_ID, "org.babyfish.jimmer", listOf("ClientException")),
-    LsiTypeName(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
-    LsiTypeName(CODE_BASED_EXCEPTION_ID, "org.babyfish.jimmer.error", listOf("CodeBasedException")),
-    LsiTypeName(
+    LsiClass(CLIENT_EXCEPTION_ID, "org.babyfish.jimmer", listOf("ClientException")),
+    LsiClass(GENERATED_BY_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
+    LsiClass(CODE_BASED_EXCEPTION_ID, "org.babyfish.jimmer.error", listOf("CodeBasedException")),
+    LsiClass(
         CODE_BASED_RUNTIME_EXCEPTION_ID,
         "org.babyfish.jimmer.error",
         listOf("CodeBasedRuntimeException"),
     ),
-    LsiTypeName(JSON_IGNORE_ID, "com.fasterxml.jackson.annotation", listOf("JsonIgnore")),
-    LsiTypeName(NON_NULL_ID, "org.jspecify.annotations", listOf("NonNull")),
-    LsiTypeName(NULLABLE_ID, "org.jspecify.annotations", listOf("Nullable")),
-    LsiTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
-    LsiTypeName(JVM_STATIC_ID, "kotlin.jvm", listOf("JvmStatic")),
-    LsiTypeName(JAVA_STRING_ID, "java.lang", listOf("String")),
-    LsiTypeName(JAVA_OBJECT_ID, "java.lang", listOf("Object")),
-    LsiTypeName(JAVA_THROWABLE_ID, "java.lang", listOf("Throwable")),
-    LsiTypeName(KOTLIN_STRING_ID, "kotlin", listOf("String")),
-    LsiTypeName(KOTLIN_ANY_ID, "kotlin", listOf("Any")),
-    LsiTypeName(KOTLIN_THROWABLE_ID, "kotlin", listOf("Throwable")),
-    LsiTypeName(LIST_ID, "java.util", listOf("List")),
-    LsiTypeName(MAP_ID, "java.util", listOf("Map")),
-    LsiTypeName(COLLECTIONS_ID, "java.util", listOf("Collections")),
-    LsiTypeName(LINKED_HASH_MAP_ID, "java.util", listOf("LinkedHashMap")),
-    LsiTypeName(
+    LsiClass(JSON_IGNORE_ID, "com.fasterxml.jackson.annotation", listOf("JsonIgnore")),
+    LsiClass(NON_NULL_ID, "org.jspecify.annotations", listOf("NonNull")),
+    LsiClass(NULLABLE_ID, "org.jspecify.annotations", listOf("Nullable")),
+    LsiClass(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
+    LsiClass(JVM_STATIC_ID, "kotlin.jvm", listOf("JvmStatic")),
+    LsiClass(JAVA_STRING_ID, "java.lang", listOf("String")),
+    LsiClass(JAVA_OBJECT_ID, "java.lang", listOf("Object")),
+    LsiClass(JAVA_THROWABLE_ID, "java.lang", listOf("Throwable")),
+    LsiClass(KOTLIN_STRING_ID, "kotlin", listOf("String")),
+    LsiClass(KOTLIN_ANY_ID, "kotlin", listOf("Any")),
+    LsiClass(KOTLIN_THROWABLE_ID, "kotlin", listOf("Throwable")),
+    LsiClass(LIST_ID, "java.util", listOf("List")),
+    LsiClass(MAP_ID, "java.util", listOf("Map")),
+    LsiClass(COLLECTIONS_ID, "java.util", listOf("Collections")),
+    LsiClass(LINKED_HASH_MAP_ID, "java.util", listOf("LinkedHashMap")),
+    LsiClass(
         LsiSymbolId.type("java.time.LocalDateTime"),
         "java.time",
         listOf("LocalDateTime"),

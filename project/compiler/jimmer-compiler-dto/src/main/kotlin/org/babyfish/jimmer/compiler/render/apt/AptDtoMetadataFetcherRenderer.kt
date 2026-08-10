@@ -11,7 +11,7 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将冻结 DTO 的 metadata fetcher 渲染为 JavaPoet 代码块。 */
@@ -26,8 +26,8 @@ internal object AptDtoMetadataFetcherRenderer {
         configContractResolution: DtoConfigContractResolution,
         generatedPackageName: String,
         generatedSimpleNames: List<String>,
-        generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
-        batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
+        generatedDtoTypeIdsByTypeName: Map<LsiClass, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiClass>,
     ): CodeBlock {
         val generatedDtoTypeName = JimmerDtoPoetTypeNames.create(
             generatedPackageName,

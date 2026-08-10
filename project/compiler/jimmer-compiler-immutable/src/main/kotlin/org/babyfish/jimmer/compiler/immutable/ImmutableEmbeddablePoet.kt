@@ -32,7 +32,7 @@ import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeSystem
 import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
@@ -51,10 +51,9 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.clazz.LsiClass
-import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 internal fun ImmutableSchema.toEmbeddablePoetArtifacts(
     types: List<ImmutableType>,
@@ -713,7 +712,7 @@ private fun EmbeddableArtifactDependencies.artifact(
 ): LsiSourceArtifact {
     return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiTypeNames(
+        typeNames = workspace.toLsiClasses(
             file.referencedTypeIds,
             additional = schema.generatedEmbeddablePoetTypeNames() + EMBEDDABLE_RUNTIME_TYPE_NAMES,
         ),
@@ -729,14 +728,14 @@ private fun EmbeddableArtifactDependencies.artifact(
     )
 }
 
-private fun ImmutableSchema.generatedEmbeddablePoetTypeNames(): List<LsiTypeName> {
+private fun ImmutableSchema.generatedEmbeddablePoetTypeNames(): List<LsiClass> {
     return types.flatMap { type ->
         listOf(
-            generatedTopLevelTypeName(type.packageName, "${type.simpleName}Props"),
-            generatedTopLevelTypeName(type.packageName, "${type.simpleName}PropExpression"),
-            generatedTopLevelTypeName(type.packageName, "${type.simpleName}FetcherDsl"),
+            generatedTopLevelClass(type.packageName, "${type.simpleName}Props"),
+            generatedTopLevelClass(type.packageName, "${type.simpleName}PropExpression"),
+            generatedTopLevelClass(type.packageName, "${type.simpleName}FetcherDsl"),
         )
-    }.distinctBy { typeName -> typeName.typeId }
+    }.distinctBy { typeName -> typeName.id }
 }
 
 private data class EmbeddableArtifactDependencies(

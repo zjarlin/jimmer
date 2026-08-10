@@ -26,9 +26,9 @@ import site.addzero.lsi.model.LsiAnnotationArgumentLayout
 import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
 import site.addzero.lsi.model.LsiAnnotationArrayStyle
 import site.addzero.lsi.model.LsiClassLiteralStyle
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 按冻结契约顺序将 DTO 类型注解降低为平台中立源码结构。 */
 internal fun DtoType.typeAnnotationPoetAnnotations(
@@ -99,11 +99,11 @@ private fun List<DtoAnnotation>.toDtoPoetAnnotations(
 /** 为一组 DTO 注解解析完整且精确的源码类型名称。 */
 internal fun LsiWorkspace.dtoAnnotationPoetTypeNames(
     annotations: List<LsiAnnotation>,
-): List<LsiTypeName> {
+): List<LsiClass> {
     val referencedTypeIds = annotations.flatMapTo(sortedSetOf()) { annotation ->
         annotation.referencedTypeIds
     }
-    return toLsiTypeNames(referencedTypeIds)
+    return toLsiClasses(referencedTypeIds)
 }
 
 /** 将冻结的类型注解应用降低为平台中立源码结构。 */

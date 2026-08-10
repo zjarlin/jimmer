@@ -11,9 +11,9 @@ import site.addzero.lsi.jimmer.dto.scalarType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 把冻结的枚举映射降级为枚举值到 DTO 标量值的转换 lambda。 */
 internal fun DtoBaseProp.toEnumToScalarLambdaPoetCodeBlock(
@@ -170,8 +170,8 @@ internal fun DtoBaseProp.toScalarToEnumPoetCodeBlock(
 /** 为独立枚举转换代码块解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoEnumPoetTypeNames(
     codeBlock: LsiCodeBlock,
-): List<LsiTypeName> {
-    return toLsiTypeNames(
+): List<LsiClass> {
+    return toLsiClasses(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES,
     )

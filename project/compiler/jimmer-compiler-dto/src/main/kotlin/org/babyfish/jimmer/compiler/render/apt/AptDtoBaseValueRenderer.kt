@@ -12,8 +12,8 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
-import site.addzero.lsi.model.generatedSiblingTypeName
+import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.clazz.generatedSiblingClass
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将 immutable-to-DTO Java 属性读取语义渲染为 JavaPoet 表达式。 */
@@ -32,10 +32,10 @@ internal object AptDtoBaseValueRenderer {
         baseSlotName: String,
         conversionErrorMessage: String,
         generatedTargetType: (DtoProp) -> LsiDeclaredType,
-        generatedTypeNames: Collection<LsiTypeName>,
+        generatedTypeNames: Collection<LsiClass>,
     ): CodeBlock {
         val producerType = baseType.generatedDraftProducerType()
-        val producerTypeName = workspace.generatedSiblingTypeName(
+        val producerTypeName = workspace.generatedSiblingClass(
             sourceTypeId = baseType.id,
             generatedTypeId = producerType.declarationId,
             simpleNameSuffix = "Draft",

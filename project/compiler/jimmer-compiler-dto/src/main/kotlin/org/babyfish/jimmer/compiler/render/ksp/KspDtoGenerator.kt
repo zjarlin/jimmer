@@ -60,7 +60,7 @@ import site.addzero.lsi.jimmer.dto.usesDirectBaseAccess
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiImport
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import java.util.*
 
 internal class KspDtoGenerator private constructor(
@@ -73,7 +73,7 @@ internal class KspDtoGenerator private constructor(
     private val annotationContract: DtoAnnotationContract,
     private val interfaceContractResolution: DtoInterfaceContractResolution,
     private val configContractResolution: DtoConfigContractResolution,
-    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
+    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiClass>,
     private val generatedDtoPackageName: String,
     private val generatedDtoSimpleNames: List<String>,
     private val parent: KspDtoGenerator?,
@@ -111,11 +111,11 @@ internal class KspDtoGenerator private constructor(
     private val polymorphicBranch: Boolean
         get() = lsiPolymorphicBranch != null
 
-    private val generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId> =
+    private val generatedDtoTypeIdsByTypeName: Map<LsiClass, DtoTypeId> =
         parent?.generatedDtoTypeIdsByTypeName
             ?: JimmerDtoPoetTypeNames.forRoot(lsiGraph, lsiDtoType, rootDtoTypeNamesByTypeId)
 
-    private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiTypeName> =
+    private val generatedDtoTypeNamesByTypeId: MutableMap<DtoTypeId, LsiClass> =
         (parent?.generatedDtoTypeNamesByTypeId ?: rootDtoTypeNamesByTypeId).toMutableMap()
 
     private val locallyGeneratedDtoTypeIds = mutableSetOf<DtoTypeId>()
@@ -160,7 +160,7 @@ internal class KspDtoGenerator private constructor(
         annotationContract: DtoAnnotationContract,
         interfaceContractResolution: DtoInterfaceContractResolution,
         configContractResolution: DtoConfigContractResolution,
-        rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
+        rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiClass>,
     ) : this(
         mutable,
         lsiGraph,

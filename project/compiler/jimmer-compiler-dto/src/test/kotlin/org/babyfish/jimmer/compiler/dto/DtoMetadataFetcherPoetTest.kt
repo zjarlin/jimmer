@@ -46,7 +46,6 @@ import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeFragment
 import site.addzero.lsi.model.LsiImport
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -370,7 +369,7 @@ class DtoMetadataFetcherPoetTest {
             ).sortedBy(DtoProp::id),
         )
         val batchRootTypeNames = JimmerDtoPoetTypeNames.roots(listOf(graph)) + mapOf(
-            REUSABLE_STORE_VIEW_DTO_TYPE_ID to LsiTypeName(
+            REUSABLE_STORE_VIEW_DTO_TYPE_ID to LsiClass(
                 typeId = REUSABLE_STORE_VIEW_TYPE_ID,
                 packageName = "demo.dto",
                 simpleNames = listOf("StoreView"),
@@ -645,9 +644,9 @@ class DtoMetadataFetcherPoetTest {
         val graph: DtoGraph,
         val immutableSchema: ImmutableSchema,
         val workspace: LsiWorkspace,
-        val generatedDtoTypeName: LsiTypeName,
-        val generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
-        val batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
+        val generatedDtoTypeName: LsiClass,
+        val generatedDtoTypeIdsByTypeName: Map<LsiClass, DtoTypeId>,
+        val batchRootDtoTypeNames: Map<DtoTypeId, LsiClass>,
     ) {
         fun fragment(targetLanguage: LsiLanguage): LsiCodeFragment {
             return rootType.toLsiMetadataFetcherPoetFragment(

@@ -11,7 +11,7 @@ import site.addzero.lsi.model.LsiAnnotation
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
 import site.addzero.lsi.model.LsiAnnotationValue
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 private val DESCRIPTION_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.client.Description")
 
@@ -40,7 +40,7 @@ private fun String.toDescriptionPoetAnnotation(): LsiAnnotation {
     )
 }
 
-internal val DTO_DESCRIPTION_POET_TYPE_NAME = LsiTypeName(
+internal val DTO_DESCRIPTION_POET_TYPE_NAME = LsiClass(
     typeId = DESCRIPTION_TYPE_ID,
     packageName = "org.babyfish.jimmer.client",
     simpleNames = listOf("Description"),

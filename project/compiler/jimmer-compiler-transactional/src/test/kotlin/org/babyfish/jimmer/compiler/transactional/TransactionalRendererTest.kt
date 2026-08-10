@@ -45,7 +45,6 @@ import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiVisibility
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -136,8 +135,8 @@ class TransactionalRendererTest {
             origin = LsiOrigin(LsiOriginKind.BINARY),
         )
         val expectedTypeNames = listOf(
-            LsiTypeName(outerId, "UPPER.pkg", listOf("lowercase")),
-            LsiTypeName(nestedId, "UPPER.pkg", listOf("lowercase", "item")),
+            LsiClass(outerId, "UPPER.pkg", listOf("lowercase")),
+            LsiClass(nestedId, "UPPER.pkg", listOf("lowercase", "item")),
         )
 
         val (javaSchema, javaWorkspace) = javaFixture()
@@ -156,8 +155,8 @@ class TransactionalRendererTest {
             .single()
 
         expectedTypeNames.forEach { expected ->
-            assertEquals(expected, javaPoetArtifact.typeNames.single { it.typeId == expected.typeId })
-            assertEquals(expected, kotlinPoetArtifact.typeNames.single { it.typeId == expected.typeId })
+            assertEquals(expected, javaPoetArtifact.typeNames.single { it.id == expected.id })
+            assertEquals(expected, kotlinPoetArtifact.typeNames.single { it.id == expected.id })
         }
         val javaContent = LsiJavaPoetRenderer().render(javaPoetArtifact).content
         val kotlinContent = LsiKotlinPoetRenderer().render(kotlinPoetArtifact).content

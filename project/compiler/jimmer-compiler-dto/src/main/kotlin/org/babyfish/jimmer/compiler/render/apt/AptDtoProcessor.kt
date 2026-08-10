@@ -17,7 +17,7 @@ import site.addzero.lsi.jimmer.dto.dependencySources
 import site.addzero.lsi.jimmer.dto.dependencySymbols
 import site.addzero.lsi.jimmer.dto.rootTypesInDeclarationOrder
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 internal class AptDtoProcessor(
     graphs: Collection<DtoGraph>,
@@ -36,7 +36,7 @@ internal class AptDtoProcessor(
 
     private val configContractsBySource = configContractsBySource.toMap()
 
-    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName> =
+    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiClass> =
         JimmerDtoPoetTypeNames.roots(graphs)
 
     fun process(): List<GeneratedArtifact> = buildList {

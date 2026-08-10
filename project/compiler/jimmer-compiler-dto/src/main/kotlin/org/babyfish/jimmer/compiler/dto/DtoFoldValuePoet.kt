@@ -11,9 +11,9 @@ import site.addzero.lsi.type.LsiNullability
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将折叠 DTO 的基础对象构造表达式降低为平台中立代码。 */
 internal fun DtoFoldProp.toFoldValuePoetCodeBlock(
@@ -48,9 +48,9 @@ internal fun DtoFoldProp.toFoldValuePoetCodeBlock(
 /** 解析折叠属性 initializer 引用的完整类型名。 */
 internal fun LsiWorkspace.dtoFoldValuePoetTypeNames(
     codeBlock: LsiCodeBlock,
-    generatedTypeNames: Collection<LsiTypeName>,
-): List<LsiTypeName> {
-    return toLsiTypeNames(
+    generatedTypeNames: Collection<LsiClass>,
+): List<LsiClass> {
+    return toLsiClasses(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + generatedTypeNames,
     )

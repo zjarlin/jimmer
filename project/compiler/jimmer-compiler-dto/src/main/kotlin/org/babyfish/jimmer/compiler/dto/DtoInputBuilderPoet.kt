@@ -43,10 +43,9 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.toSourceAnnotation
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将冻结的 Input DTO 语义降低为平台中立的 Builder 源码结构。 */
 internal fun DtoType.toInputBuilderPoetType(
@@ -512,19 +511,19 @@ private fun code(block: LsiCodeBuilder.() -> Unit): LsiCodeBlock = LsiCodeBlock.
 /** 为嵌入式 InputBuilder 解析完整且精确的源码类型名称表。 */
 internal fun LsiWorkspace.inputBuilderPoetTypeNames(
     inputBuilderType: LsiClass,
-    currentDtoTypeName: LsiTypeName,
-    generatedDtoTypeNames: Collection<LsiTypeName>,
+    currentDtoTypeName: LsiClass,
+    generatedDtoTypeNames: Collection<LsiClass>,
     jacksonVersion: JacksonFamily,
-): List<LsiTypeName> {
+): List<LsiClass> {
     val builderTypeName = JimmerDtoPoetTypeNames.create(
         currentDtoTypeName.packageName,
         currentDtoTypeName.simpleNames + "Builder",
     )
-    val additionalByTypeId = linkedMapOf<LsiSymbolId, LsiTypeName>()
-    fun add(typeName: LsiTypeName) {
-        val previous = additionalByTypeId.putIfAbsent(typeName.typeId, typeName)
+    val additionalByTypeId = linkedMapOf<LsiSymbolId, LsiClass>()
+    fun add(typeName: LsiClass) {
+        val previous = additionalByTypeId.putIfAbsent(typeName.id, typeName)
         require(previous == null || previous == typeName) {
-            "InputBuilder type '${typeName.typeId.value}' has conflicting exact source names"
+            "InputBuilder type '${typeName.id.value}' has conflicting exact source names"
         }
     }
     generatedDtoTypeNames.forEach(::add)
@@ -532,7 +531,7 @@ internal fun LsiWorkspace.inputBuilderPoetTypeNames(
     add(builderTypeName)
     DTO_COMMON_POET_TYPE_NAMES.forEach(::add)
     jacksonVersion.inputBuilderJacksonPoetTypeNames().forEach(::add)
-    return toLsiTypeNames(
+    return toLsiClasses(
         typeIds = inputBuilderType.referencedTypeIds,
         additional = additionalByTypeId.values,
     )
@@ -552,7 +551,7 @@ internal fun JacksonFamily.inputBuilderJsonNamingAnnotationTypeId(): LsiSymbolId
     }
 }
 
-private fun JacksonFamily.inputBuilderJacksonPoetTypeNames(): List<LsiTypeName> {
+private fun JacksonFamily.inputBuilderJacksonPoetTypeNames(): List<LsiClass> {
     return when (this) {
         JacksonFamily.JACKSON_2 -> JACKSON_2_INPUT_BUILDER_POET_TYPE_NAMES
         JacksonFamily.JACKSON_3 -> JACKSON_3_INPUT_BUILDER_POET_TYPE_NAMES

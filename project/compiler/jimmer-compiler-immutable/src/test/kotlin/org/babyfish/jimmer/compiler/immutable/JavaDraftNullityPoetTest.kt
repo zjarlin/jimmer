@@ -14,7 +14,6 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 class JavaDraftNullityPoetTest {
@@ -64,10 +63,10 @@ class JavaDraftNullityPoetTest {
                 members = listOf(type),
             ),
             typeNames = listOf(
-                LsiTypeName(statusTypeId, "demo.model", listOf("B", "Status")),
-                LsiTypeName(utilDateTypeId, "java.util", listOf("Date")),
-                LsiTypeName(sqlDateTypeId, "java.sql", listOf("Date")),
-                LsiTypeName(nonNullTypeId, "org.jspecify.annotations", listOf("NonNull")),
+                LsiClass(statusTypeId, "demo.model", listOf("B", "Status")),
+                LsiClass(utilDateTypeId, "java.util", listOf("Date")),
+                LsiClass(sqlDateTypeId, "java.sql", listOf("Date")),
+                LsiClass(nonNullTypeId, "org.jspecify.annotations", listOf("NonNull")),
             ),
             aggregationMode = ArtifactAggregationMode.AGGREGATING,
         )

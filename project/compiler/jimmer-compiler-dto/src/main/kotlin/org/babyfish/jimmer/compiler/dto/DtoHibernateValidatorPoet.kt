@@ -17,9 +17,9 @@ import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将冻结的 DTO 属性访问语义降低为 Hibernate Validator 增强函数。 */
 internal fun DtoType.toDtoHibernateValidatorPoetFunctions(
@@ -48,12 +48,12 @@ internal fun dtoHibernateValidatorEnhancedBeanType(): LsiDeclaredType {
 /** 解析 Hibernate Validator lowering 引用的精确源码类型名称。 */
 internal fun LsiWorkspace.dtoHibernateValidatorPoetTypeNames(
     functions: Collection<LsiFunction>,
-): List<LsiTypeName> {
+): List<LsiClass> {
     val typeIds = buildSet {
         functions.forEach { function -> addAll(function.referencedTypeIds) }
         add(HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID)
     }
-    return toLsiTypeNames(
+    return toLsiClasses(
         typeIds = typeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_NAME,
     )
@@ -218,7 +218,7 @@ private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID =
     LsiSymbolId.type("org.hibernate.validator.engine.HibernateValidatorEnhancedBean")
 private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE =
     LsiDeclaredType(HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID)
-private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_NAME = LsiTypeName(
+private val HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_NAME = LsiClass(
     typeId = HIBERNATE_VALIDATOR_ENHANCED_BEAN_TYPE_ID,
     packageName = "org.hibernate.validator.engine",
     simpleNames = listOf("HibernateValidatorEnhancedBean"),

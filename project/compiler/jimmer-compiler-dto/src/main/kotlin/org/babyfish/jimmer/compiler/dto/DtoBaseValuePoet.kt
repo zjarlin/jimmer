@@ -12,9 +12,9 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将 immutable-to-DTO 基础属性读取表达式降低为平台中立代码。 */
 internal fun DtoBaseProp.toBaseValuePoetCodeBlock(
@@ -81,9 +81,9 @@ internal fun DtoBaseProp.toBaseValuePoetCodeBlock(
 /** 解析 initializer 代码块引用的完整 DTO、运行时和 Draft 类型名。 */
 internal fun LsiWorkspace.dtoBaseValuePoetTypeNames(
     codeBlock: LsiCodeBlock,
-    additional: Collection<LsiTypeName> = emptyList(),
-): List<LsiTypeName> {
-    return toLsiTypeNames(
+    additional: Collection<LsiClass> = emptyList(),
+): List<LsiClass> {
+    return toLsiClasses(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + DTO_BASE_VALUE_POET_TYPE_NAMES + additional,
     )

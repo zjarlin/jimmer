@@ -15,7 +15,7 @@ import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 /** 将冻结的 DTO 属性顺序与包含条件降低为平台中立的 toString 函数。 */
 internal fun DtoType.toDtoToStringPoetFunction(
@@ -193,6 +193,6 @@ private fun MutableSet<String>.reserveLocalName(baseName: String): String {
 private val STRING_TYPE_ID = LsiSymbolId.type("java.lang.String")
 private val STRING_TYPE = LsiDeclaredType(STRING_TYPE_ID)
 
-internal val DTO_TO_STRING_POET_TYPE_NAMES: List<LsiTypeName> = listOf(
-    LsiTypeName(STRING_TYPE_ID, "java.lang", listOf("String")),
+internal val DTO_TO_STRING_POET_TYPE_NAMES: List<LsiClass> = listOf(
+    LsiClass(STRING_TYPE_ID, "java.lang", listOf("String")),
 )

@@ -12,15 +12,15 @@ import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将冻结的多态 DTO 分支转换规则降低为可由两端 Poet 渲染的代码块。 */
 internal fun DtoType.toPolymorphicMetadataConverterPoetCodeBlock(
     targetLanguage: LsiLanguage,
     graph: DtoGraph,
-    generatedRootTypeName: LsiTypeName,
+    generatedRootTypeName: LsiClass,
 ): LsiCodeBlock {
     require(graph.typesById[id] === this) {
         "DTO polymorphic root does not belong to this graph: ${id.value}"
@@ -102,12 +102,12 @@ internal fun DtoType.toPolymorphicMetadataConverterPoetCodeBlock(
 internal fun LsiWorkspace.dtoPolymorphicMetadataConverterPoetTypeNames(
     dtoType: DtoType,
     codeBlock: LsiCodeBlock,
-    generatedRootTypeName: LsiTypeName,
-): List<LsiTypeName> {
+    generatedRootTypeName: LsiClass,
+): List<LsiClass> {
     val polymorphism = requireNotNull(dtoType.polymorphism) {
         "DTO type is not a polymorphic root: ${dtoType.id.value}"
     }
-    return toLsiTypeNames(
+    return toLsiClasses(
         typeIds = codeBlock.referencedTypeIds,
         additional = POLYMORPHIC_CONVERTER_RUNTIME_TYPE_NAMES +
             polymorphism.branches.map { branch -> generatedBranchTypeName(branch, generatedRootTypeName) },
@@ -116,7 +116,7 @@ internal fun LsiWorkspace.dtoPolymorphicMetadataConverterPoetTypeNames(
 
 private fun LsiCodeBuilder.javaTypeBranch(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiTypeName,
+    generatedRootTypeName: LsiClass,
 ) {
     val targetType = LsiDeclaredType(requireNotNull(branch.targetBaseTypeId))
     beginControlFlow {
@@ -136,7 +136,7 @@ private fun LsiCodeBuilder.javaTypeBranch(
 
 private fun LsiCodeBuilder.kotlinTypeBranch(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiTypeName,
+    generatedRootTypeName: LsiClass,
 ) {
     val targetType = LsiDeclaredType(requireNotNull(branch.targetBaseTypeId))
     statement {
@@ -151,22 +151,22 @@ private fun LsiCodeBuilder.kotlinTypeBranch(
 
 private fun generatedBranchType(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiTypeName,
+    generatedRootTypeName: LsiClass,
 ): LsiDeclaredType {
-    return LsiDeclaredType(generatedBranchTypeName(branch, generatedRootTypeName).typeId)
+    return LsiDeclaredType(generatedBranchTypeName(branch, generatedRootTypeName).id)
 }
 
 private fun generatedBranchTypeName(
     branch: DtoPolymorphicBranch,
-    generatedRootTypeName: LsiTypeName,
-): LsiTypeName {
+    generatedRootTypeName: LsiClass,
+): LsiClass {
     return JimmerDtoPoetTypeNames.create(
         packageName = generatedRootTypeName.packageName,
         simpleNames = generatedRootTypeName.simpleNames + branch.className,
     )
 }
 
-private fun missingBranchMessagePrefix(generatedRootTypeName: LsiTypeName): String {
+private fun missingBranchMessagePrefix(generatedRootTypeName: LsiClass): String {
     return "Cannot convert entity object to polymorphic DTO \"${generatedRootTypeName.canonicalName}\" " +
         "because there is no branch for actual entity type \""
 }
@@ -176,9 +176,9 @@ private val IMMUTABLE_SPI_TYPE_ID = LsiSymbolId.type("org.babyfish.jimmer.runtim
 private val JAVA_ILLEGAL_ARGUMENT_EXCEPTION_TYPE_ID = LsiSymbolId.type("java.lang.IllegalArgumentException")
 
 private val POLYMORPHIC_CONVERTER_RUNTIME_TYPE_NAMES = listOf(
-    LsiTypeName(JAVA_CLASS_TYPE_ID, "java.lang", listOf("Class")),
-    LsiTypeName(IMMUTABLE_SPI_TYPE_ID, "org.babyfish.jimmer.runtime", listOf("ImmutableSpi")),
-    LsiTypeName(
+    LsiClass(JAVA_CLASS_TYPE_ID, "java.lang", listOf("Class")),
+    LsiClass(IMMUTABLE_SPI_TYPE_ID, "org.babyfish.jimmer.runtime", listOf("ImmutableSpi")),
+    LsiClass(
         JAVA_ILLEGAL_ARGUMENT_EXCEPTION_TYPE_ID,
         "java.lang",
         listOf("IllegalArgumentException"),

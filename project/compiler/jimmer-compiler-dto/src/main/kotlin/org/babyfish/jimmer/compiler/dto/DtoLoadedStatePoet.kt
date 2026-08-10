@@ -15,7 +15,7 @@ import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiField
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 /** 将基于实体构造 DTO 时的加载状态初始化表达式降低为平台中立代码。 */
 internal fun DtoBaseProp.toBaseLoadedStateInitializerPoetCodeBlock(
@@ -62,9 +62,9 @@ internal fun DtoProp.toLoadedStateStoragePoetPropertyOrNull(
         type = BOOLEAN_TYPE,
         mutable = mutable,
         annotations = listOf(
-            sourceLsiAnnotation(API_IGNORE_TYPE_NAME.typeId),
+            sourceLsiAnnotation(API_IGNORE_TYPE_NAME.id),
             sourceLsiAnnotation(
-                type = JSON_IGNORE_TYPE_NAME.typeId,
+                type = JSON_IGNORE_TYPE_NAME.id,
                 useSiteTarget = LsiAnnotationUseSiteTarget.GETTER,
             ),
         ),
@@ -93,7 +93,7 @@ private val JSON_IGNORE_TYPE_NAME = JimmerDtoPoetTypeNames.create(
 )
 
 /** 返回加载状态属性注解所需的稳定源码类型名。 */
-internal val DTO_LOADED_STATE_POET_TYPE_NAMES: List<LsiTypeName> = listOf(
+internal val DTO_LOADED_STATE_POET_TYPE_NAMES: List<LsiClass> = listOf(
     API_IGNORE_TYPE_NAME,
     JSON_IGNORE_TYPE_NAME,
 )

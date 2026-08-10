@@ -20,11 +20,11 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeReferenceStyle
-import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将类型多态输入分支的判别值校验降低为可由两端 Poet 渲染的代码块。 */
 internal fun DtoType.toTypedPolymorphicInputDiscriminatorValidationPoetCodeBlock(
@@ -33,7 +33,7 @@ internal fun DtoType.toTypedPolymorphicInputDiscriminatorValidationPoetCodeBlock
     discriminatorProp: DtoBaseProp,
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
-    generatedDtoTypeName: LsiTypeName,
+    generatedDtoTypeName: LsiClass,
 ): LsiCodeBlock {
     require(graph.typesById[id] === this) {
         "DTO polymorphic input branch does not belong to this graph: ${id.value}"
@@ -93,7 +93,7 @@ internal fun DtoType.toDefaultPolymorphicInputBodyPoetCodeBlock(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     workspace: LsiWorkspace,
-    generatedDtoTypeName: LsiTypeName,
+    generatedDtoTypeName: LsiClass,
     idParameterName: String? = null,
     blockParameterName: String? = null,
 ): LsiCodeBlock {
@@ -237,13 +237,13 @@ internal fun DtoType.toDefaultPolymorphicInputBodyPoetCodeBlock(
 internal fun LsiWorkspace.dtoPolymorphicInputPoetTypeNames(
     codeBlock: LsiCodeBlock,
     immutableSchema: ImmutableSchema,
-): List<LsiTypeName> {
-    return toLsiTypeNames(
+): List<LsiClass> {
+    return toLsiClasses(
         typeIds = codeBlock.referencedTypeIds,
         additional = POLYMORPHIC_INPUT_RUNTIME_TYPE_NAMES + immutableSchema.types.flatMap { type ->
             listOf(
-                generatedTopLevelTypeName(type.packageName, type.simpleName),
-                generatedTopLevelTypeName(type.packageName, "${type.simpleName}Draft"),
+                generatedTopLevelClass(type.packageName, type.simpleName),
+                generatedTopLevelClass(type.packageName, "${type.simpleName}Draft"),
             )
         },
     )
@@ -254,7 +254,7 @@ private fun ImmutableType.javaDraftType(): LsiDeclaredType {
 }
 
 private fun ImmutableType.javaDraftTypeReferenceStyle(
-    generatedDtoTypeName: LsiTypeName,
+    generatedDtoTypeName: LsiClass,
 ): LsiTypeReferenceStyle {
     return if (simpleName + "Draft" in generatedDtoTypeName.simpleNames) {
         LsiTypeReferenceStyle.FULLY_QUALIFIED
@@ -264,7 +264,7 @@ private fun ImmutableType.javaDraftTypeReferenceStyle(
 }
 
 private fun ImmutableType.entityTypeReferenceStyle(
-    generatedDtoTypeName: LsiTypeName,
+    generatedDtoTypeName: LsiClass,
 ): LsiTypeReferenceStyle {
     return if (simpleName in generatedDtoTypeName.simpleNames) {
         LsiTypeReferenceStyle.FULLY_QUALIFIED
@@ -278,7 +278,7 @@ private fun javaTypedDiscriminatorValidation(
     discriminatorValue: String,
     rootTypeId: LsiSymbolId,
     entityTypeName: String,
-    generatedDtoTypeName: LsiTypeName,
+    generatedDtoTypeName: LsiClass,
 ): LsiCodeBlock {
     return LsiCodeBlock.build {
         beginControlFlow {
@@ -313,7 +313,7 @@ private fun kotlinTypedDiscriminatorValidation(
     discriminatorValue: String,
     rootTypeId: LsiSymbolId,
     entityTypeName: String,
-    generatedDtoTypeName: LsiTypeName,
+    generatedDtoTypeName: LsiClass,
 ): LsiCodeBlock {
     return LsiCodeBlock.build {
         beginControlFlow {

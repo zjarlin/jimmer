@@ -30,10 +30,10 @@ import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiCodeFragment
 import site.addzero.lsi.model.LsiImport
-import site.addzero.lsi.model.LsiTypeName
-import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将冻结 DTO 的 metadata fetcher 降低为两端共享的代码片段。 */
 internal fun DtoType.toLsiMetadataFetcherPoetFragment(
@@ -42,9 +42,9 @@ internal fun DtoType.toLsiMetadataFetcherPoetFragment(
     immutableSchema: ImmutableSchema,
     workspace: LsiWorkspace,
     configContractResolution: DtoConfigContractResolution,
-    generatedDtoTypeName: LsiTypeName,
-    generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
-    batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
+    generatedDtoTypeName: LsiClass,
+    generatedDtoTypeIdsByTypeName: Map<LsiClass, DtoTypeId>,
+    batchRootDtoTypeNames: Map<DtoTypeId, LsiClass>,
 ): LsiCodeFragment {
     require(graph.typesById[id] === this) {
         "DTO metadata fetcher type does not belong to this graph: ${id.value}"
@@ -70,18 +70,18 @@ internal fun DtoType.toLsiMetadataFetcherPoetFragment(
 internal fun LsiWorkspace.dtoMetadataFetcherPoetTypeNames(
     fragment: LsiCodeFragment,
     immutableSchema: ImmutableSchema,
-    generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
-): List<LsiTypeName> {
+    generatedDtoTypeIdsByTypeName: Map<LsiClass, DtoTypeId>,
+): List<LsiClass> {
     val generatedFetcherTypeNames = immutableSchema.types.map { type ->
-        generatedTopLevelTypeName(type.packageName, "${type.simpleName}Fetcher")
+        generatedTopLevelClass(type.packageName, "${type.simpleName}Fetcher")
     }
-    return toLsiTypeNames(
+    return toLsiClasses(
         typeIds = fragment.codeBlock.referencedTypeIds,
         additional = (
             DTO_CONFIG_RUNTIME_TYPE_NAMES +
                 generatedFetcherTypeNames +
                 generatedDtoTypeIdsByTypeName.keys
-            ).distinctBy(LsiTypeName::typeId),
+            ).distinctBy(LsiClass::id),
     )
 }
 
@@ -91,8 +91,8 @@ private class MetadataFetcherPoetLowering(
     private val immutableSchema: ImmutableSchema,
     private val workspace: LsiWorkspace,
     private val configContractResolution: DtoConfigContractResolution,
-    private val generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
-    private val batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
+    private val generatedDtoTypeIdsByTypeName: Map<LsiClass, DtoTypeId>,
+    private val batchRootDtoTypeNames: Map<DtoTypeId, LsiClass>,
 ) {
 
     init {
@@ -103,7 +103,7 @@ private class MetadataFetcherPoetLowering(
 
     fun lower(
         rootType: DtoType,
-        generatedRootTypeName: LsiTypeName,
+        generatedRootTypeName: LsiClass,
     ): LsiCodeFragment {
         val codeBlock = LsiCodeBlock.build {
             when (targetLanguage) {
@@ -124,7 +124,7 @@ private class MetadataFetcherPoetLowering(
 
     private fun LsiCodeBuilder.javaRoot(
         rootType: DtoType,
-        generatedRootTypeName: LsiTypeName,
+        generatedRootTypeName: LsiClass,
     ) {
         val baseType = rootType.immutableBaseType()
         type(fetcherType(baseType))
@@ -156,7 +156,7 @@ private class MetadataFetcherPoetLowering(
 
     private fun LsiCodeBuilder.kotlinRoot(
         rootType: DtoType,
-        generatedRootTypeName: LsiTypeName,
+        generatedRootTypeName: LsiClass,
     ) {
         val baseType = rootType.immutableBaseType()
         topLevelMember(NEW_FETCHER_PACKAGE, "newFetcher", extension = false)
@@ -192,11 +192,11 @@ private class MetadataFetcherPoetLowering(
     }
 
     private inline fun DtoType.typeBranches(
-        generatedOwnerTypeName: LsiTypeName,
+        generatedOwnerTypeName: LsiClass,
         block: (
             branchType: DtoType,
             generatedBranchType: DtoType,
-            generatedBranchTypeName: LsiTypeName,
+            generatedBranchTypeName: LsiClass,
             targetTypeId: LsiSymbolId,
         ) -> Unit,
     ) {
@@ -430,7 +430,7 @@ private class MetadataFetcherPoetLowering(
                 reference,
                 batchRootDtoTypeNames,
             )
-            return LsiDeclaredType(generatedTypeName?.typeId ?: reference.toLsiType().declarationId)
+            return LsiDeclaredType(generatedTypeName?.id ?: reference.toLsiType().declarationId)
         }
         val targetType = generatedTargetType(graph) ?: return null
         val targetOccurrence = if (generatedOwner.currentTypeHasOccurrence) {
@@ -438,22 +438,22 @@ private class MetadataFetcherPoetLowering(
         } else {
             directChildOccurrenceOrNull(generatedOwner.typeName, targetType) ?: return null
         }
-        return LsiDeclaredType(targetOccurrence.typeId)
+        return LsiDeclaredType(targetOccurrence.id)
     }
 
     private fun directChildOccurrence(
-        ownerTypeName: LsiTypeName,
+        ownerTypeName: LsiClass,
         targetType: DtoType,
-    ): LsiTypeName = JimmerDtoPoetTypeNames.requireDirectChildOccurrence(
+    ): LsiClass = JimmerDtoPoetTypeNames.requireDirectChildOccurrence(
         ownerTypeName = ownerTypeName,
         targetTypeId = targetType.id,
         typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
     )
 
     private fun directChildOccurrenceOrNull(
-        ownerTypeName: LsiTypeName,
+        ownerTypeName: LsiClass,
         targetType: DtoType,
-    ): LsiTypeName? = JimmerDtoPoetTypeNames.directChildOccurrenceOrNull(
+    ): LsiClass? = JimmerDtoPoetTypeNames.directChildOccurrenceOrNull(
         ownerTypeName = ownerTypeName,
         targetTypeId = targetType.id,
         typeIdsByTypeName = generatedDtoTypeIdsByTypeName,
@@ -502,7 +502,7 @@ private class MetadataFetcherPoetLowering(
     }
 
     private fun fetcherType(type: ImmutableType): LsiDeclaredType = LsiDeclaredType(
-        generatedTopLevelTypeName(type.packageName, "${type.simpleName}Fetcher").typeId
+        generatedTopLevelClass(type.packageName, "${type.simpleName}Fetcher").id
     )
 
     private companion object {
@@ -510,7 +510,7 @@ private class MetadataFetcherPoetLowering(
     }
 
     private data class GeneratedOwner(
-        val typeName: LsiTypeName,
+        val typeName: LsiClass,
         val currentTypeHasOccurrence: Boolean = true,
     )
 }

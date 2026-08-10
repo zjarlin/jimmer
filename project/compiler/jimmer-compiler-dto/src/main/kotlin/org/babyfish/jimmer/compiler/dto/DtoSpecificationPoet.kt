@@ -48,9 +48,9 @@ import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 将冻结的 Specification 基础类型语义降低为平台中立的 entityType 函数。 */
 internal fun DtoType.toLsiSpecificationEntityTypePoetFunction(
@@ -247,14 +247,14 @@ internal fun DtoBaseProp.toLsiSpecificationConverterPoetFunctionOrNull(
 internal fun LsiWorkspace.dtoSpecificationPoetTypeNames(
     function: LsiFunction,
     immutableSchema: ImmutableSchema,
-): List<LsiTypeName> {
-    return toLsiTypeNames(
+): List<LsiClass> {
+    return toLsiClasses(
         typeIds = function.referencedTypeIds,
         additional = (
             DTO_COMMON_POET_TYPE_NAMES +
                 SPECIFICATION_POET_TYPE_NAMES +
                 immutableSchema.toLsiGeneratedQueryPoetTypeNames()
-            ).distinctBy(LsiTypeName::typeId),
+            ).distinctBy(LsiClass::id),
     )
 }
 
@@ -537,7 +537,7 @@ private const val SPECIFICATION_CONVERTER_VALUE_NAME = "value"
 
 private val CLASS_TYPE_ID = LsiSymbolId.type("java.lang.Class")
 
-private val CLASS_TYPE_NAME = LsiTypeName(CLASS_TYPE_ID, "java.lang", listOf("Class"))
+private val CLASS_TYPE_NAME = LsiClass(CLASS_TYPE_ID, "java.lang", listOf("Class"))
 
 private val SPECIFICATION_ARGS_TYPE_ID =
     LsiSymbolId.type("org.babyfish.jimmer.sql.ast.query.specification.SpecificationArgs")
@@ -552,22 +552,22 @@ private val IMMUTABLE_PROP_TYPE = LsiDeclaredType(LsiSymbolId.type("org.babyfish
 
 private val SPECIFICATION_POET_TYPE_NAMES = listOf(
     CLASS_TYPE_NAME,
-    LsiTypeName(
+    LsiClass(
         SPECIFICATION_ARGS_TYPE_ID,
         "org.babyfish.jimmer.sql.ast.query.specification",
         listOf("SpecificationArgs"),
     ),
-    LsiTypeName(
+    LsiClass(
         K_SPECIFICATION_ARGS_TYPE_ID,
         "org.babyfish.jimmer.sql.kt.ast.query.specification",
         listOf("KSpecificationArgs"),
     ),
-    LsiTypeName(
+    LsiClass(
         PREDICATE_APPLIER_TYPE.declarationId,
         "org.babyfish.jimmer.sql.ast.query.specification",
         listOf("PredicateApplier"),
     ),
-    LsiTypeName(
+    LsiClass(
         IMMUTABLE_PROP_TYPE.declarationId,
         "org.babyfish.jimmer.meta",
         listOf("ImmutableProp"),

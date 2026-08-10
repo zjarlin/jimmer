@@ -13,9 +13,9 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 把冻结的 DTO 属性写回语义降级为访问器调用。 */
 internal fun DtoBaseProp.toDraftWritePoetCodeBlock(
@@ -130,8 +130,8 @@ private fun LsiCodeBuilder.accessorDraftWrite(
 /** 为 DTO Draft 写回代码解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoDraftWritePoetTypeNames(
     codeBlock: LsiCodeBlock,
-): List<LsiTypeName> {
-    return toLsiTypeNames(
+): List<LsiClass> {
+    return toLsiClasses(
         typeIds = codeBlock.referencedTypeIds,
         additional = listOf(COLLECTIONS_POET_TYPE_NAME),
     )
@@ -139,7 +139,7 @@ internal fun LsiWorkspace.dtoDraftWritePoetTypeNames(
 
 private const val KOTLIN_COLLECTIONS_PACKAGE = "kotlin.collections"
 private val COLLECTIONS_TYPE = LsiDeclaredType(LsiSymbolId.type("java.util.Collections"))
-private val COLLECTIONS_POET_TYPE_NAME = LsiTypeName(
+private val COLLECTIONS_POET_TYPE_NAME = LsiClass(
     typeId = COLLECTIONS_TYPE.declarationId,
     packageName = "java.util",
     simpleNames = listOf("Collections"),

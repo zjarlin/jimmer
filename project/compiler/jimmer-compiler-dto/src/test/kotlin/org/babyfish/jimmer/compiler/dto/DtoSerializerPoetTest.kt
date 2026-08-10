@@ -29,7 +29,7 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.type.LsiType
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -40,12 +40,12 @@ class DtoSerializerPoetTest {
         val graph = graph()
         val type = graph.types.single()
         val schema = immutableSchema()
-        val dtoTypeName = LsiTypeName(
+        val dtoTypeName = LsiClass(
             LsiSymbolId.type("demo.BookInput"),
             "demo",
             listOf("BookInput"),
         )
-        val dtoType = LsiDeclaredType(dtoTypeName.typeId)
+        val dtoType = LsiDeclaredType(dtoTypeName.id)
 
         val java2 = LsiJavaPoetRenderer().renderType(
             type.toSerializerPoetType(

@@ -20,7 +20,7 @@ import site.addzero.lsi.model.LsiCodeBuilder
 import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 /** 将冻结的 DTO 属性语义降低为平台中立的 hashCode 函数。 */
 internal fun DtoType.toDtoHashCodePoetFunction(
@@ -84,7 +84,7 @@ internal fun DtoType.toDtoEqualsPoetFunction(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     targetLanguage: LsiLanguage,
-    generatedTypeName: LsiTypeName,
+    generatedTypeName: LsiClass,
 ): LsiFunction {
     val language = targetLanguage.requireObjectMethodTargetLanguage()
     val props = propsInDeclarationOrder(graph)
@@ -98,7 +98,7 @@ internal fun DtoType.toDtoEqualsPoetFunction(
     val typedOtherName = reservedNames.reserveObjectMethodName(
         if (language == LsiLanguage.JAVA) "other" else "_other",
     )
-    val generatedType = LsiDeclaredType(generatedTypeName.typeId)
+    val generatedType = LsiDeclaredType(generatedTypeName.id)
     val body = LsiCodeBlock.build {
         beginControlFlow {
             text("if (")
@@ -313,15 +313,15 @@ private fun LsiLanguage.objectMethodParameterType(): LsiDeclaredType {
 }
 
 internal fun dtoEqualityPoetTypeNames(
-    generatedTypeName: LsiTypeName? = null,
-): List<LsiTypeName> {
+    generatedTypeName: LsiClass? = null,
+): List<LsiClass> {
     return buildList {
         add(OBJECT_TYPE_NAME)
         add(ANY_TYPE_NAME)
         add(OBJECTS_TYPE_NAME)
         add(ARRAYS_TYPE_NAME)
         generatedTypeName?.let(::add)
-    }.distinctBy(LsiTypeName::typeId)
+    }.distinctBy(LsiClass::id)
 }
 
 private val INT_TYPE = LsiPrimitiveType(LsiPrimitiveKind.INT)
@@ -333,7 +333,7 @@ private val ARRAYS_TYPE_ID = LsiSymbolId.type("java.util.Arrays")
 private val OBJECTS_TYPE = LsiDeclaredType(OBJECTS_TYPE_ID)
 private val ARRAYS_TYPE = LsiDeclaredType(ARRAYS_TYPE_ID)
 
-private val OBJECT_TYPE_NAME = LsiTypeName(OBJECT_TYPE_ID, "java.lang", listOf("Object"))
-private val ANY_TYPE_NAME = LsiTypeName(ANY_TYPE_ID, "kotlin", listOf("Any"))
-private val OBJECTS_TYPE_NAME = LsiTypeName(OBJECTS_TYPE_ID, "java.util", listOf("Objects"))
-private val ARRAYS_TYPE_NAME = LsiTypeName(ARRAYS_TYPE_ID, "java.util", listOf("Arrays"))
+private val OBJECT_TYPE_NAME = LsiClass(OBJECT_TYPE_ID, "java.lang", listOf("Object"))
+private val ANY_TYPE_NAME = LsiClass(ANY_TYPE_ID, "kotlin", listOf("Any"))
+private val OBJECTS_TYPE_NAME = LsiClass(OBJECTS_TYPE_ID, "java.util", listOf("Objects"))
+private val ARRAYS_TYPE_NAME = LsiClass(ARRAYS_TYPE_ID, "java.util", listOf("Arrays"))

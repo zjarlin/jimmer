@@ -22,10 +22,10 @@ import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeReferenceStyle
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 把冻结 DTO 属性降低为完整的平台中立访问器初始化表达式。 */
 internal fun DtoBaseProp.toAccessorInitializerPoetCodeBlock(
@@ -89,8 +89,8 @@ internal fun DtoBaseProp.toAccessorInitializerPoetCodeBlock(
 internal fun LsiWorkspace.dtoAccessorPoetTypeNames(
     initializer: LsiCodeBlock,
     immutableSchema: ImmutableSchema,
-    generatedTypeNames: Collection<LsiTypeName> = emptyList(),
-): List<LsiTypeName> {
+    generatedTypeNames: Collection<LsiClass> = emptyList(),
+): List<LsiClass> {
     val candidateTypeNames = buildList {
         addAll(DTO_COMMON_POET_TYPE_NAMES)
         add(DTO_PROP_ACCESSOR_TYPE_NAME)
@@ -102,14 +102,14 @@ internal fun LsiWorkspace.dtoAccessorPoetTypeNames(
         addAll(generatedTypeNames)
     }
     val conflictingTypeNames = candidateTypeNames
-        .groupBy(LsiTypeName::typeId)
+        .groupBy(LsiClass::id)
         .filterValues { names -> names.distinct().size > 1 }
     require(conflictingTypeNames.isEmpty()) {
         "DTO accessor Poet type ids have conflicting source names: " +
             conflictingTypeNames.keys.sorted().joinToString { typeId -> typeId.value }
     }
-    val additionalTypeNames = candidateTypeNames.distinctBy(LsiTypeName::typeId)
-    return toLsiTypeNames(
+    val additionalTypeNames = candidateTypeNames.distinctBy(LsiClass::id)
+    return toLsiClasses(
         typeIds = initializer.referencedTypeIds,
         additional = additionalTypeNames,
     )
@@ -408,7 +408,7 @@ private fun ImmutableType.dtoDraftSlotOwnerType(targetLanguage: LsiLanguage): Ls
     return LsiDeclaredType(LsiSymbolId.type("${qualifiedName}Draft.$nestedName"))
 }
 
-private fun ImmutableType.dtoDraftSlotOwnerPoetTypeName(nestedName: String): LsiTypeName {
+private fun ImmutableType.dtoDraftSlotOwnerPoetTypeName(nestedName: String): LsiClass {
     val packageName = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
     val simpleName = qualifiedName.substringAfterLast('.')
     return JimmerDtoPoetTypeNames.create(
@@ -429,6 +429,6 @@ private val DTO_PROP_ACCESSOR_TYPE_NAME = JimmerDtoPoetTypeNames.create(
     listOf("DtoPropAccessor"),
 )
 
-private val DTO_PROP_ACCESSOR_TYPE = LsiDeclaredType(DTO_PROP_ACCESSOR_TYPE_NAME.typeId)
+private val DTO_PROP_ACCESSOR_TYPE = LsiDeclaredType(DTO_PROP_ACCESSOR_TYPE_NAME.id)
 
 private val KOTLIN_ANY_TYPE = LsiDeclaredType(LsiSymbolId.type("kotlin.Any"))

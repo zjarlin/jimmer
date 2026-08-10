@@ -36,10 +36,9 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.clazz.LsiClass
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
 import site.addzero.lsi.model.sourceLsiAnnotation
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 import site.addzero.lsi.model.toSourceAnnotation
 
 internal fun TransactionalSchema.toLsiSourceArtifacts(
@@ -66,7 +65,7 @@ private fun TransactionalType.toLsiSourceArtifact(workspace: LsiWorkspace): LsiS
     )
     return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiTypeNames(file.referencedTypeIds, BUILT_IN_TYPE_NAMES),
+        typeNames = workspace.toLsiClasses(file.referencedTypeIds, BUILT_IN_TYPE_NAMES),
         aggregationMode = classifyArtifactAggregationMode(
             originatingSymbols = originatingSymbols,
             originatingSources = originatingSources,
@@ -481,21 +480,21 @@ private val PROPAGATION_TYPE = LsiDeclaredType(
 private val JAVA_OVERRIDE_ID = LsiSymbolId.type("java.lang.Override")
 private val KOTLIN_SUPPRESS_ID = LsiSymbolId.type("kotlin.Suppress")
 private val BUILT_IN_TYPE_NAMES = listOf(
-    LsiTypeName(
+    LsiClass(
         PROPAGATION_TYPE.declarationId,
         "org.babyfish.jimmer.sql.transaction",
         listOf("Propagation"),
     ),
-    LsiTypeName(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
-    LsiTypeName(KOTLIN_SUPPRESS_ID, "kotlin", listOf("Suppress")),
-    LsiTypeName(LsiSymbolId.type("java.lang.String"), "java.lang", listOf("String")),
-    LsiTypeName(LsiSymbolId.type("java.io.IOException"), "java.io", listOf("IOException")),
-    LsiTypeName(
+    LsiClass(JAVA_OVERRIDE_ID, "java.lang", listOf("Override")),
+    LsiClass(KOTLIN_SUPPRESS_ID, "kotlin", listOf("Suppress")),
+    LsiClass(LsiSymbolId.type("java.lang.String"), "java.lang", listOf("String")),
+    LsiClass(LsiSymbolId.type("java.io.IOException"), "java.io", listOf("IOException")),
+    LsiClass(
         LsiSymbolId.type("org.babyfish.jimmer.sql.JSqlClient"),
         "org.babyfish.jimmer.sql",
         listOf("JSqlClient"),
     ),
-    LsiTypeName(
+    LsiClass(
         LsiSymbolId.type("org.babyfish.jimmer.sql.kt.KSqlClient"),
         "org.babyfish.jimmer.sql.kt",
         listOf("KSqlClient"),

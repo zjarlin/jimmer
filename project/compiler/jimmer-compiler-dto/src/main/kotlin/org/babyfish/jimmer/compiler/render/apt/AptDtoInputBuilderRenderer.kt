@@ -15,7 +15,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将共享 InputBuilder 模型渲染为可嵌入 APT DTO 的 JavaPoet 类型。 */
@@ -31,22 +31,22 @@ internal object AptDtoInputBuilderRenderer {
         jacksonVersion: JacksonFamily,
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
-        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
-        batchRootDtoTypeNames: Collection<LsiTypeName>,
+        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiClass>,
+        batchRootDtoTypeNames: Collection<LsiClass>,
     ): TypeSpec {
         val currentDtoTypeName = JimmerDtoPoetTypeNames.create(
             generatedDtoPackageName,
             generatedDtoSimpleNames,
         )
         val generatedDtoTypes = generatedDtoTypeNamesByTypeId.mapValues { (_, typeName) ->
-            LsiDeclaredType(typeName.typeId)
+            LsiDeclaredType(typeName.id)
         }
         val inputBuilderType = dtoType.toInputBuilderPoetType(
             graph = graph,
             immutableSchema = immutableSchema,
             annotationContract = annotationContract,
             targetLanguage = LsiLanguage.JAVA,
-            currentDtoType = LsiDeclaredType(currentDtoTypeName.typeId),
+            currentDtoType = LsiDeclaredType(currentDtoTypeName.id),
             generatedDtoTypes = generatedDtoTypes,
             jsonPojoBuilderAnnotationTypeId = jacksonVersion.inputBuilderJsonPojoBuilderAnnotationTypeId(),
             jsonNamingAnnotationTypeId = jacksonVersion.inputBuilderJsonNamingAnnotationTypeId(),

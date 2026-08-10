@@ -62,7 +62,7 @@ import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeReferenceStyle
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /**
  * 将不可变类型查询语义降低为共享 LSI Poet 产物。
@@ -1513,7 +1513,7 @@ private fun QueryArtifactDependencies.artifact(
 ): LsiSourceArtifact {
     return LsiSourceArtifact(
         file = file,
-        typeNames = workspace.toLsiTypeNames(
+        typeNames = workspace.toLsiClasses(
             file.referencedTypeIds,
             additional = schema.toLsiGeneratedQueryPoetTypeNames() + QUERY_RUNTIME_TYPE_NAMES,
         ),

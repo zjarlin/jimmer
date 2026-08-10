@@ -32,7 +32,7 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 class DtoAnnotationPoetTest {
@@ -111,7 +111,7 @@ class DtoAnnotationPoetTest {
         val renderedKotlinAnnotation = LsiKotlinPoetRenderer().renderAnnotation(
             annotation = dtoType.typeAnnotationPoetAnnotations(contract, LsiLanguage.KOTLIN).first(),
             typeNames = listOf(
-                LsiTypeName(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
+                LsiClass(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
             ),
         )
         assertContains(renderedKotlinAnnotation.toString(), "`when` = \"first-w\"")
@@ -174,7 +174,7 @@ class DtoAnnotationPoetTest {
         val rendered = LsiKotlinPoetRenderer().renderAnnotation(
             annotation = annotations.first(),
             typeNames = listOf(
-                LsiTypeName(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
+                LsiClass(REPEATED_ANNOTATION_TYPE_ID, "demo", listOf("Repeated")),
             ),
         )
         assertContains(rendered.toString(), "`when` = \"first-w\"")
@@ -228,7 +228,7 @@ class DtoAnnotationPoetTest {
         assertEquals("value", assertIs<LsiSourceAnnotationArgument.Named>(annotation.sourceArguments.single()).name)
         val rendered = LsiKotlinPoetRenderer().renderAnnotation(
             annotation,
-            listOf(LsiTypeName(annotationTypeId, "demo", listOf("Alias"))),
+            listOf(LsiClass(annotationTypeId, "demo", listOf("Alias"))),
         )
         assertEquals("@demo.Alias(value = \"base-edition\")", rendered.toString())
     }
@@ -274,7 +274,7 @@ class DtoAnnotationPoetTest {
         )
         val rendered = LsiKotlinPoetRenderer().renderAnnotation(
             annotation,
-            listOf(LsiTypeName(annotationTypeId, "demo", listOf("Rule"))),
+            listOf(LsiClass(annotationTypeId, "demo", listOf("Rule"))),
         )
 
         assertEquals("@demo.Rule(`when` = \"default\")", rendered.toString())

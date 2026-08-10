@@ -24,10 +24,10 @@ import site.addzero.lsi.type.LsiPrimitiveType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiCodeBlock
 import site.addzero.lsi.model.LsiCodeBuilder
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeReferenceStyle
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 把冻结的 DTO 属性配置降级为可由两端 Poet 渲染的代码块。 */
 internal fun DtoBaseProp.toConfigPoetCodeBlock(
@@ -60,8 +60,8 @@ internal fun DtoBaseProp.toConfigPoetCodeBlock(
 /** 为独立 DTO config 代码块解析完整源码类型名。 */
 internal fun LsiWorkspace.dtoConfigPoetTypeNames(
     codeBlock: LsiCodeBlock,
-): List<LsiTypeName> {
-    return toLsiTypeNames(
+): List<LsiClass> {
+    return toLsiClasses(
         typeIds = codeBlock.referencedTypeIds,
         additional = DTO_CONFIG_RUNTIME_TYPE_NAMES,
     )
@@ -354,7 +354,7 @@ private fun LsiCodeBuilder.kotlinPropPath(
     name("table")
     path.forEach { node ->
         val prop = node.immutableProp(immutableSchema)
-        val packageName = workspace.toLsiTypeNames(listOf(prop.ownerTypeId)).single().packageName
+        val packageName = workspace.toLsiClasses(listOf(prop.ownerTypeId)).single().packageName
         text(".")
         topLevelMember(
             packageName,

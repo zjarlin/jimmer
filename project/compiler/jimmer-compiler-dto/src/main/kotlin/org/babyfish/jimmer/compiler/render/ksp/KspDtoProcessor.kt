@@ -17,7 +17,7 @@ import site.addzero.lsi.jimmer.dto.dependencySources
 import site.addzero.lsi.jimmer.dto.dependencySymbols
 import site.addzero.lsi.jimmer.dto.rootTypesInDeclarationOrder
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 internal class KspDtoProcessor(
     graphs: Collection<DtoGraph>,
@@ -31,7 +31,7 @@ internal class KspDtoProcessor(
 ) {
     private val graphs = graphs.toList()
 
-    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName> =
+    private val rootDtoTypeNamesByTypeId: Map<DtoTypeId, LsiClass> =
         JimmerDtoPoetTypeNames.roots(graphs)
 
     fun process(): List<GeneratedArtifact> = buildList {

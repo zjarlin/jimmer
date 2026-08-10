@@ -42,9 +42,8 @@ import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.LsiTypeName
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 internal fun TypedTupleSchema.toLsiSourceArtifacts(
     workspace: LsiWorkspace,
@@ -101,7 +100,7 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiSourceArt
     return files.map { file ->
         LsiSourceArtifact(
             file = file,
-            typeNames = workspace.toLsiTypeNames(
+            typeNames = workspace.toLsiClasses(
                 typeIds = file.referencedTypeIds,
                 additional = generatedTypeNames(),
             ),
@@ -114,11 +113,11 @@ private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiSourceArt
     }
 }
 
-private fun TypedTupleType.generatedTypeNames(): List<LsiTypeName> {
+private fun TypedTupleType.generatedTypeNames(): List<LsiClass> {
     return buildList {
         addAll(BUILT_IN_TYPE_NAMES)
         add(
-            LsiTypeName(
+            LsiClass(
                 typeId = LsiSymbolId.type(mapperQualifiedName),
                 packageName = packageName,
                 simpleNames = listOf(mapperSimpleName),
@@ -128,7 +127,7 @@ private fun TypedTupleType.generatedTypeNames(): List<LsiTypeName> {
         if (projection != null) {
             add(topLevelGeneratedTypeName(tableQualifiedName))
             add(
-                LsiTypeName(
+                LsiClass(
                     typeId = nullableTableType.declarationId,
                     packageName = packageName,
                     simpleNames = listOf(tableSimpleName, "Nullable"),
@@ -142,7 +141,7 @@ private fun TypedTupleType.generatedTypeNames(): List<LsiTypeName> {
         }
         properties.drop(1).forEach { property ->
             add(
-                LsiTypeName(
+                LsiClass(
                     typeId = LsiSymbolId.type("$mapperQualifiedName.${property.builderSimpleName}"),
                     packageName = packageName,
                     simpleNames = listOf(mapperSimpleName, property.builderSimpleName),
@@ -967,9 +966,9 @@ private fun LsiType.asNonNullType(): LsiType {
     }
 }
 
-private fun topLevelGeneratedTypeName(qualifiedName: String): LsiTypeName {
+private fun topLevelGeneratedTypeName(qualifiedName: String): LsiClass {
     val packageName = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
-    return LsiTypeName(
+    return LsiClass(
         typeId = LsiSymbolId.type(qualifiedName),
         packageName = packageName,
         simpleNames = listOf(qualifiedName.substringAfterLast('.')),
@@ -1020,65 +1019,65 @@ private val ARRAYS_TYPE = declaredType("java.util.Arrays")
 private val OBJECT_TYPE = declaredType("java.lang.Object")
 private val SUPPRESS_ID = LsiSymbolId.type("kotlin.Suppress")
 private val BUILT_IN_TYPE_NAMES = listOf(
-    LsiTypeName(SELECTION_ID, "org.babyfish.jimmer.sql.ast", listOf("Selection")),
-    LsiTypeName(TUPLE_MAPPER_ID, "org.babyfish.jimmer.sql.runtime", listOf("TupleMapper")),
-    LsiTypeName(BASE_TABLE_PROJECTION_ID, "org.babyfish.jimmer.sql.ast.query", listOf("BaseTableProjection")),
-    LsiTypeName(BASE_TABLE_ID, "org.babyfish.jimmer.sql.ast.table", listOf("BaseTable")),
-    LsiTypeName(BASE_TABLE_FACTORY_ID, "org.babyfish.jimmer.sql.ast.table.spi", listOf("BaseTableFactory")),
-    LsiTypeName(
+    LsiClass(SELECTION_ID, "org.babyfish.jimmer.sql.ast", listOf("Selection")),
+    LsiClass(TUPLE_MAPPER_ID, "org.babyfish.jimmer.sql.runtime", listOf("TupleMapper")),
+    LsiClass(BASE_TABLE_PROJECTION_ID, "org.babyfish.jimmer.sql.ast.query", listOf("BaseTableProjection")),
+    LsiClass(BASE_TABLE_ID, "org.babyfish.jimmer.sql.ast.table", listOf("BaseTable")),
+    LsiClass(BASE_TABLE_FACTORY_ID, "org.babyfish.jimmer.sql.ast.table.spi", listOf("BaseTableFactory")),
+    LsiClass(
         BASE_TABLE_SELECTION_KIND_ID,
         "org.babyfish.jimmer.sql.ast.table.spi",
         listOf("BaseTableSelectionKind"),
     ),
-    LsiTypeName(
+    LsiClass(
         BASE_TABLE_SELECTION_LAYOUT_ID,
         "org.babyfish.jimmer.sql.ast.table.spi",
         listOf("BaseTableSelectionLayout"),
     ),
-    LsiTypeName(
+    LsiClass(
         ABSTRACT_TYPED_BASE_TABLE_ID,
         "org.babyfish.jimmer.sql.ast.table.spi",
         listOf("AbstractTypedBaseTable"),
     ),
-    LsiTypeName(EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("Expression")),
-    LsiTypeName(STRING_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("StringExpression")),
-    LsiTypeName(NUMERIC_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("NumericExpression")),
-    LsiTypeName(DATE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("DateExpression")),
-    LsiTypeName(TEMPORAL_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("TemporalExpression")),
-    LsiTypeName(COMPARABLE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("ComparableExpression")),
-    LsiTypeName(
+    LsiClass(EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("Expression")),
+    LsiClass(STRING_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("StringExpression")),
+    LsiClass(NUMERIC_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("NumericExpression")),
+    LsiClass(DATE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("DateExpression")),
+    LsiClass(TEMPORAL_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("TemporalExpression")),
+    LsiClass(COMPARABLE_EXPRESSION_ID, "org.babyfish.jimmer.sql.ast", listOf("ComparableExpression")),
+    LsiClass(
         K_BASE_TABLE_PROJECTION_ID,
         "org.babyfish.jimmer.sql.kt.ast.query",
         listOf("KBaseTableProjection"),
     ),
-    LsiTypeName(
+    LsiClass(
         ABSTRACT_K_BASE_TABLE_ID,
         "org.babyfish.jimmer.sql.kt.ast.table.impl",
         listOf("AbstractKBaseTable"),
     ),
-    LsiTypeName(K_NON_NULL_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullBaseTable")),
-    LsiTypeName(K_NULLABLE_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableBaseTable")),
-    LsiTypeName(K_BASE_TABLE_SYMBOL_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KBaseTableSymbol")),
-    LsiTypeName(K_PROPS_WEAK_JOIN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoin")),
-    LsiTypeName(K_PROPS_WEAK_JOIN_FUN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoinFun")),
-    LsiTypeName(K_NON_NULL_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullTable")),
-    LsiTypeName(K_NULLABLE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableTable")),
-    LsiTypeName(
+    LsiClass(K_NON_NULL_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullBaseTable")),
+    LsiClass(K_NULLABLE_BASE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableBaseTable")),
+    LsiClass(K_BASE_TABLE_SYMBOL_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KBaseTableSymbol")),
+    LsiClass(K_PROPS_WEAK_JOIN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoin")),
+    LsiClass(K_PROPS_WEAK_JOIN_FUN_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KPropsWeakJoinFun")),
+    LsiClass(K_NON_NULL_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNonNullTable")),
+    LsiClass(K_NULLABLE_TABLE_ID, "org.babyfish.jimmer.sql.kt.ast.table", listOf("KNullableTable")),
+    LsiClass(
         K_NON_NULL_EXPRESSION_ID,
         "org.babyfish.jimmer.sql.kt.ast.expression",
         listOf("KNonNullExpression"),
     ),
-    LsiTypeName(
+    LsiClass(
         K_NULLABLE_EXPRESSION_ID,
         "org.babyfish.jimmer.sql.kt.ast.expression",
         listOf("KNullableExpression"),
     ),
-    LsiTypeName(K_CLASS_ID, "kotlin.reflect", listOf("KClass")),
-    LsiTypeName(LIST_ID, "java.util", listOf("List")),
-    LsiTypeName(COLLECTIONS_TYPE.declarationId, "java.util", listOf("Collections")),
-    LsiTypeName(ARRAYS_TYPE.declarationId, "java.util", listOf("Arrays")),
-    LsiTypeName(OBJECT_TYPE.declarationId, "java.lang", listOf("Object")),
-    LsiTypeName(SUPPRESS_ID, "kotlin", listOf("Suppress")),
+    LsiClass(K_CLASS_ID, "kotlin.reflect", listOf("KClass")),
+    LsiClass(LIST_ID, "java.util", listOf("List")),
+    LsiClass(COLLECTIONS_TYPE.declarationId, "java.util", listOf("Collections")),
+    LsiClass(ARRAYS_TYPE.declarationId, "java.util", listOf("Arrays")),
+    LsiClass(OBJECT_TYPE.declarationId, "java.lang", listOf("Object")),
+    LsiClass(SUPPRESS_ID, "kotlin", listOf("Suppress")),
 )
 private val SELECTION_STAR_TYPE = LsiDeclaredType(
     declarationId = SELECTION_ID,

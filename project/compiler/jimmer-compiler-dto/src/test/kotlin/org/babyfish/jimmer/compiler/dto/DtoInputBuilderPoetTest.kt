@@ -47,7 +47,7 @@ import site.addzero.lsi.model.LsiFunction
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentLayout
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
@@ -597,25 +597,25 @@ class DtoInputBuilderPoetTest {
         val WRAPPER_ANNOTATION_TYPE_ID = LsiSymbolId.type("demo.Wrapper")
         val NAMING_STRATEGY_TYPE_ID = LsiSymbolId.type("demo.SnakeCaseStrategy")
         val TYPE_NAMES = listOf(
-            LsiTypeName(DTO_DECLARATION_TYPE_ID, "demo", listOf("BookInput")),
-            LsiTypeName(BUILDER_TYPE_ID, "demo", listOf("BookInput", "Builder")),
-            LsiTypeName(JAVA_STRING_TYPE_ID, "java.lang", listOf("String")),
-            LsiTypeName(KOTLIN_STRING_TYPE_ID, "kotlin", listOf("String")),
-            LsiTypeName(INPUT_TYPE_ID, "org.babyfish.jimmer", listOf("Input")),
-            LsiTypeName(OBJECTS_TYPE_ID, "java.util", listOf("Objects")),
-            LsiTypeName(GENERATED_BY_TYPE_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
-            LsiTypeName(
+            LsiClass(DTO_DECLARATION_TYPE_ID, "demo", listOf("BookInput")),
+            LsiClass(BUILDER_TYPE_ID, "demo", listOf("BookInput", "Builder")),
+            LsiClass(JAVA_STRING_TYPE_ID, "java.lang", listOf("String")),
+            LsiClass(KOTLIN_STRING_TYPE_ID, "kotlin", listOf("String")),
+            LsiClass(INPUT_TYPE_ID, "org.babyfish.jimmer", listOf("Input")),
+            LsiClass(OBJECTS_TYPE_ID, "java.util", listOf("Objects")),
+            LsiClass(GENERATED_BY_TYPE_ID, "org.babyfish.jimmer.internal", listOf("GeneratedBy")),
+            LsiClass(
                 JSON_POJO_BUILDER_TYPE_ID,
                 "com.fasterxml.jackson.databind.annotation",
                 listOf("JsonPOJOBuilder"),
             ),
-            LsiTypeName(
+            LsiClass(
                 JSON_NAMING_TYPE_ID,
                 "com.fasterxml.jackson.databind.annotation",
                 listOf("JsonNaming"),
             ),
-            LsiTypeName(JSON_ALIAS_TYPE_ID, "com.fasterxml.jackson.annotation", listOf("JsonAlias")),
-            LsiTypeName(NAMING_STRATEGY_TYPE_ID, "demo", listOf("SnakeCaseStrategy")),
+            LsiClass(JSON_ALIAS_TYPE_ID, "com.fasterxml.jackson.annotation", listOf("JsonAlias")),
+            LsiClass(NAMING_STRATEGY_TYPE_ID, "demo", listOf("SnakeCaseStrategy")),
         )
 
         val EXPECTED_JAVA =

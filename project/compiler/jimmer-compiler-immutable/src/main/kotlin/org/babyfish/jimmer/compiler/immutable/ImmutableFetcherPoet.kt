@@ -39,7 +39,7 @@ import site.addzero.lsi.type.LsiTypeArgument
 import site.addzero.lsi.type.LsiTypeParameter
 import site.addzero.lsi.type.LsiTypeParameterRef
 import site.addzero.lsi.type.LsiType
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.type.LsiUnresolvedType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
@@ -58,11 +58,10 @@ import site.addzero.lsi.model.LsiModifier
 import site.addzero.lsi.model.LsiNameStyle
 import site.addzero.lsi.model.LsiParameter
 import site.addzero.lsi.model.LsiProperty
-import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.model.LsiTypeDeclarationKind
-import site.addzero.lsi.model.generatedTopLevelTypeName
+import site.addzero.lsi.clazz.generatedTopLevelClass
 import site.addzero.lsi.model.referencedTypeIds
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.toLsiClasses
 
 internal fun ImmutableSchema.toFetcherPoetArtifacts(
     types: List<ImmutableType>,
@@ -114,7 +113,7 @@ private class FetcherPoetContext(
         }
         return LsiSourceArtifact(
             file = file,
-            typeNames = workspace.toLsiTypeNames(
+            typeNames = workspace.toLsiClasses(
                 file.referencedTypeIds,
                 additional = schema.generatedFetcherPoetTypeNames() + FETCHER_RUNTIME_TYPE_IDS.map(
                     LsiSymbolId::topLevelPoetTypeName
@@ -133,23 +132,23 @@ private class FetcherPoetContext(
         )
     }
 
-    private fun ImmutableSchema.generatedFetcherPoetTypeNames(): List<LsiTypeName> {
+    private fun ImmutableSchema.generatedFetcherPoetTypeNames(): List<LsiClass> {
         return types.flatMap { immutableType ->
             listOf(
-                generatedTopLevelTypeName(
+                generatedTopLevelClass(
                     immutableType.packageName,
                     "${immutableType.simpleName}$FETCHER_SUFFIX",
                 ),
-                generatedTopLevelTypeName(
+                generatedTopLevelClass(
                     immutableType.packageName,
                     "${immutableType.simpleName}$FETCHER_DSL_SUFFIX",
                 ),
-                generatedTopLevelTypeName(
+                generatedTopLevelClass(
                     immutableType.packageName,
                     "${immutableType.simpleName}Table",
                 ),
             )
-        }.distinctBy { typeName -> typeName.typeId }
+        }.distinctBy { typeName -> typeName.id }
     }
 
     private fun javaFile(): LsiFile {

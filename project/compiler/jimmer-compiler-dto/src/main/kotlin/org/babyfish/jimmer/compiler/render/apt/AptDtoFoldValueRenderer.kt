@@ -9,7 +9,7 @@ import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将折叠 DTO 的基础对象构造表达式渲染为 JavaPoet 代码块。 */
@@ -23,7 +23,7 @@ internal object AptDtoFoldValueRenderer {
         baseParameterName: String,
         nullGuardAccessorName: String,
         generatedTargetType: (DtoProp) -> LsiDeclaredType,
-        generatedTypeNames: Collection<LsiTypeName>,
+        generatedTypeNames: Collection<LsiClass>,
     ): CodeBlock {
         val initializer = prop.toFoldValuePoetCodeBlock(
             graph = graph,

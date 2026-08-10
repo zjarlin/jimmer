@@ -56,7 +56,7 @@ class DtoPolymorphicBranchPoetTest {
             assertIs<LsiSourceAnnotationArgument.Named>(annotation.sourceArguments[0]).value,
         )
         assertEquals(
-            generatedRootTypeName.typeId,
+            generatedRootTypeName.id,
             assertIs<LsiDeclaredType>(classValue.type).declarationId,
         )
         assertEquals(
@@ -66,8 +66,8 @@ class DtoPolymorphicBranchPoetTest {
             ).value,
         )
         assertEquals(
-            listOf(GENERATED_POLYMORPHIC_DTO_BRANCH_ANNOTATION, generatedRootTypeName.typeId),
-            polymorphicDtoBranchPoetTypeNames(generatedRootTypeName).map { typeName -> typeName.typeId },
+            listOf(GENERATED_POLYMORPHIC_DTO_BRANCH_ANNOTATION, generatedRootTypeName.id),
+            polymorphicDtoBranchPoetTypeNames(generatedRootTypeName).map { typeName -> typeName.id },
         )
     }
 

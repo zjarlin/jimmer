@@ -12,7 +12,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.LsiImport
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将冻结 DTO 的 metadata fetcher 渲染为 KotlinPoet 代码块。 */
@@ -26,8 +26,8 @@ internal object KspDtoMetadataFetcherRenderer {
         configContractResolution: DtoConfigContractResolution,
         generatedPackageName: String,
         generatedSimpleNames: List<String>,
-        generatedDtoTypeIdsByTypeName: Map<LsiTypeName, DtoTypeId>,
-        batchRootDtoTypeNames: Map<DtoTypeId, LsiTypeName>,
+        generatedDtoTypeIdsByTypeName: Map<LsiClass, DtoTypeId>,
+        batchRootDtoTypeNames: Map<DtoTypeId, LsiClass>,
         registerImport: (LsiImport) -> Unit,
     ): CodeBlock {
         val generatedDtoTypeName = JimmerDtoPoetTypeNames.create(

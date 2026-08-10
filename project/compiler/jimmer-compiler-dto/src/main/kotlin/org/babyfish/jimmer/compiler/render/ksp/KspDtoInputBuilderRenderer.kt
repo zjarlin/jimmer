@@ -15,7 +15,7 @@ import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.jimmer.dto.DtoTypeId
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将共享 InputBuilder 模型渲染为可嵌入 KSP DTO 的 KotlinPoet 类型。 */
@@ -30,21 +30,21 @@ internal object KspDtoInputBuilderRenderer {
         jacksonVersion: JacksonFamily,
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
-        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiTypeName>,
+        generatedDtoTypeNamesByTypeId: Map<DtoTypeId, LsiClass>,
     ): TypeSpec {
         val currentDtoTypeName = JimmerDtoPoetTypeNames.create(
             generatedDtoPackageName,
             generatedDtoSimpleNames,
         )
         val generatedDtoTypes = generatedDtoTypeNamesByTypeId.mapValues { (_, typeName) ->
-            LsiDeclaredType(typeName.typeId)
+            LsiDeclaredType(typeName.id)
         }
         val inputBuilderType = dtoType.toInputBuilderPoetType(
             graph = graph,
             immutableSchema = immutableSchema,
             annotationContract = annotationContract,
             targetLanguage = LsiLanguage.KOTLIN,
-            currentDtoType = LsiDeclaredType(currentDtoTypeName.typeId),
+            currentDtoType = LsiDeclaredType(currentDtoTypeName.id),
             generatedDtoTypes = generatedDtoTypes,
             jsonPojoBuilderAnnotationTypeId = jacksonVersion.inputBuilderJsonPojoBuilderAnnotationTypeId(),
             jsonNamingAnnotationTypeId = jacksonVersion.inputBuilderJsonNamingAnnotationTypeId(),

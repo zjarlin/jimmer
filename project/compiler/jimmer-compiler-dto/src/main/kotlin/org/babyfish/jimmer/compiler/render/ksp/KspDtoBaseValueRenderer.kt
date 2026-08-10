@@ -11,7 +11,7 @@ import site.addzero.lsi.jimmer.dto.DtoProp
 import site.addzero.lsi.jimmer.dto.kotlinBaseValueAccessorName
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.model.LsiWorkspace
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.kotlinpoet.LsiKotlinPoetRenderer
 
 /** 将 immutable-to-DTO Kotlin 属性读取语义渲染为 KotlinPoet 表达式。 */
@@ -26,7 +26,7 @@ internal object KspDtoBaseValueRenderer {
         baseParameterName: String,
         conversionErrorMessage: String,
         generatedTargetType: (DtoProp) -> LsiDeclaredType,
-        generatedTypeNames: Collection<LsiTypeName>,
+        generatedTypeNames: Collection<LsiClass>,
     ): CodeBlock {
         val initializer = prop.toBaseValuePoetCodeBlock(
             graph = graph,

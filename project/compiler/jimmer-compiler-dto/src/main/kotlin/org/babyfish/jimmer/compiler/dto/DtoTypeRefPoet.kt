@@ -8,19 +8,19 @@ import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiWorkspace
 import site.addzero.lsi.model.collectTypeRefDependencies
-import site.addzero.lsi.model.LsiTypeName
-import site.addzero.lsi.model.generatedSiblingTypeName
-import site.addzero.lsi.model.toLsiTypeNames
+import site.addzero.lsi.clazz.LsiClass
+import site.addzero.lsi.clazz.generatedSiblingClass
+import site.addzero.lsi.clazz.toLsiClasses
 
 /** 为冻结的 DTO 类型引用解析完整且精确的源码名称表。 */
 internal fun LsiWorkspace.dtoTypeRefPoetTypeNames(
     type: LsiType,
-    generatedTypeNames: Collection<LsiTypeName> = emptyList(),
-): List<LsiTypeName> {
+    generatedTypeNames: Collection<LsiClass> = emptyList(),
+): List<LsiClass> {
     val typeIds = sortedSetOf<LsiSymbolId>().apply {
         collectTypeRefDependencies(type)
     }.filterTo(sortedSetOf(), LsiSymbolId::isTypeId)
-    return toLsiTypeNames(
+    return toLsiClasses(
         typeIds = typeIds,
         additional = DTO_COMMON_POET_TYPE_NAMES + generatedTypeNames,
     )
@@ -30,11 +30,11 @@ internal fun LsiWorkspace.dtoTypeRefPoetTypeNames(
 internal fun LsiWorkspace.dtoBaseContractPoetTypeNames(
     contractType: LsiDeclaredType,
     baseType: ImmutableType,
-): List<LsiTypeName> {
+): List<LsiClass> {
     val generatedTypeNames = if (baseType.kind == ImmutableTypeKind.ENTITY) {
         val tableType = baseType.generatedTableType()
         listOf(
-            generatedSiblingTypeName(
+            generatedSiblingClass(
                 sourceTypeId = baseType.id,
                 generatedTypeId = tableType.declarationId,
                 simpleNameSuffix = "Table",

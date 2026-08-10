@@ -16,14 +16,14 @@ import site.addzero.lsi.model.LsiAnnotationValue
 import site.addzero.lsi.model.LsiSourceAnnotationArgument
 import site.addzero.lsi.model.LsiAnnotationArgumentNameStyle
 import site.addzero.lsi.model.LsiAnnotationArrayStyle
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 
 /** 将完整的多态输入根 LSI 注解转换为平台中立的源码注解。 */
 internal fun DtoType.toJacksonPolymorphicRootPoetAnnotations(
     graph: DtoGraph,
     immutableSchema: ImmutableSchema,
     annotationContract: DtoAnnotationContract,
-    generatedRootTypeName: LsiTypeName,
+    generatedRootTypeName: LsiClass,
     targetLanguage: LsiLanguage,
 ): List<LsiAnnotation> {
     targetLanguage.requireJacksonPolymorphismTargetLanguage()
@@ -31,7 +31,7 @@ internal fun DtoType.toJacksonPolymorphicRootPoetAnnotations(
         graph = graph,
         immutableSchema = immutableSchema,
         annotationContract = annotationContract,
-        generatedRootTypeId = generatedRootTypeName.typeId,
+        generatedRootTypeId = generatedRootTypeName.id,
     ).map { annotation ->
         annotation.toJacksonPolymorphismPoetAnnotation(targetLanguage)
     }
@@ -58,8 +58,8 @@ internal fun DtoPolymorphicBranch.toJacksonPolymorphicTypeNamePoetAnnotationOrNu
 
 /** 返回 Jackson 多态注解及生成分支引用需要的精确源码类型名。 */
 internal fun DtoType.jacksonPolymorphismPoetTypeNames(
-    generatedRootTypeName: LsiTypeName,
-): List<LsiTypeName> {
+    generatedRootTypeName: LsiClass,
+): List<LsiClass> {
     val generatedBranchTypeNames = polymorphism
         ?.branches
         .orEmpty()
@@ -68,7 +68,7 @@ internal fun DtoType.jacksonPolymorphismPoetTypeNames(
         JACKSON_POLYMORPHISM_POET_TYPE_NAMES +
             generatedRootTypeName +
             generatedBranchTypeNames
-        ).distinctBy(LsiTypeName::typeId)
+        ).distinctBy(LsiClass::id)
 }
 
 private fun LsiAnnotation.toJacksonPolymorphismPoetAnnotation(
@@ -149,7 +149,7 @@ private fun LsiLanguage?.jacksonPolymorphismArrayStyle(
     }
 }
 
-private fun LsiTypeName.nestedType(simpleName: String): LsiTypeName {
+private fun LsiClass.nestedType(simpleName: String): LsiClass {
     return JimmerDtoPoetTypeNames.create(packageName, simpleNames + simpleName)
 }
 

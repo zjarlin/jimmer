@@ -10,7 +10,7 @@ import site.addzero.lsi.jimmer.ImmutableSchema
 import site.addzero.lsi.jimmer.dto.DtoGraph
 import site.addzero.lsi.jimmer.dto.DtoType
 import site.addzero.lsi.type.LsiDeclaredType
-import site.addzero.lsi.model.LsiTypeName
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.poet.javapoet.LsiJavaPoetRenderer
 
 /** 将共享 DTO Serializer 模型渲染为可嵌入 APT DTO 的 JavaPoet 类型。 */
@@ -25,7 +25,7 @@ internal object AptDtoSerializerRenderer {
         generatedDtoPackageName: String,
         generatedDtoSimpleNames: List<String>,
     ): TypeSpec {
-        val generatedDtoTypeName = LsiTypeName(
+        val generatedDtoTypeName = LsiClass(
             typeId = LsiSymbolId.type(
                 listOf(generatedDtoPackageName, generatedDtoSimpleNames.joinToString("."))
                     .filter(String::isNotEmpty)
@@ -40,7 +40,7 @@ internal object AptDtoSerializerRenderer {
                 immutableSchema = immutableSchema,
                 targetLanguage = LsiLanguage.JAVA,
                 jacksonVersion = jacksonVersion,
-                dtoType = LsiDeclaredType(generatedDtoTypeName.typeId),
+                dtoType = LsiDeclaredType(generatedDtoTypeName.id),
             ),
             typeNames = jacksonVersion.serializerPoetTypeNames(generatedDtoTypeName),
         )
