@@ -21,6 +21,7 @@ dependencies {
     runtimeOnly(projects.jimmerCompilerModule)
     runtimeOnly(projects.jimmerCompilerTransactional)
     runtimeOnly(projects.jimmerCompilerTuple)
+    runtimeOnly(projects.jimmerMapstructApt)
 
     implementation(libs.kotlin.stdlib)
     implementation(libs.ksp.symbolProcessing.api)
@@ -33,6 +34,7 @@ dependencies {
     testImplementation(projects.lsiJimmer)
     testImplementation(libs.hibernate.validation)
     testImplementation(libs.jackson3.databind)
+    testImplementation(libs.mapstruct.processor)
     testImplementation(libs.ksp.symbolProcessing.aa.embeddable)
     testImplementation(libs.ksp.symbolProcessing.common.deps)
 }
