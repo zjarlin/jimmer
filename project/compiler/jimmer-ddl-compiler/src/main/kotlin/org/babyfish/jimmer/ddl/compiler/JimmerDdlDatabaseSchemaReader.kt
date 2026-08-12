@@ -6,10 +6,8 @@ import org.babyfish.jimmer.ddl.generator.model.AutoDdlSchema
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlTable
 import java.sql.Connection
 import java.sql.DatabaseMetaData
-import java.sql.DriverManager
 import java.sql.ResultSet
 import java.sql.Types
-import java.util.Properties
 
 object JimmerDdlDatabaseSchemaReader {
     fun read(
@@ -17,24 +15,8 @@ object JimmerDdlDatabaseSchemaReader {
         desiredSchema: AutoDdlSchema,
         renamedTables: Map<String, String> = emptyMap(),
     ): AutoDdlSchema {
-        val jdbc = settings.jdbc
-        val driverClassName = jdbc.driverClassName ?: JimmerDatabaseType.driverClassName(jdbc.url)
-        if (!driverClassName.isNullOrBlank()) {
-            Class.forName(driverClassName)
-        }
-
-        val properties = Properties().apply {
-            if (jdbc.username.isNotBlank()) {
-                setProperty("user", jdbc.username)
-            }
-            if (jdbc.password.isNotBlank()) {
-                setProperty("password", jdbc.password)
-            }
-            setProperty("connectTimeout", "5")
-            setProperty("loginTimeout", "5")
-        }
-        DriverManager.getConnection(jdbc.url, properties).use { connection ->
-            val schemaName = jdbc.schema ?: runCatching { connection.schema }.getOrNull()
+        settings.openJdbcConnection().use { connection ->
+            val schemaName = settings.jdbc.schema ?: runCatching { connection.schema }.getOrNull()
             return readSchema(connection, schemaName, desiredSchema, renamedTables)
         }
     }
@@ -70,42 +52,40 @@ object JimmerDdlDatabaseSchemaReader {
             while (resultSet.next()) {
                 val columnName = resultSet.getString("COLUMN_NAME") ?: continue
                 val jdbcType = resultSet.getInt("DATA_TYPE")
-                val length = resultSet.getIntOrNull("COLUMN_SIZE")
-                val scale = resultSet.getIntOrNull("DECIMAL_DIGITS")
+                val nativeTypeName = resultSet.getStringOrNull("TYPE_NAME")
+                val logicalType = jdbcType.toAutoDdlLogicalType(nativeTypeName)
+                val columnSize = resultSet.getIntOrNull("COLUMN_SIZE")
+                val decimalDigits = resultSet.getIntOrNull("DECIMAL_DIGITS")
                 val nullable = resultSet.getInt("NULLABLE") == DatabaseMetaData.columnNullable
                 val desiredColumn = desiredColumns[columnName.lowercase()]
-                columns += if (desiredColumn != null) {
-                    desiredColumn.copy(
-                        columnName,
-                        jdbcType.toLogicalType(),
-                        nullable,
-                        length,
-                        desiredColumn.precision,
-                        scale,
-                        resultSet.getStringOrNull("COLUMN_DEF"),
-                        desiredColumn.comment,
-                        primaryKeys.any { key -> key.equals(columnName, ignoreCase = true) },
-                        desiredColumn.autoIncrement,
-                        desiredColumn.sequenceName,
-                        resultSet.getStringOrNull("TYPE_NAME"),
-                    )
-                } else {
-                    AutoDdlColumn(
-                        name = columnName,
-                        logicalType = jdbcType.toLogicalType(),
-                        nullable = nullable,
-                        primaryKey = primaryKeys.any { key -> key.equals(columnName, ignoreCase = true) },
-                    )
-                }
+                val actualColumn = desiredColumn ?: AutoDdlColumn(
+                    name = columnName,
+                    logicalType = logicalType,
+                )
+                columns += actualColumn.copy(
+                    name = columnName,
+                    logicalType = logicalType,
+                    nullable = nullable,
+                    length = logicalType.columnLength(columnSize),
+                    precision = logicalType.columnPrecision(columnSize),
+                    scale = logicalType.columnScale(decimalDigits),
+                    defaultValue = if (actualColumn.autoIncrement) {
+                        actualColumn.defaultValue
+                    } else {
+                        resultSet.getStringOrNull("COLUMN_DEF")
+                    },
+                    primaryKey = primaryKeys.any { key -> key.equals(columnName, ignoreCase = true) },
+                    nativeTypeHint = actualColumn.nativeTypeHint?.let { nativeTypeName },
+                )
             }
         }
         return AutoDdlTable(
             desiredTable.name,
             columns,
-            emptyList(),
-            emptyList(),
-            null,
-            null,
+            desiredTable.foreignKeys,
+            desiredTable.indexes,
+            desiredTable.comment,
+            desiredTable.junction,
         )
     }
 
@@ -158,8 +138,29 @@ object JimmerDdlDatabaseSchemaReader {
         return runCatching { getString(columnName)?.takeIf { it.isNotBlank() } }.getOrNull()
     }
 
-    private fun Int.toLogicalType(): AutoDdlLogicalType {
-        return when (this) {
+    private fun AutoDdlLogicalType.columnLength(columnSize: Int?): Int? {
+        return columnSize.takeIf { this == AutoDdlLogicalType.STRING || this == AutoDdlLogicalType.CHAR }
+    }
+
+    private fun AutoDdlLogicalType.columnPrecision(columnSize: Int?): Int? {
+        return columnSize.takeIf { this == AutoDdlLogicalType.DECIMAL || this == AutoDdlLogicalType.BIG_INTEGER }
+    }
+
+    private fun AutoDdlLogicalType.columnScale(decimalDigits: Int?): Int? {
+        return decimalDigits.takeIf { this == AutoDdlLogicalType.DECIMAL || this == AutoDdlLogicalType.BIG_INTEGER }
+    }
+}
+
+internal fun Int.toAutoDdlLogicalType(nativeTypeName: String?): AutoDdlLogicalType {
+    return when (nativeTypeName?.trim()?.lowercase()) {
+        "text" -> AutoDdlLogicalType.TEXT
+        "json", "jsonb" -> AutoDdlLogicalType.JSON
+        "uuid" -> AutoDdlLogicalType.UUID
+        "bytea" -> AutoDdlLogicalType.BINARY
+        "interval" -> AutoDdlLogicalType.DURATION
+        "timestamptz", "timestamp with time zone" -> AutoDdlLogicalType.DATETIME_TZ
+        "timestamp", "timestamp without time zone" -> AutoDdlLogicalType.DATETIME
+        else -> when (this) {
             Types.CHAR, Types.NCHAR -> AutoDdlLogicalType.CHAR
             Types.VARCHAR, Types.NVARCHAR -> AutoDdlLogicalType.STRING
             Types.LONGVARCHAR, Types.LONGNVARCHAR, Types.CLOB, Types.NCLOB -> AutoDdlLogicalType.TEXT

@@ -1,6 +1,8 @@
 package org.babyfish.jimmer.ddl.compiler
 
 import java.io.File
+import java.sql.DriverManager
+import java.sql.Types
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -40,6 +42,149 @@ class JimmerDdlCompilerTest {
                 mapOf("jimmerDdl.allowDestructiveChanges" to "true"),
             ).allowDestructiveChanges,
         )
+    }
+
+    @Test
+    fun `flyway history table is configurable globally and per profile`() {
+        assertEquals(
+            "flyway_schema_history",
+            JimmerDdlCompilerSettings.fromOptions(emptyMap()).flywayHistoryTable,
+        )
+        val profiles = JimmerDdlCompilerSettings.allFromOptions(
+            mapOf(
+                "jimmerDdl.profiles" to "default,ai",
+                "jimmerDdl.flywayHistoryTable" to "flyway_schema_history",
+                "jimmerDdl.profile.ai.flywayHistoryTable" to "flyway_schema_history_ai_rag",
+            )
+        )
+        assertEquals("flyway_schema_history", profiles[0].flywayHistoryTable)
+        assertEquals("flyway_schema_history_ai_rag", profiles[1].flywayHistoryTable)
+    }
+
+    @Test
+    fun `missing local spring profile falls back to dev datasource`() {
+        val projectDir = createTempDirectory(prefix = "jimmer-ddl-settings-test").toFile()
+        val resourceDir = projectDir.resolve("src/main/resources/config").apply(File::mkdirs)
+        resourceDir.resolve("datasource.yml").writeText(
+            """
+            spring.config.activate.on-profile: dev
+            spring:
+              datasource:
+                dynamic:
+                  primary: master
+                  datasource:
+                    master:
+                      url: jdbc:postgresql://localhost:5432/example
+                      username: postgres
+                      password: secret
+            """.trimIndent()
+        )
+
+        val settings = JimmerDdlCompilerSettings.fromOptions(
+            mapOf(
+                "jimmerDdl.outputDir" to projectDir.resolve(
+                    "build/generated/jimmer-ddl/main/resources/db/migration"
+                ).absolutePath,
+                "jimmerDdl.springProfile" to "local",
+            )
+        )
+
+        assertEquals("jdbc:postgresql://localhost:5432/example", settings.jdbc.url)
+        assertEquals("postgres", settings.jdbc.username)
+        assertEquals("secret", settings.jdbc.password)
+        assertEquals(JimmerDatabaseType.POSTGRESQL, settings.databaseType)
+    }
+
+    @Test
+    fun `compare database without jdbc url skips ddl generation`() {
+        val result = compile(
+            workspace = bookWorkspace(),
+            settings = settings().copy(compareDatabase = true, jdbc = JimmerDdlJdbcSettings()),
+        )
+
+        assertTrue(result.warnings.any { warning -> "no JDBC URL" in warning })
+        assertTrue(result.sql.isBlank())
+    }
+
+    @Test
+    fun `database comparison failure skips ddl generation`() {
+        val result = compile(
+            workspace = bookWorkspace(),
+            settings = settings().copy(
+                compareDatabase = true,
+                jdbc = JimmerDdlJdbcSettings(url = "jdbc:unsupported://localhost/example"),
+            ),
+        )
+
+        assertTrue(result.warnings.any { warning -> "comparison failed" in warning && "skipped" in warning })
+        assertTrue(result.sql.isBlank())
+    }
+
+    @Test
+    fun `postgresql native type names override generic jdbc type codes`() {
+        assertEquals(AutoDdlLogicalType.TEXT, Types.VARCHAR.toAutoDdlLogicalType("text"))
+        assertEquals(AutoDdlLogicalType.STRING, Types.VARCHAR.toAutoDdlLogicalType("varchar"))
+        assertEquals(AutoDdlLogicalType.JSON, Types.OTHER.toAutoDdlLogicalType("jsonb"))
+        assertEquals(AutoDdlLogicalType.UUID, Types.OTHER.toAutoDdlLogicalType("uuid"))
+    }
+
+    @Test
+    fun `database reader keeps actual columns missing from desired schema`() {
+        val jdbcUrl = "jdbc:h2:mem:jimmer_ddl_reader;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1"
+        DriverManager.getConnection(jdbcUrl, "sa", "").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("CREATE TABLE book (id BIGINT PRIMARY KEY, legacy_name VARCHAR(255))")
+            }
+        }
+        val desiredSchema = AutoDdlSchema(
+            tables = listOf(
+                AutoDdlTable(
+                    name = "book",
+                    columns = listOf(
+                        AutoDdlColumn("id", AutoDdlLogicalType.INT64, nullable = false, primaryKey = true)
+                    ),
+                )
+            )
+        )
+
+        val actualSchema = JimmerDdlDatabaseSchemaReader.read(
+            settings = JimmerDdlCompilerSettings(
+                databaseType = JimmerDatabaseType.H2,
+                jdbc = JimmerDdlJdbcSettings(url = jdbcUrl, username = "sa"),
+            ),
+            desiredSchema = desiredSchema,
+        )
+
+        assertTrue(actualSchema.tables.single().columns.any { column -> column.name == "legacy_name" })
+    }
+
+    @Test
+    fun `flyway history reader returns only successful scripts from configured table`() {
+        val jdbcUrl = "jdbc:h2:mem:jimmer_ddl_flyway_history;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1"
+        DriverManager.getConnection(jdbcUrl, "sa", "").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute(
+                    "CREATE TABLE flyway_schema_history_iot_management " +
+                        "(script VARCHAR(255) NOT NULL, success BOOLEAN NOT NULL)"
+                )
+                statement.execute(
+                    "INSERT INTO flyway_schema_history_iot_management(script, success) VALUES " +
+                        "('V1__applied.sql', TRUE), ('V2__failed.sql', FALSE)"
+                )
+            }
+        }
+
+        val history = JimmerDdlFlywayHistoryReader.read(
+            JimmerDdlCompilerSettings(
+                databaseType = JimmerDatabaseType.H2,
+                compareDatabase = true,
+                flywayHistoryTable = "flyway_schema_history_iot_management",
+                jdbc = JimmerDdlJdbcSettings(url = jdbcUrl, username = "sa"),
+            )
+        )
+
+        assertTrue(history.available)
+        assertEquals(setOf("V1__applied.sql"), history.appliedScripts)
     }
 
     @Test
@@ -350,6 +495,163 @@ class JimmerDdlCompilerTest {
         assertFalse("CREATE TABLE IF NOT EXISTS \"customers\"" in result.sql)
     }
 
+    @Test
+    fun `association inputNotNull produces nonnull foreign key column`() {
+        val nodeId = LsiSymbolId.type("demo.BaseNode")
+        val relationId = LsiSymbolId.type("demo.BaseNodeRelation")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.BaseNode",
+                    annotations = listOf(entity(), table("iot_base_node")),
+                    memberIds = listOf(LsiSymbolId.property(nodeId, "id")),
+                ),
+                property(nodeId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(id())),
+                type(
+                    qualifiedName = "demo.BaseNodeRelation",
+                    annotations = listOf(entity(), table("iot_base_node_relation")),
+                    memberIds = listOf(
+                        LsiSymbolId.property(relationId, "id"),
+                        LsiSymbolId.property(relationId, "fromNode"),
+                    ),
+                ),
+                property(relationId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(id())),
+                property(
+                    ownerId = relationId,
+                    name = "fromNode",
+                    type = LsiDeclaredType(nodeId, nullability = LsiNullability.NULLABLE),
+                    annotations = listOf(manyToOne(inputNotNull = true), joinColumn("from_node_id")),
+                ),
+            )
+        )
+
+        val result = compile(workspace)
+
+        assertEquals(false, result.schema.table("iot_base_node_relation")?.column("from_node_id")?.nullable)
+        assertContains(result.sql, "\"from_node_id\" BIGINT NOT NULL")
+    }
+
+    @Test
+    fun `join table annotation controls names filter and composite primary key`() {
+        val noticeId = LsiSymbolId.type("demo.Notice")
+        val deptId = LsiSymbolId.type("demo.Dept")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.Notice",
+                    annotations = listOf(entity(), table("system_notice")),
+                    memberIds = listOf(
+                        LsiSymbolId.property(noticeId, "id"),
+                        LsiSymbolId.property(noticeId, "depts"),
+                    ),
+                ),
+                property(noticeId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(id())),
+                property(
+                    ownerId = noticeId,
+                    name = "depts",
+                    type = LsiDeclaredType(
+                        declarationId = LsiSymbolId.type("kotlin.collections.List"),
+                        arguments = listOf(LsiTypeArgument.invariant(LsiDeclaredType(deptId))),
+                    ),
+                    annotations = listOf(
+                        manyToMany(),
+                        joinTable(
+                            name = "biz_mapping",
+                            joinColumnName = "from_id",
+                            inverseJoinColumnName = "to_id",
+                            filterColumnName = "mapping_type",
+                        ),
+                    ),
+                ),
+                type(
+                    qualifiedName = "demo.Dept",
+                    annotations = listOf(entity(), table("system_dept")),
+                    memberIds = listOf(LsiSymbolId.property(deptId, "id")),
+                ),
+                property(deptId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(id())),
+            )
+        )
+
+        val result = compile(workspace)
+
+        assertContains(result.sql, "CREATE TABLE IF NOT EXISTS \"biz_mapping\"")
+        assertContains(result.sql, "\"mapping_type\" TEXT NOT NULL")
+        assertContains(result.sql, "PRIMARY KEY (\"from_id\", \"to_id\", \"mapping_type\")")
+    }
+
+    @Test
+    fun `ordinal enum property uses integer storage`() {
+        val enumId = LsiSymbolId.type("demo.EnumKnowledgeType")
+        val documentId = LsiSymbolId.type("demo.KnowledgeDocument")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.EnumKnowledgeType",
+                    annotations = listOf(enumType("ORDINAL")),
+                    kind = LsiTypeDeclarationKind.ENUM,
+                ),
+                type(
+                    qualifiedName = "demo.KnowledgeDocument",
+                    annotations = listOf(entity()),
+                    memberIds = listOf(
+                        LsiSymbolId.property(documentId, "id"),
+                        LsiSymbolId.property(documentId, "knowledgeType"),
+                    ),
+                ),
+                property(documentId, "id", LsiPrimitiveType(LsiPrimitiveKind.LONG), listOf(id())),
+                property(documentId, "knowledgeType", LsiDeclaredType(enumId)),
+            )
+        )
+
+        val result = compile(workspace)
+
+        assertContains(result.sql, "\"knowledge_type\" INTEGER NOT NULL")
+    }
+
+    @Test
+    fun `nested embeddable applies prop override and parent nullability`() {
+        val coordinatesId = LsiSymbolId.type("demo.Coordinates")
+        val locationId = LsiSymbolId.type("demo.Location")
+        val siteId = LsiSymbolId.type("demo.Site")
+        val workspace = LsiWorkspace(
+            declarations = listOf(
+                type(
+                    qualifiedName = "demo.Coordinates",
+                    annotations = listOf(embeddable()),
+                    memberIds = listOf(LsiSymbolId.property(coordinatesId, "latitude")),
+                ),
+                property(coordinatesId, "latitude", stringType(), listOf(column("latitude_value"))),
+                type(
+                    qualifiedName = "demo.Location",
+                    annotations = listOf(embeddable()),
+                    memberIds = listOf(LsiSymbolId.property(locationId, "coordinates")),
+                ),
+                property(
+                    ownerId = locationId,
+                    name = "coordinates",
+                    type = LsiDeclaredType(coordinatesId, nullability = LsiNullability.NULLABLE),
+                ),
+                type(
+                    qualifiedName = "demo.Site",
+                    annotations = listOf(entity()),
+                    memberIds = listOf(LsiSymbolId.property(siteId, "location")),
+                ),
+                property(
+                    ownerId = siteId,
+                    name = "location",
+                    type = LsiDeclaredType(locationId),
+                    annotations = listOf(propOverride("coordinates.latitude", "site_latitude")),
+                ),
+            )
+        )
+
+        val result = compile(workspace)
+        val columns = result.schema.table("site")?.columns.orEmpty()
+
+        assertEquals(listOf("site_latitude"), columns.map(AutoDdlColumn::name))
+        assertEquals(true, columns.single().nullable)
+    }
+
     private fun compile(
         workspace: LsiWorkspace,
         settings: JimmerDdlCompilerSettings = settings(),
@@ -425,12 +727,13 @@ class JimmerDdlCompilerTest {
         annotations: List<LsiAnnotation> = emptyList(),
         superTypes: List<LsiType> = emptyList(),
         memberIds: List<LsiSymbolId> = emptyList(),
+        kind: LsiTypeDeclarationKind = LsiTypeDeclarationKind.INTERFACE,
     ): LsiClass {
         return LsiClass(
             id = LsiSymbolId.type(qualifiedName),
             name = qualifiedName.substringAfterLast('.'),
             qualifiedName = qualifiedName,
-            kind = LsiTypeDeclarationKind.INTERFACE,
+            kind = kind,
             superTypes = superTypes,
             memberIds = memberIds,
             annotations = annotations,
@@ -487,7 +790,57 @@ class JimmerDdlCompilerTest {
 
     private fun manyToMany(): LsiAnnotation = annotation("org.babyfish.jimmer.sql.ManyToMany")
 
-    private fun manyToOne(): LsiAnnotation = annotation("org.babyfish.jimmer.sql.ManyToOne")
+    private fun manyToOne(inputNotNull: Boolean = false): LsiAnnotation {
+        return annotation(
+            qualifiedName = "org.babyfish.jimmer.sql.ManyToOne",
+            arguments = mapOf("inputNotNull" to LsiAnnotationValue.BooleanValue(inputNotNull)),
+        )
+    }
+
+    private fun joinTable(
+        name: String,
+        joinColumnName: String,
+        inverseJoinColumnName: String,
+        filterColumnName: String,
+    ): LsiAnnotation {
+        val filter = annotation(
+            qualifiedName = "org.babyfish.jimmer.sql.JoinTable.JoinTableFilter",
+            arguments = mapOf("columnName" to LsiAnnotationValue.StringValue(filterColumnName)),
+        )
+        return annotation(
+            qualifiedName = "org.babyfish.jimmer.sql.JoinTable",
+            arguments = mapOf(
+                "name" to LsiAnnotationValue.StringValue(name),
+                "joinColumnName" to LsiAnnotationValue.StringValue(joinColumnName),
+                "inverseJoinColumnName" to LsiAnnotationValue.StringValue(inverseJoinColumnName),
+                "filter" to LsiAnnotationValue.NestedAnnotationValue(filter),
+            ),
+        )
+    }
+
+    private fun enumType(strategy: String): LsiAnnotation {
+        return annotation(
+            qualifiedName = "org.babyfish.jimmer.sql.EnumType",
+            arguments = mapOf(
+                "value" to LsiAnnotationValue.EnumValue(
+                    enumType = LsiSymbolId.type("org.babyfish.jimmer.sql.EnumType.Strategy"),
+                    entryName = strategy,
+                )
+            ),
+        )
+    }
+
+    private fun embeddable(): LsiAnnotation = annotation("org.babyfish.jimmer.sql.Embeddable")
+
+    private fun propOverride(prop: String, columnName: String): LsiAnnotation {
+        return annotation(
+            qualifiedName = "org.babyfish.jimmer.sql.PropOverride",
+            arguments = mapOf(
+                "prop" to LsiAnnotationValue.StringValue(prop),
+                "columnName" to LsiAnnotationValue.StringValue(columnName),
+            ),
+        )
+    }
 
     private fun joinColumn(name: String): LsiAnnotation {
         return annotation(

@@ -4,6 +4,7 @@ import org.babyfish.jimmer.ddl.generator.model.AutoDdlColumn
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlForeignKey
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlIndex
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlIndexType
+import org.babyfish.jimmer.ddl.generator.model.AutoDdlJunction
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlLogicalType
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlSchema
 import org.babyfish.jimmer.ddl.generator.model.AutoDdlSequence
@@ -20,6 +21,7 @@ import site.addzero.lsi.model.LsiResolvedProperty
 import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.type.LsiType
 import site.addzero.lsi.model.LsiTypeSystem
+import site.addzero.lsi.model.LsiTypeDeclarationKind
 import site.addzero.lsi.model.LsiWorkspace
 
 internal fun LsiWorkspace.jimmerEntityTypes(): List<LsiClass> {
@@ -123,6 +125,9 @@ private class JimmerDdlSchemaBuilder(
                     }
                 }
                 property.isOwningManyToMany() -> Unit
+                property.isEmbeddedProperty() -> {
+                    scalarColumns += property.toEmbeddedColumns()
+                }
                 else -> {
                     val column = property.toColumn()
                     scalarColumns += if (joinedRoot != null && property.sameDeclaration(rootIdProperty)) {
@@ -208,7 +213,7 @@ private class JimmerDdlSchemaBuilder(
             val ownerIdProperty = entity.allProperties().firstOrNull { property -> property.isIdProperty() }
                 ?: return@flatMap emptyList()
             entity.allProperties()
-                .filter { property -> property.hasAnnotation("ManyToMany") }
+                .filter { property -> property.isOwningManyToMany() }
                 .mapNotNull { property ->
                     val targetId = property.collectionElementDeclarationId() ?: return@mapNotNull null
                     val targetType = relationTargetById[targetId] ?: return@mapNotNull null
@@ -216,21 +221,49 @@ private class JimmerDdlSchemaBuilder(
                         ?: return@mapNotNull null
                     val ownerToken = entity.name.toJimmerSnakeCase()
                     val targetToken = targetType.name.toJimmerSnakeCase()
-                    val leftColumnName = "${ownerToken}_id"
-                    val rightColumnName = "${targetToken}_id"
+                    val joinTable = property.annotations.annotation("JoinTable")
+                    val leftColumnName = joinTable?.stringValue("joinColumnName")
+                        ?.takeIf(String::isNotBlank)
+                        ?: "${ownerToken}_id"
+                    val rightColumnName = joinTable?.stringValue("inverseJoinColumnName")
+                        ?.takeIf(String::isNotBlank)
+                        ?: "${targetToken}_id"
+                    val filterColumn = joinTable?.nestedAnnotation("filter")
+                        ?.stringValue("columnName")
+                        ?.takeIf { columnName ->
+                            columnName.isNotBlank() && columnName != "<illegal-column-name>"
+                        }
+                        ?.let { columnName ->
+                            AutoDdlColumn(
+                                name = columnName,
+                                logicalType = AutoDdlLogicalType.TEXT,
+                                nullable = false,
+                                primaryKey = true,
+                            )
+                        }
                     AutoDdlTable(
-                        name = "${ownerToken}_${property.declaration.name.toJimmerSnakeCase()}_mapping",
+                        name = joinTable?.stringValue("name")
+                            ?.takeIf(String::isNotBlank)
+                            ?: "${ownerToken}_${property.declaration.name.toJimmerSnakeCase()}_mapping",
                         columns = listOf(
                             AutoDdlColumn(
                                 name = leftColumnName,
                                 logicalType = ownerIdProperty.toLogicalType(),
                                 nullable = false,
+                                primaryKey = true,
                             ),
                             AutoDdlColumn(
                                 name = rightColumnName,
                                 logicalType = targetIdProperty.toLogicalType(),
                                 nullable = false,
+                                primaryKey = true,
                             ),
+                        ) + listOfNotNull(filterColumn),
+                        junction = AutoDdlJunction(
+                            leftTableName = entity.jimmerTableName(),
+                            rightTableName = targetType.jimmerTableName(),
+                            leftColumnName = leftColumnName,
+                            rightColumnName = rightColumnName,
                         ),
                     )
                 }
@@ -298,6 +331,44 @@ private class JimmerDdlSchemaBuilder(
         )
     }
 
+    private fun LsiResolvedProperty.toEmbeddedColumns(
+        path: String = "",
+        parentNullable: Boolean = false,
+        inheritedOverrides: Map<String, String> = emptyMap(),
+        visitedTypeIds: Set<LsiSymbolId> = emptySet(),
+    ): List<AutoDdlColumn> {
+        val embeddedType = embeddedType() ?: return listOf(toColumn())
+        if (embeddedType.id in visitedTypeIds) {
+            return emptyList()
+        }
+        val currentPath = path.takeIf(String::isNotBlank)
+        val overrides = inheritedOverrides + propOverrides().mapKeys { (relativePath, _) ->
+            listOfNotNull(currentPath, relativePath).joinToString(".")
+        }
+        val nullable = parentNullable || isNullable()
+        return embeddedType.allProperties().flatMap { property ->
+            if (property.shouldSkipProperty()) {
+                return@flatMap emptyList()
+            }
+            val propertyPath = listOfNotNull(currentPath, property.declaration.name).joinToString(".")
+            if (property.isEmbeddedProperty()) {
+                property.toEmbeddedColumns(
+                    path = propertyPath,
+                    parentNullable = nullable,
+                    inheritedOverrides = overrides,
+                    visitedTypeIds = visitedTypeIds + embeddedType.id,
+                )
+            } else {
+                listOf(
+                    property.toColumn().copy(
+                        name = overrides[propertyPath] ?: property.columnName(),
+                        nullable = nullable || property.isNullable(),
+                    )
+                )
+            }
+        }
+    }
+
     private fun LsiResolvedProperty.toLogicalType(): AutoDdlLogicalType {
         if (isJsonType()) {
             return AutoDdlLogicalType.JSON
@@ -311,7 +382,21 @@ private class JimmerDdlSchemaBuilder(
                     AutoDdlLogicalType.UNKNOWN
                 }
             }
-            is LsiDeclaredType -> propertyType.declarationId.typeQualifiedName().toLogicalType(isTextType())
+            is LsiDeclaredType -> {
+                val declaration = workspace[propertyType.declarationId] as? LsiClass
+                if (declaration?.kind == LsiTypeDeclarationKind.ENUM) {
+                    if (declaration.annotations.annotation("EnumType")
+                            ?.stringValue("value")
+                            ?.equals("ORDINAL", ignoreCase = true) == true
+                    ) {
+                        AutoDdlLogicalType.INT32
+                    } else {
+                        AutoDdlLogicalType.STRING
+                    }
+                } else {
+                    propertyType.declarationId.typeQualifiedName().toLogicalType(isTextType())
+                }
+            }
             else -> AutoDdlLogicalType.UNKNOWN
         }
     }
@@ -351,6 +436,11 @@ private class JimmerDdlSchemaBuilder(
     }
 
     private fun LsiResolvedProperty.isNullable(): Boolean {
+        if (annotationValue("ManyToOne", "inputNotNull")?.toBooleanStrictOrNull() == true ||
+            annotationValue("OneToOne", "inputNotNull")?.toBooleanStrictOrNull() == true
+        ) {
+            return false
+        }
         if (type is LsiPrimitiveType) {
             return false
         }
@@ -371,6 +461,33 @@ private class JimmerDdlSchemaBuilder(
 
     private fun LsiResolvedProperty.isOwningManyToMany(): Boolean {
         return hasAnnotation("ManyToMany") && annotationValue("ManyToMany", "mappedBy").isNullOrBlank()
+    }
+
+    private fun LsiResolvedProperty.isEmbeddedProperty(): Boolean {
+        return embeddedType() != null
+    }
+
+    private fun LsiResolvedProperty.embeddedType(): LsiClass? {
+        val declarationId = (type as? LsiDeclaredType)?.declarationId ?: return null
+        return (workspace[declarationId] as? LsiClass)?.takeIf { declaration ->
+            declaration.annotations.annotation("Embeddable") != null
+        }
+    }
+
+    private fun LsiResolvedProperty.propOverrides(): Map<String, String> {
+        return annotations.flatMap { annotation ->
+            when (annotation.simpleName()) {
+                "PropOverride" -> listOf(annotation)
+                "PropOverrides" -> annotation.nestedAnnotations("value")
+                else -> emptyList()
+            }
+        }.mapNotNull { annotation ->
+            val prop = annotation.stringValue("prop")?.takeIf(String::isNotBlank)
+                ?: return@mapNotNull null
+            val columnName = annotation.stringValue("columnName")?.takeIf(String::isNotBlank)
+                ?: return@mapNotNull null
+            prop to columnName
+        }.toMap()
     }
 
     private fun LsiResolvedProperty.isFakeForeignKey(): Boolean {
@@ -518,6 +635,20 @@ private fun LsiAnnotation.simpleName(): String {
 
 private fun LsiAnnotation.stringValue(name: String): String? {
     return arguments[name]?.value?.asText()
+}
+
+private fun LsiAnnotation.nestedAnnotation(name: String): LsiAnnotation? {
+    return (arguments[name]?.value as? LsiAnnotationValue.NestedAnnotationValue)?.annotation
+}
+
+private fun LsiAnnotation.nestedAnnotations(name: String): List<LsiAnnotation> {
+    return when (val value = arguments[name]?.value) {
+        is LsiAnnotationValue.NestedAnnotationValue -> listOf(value.annotation)
+        is LsiAnnotationValue.ArrayValue -> value.elements.mapNotNull { element ->
+            (element as? LsiAnnotationValue.NestedAnnotationValue)?.annotation
+        }
+        else -> emptyList()
+    }
 }
 
 private fun LsiAnnotationValue.asText(): String? {

@@ -6,6 +6,7 @@ object JimmerDdlCompilerFiles {
     private const val SNAPSHOT_DIR_NAME = ".jimmer-ddl"
     private const val SNAPSHOT_DIRECTORY_NAME = "entity-table-snapshot"
     private const val SOURCE_FINGERPRINT_FILE_NAME = "source-fingerprint.properties"
+    private const val FLYWAY_HISTORY_FILE_NAME = "applied-flyway-scripts.txt"
 
     fun resolveOutputFile(settings: JimmerDdlCompilerSettings): File {
         val outputDir = File(settings.outputDir)
@@ -35,6 +36,22 @@ object JimmerDdlCompilerFiles {
         outputFile.parentFile.mkdirs()
         outputFile.writeText(sql)
         return outputFile
+    }
+
+    fun writeGeneratedFlywayHistory(
+        settings: JimmerDdlCompilerSettings,
+        history: JimmerDdlFlywayHistory,
+    ): File {
+        val historyFile = settings.outputDir.toGeneratedResourcesDir()
+            .resolve(SNAPSHOT_DIR_NAME)
+            .resolve(FLYWAY_HISTORY_FILE_NAME)
+        val content = buildList {
+            add("available=${history.available}")
+            addAll(history.appliedScripts.sorted())
+        }.joinToString(separator = "\n", postfix = "\n")
+        historyFile.parentFile.mkdirs()
+        historyFile.writeText(content)
+        return historyFile
     }
 
     private fun String.toProjectDir(): File? {

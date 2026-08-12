@@ -36,11 +36,44 @@ class JimmerDdlCompilerFrontendParityTest {
         }
     }
 
-    private fun compileApt(): DdlOutput {
-        val projectDir = createTempDirectory(prefix = "jimmer-ddl-apt-parity").toFile()
-        val sourceFile = projectDir.resolve("src/main/java/demo/Book.java").also { file ->
+    @Test
+    fun `apt and ksp preserve advanced ddl annotation semantics`() {
+        val apt = compileApt(
+            sourceName = "AdvancedBook.java",
+            source = JAVA_ADVANCED_SOURCE,
+            tempPrefix = "jimmer-ddl-apt-advanced",
+        )
+        val ksp = compileKsp(
+            sources = linkedMapOf(
+                "KnowledgeType.kt" to KOTLIN_ADVANCED_ENUM_SOURCE,
+                "Coordinates.kt" to KOTLIN_ADVANCED_COORDINATES_SOURCE,
+                "Location.kt" to KOTLIN_ADVANCED_LOCATION_SOURCE,
+                "AdvancedBook.kt" to KOTLIN_ADVANCED_ENTITY_SOURCE,
+            ),
+            tempPrefix = "jimmer-ddl-ksp-advanced",
+        )
+
+        assertContains(apt.sqlText, "\"knowledge_type\" INTEGER NOT NULL")
+        assertContains(apt.sqlText, "\"site_latitude\" VARCHAR(255)")
+        assertContains(apt.sqlText, "\"parent_id\" BIGINT NOT NULL")
+        assertContains(apt.sqlText, "\"mapping_type\" TEXT NOT NULL")
+        assertContains(apt.sqlText, "PRIMARY KEY (\"from_id\", \"to_id\", \"mapping_type\")")
+        assertContentEquals(apt.sqlBytes, ksp.sqlBytes)
+        assertEquals(apt.snapshotBytes.keys, ksp.snapshotBytes.keys)
+        apt.snapshotBytes.forEach { (name, bytes) ->
+            assertContentEquals(bytes, ksp.snapshotBytes.getValue(name), name)
+        }
+    }
+
+    private fun compileApt(
+        sourceName: String = "Book.java",
+        source: String = JAVA_SOURCE,
+        tempPrefix: String = "jimmer-ddl-apt-parity",
+    ): DdlOutput {
+        val projectDir = createTempDirectory(prefix = tempPrefix).toFile()
+        val sourceFile = projectDir.resolve("src/main/java/demo/$sourceName").also { file ->
             file.parentFile.mkdirs()
-            file.writeText(JAVA_SOURCE)
+            file.writeText(source)
         }
         val classesDir = projectDir.resolve("build/classes").apply(File::mkdirs)
         val outputDir = projectDir.ddlOutputDir()
@@ -66,18 +99,20 @@ class JimmerDdlCompilerFrontendParityTest {
         return outputDir.readDdlOutput(projectDir)
     }
 
-    private fun compileKsp(): DdlOutput {
-        val projectDir = createTempDirectory(prefix = "jimmer-ddl-ksp-parity").toFile()
-        val sourceFiles = listOf(
-            projectDir.resolve("src/main/kotlin/demo/BookBase.kt").also { file ->
+    private fun compileKsp(
+        sources: Map<String, String> = linkedMapOf(
+            "BookBase.kt" to KOTLIN_BASE_SOURCE,
+            "Book.kt" to KOTLIN_ENTITY_SOURCE,
+        ),
+        tempPrefix: String = "jimmer-ddl-ksp-parity",
+    ): DdlOutput {
+        val projectDir = createTempDirectory(prefix = tempPrefix).toFile()
+        val sourceFiles = sources.map { (name, source) ->
+            projectDir.resolve("src/main/kotlin/demo/$name").also { file ->
                 file.parentFile.mkdirs()
-                file.writeText(KOTLIN_BASE_SOURCE)
-            },
-            projectDir.resolve("src/main/kotlin/demo/Book.kt").also { file ->
-                file.parentFile.mkdirs()
-                file.writeText(KOTLIN_ENTITY_SOURCE)
-            },
-        )
+                file.writeText(source)
+            }
+        }
         val outputDir = projectDir.ddlOutputDir()
         val kspOutputDir = projectDir.resolve("build/ksp").apply(File::mkdirs)
         val logger = CapturingKspLogger()
@@ -227,6 +262,136 @@ class JimmerDdlCompilerFrontendParityTest {
 
                 @Column(name = "title")
                 val title: String
+            }
+        """.trimIndent()
+
+        val JAVA_ADVANCED_SOURCE = """
+            package demo;
+
+            import java.util.List;
+            import org.babyfish.jimmer.sql.Column;
+            import org.babyfish.jimmer.sql.Embeddable;
+            import org.babyfish.jimmer.sql.Entity;
+            import org.babyfish.jimmer.sql.EnumType;
+            import org.babyfish.jimmer.sql.Id;
+            import org.babyfish.jimmer.sql.JoinColumn;
+            import org.babyfish.jimmer.sql.JoinTable;
+            import org.babyfish.jimmer.sql.ManyToMany;
+            import org.babyfish.jimmer.sql.ManyToOne;
+            import org.babyfish.jimmer.sql.PropOverride;
+            import org.babyfish.jimmer.sql.Table;
+            import org.jetbrains.annotations.Nullable;
+
+            @EnumType(EnumType.Strategy.ORDINAL)
+            enum KnowledgeType { BOOK }
+
+            @Embeddable
+            interface Coordinates {
+                @Column(name = "latitude_value")
+                String latitude();
+            }
+
+            @Embeddable
+            interface Location {
+                @Nullable
+                Coordinates coordinates();
+            }
+
+            @Entity
+            @Table(name = "advanced_book")
+            public interface AdvancedBook {
+                @Id
+                long id();
+
+                KnowledgeType knowledgeType();
+
+                @PropOverride(prop = "coordinates.latitude", columnName = "site_latitude")
+                Location location();
+
+                @ManyToOne(inputNotNull = true)
+                @JoinColumn(name = "parent_id")
+                @Nullable
+                AdvancedBook parent();
+
+                @ManyToMany
+                @JoinTable(
+                    name = "advanced_book_mapping",
+                    joinColumnName = "from_id",
+                    inverseJoinColumnName = "to_id",
+                    filter = @JoinTable.JoinTableFilter(columnName = "mapping_type", values = "PEER")
+                )
+                List<AdvancedBook> peers();
+            }
+        """.trimIndent()
+
+        val KOTLIN_ADVANCED_ENUM_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.EnumType
+
+            @EnumType(EnumType.Strategy.ORDINAL)
+            enum class KnowledgeType { BOOK }
+        """.trimIndent()
+
+        val KOTLIN_ADVANCED_COORDINATES_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Column
+            import org.babyfish.jimmer.sql.Embeddable
+
+            @Embeddable
+            interface Coordinates {
+                @Column(name = "latitude_value")
+                val latitude: String
+            }
+        """.trimIndent()
+
+        val KOTLIN_ADVANCED_LOCATION_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Embeddable
+
+            @Embeddable
+            interface Location {
+                val coordinates: Coordinates?
+            }
+        """.trimIndent()
+
+        val KOTLIN_ADVANCED_ENTITY_SOURCE = """
+            package demo
+
+            import org.babyfish.jimmer.sql.Entity
+            import org.babyfish.jimmer.sql.Id
+            import org.babyfish.jimmer.sql.JoinColumn
+            import org.babyfish.jimmer.sql.JoinTable
+            import org.babyfish.jimmer.sql.ManyToMany
+            import org.babyfish.jimmer.sql.ManyToOne
+            import org.babyfish.jimmer.sql.PropOverride
+            import org.babyfish.jimmer.sql.Table
+
+            @Entity
+            @Table(name = "advanced_book")
+            interface AdvancedBook {
+                @Id
+                val id: Long
+
+                val knowledgeType: KnowledgeType
+
+                @PropOverride(prop = "coordinates.latitude", columnName = "site_latitude")
+                val location: Location
+
+                @ManyToOne(inputNotNull = true)
+                @JoinColumn(name = "parent_id")
+                val parent: AdvancedBook?
+
+                @ManyToMany
+                @JoinTable(
+                    name = "advanced_book_mapping",
+                    joinColumnName = "from_id",
+                    inverseJoinColumnName = "to_id",
+                    filter = JoinTable.JoinTableFilter(columnName = "mapping_type", values = ["PEER"]),
+                )
+                val peers: List<AdvancedBook>
             }
         """.trimIndent()
 

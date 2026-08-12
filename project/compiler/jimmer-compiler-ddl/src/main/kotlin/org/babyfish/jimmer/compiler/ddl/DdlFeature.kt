@@ -15,6 +15,7 @@ import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerFiles
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerResult
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlCompilerSettings
 import org.babyfish.jimmer.ddl.compiler.JimmerDdlEntityTableSnapshot
+import org.babyfish.jimmer.ddl.compiler.JimmerDdlFlywayHistoryReader
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.diagnostic.LsiDiagnostic
 import site.addzero.lsi.diagnostic.LsiDiagnosticSeverity
@@ -37,6 +38,7 @@ class DdlFeature : CompilerFeature<DdlCollectionState, DdlFeatureState> {
             "jimmerDdl.jdbcPassword",
             "jimmerDdl.jdbcSchema",
             "jimmerDdl.jdbcDriver",
+            "jimmerDdl.flywayHistoryTable",
             "jimmerDdl.springResourcePath",
             "jimmerDdl.springProfile",
             "jimmerDdl.outputFormat",
@@ -235,6 +237,10 @@ private object JimmerDdlFileRenderer {
                     settings = result.settings,
                 )
                 if (!result.isEmpty) {
+                    JimmerDdlCompilerFiles.writeGeneratedFlywayHistory(
+                        settings = result.settings,
+                        history = JimmerDdlFlywayHistoryReader.read(result.settings),
+                    )
                     val outputFile = JimmerDdlCompilerFiles.writeOutputFile(result.settings, result.sql)
                     add(
                         LsiDiagnostic(

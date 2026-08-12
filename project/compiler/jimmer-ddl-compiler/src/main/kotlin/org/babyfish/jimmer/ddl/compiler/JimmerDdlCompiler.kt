@@ -94,28 +94,51 @@ object JimmerDdlCompiler {
             .takeIf { settings.allowDestructiveChanges }
             .orEmpty()
         val effectiveChangePlan = changePlan.copy(renameOperations = renameOperations)
-        val operationPlan = if (settings.compareDatabase && settings.jdbc.url.isNotBlank()) {
-            generateComparedOperations(
-                schema = schema,
-                settings = settings,
-                renamedTables = renameOperations.associate { operation ->
-                    operation.newTableName.lowercase() to operation.oldTableName
-                },
-            )
-        } else {
-            buildOfflineIncrementalOperationPlan(
-                schema = schema,
-                changePlan = effectiveChangePlan,
-                settings = settings,
-            )
+        val operationPlan = when {
+            settings.compareDatabase && settings.jdbc.configured -> {
+                generateComparedOperations(
+                    schema = schema,
+                    settings = settings,
+                    renamedTables = renameOperations.associate { operation ->
+                        operation.newTableName.lowercase() to operation.oldTableName
+                    },
+                )
+            }
+            settings.compareDatabase -> {
+                JimmerDdlOperationPlan(
+                    operations = emptyList(),
+                    generationAvailable = false,
+                    warnings = listOf(
+                        "Jimmer DDL database comparison is enabled but no JDBC URL was resolved; " +
+                            "DDL generation was skipped."
+                    ),
+                )
+            }
+            else -> {
+                buildOfflineIncrementalOperationPlan(
+                    schema = schema,
+                    changePlan = effectiveChangePlan,
+                    settings = settings,
+                )
+            }
         }
         val renamedTableNames = renameOperations.map { operation -> operation.newTableName.lowercase() }.toSet()
         val operations = operationPlan.operations.filterNot { operation ->
             operation is CreateTable && operation.table.name.lowercase() in renamedTableNames
         }
-        val statements = buildRenameTableStatements(renameOperations, settings) +
-            AutoDdlDialects.require(settings.databaseType).render(operations) +
+        val repairStatements = if (operationPlan.generationAvailable) {
             buildPostgreSqlNullabilityRepairStatements(schema, settings)
+        } else {
+            emptyList()
+        }
+        val renameStatements = if (operationPlan.generationAvailable) {
+            buildRenameTableStatements(renameOperations, settings)
+        } else {
+            emptyList()
+        }
+        val statements = renameStatements +
+            AutoDdlDialects.require(settings.databaseType).render(operations) +
+            repairStatements
         return JimmerDdlCompilePlan(
             statements = statements,
             snapshotSchema = operationPlan.snapshotSchema ?: schema,
@@ -167,8 +190,12 @@ object JimmerDdlCompiler {
             JimmerDdlOperationPlan(operations = operations)
         }.getOrElse { cause ->
             JimmerDdlOperationPlan(
-                operations = buildOfflineOperations(schema, settings),
-                warnings = listOf("Jimmer DDL database comparison failed; fallback to offline DDL generation: ${cause.message ?: cause::class.qualifiedName}"),
+                operations = emptyList(),
+                generationAvailable = false,
+                warnings = listOf(
+                    "Jimmer DDL database comparison failed; DDL generation was skipped: " +
+                        (cause.message ?: cause::class.qualifiedName)
+                ),
             )
         }
     }
@@ -425,6 +452,7 @@ data class RenameTable(
 private data class JimmerDdlOperationPlan(
     val operations: List<AutoDdlOperation>,
     val snapshotSchema: AutoDdlSchema? = null,
+    val generationAvailable: Boolean = true,
     val warnings: List<String> = emptyList(),
 )
 

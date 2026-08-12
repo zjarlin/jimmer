@@ -8,6 +8,7 @@ private const val DEFAULT_OUTPUT_DIR = "build/generated/jimmer-ddl/main/resource
 private const val DEFAULT_VERSION = "1001"
 private const val DEFAULT_DESCRIPTION = "jimmer_auto_ddl_generated"
 private const val DEFAULT_SPRING_PROFILE = "local"
+internal const val DEFAULT_FLYWAY_HISTORY_TABLE = "flyway_schema_history"
 private val DEFAULT_DATABASE_TYPE = JimmerDatabaseType.POSTGRESQL
 
 enum class JimmerDdlOutputFormat {
@@ -49,6 +50,7 @@ data class JimmerDdlCompilerSettings(
     val sourceFingerprint: String? = null,
     val jdbc: JimmerDdlJdbcSettings = JimmerDdlJdbcSettings(),
     val allowDestructiveChanges: Boolean = false,
+    val flywayHistoryTable: String = DEFAULT_FLYWAY_HISTORY_TABLE,
 ) {
     fun includesClass(qualifiedName: String?): Boolean {
         if (qualifiedName.isNullOrBlank()) {
@@ -115,6 +117,10 @@ data class JimmerDdlCompilerSettings(
                 includeManyToManyTables = options.option("jimmerDdl.includeManyToManyTables", defaultValue = "true").toBooleanStrictOrNull() ?: true,
                 compareDatabase = options.option("jimmerDdl.compareDatabase", defaultValue = "true").toBooleanStrictOrNull() ?: true,
                 allowDestructiveChanges = options.option("jimmerDdl.allowDestructiveChanges", defaultValue = "false").toBooleanStrictOrNull() ?: false,
+                flywayHistoryTable = options.option(
+                    "jimmerDdl.flywayHistoryTable",
+                    defaultValue = DEFAULT_FLYWAY_HISTORY_TABLE,
+                ),
                 nullabilityRepairOnly = options.option("jimmerDdl.nullabilityRepairOnly", defaultValue = "false").toBooleanStrictOrNull() ?: false,
                 sourceFingerprint = options.option("jimmerDdl.sourceFingerprint", defaultValue = "").takeIf { it.isNotBlank() },
                 jdbc = jdbc,
@@ -150,6 +156,11 @@ data class JimmerDdlCompilerSettings(
                 includeManyToManyTables = options.profileOption(profileName, "includeManyToManyTables", defaultValue = "true").toBooleanStrictOrNull() ?: true,
                 compareDatabase = options.profileOption(profileName, "compareDatabase", defaultValue = "true").toBooleanStrictOrNull() ?: true,
                 allowDestructiveChanges = options.profileOption(profileName, "allowDestructiveChanges", defaultValue = "false").toBooleanStrictOrNull() ?: false,
+                flywayHistoryTable = options.profileOption(
+                    profileName,
+                    "flywayHistoryTable",
+                    defaultValue = DEFAULT_FLYWAY_HISTORY_TABLE,
+                ),
                 nullabilityRepairOnly = options.profileOption(profileName, "nullabilityRepairOnly", defaultValue = "false").toBooleanStrictOrNull() ?: false,
                 sourceFingerprint = options.profileOption(profileName, "sourceFingerprint", defaultValue = "").takeIf { it.isNotBlank() }
                     ?: options.option("jimmerDdl.sourceFingerprint", defaultValue = "").takeIf { it.isNotBlank() },
@@ -259,12 +270,11 @@ data class JimmerDdlCompilerSettings(
         }
 
         private fun File.readSpringJdbcSettings(springProfile: String): JimmerDdlJdbcSettings? {
-            val props = if (extension.equals("properties", ignoreCase = true)) {
-                parsePropertiesConfig()
-            } else {
-                parseYamlConfig(readText(), springProfile)
+            if (extension.equals("properties", ignoreCase = true)) {
+                return parsePropertiesConfig().toJdbcSettings()
             }
-            return props.toJdbcSettings()
+            return parseYamlConfigCandidates(readText(), springProfile)
+                .firstNotNullOfOrNull { props -> props.toJdbcSettings() }
         }
 
         private fun File.parsePropertiesConfig(): Map<String, String> {
@@ -273,9 +283,12 @@ data class JimmerDdlCompilerSettings(
             }.entries.associate { (key, value) -> key.toString() to value.toString() }
         }
 
-        private fun parseYamlConfig(text: String, springProfile: String): Map<String, String> {
+        private fun parseYamlConfigCandidates(
+            text: String,
+            springProfile: String,
+        ): List<Map<String, String>> {
             val defaults = linkedMapOf<String, String>()
-            val profiles = linkedMapOf<String, String>()
+            val profiles = linkedMapOf<String, MutableMap<String, String>>()
             text.normalizeYamlProfileKey()
                 .split(Regex("(?m)^---\\s*$"))
                 .forEach { document ->
@@ -286,14 +299,28 @@ data class JimmerDdlCompilerSettings(
                     val profile = props["spring.config.activate.on-profile"]
                     if (profile == null) {
                         defaults.putAll(props)
-                    } else if (profile.split(',', ';').map { it.trim() }.any { it.equals(springProfile, ignoreCase = true) }) {
-                        profiles.putAll(props)
+                    } else {
+                        profile.split(',', ';')
+                            .map { value -> value.trim().lowercase() }
+                            .filter(String::isNotBlank)
+                            .forEach { profileName ->
+                                profiles.getOrPut(profileName, ::linkedMapOf).putAll(props)
+                            }
                     }
                 }
-            return linkedMapOf<String, String>().apply {
-                putAll(defaults)
-                putAll(profiles)
+            val candidateProfiles = (listOf(springProfile, "dev", "prod") + profiles.keys)
+                .map { value -> value.trim().lowercase() }
+                .filter(String::isNotBlank)
+                .distinct()
+            val candidates = candidateProfiles.mapNotNull { profileName ->
+                profiles[profileName]?.let { profileProps ->
+                    linkedMapOf<String, String>().apply {
+                        putAll(defaults)
+                        putAll(profileProps)
+                    }
+                }
             }
+            return candidates + defaults
         }
 
         private fun parseYamlDocument(document: String): Map<String, String> {
