@@ -74,26 +74,11 @@ internal fun ImmutableSchema.toEmbeddablePoetArtifacts(
                 schema = this,
                 typeSystem = typeSystem,
                 workspace = workspace,
-                propsDependencies = type.embeddableDependencies(
-                    workspace = workspace,
-                    runtimeDependencies = JAVA_PROPS_RUNTIME_DEPENDENCIES,
-                    includeExpressionHierarchy = false,
-                ),
-                expressionDependencies = type.embeddableDependencies(
-                    workspace = workspace,
-                    runtimeDependencies = JAVA_EXPRESSION_RUNTIME_DEPENDENCIES,
-                    includeExpressionHierarchy = true,
-                ),
             )
             LsiLanguage.KOTLIN -> listOf(
                 type.toKotlinPoetArtifact(
                     schema = this,
                     workspace = workspace,
-                    dependencies = type.embeddableDependencies(
-                        workspace = workspace,
-                        runtimeDependencies = KOTLIN_RUNTIME_DEPENDENCIES,
-                        includeExpressionHierarchy = false,
-                    ),
                 )
             )
             LsiLanguage.UNKNOWN -> error("Unsupported immutable embeddable Poet language")
@@ -101,11 +86,13 @@ internal fun ImmutableSchema.toEmbeddablePoetArtifacts(
     }
 }
 
-private fun ImmutableType.embeddableDependencies(
+private fun ImmutableType.embeddableArtifact(
     workspace: LsiWorkspace,
+    schema: ImmutableSchema,
+    file: LsiFile,
     runtimeDependencies: Set<LsiSymbolId>,
     includeExpressionHierarchy: Boolean,
-): EmbeddableArtifactDependencies {
+): LsiSourceArtifact {
     val symbols = buildSet {
         add(id)
         add(GENERATED_BY_ID)
@@ -137,7 +124,17 @@ private fun ImmutableType.embeddableDependencies(
         hierarchySources.filterTo(this) { source -> source.kind != LsiSourceKind.BINARY }
         addAll(originatingSources)
     }
-    return EmbeddableArtifactDependencies(
+    return LsiSourceArtifact(
+        file = file,
+        typeNames = workspace.toLsiClasses(
+            file.referencedTypeIds,
+            additional = schema.generatedEmbeddablePoetTypeNames() + EMBEDDABLE_RUNTIME_TYPE_NAMES,
+        ),
+        aggregationMode = classifyArtifactAggregationMode(
+            originatingSymbols = originatingSymbols,
+            originatingSources = originatingSources,
+            dependencySources = dependencySources,
+        ),
         originatingSymbols = originatingSymbols,
         originatingSources = originatingSources,
         dependencySymbols = symbols,
@@ -239,29 +236,31 @@ private fun ImmutableType.toJavaPoetArtifacts(
     schema: ImmutableSchema,
     typeSystem: LsiTypeSystem,
     workspace: LsiWorkspace,
-    propsDependencies: EmbeddableArtifactDependencies,
-    expressionDependencies: EmbeddableArtifactDependencies,
 ): List<LsiSourceArtifact> {
     return listOf(
-        propsDependencies.artifact(
-            workspace,
-            schema,
-            LsiFile(
+        embeddableArtifact(
+            workspace = workspace,
+            schema = schema,
+            file = LsiFile(
                 language = LsiLanguage.JAVA,
                 packageName = packageName,
                 fileName = propsSimpleName,
                 members = listOf(javaPropsType(schema)),
-            )
+            ),
+            runtimeDependencies = JAVA_PROPS_RUNTIME_DEPENDENCIES,
+            includeExpressionHierarchy = false,
         ),
-        expressionDependencies.artifact(
-            workspace,
-            schema,
-            LsiFile(
+        embeddableArtifact(
+            workspace = workspace,
+            schema = schema,
+            file = LsiFile(
                 language = LsiLanguage.JAVA,
                 packageName = packageName,
                 fileName = propExpressionSimpleName,
                 members = listOf(javaPropExpressionType(schema, typeSystem)),
-            )
+            ),
+            runtimeDependencies = JAVA_EXPRESSION_RUNTIME_DEPENDENCIES,
+            includeExpressionHierarchy = true,
         ),
     )
 }
@@ -430,13 +429,12 @@ private fun ImmutableProp.javaExpressionType(typeSystem: LsiTypeSystem): LsiType
 private fun ImmutableType.toKotlinPoetArtifact(
     schema: ImmutableSchema,
     workspace: LsiWorkspace,
-    dependencies: EmbeddableArtifactDependencies,
 ): LsiSourceArtifact {
     val sourceBaseName = workspace.immutableSourceBaseName(this)
-    return dependencies.artifact(
-        workspace,
-        schema,
-        LsiFile(
+    return embeddableArtifact(
+        workspace = workspace,
+        schema = schema,
+        file = LsiFile(
             language = LsiLanguage.KOTLIN,
             packageName = packageName,
             fileName = "${sourceBaseName}Props",
@@ -454,7 +452,9 @@ private fun ImmutableType.toKotlinPoetArtifact(
                 add(kotlinFetchByFunction(nullable = true))
                 add(kotlinPropsObject(schema))
             },
-        )
+        ),
+        runtimeDependencies = KOTLIN_RUNTIME_DEPENDENCIES,
+        includeExpressionHierarchy = false,
     )
 }
 
@@ -706,29 +706,6 @@ private val ImmutablePropValueCategory.factoryName: String
         ImmutablePropValueCategory.REFERENCE_LIST -> "referenceList"
     }
 
-private fun EmbeddableArtifactDependencies.artifact(
-    workspace: LsiWorkspace,
-    schema: ImmutableSchema,
-    file: LsiFile,
-): LsiSourceArtifact {
-    return LsiSourceArtifact(
-        file = file,
-        typeNames = workspace.toLsiClasses(
-            file.referencedTypeIds,
-            additional = schema.generatedEmbeddablePoetTypeNames() + EMBEDDABLE_RUNTIME_TYPE_NAMES,
-        ),
-        aggregationMode = classifyArtifactAggregationMode(
-            originatingSymbols = originatingSymbols,
-            originatingSources = originatingSources,
-            dependencySources = dependencySources,
-        ),
-        originatingSymbols = originatingSymbols,
-        originatingSources = originatingSources,
-        dependencySymbols = dependencySymbols,
-        dependencySources = dependencySources,
-    )
-}
-
 private fun ImmutableSchema.generatedEmbeddablePoetTypeNames(): List<LsiClass> {
     return types.flatMap { type ->
         listOf(
@@ -738,13 +715,6 @@ private fun ImmutableSchema.generatedEmbeddablePoetTypeNames(): List<LsiClass> {
         )
     }.distinctBy { typeName -> typeName.id }
 }
-
-private data class EmbeddableArtifactDependencies(
-    val originatingSymbols: Set<LsiSymbolId>,
-    val originatingSources: Set<LsiSource>,
-    val dependencySymbols: Set<LsiSymbolId>,
-    val dependencySources: Set<LsiSource>,
-)
 
 private val GENERATED_BY_ID = LsiSymbolId.type("org.babyfish.jimmer.internal.GeneratedBy")
 private val TYPED_PROP_ID = LsiSymbolId.type("org.babyfish.jimmer.meta.TypedProp")

@@ -9,6 +9,7 @@ import kotlin.test.assertTrue
 import org.babyfish.jimmer.client.meta.TypeDefinition
 import org.babyfish.jimmer.client.meta.TypeName
 import org.babyfish.jimmer.client.meta.impl.Schemas
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.client.ClientDeclaredTypeRef
 import site.addzero.lsi.jimmer.client.ClientDefinitionError
@@ -23,7 +24,6 @@ import site.addzero.lsi.jimmer.client.ClientSchema
 import site.addzero.lsi.jimmer.client.ClientService
 import site.addzero.lsi.jimmer.client.ClientTypeArgument
 import site.addzero.lsi.jimmer.client.ClientTypeDefinition
-import site.addzero.lsi.jimmer.client.ClientTypeName
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiVariance
 
@@ -86,17 +86,17 @@ class ClientResourceRendererTest {
         val service = baseSchema.services.single()
         val operation = service.operations.single()
         val bookId = LsiSymbolId.type("demo.Book")
-        val bookType = ClientTypeName("demo", listOf("Book"))
+        val bookType = clientTypeName("demo.Book")
         val fetchBy = ClientFetchBy(
             value = "BOOK_FETCHER",
             ownerTypeId = LsiSymbolId.type("demo.BookFetchers"),
-            ownerTypeName = ClientTypeName("demo", listOf("BookFetchers")),
+            ownerTypeName = clientTypeName("demo.BookFetchers"),
             targetEntityTypeId = bookId,
             documentation = "Book fetcher.",
         )
         val optionalType = ClientDeclaredTypeRef(
             typeId = LsiSymbolId.type("java.util.Optional"),
-            typeName = ClientTypeName("java.util", listOf("Optional")),
+            typeName = clientTypeName("java.util.Optional"),
             arguments = listOf(
                 ClientTypeArgument(
                     variance = LsiVariance.INVARIANT,
@@ -132,9 +132,9 @@ class ClientResourceRendererTest {
     }
 
     private fun schema(): ClientSchema {
-        val bookType = ClientTypeName("demo", listOf("Book"))
-        val categoryType = ClientTypeName("demo", listOf("Category"))
-        val exceptionType = ClientTypeName("demo", listOf("BookException"))
+        val bookType = clientTypeName("demo.Book")
+        val categoryType = clientTypeName("demo.Category")
+        val exceptionType = clientTypeName("demo.BookException")
         val serviceId = LsiSymbolId.type("demo.BookService")
         val operationId = LsiSymbolId.function(serviceId, "find", listOf("primitive:long"))
         val bookId = LsiSymbolId.type("demo.Book")
@@ -168,7 +168,7 @@ class ClientResourceRendererTest {
                                 fetchBy = ClientFetchBy(
                                     value = "BOOK_FETCHER",
                                     ownerTypeId = LsiSymbolId.type("demo.BookFetchers"),
-                                    ownerTypeName = ClientTypeName("demo", listOf("BookFetchers")),
+                                    ownerTypeName = clientTypeName("demo.BookFetchers"),
                                     targetEntityTypeId = bookId,
                                     documentation = "Book fetcher.",
                                 ),
@@ -237,6 +237,16 @@ class ClientResourceRendererTest {
                     ),
                 ),
             ).sortedBy(ClientTypeDefinition::id),
+        )
+    }
+
+    private fun clientTypeName(qualifiedName: String): LsiClass {
+        val packageName = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
+        val simpleName = qualifiedName.substringAfterLast('.')
+        return LsiClass(
+            typeId = LsiSymbolId.type(qualifiedName),
+            packageName = packageName,
+            simpleNames = listOf(simpleName),
         )
     }
 }

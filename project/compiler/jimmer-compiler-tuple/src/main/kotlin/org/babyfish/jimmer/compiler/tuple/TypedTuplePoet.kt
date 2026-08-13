@@ -14,6 +14,7 @@ import site.addzero.lsi.jimmer.tuple.TypedTupleProperty
 import site.addzero.lsi.jimmer.tuple.TypedTupleScalarCategory
 import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
 import site.addzero.lsi.jimmer.tuple.TypedTupleType
+import site.addzero.lsi.jimmer.tuple.dependencySymbolIds
 import site.addzero.lsi.type.LsiArrayType
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiNullability
@@ -55,7 +56,7 @@ internal fun TypedTupleSchema.toLsiSourceArtifacts(
 private fun TypedTupleType.toLsiPoet(workspace: LsiWorkspace): List<LsiSourceArtifact> {
     val originatingSymbols = setOf(id)
     val originatingSources = workspace.originatingSources(originatingSymbols)
-    val dependencySymbols = dependencies.symbolIds.toSet()
+    val dependencySymbols = dependencySymbolIds.toSet()
     val dependencySources = workspace.originatingSources(dependencySymbols)
     val files = when (sourceLanguage) {
         LsiLanguage.JAVA -> buildList {

@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import site.addzero.lsi.core.LsiLanguage
 import site.addzero.lsi.core.LsiSymbolId
-import site.addzero.lsi.jimmer.tuple.TypedTupleDependencies
 import site.addzero.lsi.jimmer.tuple.TypedTupleJavaSetterConstruction
 import site.addzero.lsi.jimmer.tuple.TypedTupleProperty
 import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
@@ -60,10 +59,6 @@ class TypedTupleCodegenNamesTest {
                                 setterName = "set${names[index]}",
                             )
                         },
-                    ),
-                    dependencies = TypedTupleDependencies(
-                        typeIds = listOf(TUPLE_ID),
-                        memberIds = sourceMemberIds.sorted(),
                     ),
                 )
             ),

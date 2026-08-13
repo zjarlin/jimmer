@@ -10,6 +10,7 @@ import org.babyfish.jimmer.client.meta.impl.SchemaImpl
 import org.babyfish.jimmer.client.meta.impl.Schemas
 import org.babyfish.jimmer.client.meta.impl.TypeDefinitionImpl
 import org.babyfish.jimmer.client.meta.impl.TypeRefImpl
+import site.addzero.lsi.clazz.LsiClass
 import site.addzero.lsi.core.LsiSymbolId
 import site.addzero.lsi.jimmer.client.ClientArrayTypeRef
 import site.addzero.lsi.jimmer.client.ClientDeclaredTypeRef
@@ -21,7 +22,6 @@ import site.addzero.lsi.jimmer.client.ClientPrimitiveTypeRef
 import site.addzero.lsi.jimmer.client.ClientSchema
 import site.addzero.lsi.jimmer.client.ClientService
 import site.addzero.lsi.jimmer.client.ClientTypeDefinition
-import site.addzero.lsi.jimmer.client.ClientTypeName
 import site.addzero.lsi.jimmer.client.ClientTypeParameterRef
 import site.addzero.lsi.jimmer.client.ClientTypeRef
 import site.addzero.lsi.jimmer.client.ClientUnresolvedTypeRef
@@ -193,10 +193,12 @@ private fun ClientTypeRef.toRenderedTypeRef(): TypeRefImpl<LsiSymbolId> {
 }
 
 private fun ClientService.toTypeName(): TypeName {
-    return ClientTypeName.parse(qualifiedName).toTypeName()
+    val packageName = qualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
+    val simpleName = qualifiedName.substringAfterLast('.')
+    return TypeName.of(packageName, listOf(simpleName))
 }
 
-private fun ClientTypeName.toTypeName(): TypeName = TypeName.of(packageName, simpleNames)
+private fun LsiClass.toTypeName(): TypeName = TypeName.of(packageName, simpleNames)
 
 private fun LsiPrimitiveKind.toTypeName(): TypeName {
     return when (this) {

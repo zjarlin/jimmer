@@ -25,7 +25,6 @@ import site.addzero.lsi.jimmer.tuple.TypedTupleConstructorArgument
 import site.addzero.lsi.jimmer.tuple.TypedTupleBaseTableProjection
 import site.addzero.lsi.jimmer.tuple.TypedTupleBaseTableSelection
 import site.addzero.lsi.jimmer.tuple.TypedTupleBaseTableSelectionKind
-import site.addzero.lsi.jimmer.tuple.TypedTupleDependencies
 import site.addzero.lsi.jimmer.tuple.TypedTupleJavaSetterConstruction
 import site.addzero.lsi.jimmer.tuple.TypedTupleKotlinConstructorConstruction
 import site.addzero.lsi.jimmer.tuple.TypedTupleProperty
@@ -33,6 +32,7 @@ import site.addzero.lsi.jimmer.tuple.TypedTupleScalarCategory
 import site.addzero.lsi.jimmer.tuple.TypedTupleSchema
 import site.addzero.lsi.jimmer.tuple.TypedTupleSetterAssignment
 import site.addzero.lsi.jimmer.tuple.TypedTupleType
+import site.addzero.lsi.jimmer.tuple.dependencySymbolIds
 import site.addzero.lsi.type.LsiDeclaredType
 import site.addzero.lsi.type.LsiPrimitiveKind
 import site.addzero.lsi.type.LsiPrimitiveType
@@ -167,7 +167,6 @@ class TypedTupleRendererTest {
             }
             LsiLanguage.UNKNOWN -> error("测试夹具仅支持 Java 或 Kotlin")
         }
-        val dependencyMembers = (sourceMemberIds + construction.constructorId).filterNotNull().sorted()
         val schema = TypedTupleSchema(
             tuples = listOf(
                 TypedTupleType(
@@ -192,10 +191,6 @@ class TypedTupleRendererTest {
                             ),
                         ),
                     ),
-                    dependencies = TypedTupleDependencies(
-                        typeIds = listOf(TUPLE_ID, BOOK_VIEW_ID).sorted(),
-                        memberIds = dependencyMembers,
-                    ),
                 )
             ),
         )
@@ -207,7 +202,7 @@ class TypedTupleRendererTest {
             schema = schema,
             workspace = workspace,
             tupleSource = tupleSource,
-            dependencySymbols = schema.tuples.single().dependencies.symbolIds.toSet(),
+            dependencySymbols = schema.tuples.single().dependencySymbolIds.toSet(),
         )
     }
 

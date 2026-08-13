@@ -76,8 +76,7 @@ internal fun ImmutableSchema.toFetcherPoetArtifacts(
         require(type.kind == ImmutableTypeKind.ENTITY || type.kind == ImmutableTypeKind.EMBEDDABLE) {
             "Immutable fetcher Poet generation only supports entity and embeddable types: ${type.id.value}"
         }
-        val dependencies = fetcherDependencies(type, workspace, language)
-        FetcherPoetContext(this, type, workspace).artifact(language, dependencies)
+        FetcherPoetContext(this, type, workspace).artifact(language)
     }
 }
 
@@ -93,63 +92,20 @@ private class FetcherPoetContext(
     private val emptyFetcherName = "empty${type.simpleName}$FETCHER_SUFFIX"
     private val strictTypeBranches = schema.strictPrimarySubtypesOf(type)
 
-    fun artifact(
-        language: LsiLanguage,
-        dependencies: FetcherArtifactDependencies,
-    ): LsiSourceArtifact {
+    fun artifact(language: LsiLanguage): LsiSourceArtifact {
         val file = when (language) {
             LsiLanguage.JAVA -> javaFile()
             LsiLanguage.KOTLIN -> kotlinFile()
             LsiLanguage.UNKNOWN -> error("Unsupported immutable fetcher Poet language")
         }
         val branchDependent = schema.isBranchDependent(type)
-        val aggregationMode = if (branchDependent) {
-            ArtifactAggregationMode.AGGREGATING
-        } else {
-            classifyArtifactAggregationMode(
-                originatingSymbols = dependencies.originatingSymbols,
-                originatingSources = dependencies.originatingSources,
-                dependencySources = dependencies.dependencySources,
-            )
-        }
-        return LsiSourceArtifact(
+        return schema.fetcherArtifact(
+            type = type,
+            workspace = workspace,
+            language = language,
             file = file,
-            typeNames = workspace.toLsiClasses(
-                file.referencedTypeIds,
-                additional = schema.generatedFetcherPoetTypeNames() + FETCHER_RUNTIME_TYPE_IDS.map(
-                    LsiSymbolId::topLevelPoetTypeName
-                ),
-            ),
-            aggregationMode = aggregationMode,
-            emissionMode = if (branchDependent) {
-                ArtifactEmissionMode.STABLE
-            } else {
-                ArtifactEmissionMode.IMMEDIATE
-            },
-            originatingSymbols = dependencies.originatingSymbols,
-            originatingSources = dependencies.originatingSources,
-            dependencySymbols = dependencies.dependencySymbols,
-            dependencySources = dependencies.dependencySources,
+            branchDependent = branchDependent,
         )
-    }
-
-    private fun ImmutableSchema.generatedFetcherPoetTypeNames(): List<LsiClass> {
-        return types.flatMap { immutableType ->
-            listOf(
-                generatedTopLevelClass(
-                    immutableType.packageName,
-                    "${immutableType.simpleName}$FETCHER_SUFFIX",
-                ),
-                generatedTopLevelClass(
-                    immutableType.packageName,
-                    "${immutableType.simpleName}$FETCHER_DSL_SUFFIX",
-                ),
-                generatedTopLevelClass(
-                    immutableType.packageName,
-                    "${immutableType.simpleName}Table",
-                ),
-            )
-        }.distinctBy { typeName -> typeName.id }
     }
 
     private fun javaFile(): LsiFile {
@@ -1111,20 +1067,22 @@ private class FetcherPoetContext(
     }
 }
 
-private fun ImmutableSchema.fetcherDependencies(
+private fun ImmutableSchema.fetcherArtifact(
     type: ImmutableType,
     workspace: LsiWorkspace,
     language: LsiLanguage,
-): FetcherArtifactDependencies {
+    file: LsiFile,
+    branchDependent: Boolean,
+): LsiSourceArtifact {
     val originatingSymbols = inheritanceArtifactOriginatingSymbols(type)
     val dependencySymbols = sortedSetOf<LsiSymbolId>().apply {
         addAll(originatingSymbols)
         addImmutableTypeHierarchy(
-            schema = this@fetcherDependencies,
+            schema = this@fetcherArtifact,
             rootTypeIds = originatingSymbols + type.id,
         )
         addImmutablePropClosure(
-            schema = this@fetcherDependencies,
+            schema = this@fetcherArtifact,
             rootProps = type.props,
         )
         addAll(
@@ -1141,12 +1099,53 @@ private fun ImmutableSchema.fetcherDependencies(
             .filterTo(this) { source -> source.kind != LsiSourceKind.BINARY }
         addAll(originatingSources)
     }
-    return FetcherArtifactDependencies(
+    val aggregationMode = if (branchDependent) {
+        ArtifactAggregationMode.AGGREGATING
+    } else {
+        classifyArtifactAggregationMode(
+            originatingSymbols = originatingSymbols,
+            originatingSources = originatingSources,
+            dependencySources = dependencySources,
+        )
+    }
+    return LsiSourceArtifact(
+        file = file,
+        typeNames = workspace.toLsiClasses(
+            file.referencedTypeIds,
+            additional = generatedFetcherPoetTypeNames() + FETCHER_RUNTIME_TYPE_IDS.map(
+                LsiSymbolId::topLevelPoetTypeName
+            ),
+        ),
+        aggregationMode = aggregationMode,
+        emissionMode = if (branchDependent) {
+            ArtifactEmissionMode.STABLE
+        } else {
+            ArtifactEmissionMode.IMMEDIATE
+        },
         originatingSymbols = originatingSymbols,
         originatingSources = originatingSources,
         dependencySymbols = dependencySymbols,
         dependencySources = dependencySources,
     )
+}
+
+private fun ImmutableSchema.generatedFetcherPoetTypeNames(): List<LsiClass> {
+    return types.flatMap { type ->
+        listOf(
+            generatedTopLevelClass(
+                type.packageName,
+                "${type.simpleName}$FETCHER_SUFFIX",
+            ),
+            generatedTopLevelClass(
+                type.packageName,
+                "${type.simpleName}$FETCHER_DSL_SUFFIX",
+            ),
+            generatedTopLevelClass(
+                type.packageName,
+                "${type.simpleName}Table",
+            ),
+        )
+    }.distinctBy { typeName -> typeName.id }
 }
 
 private fun MutableSet<LsiSymbolId>.addImmutableTypeHierarchy(
@@ -1411,13 +1410,6 @@ private fun ImmutableType?.requiredTableType(prop: ImmutableProp): LsiDeclaredTy
 private fun ImmutableProp.fetcherDocumentation(): String? {
     return documentation?.let(Doc::parse)?.value
 }
-
-private data class FetcherArtifactDependencies(
-    val originatingSymbols: Set<LsiSymbolId>,
-    val originatingSources: Set<LsiSource>,
-    val dependencySymbols: Set<LsiSymbolId>,
-    val dependencySources: Set<LsiSource>,
-)
 
 private const val FETCHER_SUFFIX = "Fetcher"
 private const val FETCHER_DSL_SUFFIX = "FetcherDsl"

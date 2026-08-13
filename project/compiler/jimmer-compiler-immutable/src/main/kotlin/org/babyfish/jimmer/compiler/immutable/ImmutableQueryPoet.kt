@@ -110,38 +110,35 @@ private class KotlinQueryPoetContext(
     fun artifact(): LsiSourceArtifact {
         val sourceBaseName = workspace.immutableSourceBaseName(type)
         val branchDependent = schema.isBranchDependent(type)
-        val dependencies = schema.queryDependencies(
+        return schema.queryArtifacts(
             type = type,
             workspace = workspace,
             language = LsiLanguage.KOTLIN,
-            branchDependent = branchDependent,
-        )
-        return dependencies.artifact(
-            workspace = workspace,
-            schema = schema,
-            file = LsiFile(
-                language = LsiLanguage.KOTLIN,
-                packageName = type.packageName,
-                fileName = "$sourceBaseName$PROPS_SUFFIX",
-                fileNameStyle = LsiFileNameStyle.KOTLIN_SOURCE_STEM,
-                annotations = listOf(
-                    KOTLIN_FILE_WARNING_SUPPRESSION,
-                    generatedByAnnotation(modelType, fileTarget = true),
+            files = listOf(
+                LsiFile(
+                    language = LsiLanguage.KOTLIN,
+                    packageName = type.packageName,
+                    fileName = "$sourceBaseName$PROPS_SUFFIX",
+                    fileNameStyle = LsiFileNameStyle.KOTLIN_SOURCE_STEM,
+                    annotations = listOf(
+                        KOTLIN_FILE_WARNING_SUPPRESSION,
+                        generatedByAnnotation(modelType, fileTarget = true),
+                    ),
+                    members = buildList {
+                        schema.orderedProps(type).forEach { prop -> addPropMembers(prop) }
+                        if (type.kind == ImmutableTypeKind.ENTITY) {
+                            add(remoteIdProperty(nullable = false))
+                            add(remoteIdProperty(nullable = true))
+                            add(fetchByFunction(nullable = false))
+                            add(fetchByFunction(nullable = true))
+                        }
+                        addAll(polymorphicFunctions())
+                        add(propsObject())
+                    },
                 ),
-                members = buildList {
-                    schema.orderedProps(type).forEach { prop -> addPropMembers(prop) }
-                    if (type.kind == ImmutableTypeKind.ENTITY) {
-                        add(remoteIdProperty(nullable = false))
-                        add(remoteIdProperty(nullable = true))
-                        add(fetchByFunction(nullable = false))
-                        add(fetchByFunction(nullable = true))
-                    }
-                    addAll(polymorphicFunctions())
-                    add(propsObject())
-                },
             ),
             branchDependent = branchDependent,
-        )
+        ).single()
     }
 
     private fun MutableList<LsiMember>.addPropMembers(prop: ImmutableProp) {
@@ -606,33 +603,20 @@ private class JavaQueryPoetContext(
 
     fun artifacts(): List<LsiSourceArtifact> {
         val branchDependent = schema.isBranchDependent(type)
-        val dependencies = schema.queryDependencies(
+        val files = buildList {
+            add(javaFile(propsType, propsDeclaration()))
+            if (type.kind == ImmutableTypeKind.ENTITY) {
+                add(javaFile(tableType, tableDeclaration(tableEx = false)))
+                add(javaFile(tableExType, tableDeclaration(tableEx = true)))
+            }
+        }
+        return schema.queryArtifacts(
             type = type,
             workspace = workspace,
             language = LsiLanguage.JAVA,
+            files = files,
             branchDependent = branchDependent,
         )
-        return buildList {
-            add(dependencies.artifact(workspace, schema, javaFile(propsType, propsDeclaration()), branchDependent))
-            if (type.kind == ImmutableTypeKind.ENTITY) {
-                add(
-                    dependencies.artifact(
-                        workspace,
-                        schema,
-                        javaFile(tableType, tableDeclaration(tableEx = false)),
-                        branchDependent,
-                    )
-                )
-                add(
-                    dependencies.artifact(
-                        workspace,
-                        schema,
-                        javaFile(tableExType, tableDeclaration(tableEx = true)),
-                        branchDependent,
-                    )
-                )
-            }
-        }
     }
 
     private fun javaFile(generatedType: LsiDeclaredType, declaration: LsiClass): LsiFile {
@@ -1465,12 +1449,13 @@ private class JavaQueryPoetContext(
     }
 }
 
-private fun ImmutableSchema.queryDependencies(
+private fun ImmutableSchema.queryArtifacts(
     type: ImmutableType,
     workspace: LsiWorkspace,
     language: LsiLanguage,
+    files: List<LsiFile>,
     branchDependent: Boolean,
-): QueryArtifactDependencies {
+): List<LsiSourceArtifact> {
     val originatingSymbols = if (branchDependent) {
         inheritanceArtifactOriginatingSymbols(type)
     } else {
@@ -1498,53 +1483,35 @@ private fun ImmutableSchema.queryDependencies(
             .filterTo(this) { source -> source.kind != LsiSourceKind.BINARY }
         addAll(originatingSources)
     }
-    return QueryArtifactDependencies(
-        originatingSymbols = originatingSymbols,
-        originatingSources = originatingSources,
-        dependencySymbols = dependencySymbols,
-        dependencySources = dependencySources,
-    )
+    val aggregationMode = if (branchDependent) {
+        ArtifactAggregationMode.AGGREGATING
+    } else {
+        classifyArtifactAggregationMode(
+            originatingSymbols = originatingSymbols,
+            originatingSources = originatingSources,
+            dependencySources = dependencySources,
+        )
+    }
+    return files.map { file ->
+        LsiSourceArtifact(
+            file = file,
+            typeNames = workspace.toLsiClasses(
+                file.referencedTypeIds,
+                additional = toLsiGeneratedQueryPoetTypeNames() + QUERY_RUNTIME_TYPE_NAMES,
+            ),
+            aggregationMode = aggregationMode,
+            emissionMode = if (branchDependent) {
+                ArtifactEmissionMode.STABLE
+            } else {
+                ArtifactEmissionMode.IMMEDIATE
+            },
+            originatingSymbols = originatingSymbols,
+            originatingSources = originatingSources,
+            dependencySymbols = dependencySymbols,
+            dependencySources = dependencySources,
+        )
+    }
 }
-
-private fun QueryArtifactDependencies.artifact(
-    workspace: LsiWorkspace,
-    schema: ImmutableSchema,
-    file: LsiFile,
-    branchDependent: Boolean,
-): LsiSourceArtifact {
-    return LsiSourceArtifact(
-        file = file,
-        typeNames = workspace.toLsiClasses(
-            file.referencedTypeIds,
-            additional = schema.toLsiGeneratedQueryPoetTypeNames() + QUERY_RUNTIME_TYPE_NAMES,
-        ),
-        aggregationMode = if (branchDependent) {
-            ArtifactAggregationMode.AGGREGATING
-        } else {
-            classifyArtifactAggregationMode(
-                originatingSymbols = originatingSymbols,
-                originatingSources = originatingSources,
-                dependencySources = dependencySources,
-            )
-        },
-        emissionMode = if (branchDependent) {
-            ArtifactEmissionMode.STABLE
-        } else {
-            ArtifactEmissionMode.IMMEDIATE
-        },
-        originatingSymbols = originatingSymbols,
-        originatingSources = originatingSources,
-        dependencySymbols = dependencySymbols,
-        dependencySources = dependencySources,
-    )
-}
-
-private data class QueryArtifactDependencies(
-    val originatingSymbols: Set<LsiSymbolId>,
-    val originatingSources: Set<LsiSource>,
-    val dependencySymbols: Set<LsiSymbolId>,
-    val dependencySources: Set<LsiSource>,
-)
 
 private fun generatedByAnnotation(
     type: LsiType,
