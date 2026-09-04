@@ -148,7 +148,7 @@ class DtoTypeNameSelection private constructor(
     conflictingQualifiedNames: Collection<String>,
 ) {
 
-    val conflictingQualifiedNames: List<String> = conflictingQualifiedNames.toList()
+    val conflictingQualifiedNames = conflictingQualifiedNames.toList()
 
     val isAmbiguous: Boolean
         get() = conflictingQualifiedNames.isNotEmpty()
